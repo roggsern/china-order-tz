@@ -1,0 +1,52 @@
+<?php
+
+namespace App\Models;
+
+use App\Enums\PaymentMethod;
+use App\Enums\PaymentStatus;
+use App\Models\Concerns\HasUuidPrimaryKey;
+use Database\Factories\PaymentFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Model;
+
+class Payment extends Model
+{
+    /** @use HasFactory<PaymentFactory> */
+    use HasFactory, HasUuidPrimaryKey, SoftDeletes;
+
+    protected $fillable = [
+        'order_id',
+        'user_id',
+        'method',
+        'status',
+        'amount',
+        'currency',
+        'transaction_id',
+        'reference',
+        'paid_at',
+        'metadata',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'method' => PaymentMethod::class,
+            'status' => PaymentStatus::class,
+            'amount' => 'decimal:2',
+            'paid_at' => 'datetime',
+            'metadata' => 'array',
+        ];
+    }
+
+    public function order(): BelongsTo
+    {
+        return $this->belongsTo(Order::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+}

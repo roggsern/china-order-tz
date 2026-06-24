@@ -1,0 +1,52 @@
+<?php
+
+namespace App\Models;
+
+use App\Models\Concerns\HasUuidPrimaryKey;
+use Database\Factories\CartItemFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Model;
+
+class CartItem extends Model
+{
+    /** @use HasFactory<CartItemFactory> */
+    use HasFactory, HasUuidPrimaryKey, SoftDeletes;
+
+    protected $fillable = [
+        'cart_id',
+        'product_id',
+        'product_variant_id',
+        'quantity',
+        'unit_price',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'quantity' => 'integer',
+            'unit_price' => 'decimal:2',
+        ];
+    }
+
+    public function cart(): BelongsTo
+    {
+        return $this->belongsTo(Cart::class);
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
+
+    public function variant(): BelongsTo
+    {
+        return $this->belongsTo(ProductVariant::class, 'product_variant_id');
+    }
+
+    public function lineTotal(): string
+    {
+        return (string) ($this->unit_price * $this->quantity);
+    }
+}

@@ -27,8 +27,8 @@ shell-web: ## Open shell in Web container
 migrate: ## Run Laravel migrations
 	docker compose exec api php artisan migrate
 
-fresh: ## Reset database and re-run migrations
-	docker compose exec api php artisan migrate:fresh
+fresh: ## Reset database, migrate, and seed
+	docker compose exec api php artisan migrate:fresh --seed
 
 test: ## Run backend tests
 	docker compose exec api php artisan test
