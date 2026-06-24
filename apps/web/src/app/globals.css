@@ -1,0 +1,129 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #18181b;
+  --gold: #c9a227;
+  --gold-light: #e8c547;
+  --gold-dark: #8b6914;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-gold: var(--gold);
+  --color-gold-light: var(--gold-light);
+  --color-gold-dark: var(--gold-dark);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+}
+
+::selection {
+  background-color: color-mix(in srgb, var(--gold) 30%, transparent);
+  color: var(--foreground);
+}
+
+@keyframes hero-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes hero-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes hero-orb-pulse {
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes hero-spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.hero-fade-up {
+  animation: hero-fade-up 0.8s ease-out both;
+}
+
+.hero-delay-1 {
+  animation-delay: 0.1s;
+}
+.hero-delay-2 {
+  animation-delay: 0.2s;
+}
+.hero-delay-3 {
+  animation-delay: 0.3s;
+}
+.hero-delay-4 {
+  animation-delay: 0.4s;
+}
+.hero-delay-5 {
+  animation-delay: 0.5s;
+}
+.hero-delay-6 {
+  animation-delay: 0.6s;
+}
+
+.hero-float {
+  animation: hero-float 4s ease-in-out infinite;
+}
+
+.hero-orb {
+  animation: hero-orb-pulse 8s ease-in-out infinite;
+}
+
+.hero-orb-red {
+  animation-delay: 2s;
+}
+
+.hero-spin-slow {
+  animation: hero-spin-slow 30s linear infinite;
+}
+
+.hero-orbit {
+  animation: hero-float 3s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-fade-up,
+  .hero-float,
+  .hero-orb,
+  .hero-spin-slow,
+  .hero-orbit {
+    animation: none;
+  }
+}

@@ -141,3 +141,24 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Laravel
+apps/api/vendor/
+apps/api/.env
+apps/api/.phpunit.result.cache
+apps/api/bootstrap/cache/*.php
+apps/api/storage/*.key
+apps/api/public/hot
+apps/api/public/storage
+apps/api/database/*.sqlite
+
+# Docker
+.docker/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
