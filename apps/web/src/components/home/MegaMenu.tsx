@@ -36,7 +36,7 @@ export function MegaMenu({ mobile = false, onNavigate }: MegaMenuProps) {
             {megaMenuCategories.map((category) => (
               <div key={category.slug}>
                 <Link
-                  href="#categories"
+                  href={`/categories`}
                   onClick={onNavigate}
                   className="flex items-center gap-2 text-sm font-semibold text-zinc-900"
                 >
@@ -47,7 +47,7 @@ export function MegaMenu({ mobile = false, onNavigate }: MegaMenuProps) {
                   {category.subcategories.slice(0, 4).map((sub) => (
                     <li key={sub}>
                       <Link
-                        href="#products"
+                        href={`/products?category=${category.slug}`}
                         onClick={onNavigate}
                         className="text-xs text-zinc-500 hover:text-[#c9a227]"
                       >
@@ -106,7 +106,7 @@ export function MegaMenu({ mobile = false, onNavigate }: MegaMenuProps) {
                 </button>
               ))}
               <Link
-                href="#categories"
+                href="/categories"
                 className="mt-2 flex items-center gap-1 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[#c9a227] hover:text-[#8b6914]"
               >
                 View all
@@ -121,7 +121,7 @@ export function MegaMenu({ mobile = false, onNavigate }: MegaMenuProps) {
                   <p className="mt-1 text-sm text-zinc-500">{activeCategory.description}</p>
                 </div>
                 <Link
-                  href="#products"
+                  href={`/products?category=${activeCategory.slug}`}
                   className="inline-flex shrink-0 items-center gap-1 rounded-full bg-zinc-900 px-4 py-2 text-xs font-bold uppercase tracking-wide text-white transition hover:bg-[#c9a227] hover:text-zinc-900"
                 >
                   Shop now
@@ -133,7 +133,7 @@ export function MegaMenu({ mobile = false, onNavigate }: MegaMenuProps) {
                 {activeCategory.subcategories.map((sub) => (
                   <Link
                     key={sub}
-                    href="#products"
+                    href={`/products?category=${activeCategory.slug}`}
                     className="group/sub flex items-center gap-2 rounded-lg py-1.5 text-sm text-zinc-600 transition hover:text-[#c9a227]"
                   >
                     <span className="h-1 w-1 rounded-full bg-zinc-300 transition group-hover/sub:bg-[#c9a227]" />
@@ -155,7 +155,7 @@ export function MegaMenu({ mobile = false, onNavigate }: MegaMenuProps) {
                   </p>
                 </div>
                 <Link
-                  href="#products"
+                  href={`/products?category=${activeCategory.slug}`}
                   className="shrink-0 rounded-full bg-white/20 px-3 py-1.5 text-xs font-bold text-white backdrop-blur transition hover:bg-white/30"
                 >
                   Explore

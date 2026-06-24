@@ -3,8 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { navLinks } from "@/lib/home-data";
-import { CartIcon, CloseIcon, MenuIcon, SearchIcon, UserIcon } from "./icons";
+import { CartIcon, CloseIcon, MenuIcon, UserIcon } from "./icons";
 import { MegaMenu } from "./MegaMenu";
+import { SearchBar } from "./SearchBar";
 
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -30,15 +31,7 @@ export function Header() {
           </Link>
 
           <div className="hidden flex-1 lg:block">
-            <label className="relative block max-w-xl">
-              <span className="sr-only">Search products</span>
-              <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-              <input
-                type="search"
-                placeholder="Search products, brands, categories..."
-                className="w-full rounded-full border border-zinc-200 bg-zinc-50 py-2.5 pl-11 pr-4 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-[#c9a227]/50 focus:bg-white focus:ring-2 focus:ring-[#c9a227]/20"
-              />
-            </label>
+            <SearchBar className="max-w-xl" />
           </div>
 
           <nav className="hidden items-center gap-0.5 lg:flex">
@@ -91,15 +84,7 @@ export function Header() {
         </div>
 
         <div className="pb-3 lg:hidden">
-          <label className="relative block">
-            <span className="sr-only">Search products</span>
-            <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-            <input
-              type="search"
-              placeholder="Search products..."
-              className="w-full rounded-full border border-zinc-200 bg-zinc-50 py-2.5 pl-11 pr-4 text-sm outline-none focus:border-[#c9a227]/50 focus:ring-2 focus:ring-[#c9a227]/20"
-            />
-          </label>
+          <SearchBar placeholder="Search products..." />
         </div>
       </div>
 
