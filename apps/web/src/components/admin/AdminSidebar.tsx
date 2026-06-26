@@ -2,16 +2,27 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { HorizontalBrandLogo } from "@/components/branding/HorizontalBrandLogo";
 import {
   HomeIcon,
   PackageIcon,
   GridIcon,
   ArrowRightIcon,
+  DocumentIcon,
+  TagIcon,
+  ChartBarIcon,
+  UserIcon,
+  SettingsIcon,
 } from "@/components/home/icons";
 
 const navItems = [
   { label: "Dashboard", href: "/admin", icon: HomeIcon, exact: true },
   { label: "Products", href: "/admin/products", icon: PackageIcon, exact: false },
+  { label: "Categories", href: "/admin/categories", icon: TagIcon, exact: false },
+  { label: "Brands", href: "/admin/brands", icon: ChartBarIcon, exact: false },
+  { label: "Orders", href: "/admin/orders", icon: DocumentIcon, exact: false },
+  { label: "Customers", href: "/admin/customers", icon: UserIcon, exact: false },
+  { label: "Settings", href: "/admin/settings", icon: SettingsIcon, exact: false },
 ];
 
 export function AdminSidebar() {
@@ -20,17 +31,10 @@ export function AdminSidebar() {
   return (
     <aside className="flex w-full flex-col border-r border-zinc-200 bg-[#f6f6f7] lg:w-60 lg:shrink-0">
       <div className="border-b border-zinc-200 bg-white px-4 py-4">
-        <Link href="/admin" className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#c9a227] to-[#8b6914] text-xs font-black text-white shadow-sm">
-            C
-          </span>
-          <div className="leading-tight">
-            <span className="block text-[13px] font-semibold text-zinc-900">
-              CHINA ORDER <span className="text-[#c9a227]">TZ</span>
-            </span>
-            <span className="block text-[11px] text-zinc-500">Admin</span>
-          </div>
-        </Link>
+        <div className="flex items-center gap-2.5">
+          <HorizontalBrandLogo size="sm" />
+          <span className="text-[11px] font-medium text-zinc-500">Admin</span>
+        </div>
       </div>
 
       <nav className="flex-1 p-3">

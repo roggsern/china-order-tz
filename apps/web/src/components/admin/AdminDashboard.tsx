@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
 import { useAdminProducts } from "@/components/admin/AdminProductsProvider";
+import { useAdminOrders } from "@/components/admin/AdminOrdersProvider";
+import { computeOrderAnalytics } from "@/lib/admin/order-analytics";
 import { formatPrice } from "@/lib/catalog/utils";
 import { getCategoryBySlug } from "@/lib/catalog/categories";
 import { PlusIcon, PackageIcon, ChartBarIcon } from "@/components/home/icons";
@@ -9,6 +12,9 @@ import { StatusBadge } from "@/components/admin/StatusBadge";
 
 export function AdminDashboard() {
   const { products } = useAdminProducts();
+  const { orders, isHydrated: ordersHydrated } = useAdminOrders();
+
+  const orderAnalytics = useMemo(() => computeOrderAnalytics(orders), [orders]);
 
   const activeCount = products.filter((p) => p.status === "active").length;
   const hiddenCount = products.filter((p) => p.status === "hidden").length;
@@ -35,19 +41,54 @@ export function AdminDashboard() {
         <div>
           <h1 className="text-xl font-semibold text-zinc-900 sm:text-2xl">Dashboard</h1>
           <p className="mt-0.5 text-sm text-zinc-500">
-            Overview of your store catalog and inventory.
+            Store overview — orders, revenue, and catalog at a glance.
           </p>
         </div>
-        <Link
-          href="/admin/products/new"
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#c9a227] px-4 py-2 text-sm font-semibold text-zinc-900 transition hover:bg-[#e8c547]"
-        >
-          <PlusIcon className="h-4 w-4" />
-          Add product
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/admin/orders"
+            className="inline-flex items-center justify-center rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
+          >
+            View orders
+          </Link>
+          <Link
+            href="/admin/products/new"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#c9a227] px-4 py-2 text-sm font-semibold text-zinc-900 transition hover:bg-[#e8c547]"
+          >
+            <PlusIcon className="h-4 w-4" />
+            Add product
+          </Link>
+        </div>
       </div>
 
-      {/* Stats grid */}
+      <section className="mt-6">
+        <h2 className="text-sm font-semibold text-zinc-900">Order analytics</h2>
+        <div className="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            label="Total orders"
+            value={ordersHydrated ? orderAnalytics.totalOrders : "—"}
+            href="/admin/orders"
+          />
+          <StatCard
+            label="Total revenue"
+            value={ordersHydrated ? formatPrice(orderAnalytics.totalRevenue) : "—"}
+            sub="Paid orders only"
+            isText
+          />
+          <StatCard
+            label="Paid orders"
+            value={ordersHydrated ? orderAnalytics.paidOrders : "—"}
+            accent="text-emerald-600"
+          />
+          <StatCard
+            label="Pending payments"
+            value={ordersHydrated ? orderAnalytics.pendingPayments : "—"}
+            accent="text-amber-600"
+          />
+        </div>
+      </section>
+
+      {/* Catalog stats */}
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Total products"
@@ -159,6 +200,12 @@ export function AdminDashboard() {
             Add new product
           </Link>
           <Link
+            href="/admin/orders"
+            className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
+          >
+            Manage orders
+          </Link>
+          <Link
             href="/admin/products"
             className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
           >
@@ -183,6 +230,7 @@ function StatCard({
   icon,
   href,
   isText,
+  accent,
 }: {
   label: string;
   value: number | string;
@@ -190,6 +238,7 @@ function StatCard({
   icon?: React.ReactNode;
   href?: string;
   isText?: boolean;
+  accent?: string;
 }) {
   const content = (
     <div className="admin-card p-5 transition hover:shadow-md">
@@ -197,7 +246,7 @@ function StatCard({
         <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">{label}</p>
         {icon}
       </div>
-      <p className={`mt-2 font-semibold text-zinc-900 ${isText ? "text-lg" : "text-2xl"}`}>
+      <p className={`mt-2 font-semibold ${accent ?? "text-zinc-900"} ${isText ? "text-lg" : "text-2xl"}`}>
         {value}
       </p>
       {sub && <p className="mt-1 text-xs text-zinc-500">{sub}</p>}

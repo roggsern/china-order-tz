@@ -24,7 +24,7 @@ export const categories: Category[] = [
   },
   {
     slug: "beauty",
-    name: "Beauty",
+    name: "Beauty & Cosmetics",
     description: "Skincare, makeup & wellness picks",
     gradient: "from-amber-300 via-orange-400 to-rose-400",
     icon: "💄",

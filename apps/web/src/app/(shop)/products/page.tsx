@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { products, filterProducts, sortProducts, searchProducts } from "@/lib/catalog/products";
+import { getProducts, filterProducts, sortProducts, searchProducts } from "@/lib/catalog/products";
 import { getCategoryBySlug } from "@/lib/catalog/categories";
-import type { SortOption } from "@/lib/types/catalog";
+import type { ProductOrigin, SortOption } from "@/lib/types/catalog";
 import { Breadcrumbs } from "@/components/catalog/Breadcrumbs";
 import { ProductGrid } from "@/components/catalog/ProductGrid";
 import { ProductFilters } from "@/components/catalog/ProductFilters";
+import { CategoryBanner } from "@/components/catalog/CategoryBanner";
 
 export const metadata: Metadata = {
   title: "Products — CHINA ORDER TZ",
@@ -18,6 +19,11 @@ interface ProductsPageProps {
     sort?: SortOption;
     q?: string;
     inStock?: string;
+    origin?: ProductOrigin;
+    brand?: string;
+    minRating?: string;
+    minPrice?: string;
+    maxPrice?: string;
   }>;
 }
 
@@ -27,11 +33,17 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
   const sort = params.sort ?? "featured";
   const query = params.q ?? "";
   const inStockOnly = params.inStock === "true";
+  const catalog = await getProducts();
 
-  let filtered = query ? searchProducts(query) : [...products];
+  let filtered = query ? await searchProducts(query) : [...catalog];
   filtered = filterProducts(filtered, {
     category: categorySlug || undefined,
     inStock: inStockOnly || undefined,
+    origin: params.origin || undefined,
+    brand: params.brand || undefined,
+    minRating: params.minRating ? Number(params.minRating) : undefined,
+    minPrice: params.minPrice ? Number(params.minPrice) : undefined,
+    maxPrice: params.maxPrice ? Number(params.maxPrice) : undefined,
   });
   filtered = sortProducts(filtered, sort);
 
@@ -49,25 +61,35 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
           ]}
         />
 
-        <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#c9a227]">
-              {category ? category.icon + " " + category.name : "Product Catalog"}
-            </p>
-            <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-              {pageTitle}
-            </h1>
-            {category && (
-              <p className="mt-2 max-w-xl text-base text-zinc-500">{category.description}</p>
-            )}
+        {category ? (
+          <div className="mt-6">
+            <CategoryBanner category={category} catalog={catalog} />
           </div>
+        ) : (
+          <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#c9a227]">
+                Product Catalog
+              </p>
+              <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
+                {pageTitle}
+              </h1>
+              <p className="mt-3 max-w-2xl text-base text-zinc-500">
+                Premium products with factory-direct pricing, verified suppliers, and smart delivery
+                estimates for Tanzania.
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-8 flex items-center justify-between">
           <p className="text-sm text-zinc-500">
             {filtered.length} product{filtered.length !== 1 ? "s" : ""}
           </p>
         </div>
 
-        <div className="mt-10 grid gap-8 lg:grid-cols-[260px_1fr]">
-          <Suspense fallback={<div className="h-96 animate-pulse rounded-2xl bg-zinc-200" />}>
+        <div className="mt-8 grid gap-8 lg:grid-cols-[280px_1fr]">
+          <Suspense fallback={<div className="hidden h-96 animate-pulse rounded-2xl bg-zinc-200 lg:block" />}>
             <ProductFilters />
           </Suspense>
           <ProductGrid

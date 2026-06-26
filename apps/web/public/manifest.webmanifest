@@ -1,0 +1,26 @@
+{
+  "name": "CHINA ORDER TZ",
+  "short_name": "China Order TZ",
+  "description": "Import products directly from China to Tanzania",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#c9a227",
+  "icons": [
+    {
+      "src": "/branding/favicon.png",
+      "sizes": "48x48",
+      "type": "image/png"
+    },
+    {
+      "src": "/branding/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/branding/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

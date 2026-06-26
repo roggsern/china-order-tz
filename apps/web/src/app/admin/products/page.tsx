@@ -6,11 +6,11 @@ import { ProductTable } from "@/components/admin/ProductTable";
 import { PlusIcon } from "@/components/home/icons";
 
 export default function AdminProductsPage() {
-  const { products, deleteProduct } = useAdminProducts();
+  const { products, deleteProduct, deleteProducts, isHydrated } = useAdminProducts();
 
-  const activeCount = products.filter((p) => p.status === "active").length;
-  const featuredCount = products.filter((p) => p.featured).length;
-  const lowStockCount = products.filter((p) => p.stock > 0 && p.stock <= 10).length;
+  const activeCount = products.filter((product) => product.status === "active").length;
+  const featuredCount = products.filter((product) => product.featured).length;
+  const lowStockCount = products.filter((product) => product.stock > 0 && product.stock <= 10).length;
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
@@ -52,7 +52,12 @@ export default function AdminProductsPage() {
       </div>
 
       <div className="mt-6">
-        <ProductTable products={products} onDelete={deleteProduct} />
+        <ProductTable
+          products={products}
+          isHydrated={isHydrated}
+          onDelete={deleteProduct}
+          onBulkDelete={deleteProducts}
+        />
       </div>
     </div>
   );

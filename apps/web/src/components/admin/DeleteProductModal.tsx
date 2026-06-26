@@ -5,12 +5,21 @@ import { CloseIcon, TrashIcon } from "@/components/home/icons";
 
 interface DeleteProductModalProps {
   product: Product | null;
+  count?: number;
   onConfirm: () => void;
   onCancel: () => void;
 }
 
-export function DeleteProductModal({ product, onConfirm, onCancel }: DeleteProductModalProps) {
-  if (!product) return null;
+export function DeleteProductModal({
+  product,
+  count = 0,
+  onConfirm,
+  onCancel,
+}: DeleteProductModalProps) {
+  const isOpen = product !== null || count > 0;
+  if (!isOpen) return null;
+
+  const isBulk = count > 1 || (count >= 1 && product === null);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -35,11 +44,20 @@ export function DeleteProductModal({ product, onConfirm, onCancel }: DeleteProdu
         </div>
 
         <h2 id="delete-product-title" className="mt-4 text-base font-semibold text-zinc-900">
-          Delete product?
+          {isBulk ? `Delete ${count} products?` : "Delete product?"}
         </h2>
         <p className="mt-2 text-sm text-zinc-500">
-          <span className="font-medium text-zinc-700">{product.name}</span> will be permanently
-          removed. This action cannot be undone.
+          {isBulk ? (
+            <>
+              <span className="font-medium text-zinc-700">{count} selected products</span> will be
+              permanently removed from your catalog.
+            </>
+          ) : (
+            <>
+              <span className="font-medium text-zinc-700">{product?.name}</span> will be permanently
+              removed. This action cannot be undone.
+            </>
+          )}
         </p>
 
         <div className="mt-6 flex justify-end gap-3">
@@ -55,7 +73,7 @@ export function DeleteProductModal({ product, onConfirm, onCancel }: DeleteProdu
             onClick={onConfirm}
             className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700"
           >
-            Delete product
+            {isBulk ? `Delete ${count} products` : "Delete product"}
           </button>
         </div>
       </div>

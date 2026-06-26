@@ -1,12 +1,31 @@
 "use client";
 
 import Link from "next/link";
+import { useCallback } from "react";
+import type { ProductFormData } from "@/lib/types/catalog";
 import { useAdminProducts } from "@/components/admin/AdminProductsProvider";
 import { ProductForm } from "@/components/admin/ProductForm";
 import { ChevronLeftIcon } from "@/components/home/icons";
 
 export default function NewProductPage() {
-  const { addProduct } = useAdminProducts();
+  const { addProduct, isHydrated } = useAdminProducts();
+  const isEditMode = false;
+
+  const handleSaveProduct = useCallback(
+    (data: ProductFormData) => {
+      addProduct(data);
+    },
+    [addProduct],
+  );
+
+  if (!isHydrated) {
+    return (
+      <div className="p-4 sm:p-6 lg:p-8" aria-busy="true">
+        <div className="h-8 w-48 animate-pulse rounded-lg bg-zinc-100" />
+        <div className="mt-6 h-96 animate-pulse rounded-xl bg-zinc-50" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
@@ -26,7 +45,7 @@ export default function NewProductPage() {
       </div>
 
       <div className="mt-6">
-        <ProductForm mode="create" onSubmit={addProduct} />
+        <ProductForm isEditMode={isEditMode} onSubmit={handleSaveProduct} />
       </div>
     </div>
   );

@@ -118,6 +118,23 @@ body {
   animation: hero-float 3s ease-in-out infinite;
 }
 
+@keyframes product-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: product-fade-in 0.3s ease-out both;
+}
+
+.premium-card {
+  transform: translateZ(0);
+}
+
 /* Admin — Shopify-inspired utilities */
 .admin-card {
   border-radius: 0.75rem;
@@ -150,12 +167,33 @@ body {
   color: #3f3f46;
 }
 
+/* Shop — shared cart & checkout utilities */
+.shop-section-label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #71717a;
+}
+
+.shop-summary-card {
+  border-radius: 1.5rem;
+  border: 1px solid color-mix(in srgb, #e4e4e7 80%, transparent);
+  background: #ffffff;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+}
+
+.shop-price {
+  font-variant-numeric: tabular-nums;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hero-fade-up,
   .hero-float,
   .hero-orb,
   .hero-spin-slow,
-  .hero-orbit {
+  .hero-orbit,
+  .animate-fade-in {
     animation: none;
   }
 }

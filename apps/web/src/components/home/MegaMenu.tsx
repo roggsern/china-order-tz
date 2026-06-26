@@ -8,9 +8,20 @@ import { ArrowRightIcon, ChevronDownIcon } from "./icons";
 interface MegaMenuProps {
   mobile?: boolean;
   onNavigate?: () => void;
+  linkClassName?: string;
+  triggerLabel?: string;
+  showHamburger?: boolean;
+  align?: "left" | "center";
 }
 
-export function MegaMenu({ mobile = false, onNavigate }: MegaMenuProps) {
+export function MegaMenu({
+  mobile = false,
+  onNavigate,
+  linkClassName,
+  triggerLabel = "Categories",
+  showHamburger = false,
+  align = "center",
+}: MegaMenuProps) {
   const [activeSlug, setActiveSlug] = useState(megaMenuCategories[0].slug);
   const [open, setOpen] = useState(false);
 
@@ -26,7 +37,8 @@ export function MegaMenu({ mobile = false, onNavigate }: MegaMenuProps) {
           className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
           aria-expanded={open}
         >
-          Categories
+          {showHamburger && <span className="mr-1">☰</span>}
+          {triggerLabel}
           <ChevronDownIcon
             className={`h-4 w-4 transition ${open ? "rotate-180" : ""}`}
           />
@@ -72,16 +84,22 @@ export function MegaMenu({ mobile = false, onNavigate }: MegaMenuProps) {
     >
       <button
         type="button"
-        className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
+        className={
+          linkClassName ??
+          "inline-flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-50 hover:text-zinc-900"
+        }
         aria-expanded={open}
         aria-haspopup="true"
       >
-        Categories
-        <ChevronDownIcon className="h-4 w-4 transition group-hover:rotate-180" />
+        {showHamburger && <span className="text-base leading-none text-zinc-700">☰</span>}
+        {triggerLabel}
+        <ChevronDownIcon className="h-3.5 w-3.5 opacity-60 transition group-hover:rotate-180" />
       </button>
 
       <div
-        className={`absolute left-1/2 top-full z-50 w-[720px] -translate-x-1/2 pt-2 transition-all duration-200 ${
+        className={`absolute top-full z-50 w-[720px] pt-2 transition-all duration-200 ${
+          align === "left" ? "left-0" : "left-1/2 -translate-x-1/2"
+        } ${
           open
             ? "pointer-events-auto visible translate-y-0 opacity-100"
             : "pointer-events-none invisible -translate-y-2 opacity-0"

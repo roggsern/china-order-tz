@@ -1,7 +1,7 @@
 # CHINA ORDER TZ — Master Specification
 
-**Document Version:** 1.0.0  
-**Last Updated:** June 25, 2026  
+**Document Version:** 1.1.0  
+**Last Updated:** June 26, 2026  
 **Status:** Authoritative — Single Source of Truth  
 **Maintainer:** CHINA ORDER TZ Engineering
 
@@ -25,14 +25,15 @@ This document defines the vision, architecture, standards, and functional scope 
 12. [Authentication](#authentication)
 13. [User Roles](#user-roles)
 14. [Ecommerce Modules](#ecommerce-modules)
-15. [China Order Module](#china-order-module)
-16. [AI Features](#ai-features)
-17. [UI Rules](#ui-rules)
-18. [Coding Standards](#coding-standards)
-19. [Security Standards](#security-standards)
-20. [Performance Standards](#performance-standards)
-21. [SEO Standards](#seo-standards)
-22. [Future Roadmap](#future-roadmap)
+15. [Shipping Architecture](#shipping-architecture)
+16. [China Order Module](#china-order-module)
+17. [AI Features](#ai-features)
+18. [UI Rules](#ui-rules)
+19. [Coding Standards](#coding-standards)
+20. [Security Standards](#security-standards)
+21. [Performance Standards](#performance-standards)
+22. [SEO Standards](#seo-standards)
+23. [Future Roadmap](#future-roadmap)
 
 ---
 
@@ -417,7 +418,7 @@ apps/api/app/
 | ChinaOrder | `App\Services\ChinaOrder` | Link parsing, image upload, quotations |
 | Review | `App\Services\Review` | Product reviews and moderation |
 | Wishlist | `App\Services\Wishlist` | Saved products |
-| Coupon | `App\Services\Coupon` | Discount codes and redemption |
+| Shipping | `App\Services\Shipping` | Per-item rate resolution, method eligibility, cost calculation |
 | Notification | `App\Services\Notification` | Email, SMS, in-app notifications |
 | Ai | `App\Services\Ai` | Search, image matching, recommendations |
 | Admin | `App\Services\Admin` | Dashboard, reporting, moderation |
@@ -459,7 +460,7 @@ apps/api/app/
 |-------|---------|
 | `categories` | Product categories (name, slug, parent_id, sort_order, is_active) |
 | `brands` | Product brands |
-| `products` | Core product records (name, slug, description, base price, status) |
+| `products` | Core product records (name, slug, description, base price, status, `fulfillment_source`) |
 | `product_images` | Product image gallery (url, sort_order, is_primary) |
 | `product_variants` | SKU-level variants (size, color, price, stock) |
 | `product_attributes` | Attribute definitions (e.g., Color, Size) |
@@ -472,17 +473,47 @@ apps/api/app/
 | Table | Purpose |
 |-------|---------|
 | `carts` | Cart sessions (user_id or guest_token) |
-| `cart_items` | Line items (product_variant_id, quantity, unit_price) |
+| `cart_items` | Line items (`product_variant_id`, `quantity`, `unit_price`, **`shipping_method_id`**, **`shipping_cost`**, **`estimated_delivery_days`**) |
+
+**Per-item shipping (required):** Shipping is never stored globally on the cart. Each `cart_item` carries its own `shipping_method_id`, computed `shipping_cost`, and `estimated_delivery_days`. This allows a single order to mix China-import items (air or sea) with local TZ stock (local delivery).
+
+### Shipping (Configurable Rates)
+
+| Table | Purpose |
+|-------|---------|
+| `shipping_methods` | Method definitions (`code`, `name`, `description`, `icon`, `fulfillment_source`, `is_active`, `sort_order`) |
+| `shipping_rates` | Admin-configurable pricing (`shipping_method_id`, `base_cost`, `cost_per_kg`, `min_weight`, `max_weight`, `estimated_delivery_days`, `currency`, `is_active`, optional `effective_from` / `effective_until`) |
+
+**Shipping method codes (seeded defaults):**
+
+| Code | Display | `fulfillment_source` | Customer selectable |
+|------|---------|----------------------|---------------------|
+| `air_freight` | Air Freight | `imported_from_china` | Yes |
+| `sea_freight` | Sea Freight | `imported_from_china` | Yes |
+| `local_delivery` | Local Delivery | `buy_from_tz` | No (auto-applied) |
+
+**Rules:**
+
+- All shipping prices are read from `shipping_rates` at cart/checkout calculation time — **never hardcoded in application code**.
+- Admin users update rates via the admin API/UI without code changes.
+- `App\Services\Shipping\ShippingRateService` resolves cost per line item using product weight, quantity, and the selected (or default) method.
+
+**Product fulfillment source** (`products.fulfillment_source` enum):
+
+| Value | Meaning |
+|-------|---------|
+| `imported_from_china` | Sourced from China; customer may choose Air or Sea Freight per cart line |
+| `buy_from_tz` | Local stock in Tanzania; system assigns Local Delivery automatically |
 
 ### Orders & Fulfillment
 
 | Table | Purpose |
 |-------|---------|
-| `orders` | Order header (user_id, status, subtotal, shipping, tax, total, currency) |
-| `order_items` | Order line items (product snapshot, quantity, price) |
+| `orders` | Order header (`user_id`, `status`, `subtotal`, `shipping_amount`, `discount_amount`, `tax_amount`, `total`, `currency`) — `shipping_amount` is the **sum** of per-line shipping on `order_items` |
+| `order_items` | Order line items (product snapshot, quantity, price, **`shipping_method_id`**, **`shipping_cost`**, **`estimated_delivery_days`**) — shipping snapshotted at order placement |
 | `order_status_history` | Status change audit log |
 | `order_tracking_events` | Shipment milestones (location, description, timestamp) |
-| `shipments` | Shipping method, carrier, tracking number, estimated delivery |
+| `shipments` | Physical shipment records (carrier, tracking number, links to one or more `order_items`) |
 
 ### Payments
 
@@ -555,7 +586,7 @@ apps/api/app/
 | `cache` | Laravel cache store (default migration) |
 | `cache_locks` | Laravel cache locks |
 
-**Total planned tables: 47**
+**Total planned tables: 49**
 
 ---
 
@@ -624,6 +655,7 @@ apps/api/app/
 | Auth | `/auth` | Public / Authenticated |
 | Catalog | `/categories`, `/products`, `/brands` | Public |
 | Cart | `/cart` | Guest token or Authenticated |
+| Shipping | `/shipping/methods`, `/shipping/rates` | Public (methods); Admin (rate CRUD) |
 | Checkout | `/checkout` | Authenticated |
 | Orders | `/orders` | Authenticated |
 | Payments | `/payments` | Authenticated |
@@ -695,7 +727,8 @@ apps/api/app/
 - Create and manage coupons and promotions
 - View analytics, reports, and audit logs
 - Manage users (view, suspend, assign roles)
-- Configure payment methods, shipping rates, and platform settings
+- Configure payment methods and platform settings
+- **Manage shipping methods and rates** (`shipping_methods`, `shipping_rates`) without code changes
 - Send manual notifications to customers
 
 **Access:** `/admin/*` routes (API and dashboard UI)
@@ -759,6 +792,7 @@ apps/api/app/
 **Features:**
 
 - Product detail page with image gallery, variants, pricing, stock status
+- **Fulfillment badge** — "Imported from China" vs "Buy From TZ" drives shipping UX on cart
 - Related and recommended products
 - Add to cart and add to wishlist actions
 - Customer reviews and ratings summary
@@ -774,26 +808,38 @@ apps/api/app/
 
 - Guest and authenticated cart persistence
 - Quantity adjustment and item removal
-- Real-time subtotal, shipping estimate, and discount preview
-- Cart merge on login (guest → authenticated)
+- **Per-item shipping selection** for `imported_from_china` products (Air Freight or Sea Freight)
+- **Automatic Local Delivery** applied to `buy_from_tz` products — no manual selector shown
+- Real-time **Order Summary** preview: Product Total, Shipping Total, Discount, Grand Total
+- Grand Total updates **instantly** (client-side) when a line-item shipping method changes; server recalculates on `PATCH /cart/items/{id}/shipping`
+- Cart merge on login (guest → authenticated); merged items retain or re-default shipping per fulfillment rules
 - Stock validation on cart load and checkout
 - "Save for later" to wishlist
 - Coupon code application
+
+**Cart item shipping fields (persisted on `cart_items`):**
+
+| Field | Description |
+|-------|-------------|
+| `shipping_method_id` | FK to `shipping_methods` |
+| `shipping_cost` | Computed from `shipping_rates` at time of selection or cart load |
+| `estimated_delivery_days` | From active rate row for the selected method |
 
 ## Checkout
 
 **Purpose:** Convert cart to confirmed order.
 
-**Flow:**
+**Layout:** **Single-page checkout** — no multi-step wizard. All sections are visible on one scrollable page:
 
-1. Shipping address selection or creation
-2. Shipping method selection (standard air, express air, sea freight)
-3. Payment method selection
-4. Order review and coupon application
-5. Place order → payment initiation
-6. Confirmation page with order number
+1. **Cart review** — line items with per-item shipping selectors (China-import only) and delivery estimates
+2. **Shipping address** — select existing or create new
+3. **Order summary** — Product Total, Shipping Total, Discount, Grand Total (live-updating sidebar or sticky panel)
+4. **Payment method** — select M-Pesa / card / etc.
+5. **Place order** — single primary CTA
 
-**Validation:** Server-side validation of stock, pricing, and coupon eligibility at order creation.
+Post-submit: payment initiation → confirmation page with order number.
+
+**Validation:** Server-side validation of stock, pricing, shipping method eligibility (method must match product `fulfillment_source`), coupon eligibility, and shipping cost recomputation from `shipping_rates` at order creation. Client-displayed totals must match server totals.
 
 ## Payments
 
@@ -808,12 +854,14 @@ apps/api/app/
 | Debit/Credit Card | Stripe or local gateway | P1 |
 | Bank Transfer | Manual verification | P2 |
 
+**Amount rule (required):** Customer pays **once**. Final amount = **Product Total + Shipping Total − Discount**. No hidden charges, surcharges, or post-checkout fee adjustments. `payments.amount` must equal `orders.total` at initiation.
+
 **Requirements:**
 
 - Idempotent payment initiation (prevent double charge)
 - Webhook handling for async payment confirmation
 - Payment status: `pending`, `processing`, `completed`, `failed`, `refunded`
-- Receipt generation (email + downloadable PDF)
+- Receipt generation (email + downloadable PDF) showing product and shipping line breakdown
 
 ## Orders
 
@@ -822,8 +870,8 @@ apps/api/app/
 **Customer features:**
 
 - Order history list with status badges
-- Order detail with itemized breakdown
-- Invoice/receipt download
+- Order detail with itemized breakdown **including per-line shipping method, cost, and delivery estimate**
+- Invoice/receipt download showing Product Total, Shipping Total, Discount, and Grand Total
 - Cancel order (within allowed window)
 - Request return/refund
 
@@ -909,6 +957,131 @@ apps/api/app/
 - Carrier name and tracking number
 - Estimated delivery date
 - SMS/email updates at key milestones
+
+---
+
+# Shipping Architecture
+
+Shipping is a **per cart line** concern, not a global checkout setting. This supports mixed orders (e.g. one China-import item on sea freight and one local TZ item on local delivery).
+
+## Fulfillment Sources
+
+Every product has `fulfillment_source` on the `products` table:
+
+| Source | Customer experience | Allowed methods |
+|--------|---------------------|-----------------|
+| `imported_from_china` | Customer chooses shipping per line item | Air Freight (`air_freight`), Sea Freight (`sea_freight`) |
+| `buy_from_tz` | Local Delivery applied automatically | Local Delivery (`local_delivery`) only |
+
+**Selection rules:**
+
+- **Imported from China** — show a per-line shipping selector with Air Freight and Sea Freight options. Default to the cheapest active rate (typically sea) on first add-to-cart.
+- **Buy From TZ** — assign `local_delivery` on add-to-cart and on every cart reload. **Do not** render a shipping selector for these lines.
+
+## Configurable Rate Tables
+
+All shipping prices live in the database. Application code reads rates; it never embeds TZS amounts.
+
+```
+shipping_methods ──< shipping_rates
+        │
+        └── referenced by cart_items.shipping_method_id
+            and order_items.shipping_method_id
+```
+
+**`shipping_methods`** — stable method identity:
+
+| Column | Notes |
+|--------|-------|
+| `code` | `air_freight`, `sea_freight`, `local_delivery` (unique) |
+| `name` | Display label (e.g. "Air Freight") |
+| `description` | Optional helper text shown in UI |
+| `fulfillment_source` | Which product source this method applies to |
+| `is_active` | Admin can disable without code deploy |
+| `sort_order` | UI ordering |
+
+**`shipping_rates`** — admin-editable pricing (multiple rows per method for weight tiers):
+
+| Column | Notes |
+|--------|-------|
+| `shipping_method_id` | FK |
+| `base_cost` | Flat component (TZS) |
+| `cost_per_kg` | Optional weight multiplier |
+| `min_weight` / `max_weight` | Optional tier bounds (kg) |
+| `estimated_delivery_days` | Integer shown to customer |
+| `currency` | Default `TZS` |
+| `is_active` | Toggle without delete |
+| `effective_from` / `effective_until` | Optional schedule |
+
+**Cost formula (per line item):**
+
+```
+shipping_cost = base_cost + (cost_per_kg × product.weight × quantity)
+```
+
+Resolved by `App\Services\Shipping\ShippingRateService::calculateForCartItem(CartItem $item, ShippingMethod $method)`.
+
+## Cart Item Shipping State
+
+Each `cart_items` row stores:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `shipping_method_id` | UUID FK | Selected or auto-assigned method |
+| `shipping_cost` | DECIMAL(12,2) | Last computed cost from active rate |
+| `estimated_delivery_days` | UNSIGNED INT | From matched rate row |
+
+**API:**
+
+| Endpoint | Action |
+|----------|--------|
+| `GET /api/v1/shipping/methods` | List active methods (optionally filter by `fulfillment_source`) |
+| `PATCH /api/v1/cart/items/{id}/shipping` | Body: `{ "shipping_method_id": "..." }` — recalculates cost, returns updated cart totals |
+| `POST /api/v1/cart/items` | On add: auto-assign method per fulfillment rules, compute initial shipping |
+
+On quantity change, re-run cost calculation for that line.
+
+## Order Summary (Cart + Checkout)
+
+Displayed in cart page and checkout sticky panel:
+
+| Line | Calculation |
+|------|-------------|
+| **Product Total** | Σ (`unit_price × quantity`) |
+| **Shipping Total** | Σ (`cart_items.shipping_cost`) |
+| **Discount** | Coupon / promotion amount |
+| **Grand Total** | Product Total + Shipping Total − Discount |
+
+**UX requirement:** When the customer changes a line's shipping method, Grand Total updates **immediately** in the UI (optimistic or synchronous API response). Server totals on order placement must match.
+
+## Order Placement Snapshot
+
+On `POST /checkout`, each `order_items` row copies shipping fields from its cart line:
+
+- `shipping_method_id`
+- `shipping_cost`
+- `estimated_delivery_days`
+
+`orders.shipping_amount` = sum of `order_items.shipping_cost`. `orders.total` = `subtotal + shipping_amount + tax_amount − discount_amount`.
+
+## Admin Shipping Management
+
+Admin capabilities (Phase 1 API; Phase 2 UI):
+
+- CRUD `shipping_rates` without code changes
+- Toggle `shipping_methods.is_active` and `shipping_rates.is_active`
+- Preview calculated cost for a sample product weight
+
+Access: `role:admin` on `/api/v1/admin/shipping/*`.
+
+## Frontend Components (Planned)
+
+| Component | Responsibility |
+|-----------|----------------|
+| `CartItemShippingSelector` | Air/Sea toggle per China-import line only |
+| `OrderSummary` | Product Total, Shipping Total, Discount, Grand Total |
+| `CheckoutPage` | Single-page layout composing address, summary, payment |
+| `LocalDeliveryBadge` | Read-only "Local Delivery" label on `buy_from_tz` lines |
 
 ---
 
@@ -1282,7 +1455,8 @@ Mobile-first: design for mobile, enhance for larger screens.
 - [ ] Database migrations for all planned tables
 - [ ] Authentication (register, login, Sanctum)
 - [ ] Catalog CRUD (admin) and public product browsing
-- [ ] Cart and checkout (M-Pesa integration)
+- [ ] Cart, per-item shipping, single-page checkout, and M-Pesa integration
+- [ ] Configurable shipping rates (`shipping_methods`, `shipping_rates`) with admin CRUD
 - [ ] Order management and tracking
 - [ ] China Order module (link paste + image upload + quotation workflow)
 

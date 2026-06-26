@@ -1,0 +1,14 @@
+"use client";
+
+import { Header } from "@/components/home/Header";
+import { Footer } from "@/components/home/Footer";
+
+export function StorefrontShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen bg-white text-zinc-900">
+      <Header />
+      <main>{children}</main>
+      <Footer />
+    </div>
+  );
+}

@@ -1,28 +1,19 @@
 export { categories, megaMenuCategories, getSubcategories, getFeaturedForCategory } from "@/lib/catalog/categories";
+export { buyFromTzBrands } from "@/lib/catalog/brands";
 export { formatPrice } from "@/lib/catalog/utils";
 
-import { getFeaturedProducts } from "@/lib/catalog/products";
+import { buyFromTzBrands } from "@/lib/catalog/brands";
 
 export const navLinks = [
-  { label: "Home", href: "/#home" },
   { label: "How It Works", href: "/#how-it-works" },
-  { label: "Order From China", href: "/#order-from-china" },
   { label: "About", href: "/#about" },
   { label: "Contact", href: "/#contact" },
 ] as const;
 
-export const featuredProducts = getFeaturedProducts(8).map((p) => ({
-  id: p.id,
-  name: p.name,
-  price: p.price,
-  oldPrice: p.oldPrice,
-  rating: p.rating,
-  reviews: p.reviews,
-  badge: p.badge,
-  gradient: p.gradient,
-  emoji: p.emoji,
-  slug: p.slug,
-}));
+export const headerSecondaryNav = [
+  { label: "About Us", href: "/#about" },
+  { label: "Contact Us", href: "/#contact" },
+] as const;
 
 export const howItWorksSteps = [
   {
@@ -79,44 +70,46 @@ export const supportedPlatforms = ["Alibaba", "1688", "Taobao", "Temu"] as const
 
 export const whyChooseUs = [
   {
-    title: "Fast Shipping",
-    description: "Air & sea freight options from China to Tanzania with real-time tracking.",
-    icon: "shipping",
-  },
-  {
-    title: "Trusted Suppliers",
-    description: "Vetted factories and verified sellers — quality you can count on.",
+    title: "Verified Suppliers",
+    description: "Every partner is vetted for quality, reliability, and export compliance.",
     icon: "shield",
   },
   {
     title: "Affordable Prices",
-    description: "Direct-from-factory pricing with no middleman markups.",
+    description: "Factory-direct pricing with transparent TZS quotes — no hidden markups.",
     icon: "tag",
   },
   {
-    title: "Secure Payments",
-    description: "Encrypted checkout with M-Pesa, cards, and bank transfer support.",
-    icon: "lock",
+    title: "Fast Shipping",
+    description: "Air and sea freight from China to Tanzania with real-time tracking.",
+    icon: "shipping",
+  },
+  {
+    title: "Customer Support",
+    description: "Dedicated support team available via phone, email, and WhatsApp.",
+    icon: "support",
   },
 ] as const;
 
 export const footerLinks = {
-  shop: [
-    { label: "All Categories", href: "/categories" },
-    { label: "Featured Deals", href: "/products" },
-    { label: "New Arrivals", href: "/products?sort=newest" },
-    { label: "Bulk Orders", href: "/#contact" },
-  ],
-  company: [
-    { label: "About Us", href: "/#about" },
-    { label: "How It Works", href: "/#how-it-works" },
+  about: [
+    { label: "Our Story", href: "/#about" },
+    { label: "Why Choose Us", href: "/#about" },
     { label: "Order From China", href: "/#order-from-china" },
-    { label: "Contact", href: "/#contact" },
   ],
-  support: [
-    { label: "Help Center", href: "/#contact" },
-    { label: "Track Order", href: "/#contact" },
-    { label: "Returns", href: "/#contact" },
-    { label: "Privacy Policy", href: "/#contact" },
+  contact: [
+    { label: "hello@chinaordertz.com", href: "mailto:hello@chinaordertz.com" },
+    { label: "+255 123 456 789", href: "tel:+255123456789" },
+    { label: "Dar es Salaam, Tanzania", href: "/#contact" },
   ],
+  quickLinks: [
+    { label: "All Categories", href: "/categories" },
+    { label: "Featured Products", href: "/#products" },
+    { label: "Shop All", href: "/products" },
+    { label: "Login", href: "/login" },
+  ],
+  buyFromTz: buyFromTzBrands.map((brand) => ({
+    label: brand.label,
+    href: `/products?brand=${brand.slug}`,
+  })),
 } as const;

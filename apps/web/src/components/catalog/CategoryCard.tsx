@@ -1,20 +1,29 @@
 import Link from "next/link";
-import type { Category } from "@/lib/types/catalog";
-import { getProductsByCategory } from "@/lib/catalog/products";
+import type { Category, Product } from "@/lib/types/catalog";
 import { ArrowRightIcon } from "@/components/home/icons";
 
 interface CategoryCardProps {
   category: Category;
   showProductCount?: boolean;
+  catalog?: Product[];
+  productCount?: number;
 }
 
-export function CategoryCard({ category, showProductCount = true }: CategoryCardProps) {
-  const productCount = getProductsByCategory(category.slug).length;
+export function CategoryCard({
+  category,
+  showProductCount = true,
+  catalog,
+  productCount: productCountProp,
+}: CategoryCardProps) {
+  const productCount =
+    productCountProp ??
+    catalog?.filter((product) => product.categorySlug === category.slug).length ??
+    0;
 
   return (
     <Link
-      href={`/products?category=${category.slug}`}
-      className="group relative overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200/80 transition hover:-translate-y-1 hover:shadow-xl hover:ring-[#c9a227]/30"
+      href={`/categories/${category.slug}`}
+      className="group relative overflow-hidden rounded-2xl bg-white shadow-[0_2px_16px_rgba(0,0,0,0.05)] ring-1 ring-zinc-200/80 transition duration-500 hover:-translate-y-1 hover:shadow-[0_20px_48px_rgba(0,0,0,0.1)] hover:ring-[#c9a227]/30"
     >
       <div
         className={`relative flex h-40 items-center justify-center bg-gradient-to-br ${category.gradient}`}
