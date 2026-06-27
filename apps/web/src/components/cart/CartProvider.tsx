@@ -46,6 +46,8 @@ import { applyCartItemShipping } from "@/lib/cart/shipping";
 import { clearCheckoutDraft } from "@/lib/checkout/draft";
 import { isAdminPath, isPostCheckoutPath } from "@/lib/checkout/routes";
 import { PRODUCTS_UPDATED_EVENT } from "@/lib/admin/product-storage";
+import { CartDrawerProvider } from "@/lib/cart/drawer-context";
+import { CartDrawer } from "./CartDrawer";
 
 function persistState(state: CartState) {
   saveCartState(state);
@@ -440,7 +442,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
   return (
     <CartStateContext.Provider value={stateValue}>
       <CartActionsContext.Provider value={actionsValue}>
-        <CartContext.Provider value={value}>{children}</CartContext.Provider>
+        <CartContext.Provider value={value}>
+          <CartDrawerProvider>
+            {children}
+            <CartDrawer />
+          </CartDrawerProvider>
+        </CartContext.Provider>
       </CartActionsContext.Provider>
     </CartStateContext.Provider>
   );

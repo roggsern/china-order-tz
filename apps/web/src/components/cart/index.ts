@@ -1,4 +1,7 @@
 export { CartProvider, useAddToCart } from "./CartProvider";
+export { CartDrawer } from "./CartDrawer";
+export { CartDrawerItem } from "./CartDrawerItem";
+export { CartIconButton } from "./CartIconButton";
 export { CartPageContent } from "./CartPageContent";
 export { CartItemRow } from "./CartItemRow";
 export { SavedForLaterRow } from "./SavedForLaterRow";

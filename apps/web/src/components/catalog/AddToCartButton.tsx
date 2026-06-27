@@ -9,6 +9,7 @@ import {
 } from "@/lib/catalog/variants";
 import { CartIcon } from "@/components/home/icons";
 import { useAddToCart } from "@/components/cart/CartProvider";
+import { useCartDrawer } from "@/lib/cart/drawer-context";
 
 interface AddToCartButtonProps {
   product: Product;
@@ -35,12 +36,14 @@ export function AddToCartButton({
     variant: selectedVariant,
     disabled: isDisabled,
   });
+  const { open: openCartDrawer } = useCartDrawer();
   const [added, setAdded] = useState(false);
 
   const handleClick = () => {
     if (isDisabled) return;
 
     addToCart();
+    openCartDrawer();
     setAdded(true);
     window.setTimeout(() => setAdded(false), 1800);
   };

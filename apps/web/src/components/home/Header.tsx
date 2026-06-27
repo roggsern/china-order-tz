@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { HorizontalBrandLogo } from "@/components/branding/HorizontalBrandLogo";
-import { useCart } from "@/lib/cart/context";
+import { CartIconButton } from "@/components/cart/CartIconButton";
 import { headerSecondaryNav } from "@/lib/home-data";
 import { BrandMegaMenu } from "./BrandMegaMenu";
-import { CartIcon, CloseIcon, MenuIcon, UserIcon } from "./icons";
+import { CloseIcon, MenuIcon, UserIcon } from "./icons";
 import { MegaMenu } from "./MegaMenu";
 import { SearchBar } from "./SearchBar";
 
@@ -25,8 +25,6 @@ const mobileNavLinkClass =
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [drawerActive, setDrawerActive] = useState(false);
-  const { totals, isHydrated } = useCart();
-  const cartCount = isHydrated ? totals.itemCount : 0;
 
   useEffect(() => {
     if (mobileOpen) {
@@ -69,20 +67,11 @@ export function Header() {
                 <span className="hidden lg:inline">Login</span>
               </Link>
 
-              <Link
-                href="/cart"
+              <CartIconButton
+                showLabel
                 className="inline-flex h-[52px] shrink-0 items-center gap-2 whitespace-nowrap text-[13px] font-medium text-zinc-600 transition-colors hover:text-zinc-900 xl:text-sm"
-              >
-                <span className="relative shrink-0">
-                  <CartIcon className="h-[18px] w-[18px]" />
-                  {cartCount > 0 && (
-                    <span className="absolute -right-2.5 -top-2 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#c9a227] px-1 text-[10px] font-bold text-zinc-900">
-                      {cartCount > 99 ? "99+" : cartCount}
-                    </span>
-                  )}
-                </span>
-                <span className="hidden lg:inline">Cart</span>
-              </Link>
+                labelClassName="hidden lg:inline"
+              />
 
               <Link href="#order-from-china" className={orderFromChinaButtonClass}>
                 Order From China
@@ -117,18 +106,11 @@ export function Header() {
             <HorizontalBrandLogo size="header" height={52} />
 
             <div className="ml-auto flex shrink-0 items-center gap-1">
-              <Link
-                href="/cart"
+              <CartIconButton
                 className="relative inline-flex shrink-0 items-center rounded-lg p-2 text-zinc-600 transition hover:bg-zinc-50 hover:text-zinc-900"
-                aria-label="Cart"
-              >
-                <CartIcon className="h-5 w-5" />
-                {cartCount > 0 && (
-                  <span className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#c9a227] text-[9px] font-bold text-zinc-900">
-                    {cartCount > 99 ? "99+" : cartCount}
-                  </span>
-                )}
-              </Link>
+                iconClassName="h-5 w-5"
+                badgeClassName="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#c9a227] text-[9px] font-bold text-zinc-900"
+              />
 
               <button
                 type="button"
