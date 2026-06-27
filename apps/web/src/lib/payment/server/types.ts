@@ -61,3 +61,21 @@ export type MpesaStkCallbackPayload = {
     };
   };
 };
+
+export type SimulatePaymentResult = {
+  success: boolean;
+  transactionId: string;
+  paymentReference: string;
+  status: "paid";
+  orderId: string;
+  orderNumber: string;
+  amount: number;
+  message: string;
+  mode: "test";
+};
+
+export type PaymentConfigResponse = {
+  testMode: boolean;
+  mode: "test" | "live";
+  simulateEnabled: boolean;
+};

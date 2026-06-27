@@ -16,8 +16,10 @@ import type {
   InitiatePaymentResult,
   MpesaStkCallbackPayload,
   PaymentTransaction,
+  SimulatePaymentResult,
   VerifyPaymentResult,
 } from "@/lib/payment/server/types";
+import { logServerPaymentEvent } from "@/lib/payment/server/payment-logger";
 
 const TEST_AUTO_COMPLETE_MS = 2_500;
 
@@ -225,6 +227,59 @@ export class ServerPaymentGateway {
       transactionId: transaction.transactionId,
       status: "failed",
       message: callback.ResultDesc ?? "Payment failed.",
+    };
+  }
+
+  /**
+   * Instantly completes a payment in test mode — no STK Push, no real money.
+   */
+  simulatePayment(input: InitiatePaymentInput): SimulatePaymentResult {
+    if (!isPaymentTestMode()) {
+      throw new Error("Simulate payment is only available in test mode.");
+    }
+
+    const transactionId = generateTransactionId();
+    const paymentReference = generateTestReceipt();
+    const now = new Date().toISOString();
+    const normalizedPhone = normalizeMpesaPhone(input.phone) || input.phone;
+
+    const paid: PaymentTransaction = {
+      transactionId,
+      orderId: input.orderId,
+      orderNumber: input.orderNumber,
+      amount: input.amount,
+      phone: normalizedPhone,
+      status: "paid",
+      paymentReference,
+      checkoutRequestId: `SIM-CR-${transactionId.slice(-12).toUpperCase()}`,
+      merchantRequestId: `SIM-MR-${transactionId.slice(-12).toUpperCase()}`,
+      provider: "mpesa",
+      mode: "test",
+      failureReason: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    saveTransaction(paid);
+
+    logServerPaymentEvent("simulate:completed", {
+      transactionId,
+      orderId: input.orderId,
+      orderNumber: input.orderNumber,
+      paymentReference,
+      amount: input.amount,
+    });
+
+    return {
+      success: true,
+      transactionId,
+      paymentReference,
+      status: "paid",
+      orderId: input.orderId,
+      orderNumber: input.orderNumber,
+      amount: input.amount,
+      message: "Test payment simulated successfully. No real money was charged.",
+      mode: "test",
     };
   }
 }

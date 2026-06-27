@@ -22,10 +22,13 @@ import {
   savePaymentTransaction,
 } from "@/lib/payment/payment-session";
 import { shouldRedirectToOrderSuccess } from "@/lib/order/placement";
+import { usePaymentTestMode } from "@/hooks/use-payment-test-mode";
 import { CheckoutSection } from "./CheckoutSection";
 import { CheckoutOrderSummary } from "./CheckoutOrderSummary";
 import { CheckoutStepIndicator } from "./CheckoutStepIndicator";
 import { SimplifiedPaymentMethodSelector } from "@/components/payment/SimplifiedPaymentMethodSelector";
+import { TestModeBanner } from "@/components/payment/TestModeBanner";
+import { SimulatePaymentButton } from "@/components/payment/SimulatePaymentButton";
 
 function redirectToOrderSuccess(router: ReturnType<typeof useRouter>, orderId: string): void {
   clearCheckoutDraft();
@@ -61,8 +64,10 @@ export function PaymentPageContent() {
   const [submitError, setSubmitError] = useState<string | undefined>();
   const [failedOrder, setFailedOrder] = useState<Order | null>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [isSimulating, setIsSimulating] = useState(false);
   const paymentLockRef = useRef(false);
   const mountedRef = useRef(false);
+  const { simulateEnabled, testMode } = usePaymentTestMode();
 
   useEffect(() => {
     if (mountedRef.current) {
@@ -195,6 +200,72 @@ export function PaymentPageContent() {
     }
   }, [clearPurchasedItems, draft, isProcessingPayment, paymentMethod, router]);
 
+  const handleSimulatePayment = useCallback(async () => {
+    if (paymentLockRef.current || isProcessingPayment || isSimulating || !draft) {
+      return;
+    }
+
+    if (draft.items.length === 0) {
+      setSubmitError("Your cart is empty. Add items before placing an order.");
+      return;
+    }
+
+    const existingOrderId = getOrderIdForDraft(draft.draftId);
+    if (existingOrderId) {
+      const existing = getStoredOrderById(existingOrderId);
+      if (existing && shouldRedirectToOrderSuccess(existing)) {
+        finishOrder(existing, clearPurchasedItems, router);
+        return;
+      }
+    }
+
+    if (!acquireDraftSubmissionLock(draft.draftId)) {
+      return;
+    }
+
+    setPaymentError(undefined);
+    setFailedOrder(null);
+    setSubmitError(undefined);
+    paymentLockRef.current = true;
+    setIsSimulating(true);
+
+    try {
+      const order = await paymentService.createOrder({
+        customer: draft.customer,
+        shippingAddress: draft.shippingAddress,
+        orderNotes: draft.orderNotes,
+        items: draft.items,
+        totals: draft.totals,
+        paymentMethod: PAYMENT_METHOD_CODES.MPESA,
+        cartSnapshot: draft.cartSnapshot,
+        shippingMethod: draft.shippingMethod,
+        itemShippingBreakdown: draft.itemShippingBreakdown,
+        idempotencyKey: draft.draftId,
+      });
+
+      lockCartForOrder(order.id, clearPurchasedItems);
+      const paidOrder = await paymentService.simulatePayment(order);
+      finishOrder(paidOrder, clearPurchasedItems, router);
+    } catch (error) {
+      releaseDraftSubmissionLock(draft.draftId);
+      paymentLockRef.current = false;
+
+      const linkedOrderId = getOrderIdForDraft(draft.draftId);
+      if (linkedOrderId) {
+        const linkedOrder = getStoredOrderById(linkedOrderId);
+        if (linkedOrder) {
+          lockCartForOrder(linkedOrder.id, clearPurchasedItems);
+          setFailedOrder(linkedOrder);
+        }
+      }
+
+      const message =
+        error instanceof Error ? error.message : "Simulated payment failed. Please try again.";
+      setSubmitError(message);
+      setIsSimulating(false);
+    }
+  }, [clearPurchasedItems, draft, isProcessingPayment, isSimulating, router]);
+
   const handlePaymentChange = (code: PaymentMethodCode) => {
     if (isProcessingPayment) {
       return;
@@ -261,6 +332,8 @@ export function PaymentPageContent() {
 
       <CheckoutStepIndicator current="payment" />
 
+      {testMode && simulateEnabled ? <TestModeBanner className="mt-6" /> : null}
+
       {failedOrder ? (
         <div
           role="alert"
@@ -297,14 +370,31 @@ export function PaymentPageContent() {
               {submitError}
             </p>
           ) : null}
+
+          {simulateEnabled ? (
+            <CheckoutSection
+              title="Developer Test Tools"
+              description="Skip real payment and complete checkout instantly."
+            >
+              <SimulatePaymentButton
+                onClick={handleSimulatePayment}
+                disabled={isProcessingPayment}
+                isLoading={isSimulating}
+              />
+              <p className="mt-2 text-xs leading-relaxed text-zinc-500">
+                Marks the order as paid, generates a fake transaction ID, and sets tracking to
+                Processing — safe for local testing only.
+              </p>
+            </CheckoutSection>
+          ) : null}
         </fieldset>
 
         <CheckoutOrderSummary
           items={draft.items}
           totals={draft.totals}
           onSubmit={handleSubmit}
-          isSubmitting={isProcessingPayment}
-          submitDisabled={isProcessingPayment}
+          isSubmitting={isProcessingPayment || isSimulating}
+          submitDisabled={isProcessingPayment || isSimulating}
           submitLabel={submitLabel}
           submitHint={
             isProcessingPayment

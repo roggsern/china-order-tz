@@ -1,5 +1,6 @@
 export { PaymentService, paymentService } from "./PaymentService";
-export { initiatePaymentRequest, verifyPaymentRequest } from "./client-api";
+export { initiatePaymentRequest, verifyPaymentRequest, simulatePaymentRequest, fetchPaymentConfig } from "./client-api";
+export { logPaymentEvent } from "./payment-logger";
 export {
   savePaymentTransaction,
   getPaymentTransaction,

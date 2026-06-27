@@ -20,6 +20,9 @@ import { PaymentStatusBadge } from "@/components/payment/PaymentStatusBadge";
 import { OrderSummaryTotals } from "@/components/cart/OrderSummaryTotals";
 import { OrderSuccessItemsList } from "@/components/order/OrderSuccessItemsList";
 import { CopyOrderNumber } from "@/components/order/CopyOrderNumber";
+import { usePaymentTestMode } from "@/hooks/use-payment-test-mode";
+import { TestModeBanner } from "@/components/payment/TestModeBanner";
+import { SimulatePaymentButton } from "@/components/payment/SimulatePaymentButton";
 
 interface PaymentConfirmationContentProps {
   orderId: string;
@@ -38,7 +41,9 @@ export function PaymentConfirmationContent({ orderId }: PaymentConfirmationConte
   );
   const [phase, setPhase] = useState<ConfirmationPhase>("pending");
   const [modeLabel, setModeLabel] = useState<string | null>(null);
+  const [isSimulating, setIsSimulating] = useState(false);
   const pollingRef = useRef(false);
+  const { simulateEnabled, testMode } = usePaymentTestMode();
 
   useEffect(() => {
     const fromQuery = searchParams.get("transactionId");
@@ -90,6 +95,31 @@ export function PaymentConfirmationContent({ orderId }: PaymentConfirmationConte
     }
   }, [orderId, phase, transactionId]);
 
+  const handleSimulatePayment = useCallback(async () => {
+    if (!order || isSimulating || phase === "paid") {
+      return;
+    }
+
+    setIsSimulating(true);
+    setStatusMessage("Simulating test payment…");
+
+    try {
+      const paidOrder = await paymentService.simulatePayment(order);
+      setPhase("paid");
+      setStatusMessage("Test payment completed successfully.");
+      clearPaymentTransaction(orderId);
+      clearCheckoutDraft();
+      lockCartForOrder(paidOrder.id, clearPurchasedItems);
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error ? error.message : "Simulated payment failed.",
+      );
+      setPhase("failed");
+    } finally {
+      setIsSimulating(false);
+    }
+  }, [clearPurchasedItems, isSimulating, order, orderId, phase]);
+
   useEffect(() => {
     if (!transactionId || phase !== "pending") {
       return;
@@ -118,6 +148,8 @@ export function PaymentConfirmationContent({ orderId }: PaymentConfirmationConte
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+      {testMode && simulateEnabled ? <TestModeBanner className="mb-6" /> : null}
+
       <AnimatePresence mode="wait">
         <motion.div
           key={phase}
@@ -259,9 +291,20 @@ export function PaymentConfirmationContent({ orderId }: PaymentConfirmationConte
           ) : null}
 
           {phase === "pending" ? (
-            <p className="w-full text-center text-xs text-zinc-400">
-              Do not close this page until payment is confirmed.
-            </p>
+            <div className="flex w-full flex-col gap-3">
+              {simulateEnabled ? (
+                <SimulatePaymentButton
+                  onClick={handleSimulatePayment}
+                  isLoading={isSimulating}
+                  disabled={isSimulating}
+                />
+              ) : null}
+              <p className="text-center text-xs text-zinc-400">
+                {simulateEnabled
+                  ? "Or wait for STK Push confirmation — do not close this page."
+                  : "Do not close this page until payment is confirmed."}
+              </p>
+            </div>
           ) : null}
         </div>
       </article>

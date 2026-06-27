@@ -30,8 +30,9 @@ import {
 } from "@/lib/payment/order-storage";
 import { syncTimelineWithOrder } from "@/lib/payment/timeline";
 import { lockCartForOrderInStorage } from "@/lib/order/cart-lock";
-import { initiatePaymentRequest, verifyPaymentRequest } from "@/lib/payment/client-api";
-import type { InitiatePaymentResult, VerifyPaymentResult } from "@/lib/payment/server/types";
+import { initiatePaymentRequest, simulatePaymentRequest, verifyPaymentRequest } from "@/lib/payment/client-api";
+import type { InitiatePaymentResult, SimulatePaymentResult, VerifyPaymentResult } from "@/lib/payment/server/types";
+import { logPaymentEvent } from "@/lib/payment/payment-logger";
 
 function applyOrderUpdate(order: Order, patch: Partial<Order>): Order {
   const now = new Date().toISOString();
@@ -299,6 +300,13 @@ export class PaymentService {
 
     const result = await initiatePaymentRequest(order);
 
+    logPaymentEvent("initiate:complete", {
+      orderId: order.id,
+      transactionId: result.transactionId,
+      status: result.status,
+      mode: result.mode,
+    });
+
     if (result.transactionId) {
       updateOrderById(order.id, (entry) =>
         applyOrderUpdate(entry, { paymentTransactionId: result.transactionId }),
@@ -318,13 +326,88 @@ export class PaymentService {
   async verifyPayment(transactionId: string): Promise<VerifyPaymentResult> {
     const result = await verifyPaymentRequest(transactionId);
 
+    logPaymentEvent("verify:poll", {
+      transactionId,
+      status: result.status,
+      orderId: result.orderId,
+    });
+
     if (result.status === "paid") {
+      logPaymentEvent("verify:paid", {
+        transactionId,
+        paymentReference: result.paymentReference,
+      });
       this.handlePaymentCallback(result.orderId, "paid", result.paymentReference);
     } else if (result.status === "failed") {
+      logPaymentEvent("verify:failed", { transactionId, message: result.message });
       this.handlePaymentCallback(result.orderId, "failed", null);
     }
 
     return result;
+  }
+
+  /**
+   * Test mode only — instantly marks payment as paid with a fake transaction ID
+   * and advances fulfillment to Processing for end-to-end testing.
+   */
+  async simulatePayment(order: Order): Promise<Order> {
+    logPaymentEvent("simulate:start", {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      amount: order.totals.grandTotal,
+    });
+
+    let result: SimulatePaymentResult;
+
+    try {
+      result = await simulatePaymentRequest(order);
+      logPaymentEvent("simulate:server", {
+        transactionId: result.transactionId,
+        paymentReference: result.paymentReference,
+      });
+    } catch (error) {
+      logPaymentEvent("simulate:failed", {
+        orderId: order.id,
+        message: error instanceof Error ? error.message : "Simulate failed",
+      });
+      throw error;
+    }
+
+    const paid = this.handlePaymentCallback(order.id, "paid", result.paymentReference);
+    if (!paid) {
+      logPaymentEvent("simulate:failed", { orderId: order.id, reason: "order_update_failed" });
+      throw new Error("Simulated payment succeeded but the order could not be updated.");
+    }
+
+    logPaymentEvent("simulate:paid", {
+      orderId: order.id,
+      paymentReference: result.paymentReference,
+      transactionId: result.transactionId,
+    });
+
+    updateOrderById(order.id, (entry) =>
+      applyOrderUpdate(entry, { paymentTransactionId: result.transactionId }),
+    );
+
+    const processing = this.updateOrderStatus(paid.orderNumber, ORDER_STATUS.PROCESSING);
+    if (!processing) {
+      logPaymentEvent("simulate:failed", { orderId: order.id, reason: "status_update_failed" });
+      throw new Error("Payment recorded but order status could not be advanced.");
+    }
+
+    logPaymentEvent("simulate:processing", {
+      orderId: order.id,
+      orderStatus: ORDER_STATUS.PROCESSING,
+    });
+
+    logPaymentEvent("simulate:complete", {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      transactionId: result.transactionId,
+      paymentReference: result.paymentReference,
+    });
+
+    return processing;
   }
 
   getActiveCheckoutOrder(): Order | null {
