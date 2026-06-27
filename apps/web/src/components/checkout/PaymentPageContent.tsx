@@ -19,8 +19,8 @@ import { paymentService } from "@/lib/payment/PaymentService";
 import { getOrderById as getStoredOrderById } from "@/lib/payment/order-storage";
 import {
   getPaymentTransaction,
-  savePaymentTransaction,
 } from "@/lib/payment/payment-session";
+import { redirectToPaymentProcessing } from "@/lib/payment/stk-flow";
 import { shouldRedirectToOrderSuccess } from "@/lib/order/placement";
 import { usePaymentTestMode } from "@/hooks/use-payment-test-mode";
 import { CheckoutSection } from "./CheckoutSection";
@@ -33,16 +33,6 @@ import { SimulatePaymentButton } from "@/components/payment/SimulatePaymentButto
 function redirectToOrderSuccess(router: ReturnType<typeof useRouter>, orderId: string): void {
   clearCheckoutDraft();
   router.replace(`/order-success/${orderId}`);
-}
-
-function redirectToPaymentConfirmation(
-  router: ReturnType<typeof useRouter>,
-  orderId: string,
-  transactionId: string,
-): void {
-  savePaymentTransaction(orderId, transactionId);
-  clearCheckoutDraft();
-  router.replace(`/checkout/payment/confirm/${orderId}?transactionId=${encodeURIComponent(transactionId)}`);
 }
 
 function finishOrder(
@@ -97,7 +87,8 @@ export function PaymentPageContent() {
           const transactionId =
             existing.paymentTransactionId ?? getPaymentTransaction(existing.id);
           if (transactionId) {
-            redirectToPaymentConfirmation(router, existing.id, transactionId);
+            clearCheckoutDraft();
+            redirectToPaymentProcessing(router, existing.id, transactionId);
             return;
           }
         }
@@ -169,13 +160,9 @@ export function PaymentPageContent() {
       lockCartForOrder(order.id, clearPurchasedItems);
 
       if (paymentMethod === PAYMENT_METHOD_CODES.MPESA) {
-        const payment = await paymentService.initiatePayment(order);
-
-        if (!payment.success || !payment.transactionId) {
-          throw new Error(payment.message ?? "M-Pesa payment could not be initiated.");
-        }
-
-        redirectToPaymentConfirmation(router, order.id, payment.transactionId);
+        const { transactionId } = await paymentService.beginStkPaymentProcessing(order);
+        clearCheckoutDraft();
+        redirectToPaymentProcessing(router, order.id, transactionId);
         return;
       }
 
@@ -244,8 +231,10 @@ export function PaymentPageContent() {
       });
 
       lockCartForOrder(order.id, clearPurchasedItems);
-      const paidOrder = await paymentService.simulatePayment(order);
-      finishOrder(paidOrder, clearPurchasedItems, router);
+
+      const { transactionId } = await paymentService.beginStkPaymentProcessing(order);
+      clearCheckoutDraft();
+      redirectToPaymentProcessing(router, order.id, transactionId, { simulated: true });
     } catch (error) {
       releaseDraftSubmissionLock(draft.draftId);
       paymentLockRef.current = false;
@@ -382,8 +371,8 @@ export function PaymentPageContent() {
                 isLoading={isSimulating}
               />
               <p className="mt-2 text-xs leading-relaxed text-zinc-500">
-                Marks the order as paid, generates a fake transaction ID, and sets tracking to
-                Processing — safe for local testing only.
+                Marks the order as processing, simulates STK Push timing (~4s), then confirms
+                payment — safe for local testing only.
               </p>
             </CheckoutSection>
           ) : null}
@@ -397,9 +386,9 @@ export function PaymentPageContent() {
           submitDisabled={isProcessingPayment || isSimulating}
           submitLabel={submitLabel}
           submitHint={
-            isProcessingPayment
-              ? paymentMethod === PAYMENT_METHOD_CODES.MPESA
-                ? "Initiating STK Push — please wait"
+            isProcessingPayment || isSimulating
+              ? paymentMethod === PAYMENT_METHOD_CODES.MPESA || isSimulating
+                ? "Redirecting to payment processing…"
                 : "Processing — please do not refresh or click again"
               : failedOrder
                 ? "Retry payment — your order is already saved"

@@ -1,28 +1,26 @@
-import type { Metadata } from "next";
-import { Suspense } from "react";
-import { PaymentConfirmationContent } from "@/components/checkout/PaymentConfirmationContent";
+import { redirect } from "next/navigation";
 
 type PageProps = {
   params: Promise<{ orderId: string }>;
+  searchParams: Promise<{ transactionId?: string; simulated?: string }>;
 };
 
-export const metadata: Metadata = {
-  title: "Payment Confirmation — CHINA ORDER TZ",
-  description: "Confirm your M-Pesa payment and view order status.",
-};
-
-export default async function PaymentConfirmationPage({ params }: PageProps) {
+/** Legacy route — forwards to the STK processing experience. */
+export default async function PaymentConfirmRedirectPage({
+  params,
+  searchParams,
+}: PageProps) {
   const { orderId } = await params;
+  const query = await searchParams;
 
-  return (
-    <Suspense
-      fallback={
-        <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6" aria-busy="true">
-          <div className="mx-auto h-16 w-16 animate-pulse rounded-full bg-zinc-100" />
-        </div>
-      }
-    >
-      <PaymentConfirmationContent orderId={orderId} />
-    </Suspense>
-  );
+  const urlParams = new URLSearchParams();
+  if (query.transactionId) {
+    urlParams.set("transactionId", query.transactionId);
+  }
+  if (query.simulated) {
+    urlParams.set("simulated", query.simulated);
+  }
+
+  const suffix = urlParams.toString();
+  redirect(`/checkout/payment/processing/${orderId}${suffix ? `?${suffix}` : ""}`);
 }

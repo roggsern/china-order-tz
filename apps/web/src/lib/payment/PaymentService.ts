@@ -347,8 +347,46 @@ export class PaymentService {
   }
 
   /**
-   * Test mode only — instantly marks payment as paid with a fake transaction ID
-   * and advances fulfillment to Processing for end-to-end testing.
+   * Starts STK-style payment: order fulfillment → Processing, payment stays pending,
+   * gateway transaction created for polling on the processing page.
+   */
+  async beginStkPaymentProcessing(
+    order: Order,
+  ): Promise<{ order: Order; transactionId: string }> {
+    logPaymentEvent("stk:begin", {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+    });
+
+    const processing = this.updateOrderStatus(order.orderNumber, ORDER_STATUS.PROCESSING);
+    const working = processing ?? order;
+
+    const result = await this.initiatePayment(working);
+
+    if (!result.success || !result.transactionId) {
+      logPaymentEvent("stk:failed", {
+        orderId: order.id,
+        message: result.message,
+      });
+      throw new Error(result.message ?? "M-Pesa STK Push could not be initiated.");
+    }
+
+    logPaymentEvent("stk:initiated", {
+      orderId: order.id,
+      transactionId: result.transactionId,
+      mode: result.mode,
+    });
+
+    const latest = this.getOrderById(order.id);
+    if (!latest) {
+      throw new Error("Order could not be loaded after STK initiation.");
+    }
+
+    return { order: latest, transactionId: result.transactionId };
+  }
+
+  /**
+   * @deprecated Use beginStkPaymentProcessing + processing page polling for realistic STK UX.
    */
   async simulatePayment(order: Order): Promise<Order> {
     logPaymentEvent("simulate:start", {
@@ -447,9 +485,14 @@ export class PaymentService {
         paymentMethod: order.paymentMethod,
       });
 
+      const nextStatus =
+        mappedStatus === PAYMENT_STATUS.PAID && order.status === ORDER_STATUS.PROCESSING
+          ? ORDER_STATUS.PROCESSING
+          : reconciled.status;
+
       return applyOrderUpdate(order, {
         paymentStatus: reconciled.paymentStatus,
-        status: reconciled.status,
+        status: nextStatus,
         paymentReference:
           options?.paymentReference !== undefined
             ? options.paymentReference

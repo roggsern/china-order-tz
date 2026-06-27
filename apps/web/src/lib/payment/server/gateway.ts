@@ -21,7 +21,7 @@ import type {
 } from "@/lib/payment/server/types";
 import { logServerPaymentEvent } from "@/lib/payment/server/payment-logger";
 
-const TEST_AUTO_COMPLETE_MS = 2_500;
+const TEST_AUTO_COMPLETE_MS = 4_000;
 
 function generateTransactionId(): string {
   return `txn_${crypto.randomUUID().replace(/-/g, "")}`;

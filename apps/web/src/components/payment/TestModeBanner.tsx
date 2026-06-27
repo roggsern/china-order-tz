@@ -21,8 +21,8 @@ export function TestModeBanner({ className = "" }: TestModeBannerProps) {
           </p>
           <p className="mt-1 text-sm leading-relaxed text-zinc-600">
             Payments are simulated for development. Use{" "}
-            <span className="font-semibold text-zinc-800">Simulate Payment</span> to complete checkout
-            instantly, or use M-Pesa STK for async test flow.
+            <span className="font-semibold text-zinc-800">Simulate Payment</span> for a realistic
+            STK flow with processing delay, or pay with M-Pesa for the full async experience.
           </p>
         </div>
       </div>

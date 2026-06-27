@@ -122,3 +122,9 @@ export const ORDER_STATUS_LABELS: Record<string, string> = {
 
 /** Client polling interval while waiting for M-Pesa STK confirmation (ms). */
 export const PAYMENT_VERIFY_POLL_MS = 2_000;
+
+/** Target STK auto-complete window in test mode (ms) — aligns with server gateway delay. */
+export const PAYMENT_STK_COMPLETE_MS = 4_000;
+
+/** Brief pause on "Confirming" before redirect to order success (ms). */
+export const PAYMENT_SUCCESS_REDIRECT_MS = 800;

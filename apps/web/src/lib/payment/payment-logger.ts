@@ -13,7 +13,12 @@ export type PaymentLogEvent =
   | "verify:poll"
   | "verify:paid"
   | "verify:failed"
-  | "callback:received";
+  | "callback:received"
+  | "stk:begin"
+  | "stk:initiated"
+  | "stk:confirmed"
+  | "stk:complete"
+  | "stk:failed";
 
 export function logPaymentEvent(
   event: PaymentLogEvent,
