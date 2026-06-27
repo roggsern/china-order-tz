@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AnimatedLogo } from "@/components/branding/AnimatedLogo";
+import { LoginForm } from "@/components/auth/LoginForm";
 
 export default function LoginPage() {
   return (
@@ -15,51 +16,7 @@ export default function LoginPage() {
             Sign in to your CHINA ORDER TZ account
           </p>
 
-          <form className="mt-8 space-y-5" action="#" method="post">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-zinc-300">
-                Email
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                className="mt-1.5 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-white placeholder:text-zinc-500 outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
-                placeholder="you@example.com"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-zinc-300">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                className="mt-1.5 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-white placeholder:text-zinc-500 outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
-                placeholder="••••••••"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full rounded-xl bg-[#c9a227] py-3 text-sm font-bold uppercase tracking-wide text-zinc-900 shadow-lg shadow-[#c9a227]/20 transition hover:bg-[#e8c547]"
-            >
-              Sign in
-            </button>
-          </form>
-
-          <p className="mt-6 text-center text-sm text-zinc-500">
-            Don&apos;t have an account?{" "}
-            <Link href="#" className="font-medium text-[#e8c547] hover:text-[#c9a227]">
-              Create account
-            </Link>
-          </p>
+          <LoginForm />
         </div>
 
         <p className="mt-8 text-center">

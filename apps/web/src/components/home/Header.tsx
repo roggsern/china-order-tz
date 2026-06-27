@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { HorizontalBrandLogo } from "@/components/branding/HorizontalBrandLogo";
+import { AccountLinkButton } from "@/components/home/AccountLinkButton";
 import { CartIconButton } from "@/components/cart/CartIconButton";
 import { headerSecondaryNav } from "@/lib/home-data";
 import { BrandMegaMenu } from "./BrandMegaMenu";
-import { CloseIcon, MenuIcon, UserIcon } from "./icons";
+import { CloseIcon, MenuIcon, SearchIcon, UserIcon } from "./icons";
 import { MegaMenu } from "./MegaMenu";
 import { SearchBar } from "./SearchBar";
 
@@ -22,9 +23,13 @@ const orderFromChinaButtonClass =
 const mobileNavLinkClass =
   "flex items-center gap-3 rounded-lg px-3 py-2 text-[15px] font-medium leading-tight text-zinc-800 transition-colors active:bg-zinc-100";
 
+const mobileHeaderIconClass =
+  "inline-flex shrink-0 items-center justify-center rounded-lg p-2 text-zinc-600 transition hover:bg-zinc-50 hover:text-zinc-900 active:bg-zinc-100";
+
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [drawerActive, setDrawerActive] = useState(false);
+  const mobileSearchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (mobileOpen) {
@@ -43,6 +48,11 @@ export function Header() {
   };
 
   const openMobile = () => setMobileOpen(true);
+
+  const focusMobileSearch = () => {
+    mobileSearchRef.current?.focus();
+    mobileSearchRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  };
 
   return (
     <>
@@ -105,17 +115,32 @@ export function Header() {
           <div className="flex h-16 items-center gap-4">
             <HorizontalBrandLogo size="header" height={52} />
 
-            <div className="ml-auto flex shrink-0 items-center gap-1">
+            <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1">
+              <button
+                type="button"
+                onClick={focusMobileSearch}
+                className={mobileHeaderIconClass}
+                aria-label="Search products"
+              >
+                <SearchIcon className="h-5 w-5" />
+              </button>
+
+              <AccountLinkButton
+                className={`${mobileHeaderIconClass} gap-1 px-1.5 sm:px-2`}
+                showLabel
+                labelClassName="text-[10px] font-semibold leading-none text-zinc-700 sm:text-[11px]"
+              />
+
               <CartIconButton
-                className="relative inline-flex shrink-0 items-center rounded-lg p-2 text-zinc-600 transition hover:bg-zinc-50 hover:text-zinc-900"
+                className={`${mobileHeaderIconClass} relative`}
                 iconClassName="h-5 w-5"
-                badgeClassName="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#c9a227] text-[9px] font-bold text-zinc-900"
+                badgeClassName="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#c9a227] px-0.5 text-[9px] font-bold text-zinc-900"
               />
 
               <button
                 type="button"
                 onClick={mobileOpen ? closeMobile : openMobile}
-                className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-50"
+                className={mobileHeaderIconClass}
                 aria-expanded={mobileOpen}
                 aria-label={mobileOpen ? "Close menu" : "Open menu"}
               >
@@ -125,7 +150,11 @@ export function Header() {
           </div>
 
           <div className="pb-4">
-            <SearchBar placeholder="Search products, brands or categories..." />
+            <SearchBar
+              placeholder="Search products, brands or categories..."
+              inputId="mobile-header-search"
+              inputRef={mobileSearchRef}
+            />
           </div>
         </div>
       </div>
@@ -183,12 +212,6 @@ export function Header() {
                     </Link>
                   </li>
                 ))}
-                <li>
-                  <Link href="/login" onClick={closeMobile} className={mobileNavLinkClass}>
-                    <UserIcon className="h-[18px] w-[18px] shrink-0 text-zinc-500" />
-                    Login
-                  </Link>
-                </li>
               </ul>
             </div>
 

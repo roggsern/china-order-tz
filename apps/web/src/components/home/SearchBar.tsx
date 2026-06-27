@@ -1,19 +1,23 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, type RefObject } from "react";
 import { SearchIcon } from "./icons";
 
 interface SearchBarProps {
   className?: string;
   placeholder?: string;
   size?: "default" | "large";
+  inputId?: string;
+  inputRef?: RefObject<HTMLInputElement | null>;
 }
 
 export function SearchBar({
   className = "",
   placeholder = "Search products, brands or categories...",
   size = "default",
+  inputId,
+  inputRef,
 }: SearchBarProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -40,6 +44,8 @@ export function SearchBar({
           }`}
         />
         <input
+          id={inputId}
+          ref={inputRef}
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
