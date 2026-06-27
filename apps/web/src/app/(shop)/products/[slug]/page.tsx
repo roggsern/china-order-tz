@@ -16,6 +16,7 @@ import { ShippingOptionsCard } from "@/components/catalog/ShippingOptionsCard";
 import { TrustBadges } from "@/components/catalog/TrustBadges";
 import { StockStatus } from "@/components/catalog/StockStatus";
 import { ProductTabs } from "@/components/catalog/ProductTabs";
+import { ProductDetailMobile } from "@/components/catalog/product-mobile/ProductDetailMobile";
 
 interface ProductDetailPageProps {
   params: Promise<{ slug: string }>;
@@ -41,21 +42,24 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
   const relatedProducts = await getRelatedProducts(product);
 
   return (
-    <div className="bg-white py-10 sm:py-14">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <Breadcrumbs
-          items={[
-            { label: "Products", href: "/products" },
-            ...(category
-              ? [
-                  { label: category.name, href: `/categories/${category.slug}` },
-                  { label: product.name },
-                ]
-              : [{ label: product.name }]),
-          ]}
-        />
+    <div className="bg-white py-0 sm:py-10 lg:py-14">
+      <div className="mx-auto max-w-7xl px-0 sm:px-6 lg:px-8">
+        <div className="hidden px-4 sm:px-0 lg:block">
+          <Breadcrumbs
+            items={[
+              { label: "Products", href: "/products" },
+              ...(category
+                ? [
+                    { label: category.name, href: `/categories/${category.slug}` },
+                    { label: product.name },
+                  ]
+                : [{ label: product.name }]),
+            ]}
+          />
+        </div>
 
-        <div className="mt-8 grid gap-10 lg:grid-cols-2 lg:gap-16">
+        {/* Desktop layout — unchanged */}
+        <div className="mt-0 hidden lg:mt-8 lg:grid lg:grid-cols-2 lg:gap-16">
           <ProductGallery
             product={product}
             productName={product.name}
@@ -115,30 +119,39 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
           </div>
         </div>
 
-        <ProductTabs
-          description={product.description}
-          features={product.features}
-          specifications={product.specifications}
-          reviews={product.customerReviews}
-          reviewCount={product.reviews}
-          averageRating={product.rating}
-        />
+        <div className="hidden lg:block">
+          <ProductTabs
+            description={product.description}
+            features={product.features}
+            specifications={product.specifications}
+            reviews={product.customerReviews}
+            reviewCount={product.reviews}
+            averageRating={product.rating}
+          />
 
-        {relatedProducts.length > 0 && (
-          <section className="mt-20 border-t border-zinc-100 pt-16">
-            <div className="text-center sm:text-left">
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#c9a227]">
-                You May Also Like
-              </p>
-              <h2 className="mt-2 text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">
-                Related Products
-              </h2>
-            </div>
-            <div className="mt-10">
-              <ProductGrid products={relatedProducts} />
-            </div>
-          </section>
-        )}
+          {relatedProducts.length > 0 && (
+            <section className="mt-20 border-t border-zinc-100 pt-16">
+              <div className="text-center sm:text-left">
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#c9a227]">
+                  You May Also Like
+                </p>
+                <h2 className="mt-2 text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">
+                  Related Products
+                </h2>
+              </div>
+              <div className="mt-10">
+                <ProductGrid products={relatedProducts} />
+              </div>
+            </section>
+          )}
+        </div>
+
+        {/* Mobile layout */}
+        <ProductDetailMobile
+          product={product}
+          category={category}
+          relatedProducts={relatedProducts}
+        />
       </div>
     </div>
   );
