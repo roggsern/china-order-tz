@@ -60,6 +60,26 @@ export function getOrderById(orderId: string): Order | null {
   return orders.find((order) => order.id === orderId) ?? null;
 }
 
+export function resolveOrderLookup(query: string): Order | null {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const normalized = trimmed.toUpperCase();
+  const orders = readOrders();
+
+  return (
+    orders.find(
+      (order) =>
+        order.id === trimmed ||
+        order.orderNumber === trimmed ||
+        order.orderNumber.toUpperCase() === normalized ||
+        order.id.toUpperCase() === normalized,
+    ) ?? null
+  );
+}
+
 export function getAllOrders(): Order[] {
   return readOrders().sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),

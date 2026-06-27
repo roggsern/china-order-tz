@@ -1,4 +1,5 @@
 export { TrackOrderContent } from "./TrackOrderContent";
+export { TrackOrderLookupContent } from "./TrackOrderLookupContent";
 export { OrderTrackingTimeline } from "./OrderTrackingTimeline";
 export { OrderTrackingItemsSummary } from "./OrderTrackingItemsSummary";
 export { OrderSuccessContent } from "./OrderSuccessContent";

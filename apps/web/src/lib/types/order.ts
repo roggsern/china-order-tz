@@ -13,7 +13,9 @@ export const ORDER_STATUS = {
   PENDING_PAYMENT: "pending_payment",
   CONFIRMED: "confirmed",
   PROCESSING: "processing",
+  PACKED: "packed",
   SHIPPED: "shipped",
+  IN_TRANSIT: "in_transit",
   DELIVERED: "delivered",
   CANCELLED: "cancelled",
 } as const;

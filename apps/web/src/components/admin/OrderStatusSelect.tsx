@@ -6,7 +6,9 @@ import { ORDER_STATUS } from "@/lib/types/order";
 const ADMIN_FULFILLMENT_STATUSES: { value: OrderStatus; label: string }[] = [
   { value: ORDER_STATUS.PENDING, label: "Pending" },
   { value: ORDER_STATUS.PROCESSING, label: "Processing" },
+  { value: ORDER_STATUS.PACKED, label: "Packed" },
   { value: ORDER_STATUS.SHIPPED, label: "Shipped" },
+  { value: ORDER_STATUS.IN_TRANSIT, label: "In Transit" },
   { value: ORDER_STATUS.DELIVERED, label: "Delivered" },
 ];
 

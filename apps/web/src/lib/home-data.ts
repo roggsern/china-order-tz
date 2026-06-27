@@ -103,6 +103,7 @@ export const footerLinks = {
     { label: "Dar es Salaam, Tanzania", href: "/#contact" },
   ],
   quickLinks: [
+    { label: "Track Order", href: "/track-order" },
     { label: "All Categories", href: "/categories" },
     { label: "Featured Products", href: "/#products" },
     { label: "Shop All", href: "/products" },

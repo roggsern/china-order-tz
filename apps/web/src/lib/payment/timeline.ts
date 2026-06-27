@@ -49,10 +49,10 @@ function resolveTimelineProgress(order: Order): {
   if (order.status === ORDER_STATUS.DELIVERED) {
     return { completedThrough: 5, currentIndex: null };
   }
-  if (order.status === ORDER_STATUS.SHIPPED) {
+  if (order.status === ORDER_STATUS.IN_TRANSIT || order.status === ORDER_STATUS.SHIPPED) {
     return { completedThrough: 3, currentIndex: 4 };
   }
-  if (order.status === ORDER_STATUS.PROCESSING) {
+  if (order.status === ORDER_STATUS.PACKED || order.status === ORDER_STATUS.PROCESSING) {
     return { completedThrough: 2, currentIndex: 3 };
   }
   if (order.status === ORDER_STATUS.CONFIRMED || order.paymentStatus === PAYMENT_STATUS.PAID) {

@@ -24,6 +24,7 @@ import {
   getAllOrders,
   getOrderById as getStoredOrderById,
   getOrderByNumber,
+  resolveOrderLookup,
   saveOrder,
   updateOrder,
   updateOrderById,
@@ -418,6 +419,16 @@ export class PaymentService {
 
   getOrderById(orderId: string): Order | null {
     const order = getStoredOrderById(orderId);
+    if (!order) {
+      return null;
+    }
+
+    return this.hydrateOrder(order);
+  }
+
+  /** Resolves an order by UUID or order number (case-insensitive). */
+  resolveOrder(query: string): Order | null {
+    const order = resolveOrderLookup(query);
     if (!order) {
       return null;
     }

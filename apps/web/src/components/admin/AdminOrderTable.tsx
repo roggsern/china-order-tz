@@ -38,7 +38,9 @@ function normalizeStatusForSelect(status: OrderStatus): OrderStatus {
   }
   if (
     status === ORDER_STATUS.PROCESSING ||
+    status === ORDER_STATUS.PACKED ||
     status === ORDER_STATUS.SHIPPED ||
+    status === ORDER_STATUS.IN_TRANSIT ||
     status === ORDER_STATUS.DELIVERED
   ) {
     return status;

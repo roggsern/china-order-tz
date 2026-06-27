@@ -50,6 +50,19 @@ export function reconcilePaymentStates(input: {
   const { paymentStatus, paymentMethod } = input;
 
   if (paymentStatus === PAYMENT_STATUS.PAID) {
+    const fulfillmentStatuses: OrderStatus[] = [
+      ORDER_STATUS.CONFIRMED,
+      ORDER_STATUS.PROCESSING,
+      ORDER_STATUS.PACKED,
+      ORDER_STATUS.SHIPPED,
+      ORDER_STATUS.IN_TRANSIT,
+      ORDER_STATUS.DELIVERED,
+    ];
+
+    if (fulfillmentStatuses.includes(input.status)) {
+      return { paymentStatus, status: input.status };
+    }
+
     return { paymentStatus, status: ORDER_STATUS.CONFIRMED };
   }
 

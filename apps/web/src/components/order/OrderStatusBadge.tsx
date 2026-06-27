@@ -13,7 +13,9 @@ const STATUS_STYLES: Record<string, string> = {
   pending_payment: "bg-amber-50 text-amber-800 ring-amber-600/20",
   confirmed: "bg-sky-50 text-sky-700 ring-sky-600/20",
   processing: "bg-violet-50 text-violet-700 ring-violet-600/20",
+  packed: "bg-indigo-50 text-indigo-700 ring-indigo-600/20",
   shipped: "bg-blue-50 text-blue-700 ring-blue-600/20",
+  in_transit: "bg-cyan-50 text-cyan-800 ring-cyan-600/20",
   delivered: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
   cancelled: "bg-zinc-100 text-zinc-600 ring-zinc-300/50",
 };
@@ -23,7 +25,9 @@ const STATUS_DOTS: Record<string, string> = {
   pending_payment: "bg-amber-500",
   confirmed: "bg-sky-500",
   processing: "bg-violet-500",
+  packed: "bg-indigo-500",
   shipped: "bg-blue-500",
+  in_transit: "bg-cyan-500",
   delivered: "bg-emerald-500",
   cancelled: "bg-zinc-400",
 };

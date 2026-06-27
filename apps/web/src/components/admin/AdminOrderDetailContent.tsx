@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import type { Order } from "@/lib/types/order";
+import type { Order, OrderStatus } from "@/lib/types/order";
 import { ORDER_STATUS } from "@/lib/types/order";
 import { formatDeliveryEstimate, formatPrice } from "@/lib/catalog/utils";
 import {
@@ -11,6 +11,7 @@ import {
 } from "@/lib/payment/order-filters";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment/constants";
 import { PAYMENT_STATUS } from "@/lib/types/payment";
+import { getAdminDisplayStatus } from "@/lib/order/tracking-stages";
 import { getMethodByCode } from "@/lib/shipping/engine";
 import { useAdminOrders } from "@/components/admin/AdminOrdersProvider";
 import { OrderStatusSelect } from "@/components/admin/OrderStatusSelect";
@@ -242,14 +243,7 @@ export function AdminOrderDetailContent({ orderId }: AdminOrderDetailContentProp
                   </p>
                   <div className="mt-2">
                     <OrderStatusSelect
-                      value={
-                        order.status === ORDER_STATUS.CONFIRMED ||
-                        order.status === ORDER_STATUS.PENDING_PAYMENT
-                          ? ORDER_STATUS.PENDING
-                          : order.status === ORDER_STATUS.CANCELLED
-                            ? ORDER_STATUS.PENDING
-                            : order.status
-                      }
+                      value={getAdminDisplayStatus(order.status)}
                       onChange={(status) => updateOrderStatus(order.id, status)}
                       className="w-full text-sm"
                     />
@@ -265,25 +259,46 @@ export function AdminOrderDetailContent({ orderId }: AdminOrderDetailContentProp
                       variant="success"
                     />
                   )}
-                  {order.status !== ORDER_STATUS.PROCESSING &&
-                    order.status !== ORDER_STATUS.SHIPPED &&
-                    order.status !== ORDER_STATUS.DELIVERED && (
-                      <ActionButton
-                        label="Mark as Processing"
-                        description="Start preparing the order"
-                        onClick={() => markOrderProcessing(order.id)}
-                      />
-                    )}
-                  {order.status !== ORDER_STATUS.SHIPPED && order.status !== ORDER_STATUS.DELIVERED && (
+                  {(
+                    [
+                      ORDER_STATUS.PROCESSING,
+                      ORDER_STATUS.PACKED,
+                      ORDER_STATUS.SHIPPED,
+                      ORDER_STATUS.IN_TRANSIT,
+                      ORDER_STATUS.DELIVERED,
+                    ] as OrderStatus[]
+                  ).includes(order.status) ? null : (
+                    <ActionButton
+                      label="Mark as Processing"
+                      description="Start preparing the order"
+                      onClick={() => markOrderProcessing(order.id)}
+                    />
+                  )}
+                  {order.status === ORDER_STATUS.PROCESSING && (
+                    <ActionButton
+                      label="Mark as Packed"
+                      description="Items packed and ready"
+                      onClick={() => updateOrderStatus(order.id, ORDER_STATUS.PACKED)}
+                    />
+                  )}
+                  {(order.status === ORDER_STATUS.PACKED) && (
                     <ActionButton
                       label="Mark as Shipped"
-                      description="Order is in transit"
+                      description="Order left the warehouse"
                       onClick={() => markOrderShipped(order.id)}
                     />
                   )}
-                  {order.status !== ORDER_STATUS.DELIVERED && (
+                  {order.status === ORDER_STATUS.SHIPPED && (
                     <ActionButton
-                      label="Mark as Completed"
+                      label="Mark as In Transit"
+                      description="En route to customer"
+                      onClick={() => updateOrderStatus(order.id, ORDER_STATUS.IN_TRANSIT)}
+                    />
+                  )}
+                  {order.status !== ORDER_STATUS.DELIVERED &&
+                    order.status !== ORDER_STATUS.CANCELLED && (
+                    <ActionButton
+                      label="Mark as Delivered"
                       description="Order delivered to customer"
                       onClick={() => markOrderDelivered(order.id)}
                       variant="muted"

@@ -45,10 +45,10 @@ export function getAdminOrderQueue(order: Order): AdminOrderQueue {
   if (order.status === ORDER_STATUS.DELIVERED) {
     return "completed";
   }
-  if (order.status === ORDER_STATUS.SHIPPED) {
+  if (order.status === ORDER_STATUS.SHIPPED || order.status === ORDER_STATUS.IN_TRANSIT) {
     return "shipping";
   }
-  if (order.status === ORDER_STATUS.PROCESSING) {
+  if (order.status === ORDER_STATUS.PROCESSING || order.status === ORDER_STATUS.PACKED) {
     return "processing";
   }
   if (order.paymentStatus === PAYMENT_STATUS.PAID || order.status === ORDER_STATUS.CONFIRMED) {
@@ -100,7 +100,10 @@ export function filterOrdersByListFilter(
   }
 
   if (filter === "shipped") {
-    return orders.filter((order) => order.status === ORDER_STATUS.SHIPPED);
+    return orders.filter(
+      (order) =>
+        order.status === ORDER_STATUS.SHIPPED || order.status === ORDER_STATUS.IN_TRANSIT,
+    );
   }
 
   if (filter === "delivered") {
@@ -126,8 +129,12 @@ export function getOrderFulfillmentLabel(status: OrderStatus): string {
   switch (status) {
     case ORDER_STATUS.PROCESSING:
       return "Processing";
+    case ORDER_STATUS.PACKED:
+      return "Packed";
     case ORDER_STATUS.SHIPPED:
       return "Shipped";
+    case ORDER_STATUS.IN_TRANSIT:
+      return "In Transit";
     case ORDER_STATUS.DELIVERED:
       return "Delivered";
     case ORDER_STATUS.CANCELLED:
@@ -165,8 +172,12 @@ export function getShippingStatusLabel(status: OrderStatus): string {
       return "Payment confirmed — preparing shipment";
     case ORDER_STATUS.PROCESSING:
       return "Processing at warehouse";
+    case ORDER_STATUS.PACKED:
+      return "Packed and ready to ship";
     case ORDER_STATUS.SHIPPED:
-      return "Shipped — in transit";
+      return "Shipped from warehouse";
+    case ORDER_STATUS.IN_TRANSIT:
+      return "In transit to your address";
     case ORDER_STATUS.DELIVERED:
       return "Delivered";
     case ORDER_STATUS.CANCELLED:
