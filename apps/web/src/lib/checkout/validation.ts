@@ -1,4 +1,5 @@
 import type { CheckoutFormData, CheckoutFormErrors } from "@/lib/types/checkout";
+import type { ShippingMethodCode } from "@/lib/shipping/types";
 import { formatTanzaniaPhone, isValidTanzaniaPhone, TZ_PHONE_VALIDATION_MESSAGE } from "@/lib/checkout/phone";
 import { isValidTanzaniaRegion } from "@/lib/checkout/tanzania-regions";
 
@@ -41,6 +42,98 @@ export function validateEmail(value: string): string | undefined {
   if (!EMAIL_PATTERN.test(trimmed)) {
     return "Enter a valid email address";
   }
+  return undefined;
+}
+
+export function validateEmailOptional(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  if (!EMAIL_PATTERN.test(trimmed)) {
+    return "Enter a valid email address";
+  }
+  return undefined;
+}
+
+export function validateFullName(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "Full name is required";
+  }
+  if (trimmed.length < 3) {
+    return "Enter your full name";
+  }
+  if (!NAME_PATTERN.test(trimmed)) {
+    return "Name can only contain letters, spaces, and hyphens";
+  }
+  return undefined;
+}
+
+export function splitFullName(fullName: string): { firstName: string; lastName: string } {
+  const trimmed = fullName.trim();
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+
+  if (parts.length <= 1) {
+    return { firstName: trimmed, lastName: trimmed };
+  }
+
+  return {
+    firstName: parts[0] ?? trimmed,
+    lastName: parts.slice(1).join(" "),
+  };
+}
+
+export function validateCheckoutStep1(form: CheckoutFormData): CheckoutFormErrors {
+  const errors: CheckoutFormErrors = {};
+
+  const fullName = validateFullName(
+    `${form.customer.firstName} ${form.customer.lastName}`.trim(),
+  );
+  if (fullName) {
+    errors.customer = { ...errors.customer, firstName: fullName };
+  }
+
+  const phone = validatePhone(form.customer.phone);
+  if (phone) {
+    errors.customer = { ...errors.customer, phone };
+  }
+
+  const email = validateEmailOptional(form.customer.email);
+  if (email) {
+    errors.customer = { ...errors.customer, email };
+  }
+
+  const addressLine1 = validateAddressLine1(form.shippingAddress.addressLine1);
+  if (addressLine1) {
+    errors.shippingAddress = { ...errors.shippingAddress, addressLine1 };
+  }
+
+  const city = validateCity(form.shippingAddress.city);
+  if (city) {
+    errors.shippingAddress = { ...errors.shippingAddress, city };
+  }
+
+  const region = validateRegion(form.shippingAddress.region);
+  if (region) {
+    errors.shippingAddress = { ...errors.shippingAddress, region };
+  }
+
+  return errors;
+}
+
+export function validateCheckoutStep2(
+  hasChinaItems: boolean,
+  selectedMethod: ShippingMethodCode | null,
+): string | undefined {
+  if (!hasChinaItems) {
+    return undefined;
+  }
+
+  if (!selectedMethod || (selectedMethod !== "air_freight" && selectedMethod !== "sea_freight")) {
+    return "Please select a shipping method";
+  }
+
   return undefined;
 }
 
@@ -104,7 +197,7 @@ export function validateCheckoutForm(form: CheckoutFormData): CheckoutFormErrors
     errors.customer = { ...errors.customer, lastName };
   }
 
-  const email = validateEmail(form.customer.email);
+  const email = validateEmailOptional(form.customer.email);
   if (email) {
     errors.customer = { ...errors.customer, email };
   }
