@@ -53,7 +53,7 @@ export function ProductGalleryMobile({ product }: ProductGalleryMobileProps) {
           className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {images.map((image, index) => (
-            <button
+            <motion.button
               key={image.id}
               type="button"
               onClick={() => {
@@ -62,6 +62,9 @@ export function ProductGalleryMobile({ product }: ProductGalleryMobileProps) {
               }}
               className="relative w-full shrink-0 snap-center"
               aria-label={`View ${product.name} image ${index + 1}`}
+              initial={false}
+              animate={{ opacity: activeIndex === index ? 1 : 0.92 }}
+              transition={{ duration: 0.2 }}
             >
               <ProductImageDisplay
                 image={image}
@@ -70,18 +73,21 @@ export function ProductGalleryMobile({ product }: ProductGalleryMobileProps) {
                 className="aspect-square w-full"
                 emojiClassName="text-7xl drop-shadow-lg"
               />
-            </button>
+            </motion.button>
           ))}
         </div>
 
         {images.length > 1 && (
           <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
             {images.map((image, index) => (
-              <span
+              <motion.span
                 key={image.id}
-                className={`h-1.5 rounded-full transition-all duration-300 ${
-                  index === activeIndex ? "w-5 bg-[#c9a227]" : "w-1.5 bg-white/70"
+                layout
+                className={`h-1.5 rounded-full ${
+                  index === activeIndex ? "bg-[#c9a227]" : "bg-white/70"
                 }`}
+                animate={{ width: index === activeIndex ? 20 : 6 }}
+                transition={{ type: "spring", stiffness: 400, damping: 28 }}
               />
             ))}
           </div>

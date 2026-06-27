@@ -14,14 +14,13 @@ import { trackRecentlyViewed } from "@/lib/catalog/recently-viewed";
 import { Breadcrumbs } from "../Breadcrumbs";
 import { ProductBadges } from "../ProductBadge";
 import { ProductOriginBadge } from "../ProductOriginBadge";
-import { StockStatus } from "../StockStatus";
 import { TrustBadges } from "../TrustBadges";
 import { VariantSelectors } from "../VariantSelectors";
 import { QuantitySelector } from "../QuantitySelector";
 import { ProductGalleryMobile } from "./ProductGalleryMobile";
 import { ProductMobilePrice } from "./ProductMobilePrice";
-import { ProductMobileShipping } from "./ProductMobileShipping";
-import { ProductMobileAccordion } from "./ProductMobileAccordion";
+import { ProductMobileQuickInfo } from "./ProductMobileQuickInfo";
+import { ProductMobileTabs } from "./ProductMobileTabs";
 import { ProductSupplierCard } from "./ProductSupplierCard";
 import { ProductHorizontalScroll } from "./ProductHorizontalScroll";
 import { RecentlyViewedProducts } from "./RecentlyViewedProducts";
@@ -51,8 +50,8 @@ export function ProductDetailMobile({
   }, [product]);
 
   return (
-    <div className="pb-28 lg:hidden">
-      <div className="px-4 pt-4">
+    <div className="pb-32 lg:hidden">
+      <div className="px-4 pt-3">
         <Breadcrumbs
           items={[
             { label: "Products", href: "/products" },
@@ -66,15 +65,15 @@ export function ProductDetailMobile({
         />
       </div>
 
-      <div className="mt-3">
+      <div className="mt-2">
         <ProductGalleryMobile product={product} />
       </div>
 
       <motion.div
-        initial={{ opacity: 0, y: 12 }}
+        initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35 }}
-        className="space-y-5 px-4 pt-5"
+        transition={{ duration: 0.32 }}
+        className="space-y-4 px-4 pt-4"
       >
         <div>
           <div className="flex flex-wrap items-center gap-2">
@@ -87,33 +86,32 @@ export function ProductDetailMobile({
           </div>
 
           {product.brand && (
-            <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#c9a227]">
+            <p className="mt-2.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#c9a227]">
               {product.brand}
             </p>
           )}
 
-          <h1 className="mt-1.5 text-xl font-bold leading-tight tracking-tight text-zinc-900">
+          <h1 className="mt-1 text-[1.35rem] font-bold leading-snug tracking-tight text-zinc-900">
             {product.name}
           </h1>
         </div>
 
-        <ProductMobilePrice
-          price={product.price}
-          oldPrice={product.oldPrice}
+        <ProductMobileQuickInfo
           rating={product.rating}
           reviewCount={product.reviews}
+          stock={product.stock}
+          origin={product.origin}
+          shippingContext={shippingContext}
         />
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <StockStatus stock={product.stock} size="md" />
+        <ProductMobilePrice price={product.price} oldPrice={product.oldPrice} />
+
+        <div className="flex flex-wrap items-center gap-2">
           <ProductOriginBadge origin={product.origin} size="md" />
+          {product.trustBadges.length > 0 && (
+            <TrustBadges badges={product.trustBadges.slice(0, 2)} size="sm" />
+          )}
         </div>
-
-        {product.trustBadges.length > 0 && (
-          <TrustBadges badges={product.trustBadges} size="sm" />
-        )}
-
-        <ProductMobileShipping {...shippingContext} origin={product.origin} />
 
         <div className="rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm">
           <QuantitySelector
@@ -124,10 +122,10 @@ export function ProductDetailMobile({
           />
 
           {showVariantSelectors && (
-            <div className="mt-5 border-t border-zinc-100 pt-5">
+            <div className="mt-4 border-t border-zinc-100 pt-4">
               <VariantSelectors product={product} variant={variant} onChange={setVariant} />
               {needsSize && !hasSelectedSize && (
-                <p className="mt-3 text-sm font-medium text-amber-700" role="status">
+                <p className="mt-2.5 text-sm font-medium text-amber-700" role="status">
                   {SIZE_REQUIRED_MESSAGE}
                 </p>
               )}
@@ -135,15 +133,7 @@ export function ProductDetailMobile({
           )}
         </div>
 
-        <ProductSupplierCard
-          origin={product.origin}
-          brand={product.brand}
-          trustBadges={product.trustBadges}
-          rating={product.rating}
-          reviewCount={product.reviews}
-        />
-
-        <ProductMobileAccordion
+        <ProductMobileTabs
           description={product.description}
           features={product.features}
           specifications={product.specifications}
@@ -153,9 +143,17 @@ export function ProductDetailMobile({
           shippingContext={shippingContext}
           origin={product.origin}
         />
+
+        <ProductSupplierCard
+          origin={product.origin}
+          brand={product.brand}
+          trustBadges={product.trustBadges}
+          rating={product.rating}
+          reviewCount={product.reviews}
+        />
       </motion.div>
 
-      <div className="mt-8 space-y-8">
+      <div className="mt-6 space-y-6">
         <RecentlyViewedProducts currentProductId={product.id} />
 
         {relatedProducts.length > 0 && (
