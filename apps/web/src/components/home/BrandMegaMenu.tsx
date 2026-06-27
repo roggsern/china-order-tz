@@ -25,52 +25,88 @@ export function BrandMegaMenu({
 }: BrandMegaMenuProps) {
   const [activeSlug, setActiveSlug] = useState(buyFromTzBrandMenu[0].slug);
   const [open, setOpen] = useState(false);
+  const [expandedBrandSlug, setExpandedBrandSlug] = useState<string | null>(null);
 
   const activeBrand =
     buyFromTzBrandMenu.find((brand) => brand.slug === activeSlug) ??
     buyFromTzBrandMenu[0];
 
   if (mobile) {
+    const toggleBrand = (slug: string) => {
+      setExpandedBrandSlug((current) => (current === slug ? null : slug));
+    };
+
     return (
-      <div className="space-y-1">
+      <div>
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+          className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-[15px] font-semibold leading-tight text-zinc-900 transition-colors active:bg-zinc-100"
           aria-expanded={open}
         >
-          {triggerLabel}
+          <span className="truncate">{triggerLabel}</span>
           <ChevronDownIcon
-            className={`h-4 w-4 transition ${open ? "rotate-180" : ""}`}
+            className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform duration-200 ${
+              open ? "rotate-180" : ""
+            }`}
           />
         </button>
         {open && (
-          <div className="ml-2 space-y-3 border-l-2 border-[#c9a227]/20 pl-3">
-            {buyFromTzBrandMenu.map((brand) => (
-              <div key={brand.slug}>
-                <Link
-                  href={getBrandCategoryHref(brand.slug, brand.subcategories[0].slug)}
-                  onClick={onNavigate}
-                  className="flex items-center gap-2 text-sm font-semibold text-[#c9a227]"
-                >
-                  <span>{brand.icon}</span>
-                  {brand.name}
-                </Link>
-                <ul className="mt-1.5 space-y-1 pl-7">
-                  {brand.subcategories.map((sub) => (
-                    <li key={sub.slug}>
-                      <Link
-                        href={getBrandCategoryHref(brand.slug, sub.slug)}
-                        onClick={onNavigate}
-                        className="text-xs text-zinc-500 hover:text-[#c9a227]"
-                      >
-                        {sub.name}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+          <div className="pb-1 pt-0.5">
+            <ul className="space-y-0.5">
+              {buyFromTzBrandMenu.map((brand) => {
+                const isExpanded = expandedBrandSlug === brand.slug;
+
+                return (
+                  <li key={brand.slug}>
+                    <button
+                      type="button"
+                      onClick={() => toggleBrand(brand.slug)}
+                      className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left transition-colors active:bg-zinc-50"
+                      aria-expanded={isExpanded}
+                    >
+                      <span className="flex min-w-0 items-center gap-3">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center text-base leading-none">
+                          {brand.icon}
+                        </span>
+                        <span className="truncate text-[14px] font-medium text-[#c9a227]">
+                          {brand.name}
+                        </span>
+                      </span>
+                      <ChevronDownIcon
+                        className={`h-3.5 w-3.5 shrink-0 text-zinc-400 transition-transform duration-200 ${
+                          isExpanded ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+                    {isExpanded && (
+                      <ul className="mb-1 ml-9 space-y-0.5 border-l border-zinc-100 pl-3">
+                        {brand.subcategories.map((sub) => (
+                          <li key={sub.slug}>
+                            <Link
+                              href={getBrandCategoryHref(brand.slug, sub.slug)}
+                              onClick={onNavigate}
+                              className="block rounded-md py-1.5 text-[13px] text-zinc-500 transition-colors active:text-[#c9a227]"
+                            >
+                              {sub.name}
+                            </Link>
+                          </li>
+                        ))}
+                        <li>
+                          <Link
+                            href={`/products?brand=${brand.slug}`}
+                            onClick={onNavigate}
+                            className="block py-1.5 text-[13px] font-semibold text-[#c9a227]"
+                          >
+                            Shop all {brand.name}
+                          </Link>
+                        </li>
+                      </ul>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         )}
       </div>

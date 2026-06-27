@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { HorizontalBrandLogo } from "@/components/branding/HorizontalBrandLogo";
 import { useCart } from "@/lib/cart/context";
@@ -19,12 +19,32 @@ const allCategoriesClass =
 const orderFromChinaButtonClass =
   "inline-flex h-[52px] shrink-0 items-center whitespace-nowrap rounded-xl bg-[#c9a227] px-6 text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-900 shadow-[0_2px_12px_rgba(201,162,39,0.35)] transition hover:bg-[#e8c547] hover:shadow-[0_4px_16px_rgba(201,162,39,0.45)]";
 
+const mobileNavLinkClass =
+  "flex items-center gap-3 rounded-lg px-3 py-2 text-[15px] font-medium leading-tight text-zinc-800 transition-colors active:bg-zinc-100";
+
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [drawerActive, setDrawerActive] = useState(false);
   const { totals, isHydrated } = useCart();
   const cartCount = isHydrated ? totals.itemCount : 0;
 
-  const closeMobile = () => setMobileOpen(false);
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = "hidden";
+      const frame = requestAnimationFrame(() => setDrawerActive(true));
+      return () => cancelAnimationFrame(frame);
+    }
+
+    setDrawerActive(false);
+    document.body.style.overflow = "";
+  }, [mobileOpen]);
+
+  const closeMobile = () => {
+    setDrawerActive(false);
+    window.setTimeout(() => setMobileOpen(false), 300);
+  };
+
+  const openMobile = () => setMobileOpen(true);
 
   return (
     <header className="sticky top-0 z-50 border-b border-zinc-100/80 bg-white/95 shadow-[0_4px_24px_rgba(0,0,0,0.04)] backdrop-blur-md">
@@ -111,7 +131,7 @@ export function Header() {
 
               <button
                 type="button"
-                onClick={() => setMobileOpen((open) => !open)}
+                onClick={mobileOpen ? closeMobile : openMobile}
                 className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-50"
                 aria-expanded={mobileOpen}
                 aria-label={mobileOpen ? "Close menu" : "Open menu"}
@@ -127,51 +147,77 @@ export function Header() {
         </div>
 
         {mobileOpen && (
-          <nav className="border-b border-zinc-100 bg-white px-4 py-4 sm:px-6">
-            <ul className="space-y-1">
-              <li>
-                <MegaMenu
-                  mobile
-                  onNavigate={closeMobile}
-                  triggerLabel="All Categories"
-                  showHamburger
-                />
-              </li>
-              <li>
-                <BrandMegaMenu mobile onNavigate={closeMobile} triggerLabel="Buy From TZ" />
-              </li>
-              {headerSecondaryNav.map((item) => (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    onClick={closeMobile}
-                    className="block rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-                  >
-                    {item.label}
-                  </Link>
-                </li>
-              ))}
-              <li className="pt-2">
-                <Link
-                  href="/login"
+          <div className="fixed inset-0 z-[60] md:hidden" role="presentation">
+            <button
+              type="button"
+              aria-label="Close menu"
+              onClick={closeMobile}
+              className={`absolute inset-0 bg-black/50 backdrop-blur-[2px] transition-opacity duration-300 ease-out ${
+                drawerActive ? "opacity-100" : "opacity-0"
+              }`}
+            />
+
+            <nav
+              aria-label="Mobile navigation"
+              className={`fixed inset-y-0 left-0 flex w-[min(100vw,320px)] max-w-[85vw] flex-col bg-white shadow-[4px_0_24px_rgba(0,0,0,0.12)] transition-transform duration-300 ease-out ${
+                drawerActive ? "translate-x-0" : "-translate-x-full"
+              }`}
+            >
+              <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 px-4 py-3.5">
+                <span className="text-base font-semibold tracking-tight text-zinc-900">Menu</span>
+                <button
+                  type="button"
                   onClick={closeMobile}
-                  className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+                  className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900"
+                  aria-label="Close menu"
                 >
-                  <UserIcon className="h-4 w-4" />
-                  Login
-                </Link>
-              </li>
-              <li>
+                  <CloseIcon className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-2">
+                <ul className="divide-y divide-zinc-100">
+                  <li className="py-1">
+                    <MegaMenu
+                      mobile
+                      onNavigate={closeMobile}
+                      triggerLabel="All Categories"
+                      showHamburger
+                    />
+                  </li>
+                  <li className="py-1">
+                    <BrandMegaMenu mobile onNavigate={closeMobile} triggerLabel="Buy From TZ" />
+                  </li>
+                </ul>
+
+                <ul className="mt-1 border-t border-zinc-100 pt-1">
+                  {headerSecondaryNav.map((item) => (
+                    <li key={item.href}>
+                      <Link href={item.href} onClick={closeMobile} className={mobileNavLinkClass}>
+                        {item.label}
+                      </Link>
+                    </li>
+                  ))}
+                  <li>
+                    <Link href="/login" onClick={closeMobile} className={mobileNavLinkClass}>
+                      <UserIcon className="h-[18px] w-[18px] shrink-0 text-zinc-500" />
+                      Login
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="shrink-0 border-t border-zinc-100 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                 <Link
                   href="#order-from-china"
                   onClick={closeMobile}
-                  className={`${orderFromChinaButtonClass} w-full justify-center px-3 py-3`}
+                  className={`${orderFromChinaButtonClass} w-full justify-center`}
                 >
                   Order From China
                 </Link>
-              </li>
-            </ul>
-          </nav>
+              </div>
+            </nav>
+          </div>
         )}
       </div>
     </header>
