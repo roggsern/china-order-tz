@@ -8,7 +8,8 @@ interface AdminHeaderProps {
 }
 
 export function AdminHeader({ title = "Admin Dashboard" }: AdminHeaderProps) {
-  const { signOut } = useAdminAuth();
+  const { signOut, session } = useAdminAuth();
+  const displayEmail = session?.email ?? "admin@china.com";
 
   return (
     <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-4 border-b border-zinc-800 bg-zinc-950 px-4 sm:px-6">
@@ -32,7 +33,7 @@ export function AdminHeader({ title = "Admin Dashboard" }: AdminHeaderProps) {
       <div className="flex items-center gap-3">
         <div className="hidden text-right sm:block">
           <p className="text-xs font-medium text-white">Store Admin</p>
-          <p className="text-[10px] text-zinc-500">Orders & catalog</p>
+          <p className="text-[10px] text-zinc-500">{displayEmail}</p>
         </div>
         <button
           type="button"
