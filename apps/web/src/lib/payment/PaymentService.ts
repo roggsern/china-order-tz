@@ -12,7 +12,6 @@ import {
 import { calculateCartTotals } from "@/lib/cart/utils";
 import { generateOrderNumber } from "@/lib/payment/order-number";
 import {
-  generateMpesaReference,
   reconcilePaymentStates,
   resolvePaymentOutcome,
 } from "@/lib/payment/payment-outcome";
@@ -31,6 +30,8 @@ import {
 } from "@/lib/payment/order-storage";
 import { syncTimelineWithOrder } from "@/lib/payment/timeline";
 import { lockCartForOrderInStorage } from "@/lib/order/cart-lock";
+import { initiatePaymentRequest, verifyPaymentRequest } from "@/lib/payment/client-api";
+import type { InitiatePaymentResult, VerifyPaymentResult } from "@/lib/payment/server/types";
 
 function applyOrderUpdate(order: Order, patch: Partial<Order>): Order {
   const now = new Date().toISOString();
@@ -80,6 +81,7 @@ function buildPendingOrder(input: {
     paymentStatus: PAYMENT_STATUS.PENDING,
     paymentMethod: input.paymentMethod,
     paymentReference: null,
+    paymentTransactionId: null,
     status: ORDER_STATUS.PENDING,
     createdAt: now,
     updatedAt: now,
@@ -102,9 +104,24 @@ function buildPendingOrder(input: {
   };
 }
 
+function finalizeNonMpesaOrder(order: Order, paymentMethod: PaymentMethodCode): Order {
+  const outcome = resolvePaymentOutcome(paymentMethod);
+  const reconciled = reconcilePaymentStates({
+    paymentStatus: outcome.paymentStatus,
+    status: outcome.orderStatus,
+    paymentMethod,
+  });
+  const finalized = applyOrderUpdate(order, {
+    paymentStatus: reconciled.paymentStatus,
+    status: reconciled.status,
+  });
+  saveOrder(finalized);
+  return finalized;
+}
+
 /**
- * Payment orchestration layer — swap gateway logic here in Phase 4B.
- * Checkout UI and order creation flow stay unchanged when integrating Selcom etc.
+ * Payment orchestration layer — M-Pesa STK Push runs server-side via /api/payments/*.
+ * Checkout UI calls createOrder() then initiatePayment(order) for M-Pesa.
  */
 export class PaymentService {
   /**
@@ -126,6 +143,7 @@ export class PaymentService {
       paymentStatus: PAYMENT_STATUS.PENDING,
       paymentMethod: null,
       paymentReference: null,
+      paymentTransactionId: null,
       status: ORDER_STATUS.PENDING,
       createdAt: now,
       updatedAt: now,
@@ -174,7 +192,7 @@ export class PaymentService {
 
   /**
    * Creates an order exactly once per idempotency key (checkout draft).
-   * Order is persisted as pending before payment runs; payment updates status via callback.
+   * M-Pesa orders stay pending until initiatePayment() + verifyPayment() confirm payment.
    */
   async createOrder(input: CreateOrderInput): Promise<Order> {
     if (!input.paymentMethod) {
@@ -235,39 +253,10 @@ export class PaymentService {
     lockCartForOrderInStorage(orderId);
 
     if (input.paymentMethod === PAYMENT_METHOD_CODES.MPESA) {
-      const paymentResult = await this.initiatePayment({
-        method: input.paymentMethod,
-        amount: totals.grandTotal,
-        phone: input.customer.phone,
-      });
-
-      if (!paymentResult.success) {
-        this.updatePaymentStatus(orderId, "failed");
-        throw new Error(paymentResult.message ?? "Payment failed. Please try again.");
-      }
-
-      const paid = this.updatePaymentStatus(orderId, "paid", {
-        paymentReference: paymentResult.reference,
-      });
-
-      if (!paid) {
-        throw new Error("Payment succeeded but the order could not be updated.");
-      }
-
-      return paid;
+      return this.hydrateOrder(order);
     }
 
-    const outcome = resolvePaymentOutcome(input.paymentMethod);
-    const reconciled = reconcilePaymentStates({
-      paymentStatus: outcome.paymentStatus,
-      status: outcome.orderStatus,
-      paymentMethod: input.paymentMethod,
-    });
-    const finalized = applyOrderUpdate(order, {
-      paymentStatus: reconciled.paymentStatus,
-      status: reconciled.status,
-    });
-    saveOrder(finalized);
+    const finalized = finalizeNonMpesaOrder(order, input.paymentMethod);
     return this.hydrateOrder(finalized);
   }
 
@@ -280,45 +269,62 @@ export class PaymentService {
       paymentStatus: PAYMENT_STATUS.PENDING,
       status: ORDER_STATUS.PENDING,
       paymentReference: null,
+      paymentTransactionId: null,
     });
     saveOrder(reset);
     lockCartForOrderInStorage(existing.id);
 
     if (input.paymentMethod === PAYMENT_METHOD_CODES.MPESA) {
-      const paymentResult = await this.initiatePayment({
-        method: input.paymentMethod,
-        amount: input.totals.grandTotal,
-        phone: input.customer.phone,
-      });
-
-      if (!paymentResult.success) {
-        this.updatePaymentStatus(existing.id, "failed");
-        throw new Error(paymentResult.message ?? "Payment failed. Please try again.");
-      }
-
-      const paid = this.updatePaymentStatus(existing.id, "paid", {
-        paymentReference: paymentResult.reference,
-      });
-
-      if (!paid) {
-        throw new Error("Payment succeeded but the order could not be updated.");
-      }
-
-      return paid;
+      return this.hydrateOrder(reset);
     }
 
-    const outcome = resolvePaymentOutcome(input.paymentMethod);
-    const reconciled = reconcilePaymentStates({
-      paymentStatus: outcome.paymentStatus,
-      status: outcome.orderStatus,
-      paymentMethod: input.paymentMethod,
-    });
-    const finalized = applyOrderUpdate(reset, {
-      paymentStatus: reconciled.paymentStatus,
-      status: reconciled.status,
-    });
-    saveOrder(finalized);
+    const finalized = finalizeNonMpesaOrder(reset, input.paymentMethod);
     return this.hydrateOrder(finalized);
+  }
+
+  /**
+   * Initiates M-Pesa STK Push for a pending order via the server payment gateway.
+   */
+  async initiatePayment(order: Order): Promise<InitiatePaymentResult> {
+    if (order.paymentMethod !== PAYMENT_METHOD_CODES.MPESA) {
+      return {
+        success: true,
+        transactionId: null,
+        status: "paid",
+        checkoutRequestId: null,
+        message: "No gateway initiation required for this payment method.",
+        mode: "test",
+      };
+    }
+
+    const result = await initiatePaymentRequest(order);
+
+    if (result.transactionId) {
+      updateOrderById(order.id, (entry) =>
+        applyOrderUpdate(entry, { paymentTransactionId: result.transactionId }),
+      );
+    }
+
+    if (result.status === "failed") {
+      this.handlePaymentCallback(order.id, "failed", null);
+    }
+
+    return result;
+  }
+
+  /**
+   * Polls payment status and syncs the local order when the gateway confirms payment.
+   */
+  async verifyPayment(transactionId: string): Promise<VerifyPaymentResult> {
+    const result = await verifyPaymentRequest(transactionId);
+
+    if (result.status === "paid") {
+      this.handlePaymentCallback(result.orderId, "paid", result.paymentReference);
+    } else if (result.status === "failed") {
+      this.handlePaymentCallback(result.orderId, "failed", null);
+    }
+
+    return result;
   }
 
   getActiveCheckoutOrder(): Order | null {
@@ -333,30 +339,6 @@ export class PaymentService {
     }
 
     return this.getOrder(session.orderNumber);
-  }
-
-  /**
-   * Gateway hook — simulates M-Pesa success until a real provider is integrated.
-   * Real integrations should call handlePaymentCallback() from the webhook handler.
-   */
-  async initiatePayment(input: {
-    method: PaymentMethodCode;
-    amount: number;
-    phone: string;
-  }): Promise<{ success: boolean; reference: string | null; message?: string }> {
-    void input.amount;
-    void input.phone;
-
-    if (input.method !== PAYMENT_METHOD_CODES.MPESA) {
-      return { success: true, reference: null };
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 900));
-
-    return {
-      success: true,
-      reference: generateMpesaReference(),
-    };
   }
 
   /**
@@ -389,6 +371,8 @@ export class PaymentService {
           options?.paymentReference !== undefined
             ? options.paymentReference
             : order.paymentReference,
+        paymentTransactionId:
+          paymentStatus === "paid" || paymentStatus === "failed" ? null : order.paymentTransactionId,
       });
     });
 
@@ -399,7 +383,7 @@ export class PaymentService {
     return this.hydrateOrder(updated);
   }
 
-  /** Simulated gateway callback entry point — wire real webhooks here. */
+  /** Gateway callback entry point — also used after verifyPayment syncs status. */
   handlePaymentCallback(
     orderId: string,
     outcome: "paid" | "failed",

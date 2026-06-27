@@ -40,8 +40,8 @@ export function SimplifiedPaymentMethodSelector({
       ) : null}
 
       <p className="text-xs leading-relaxed text-zinc-500">
-        Shipping is already confirmed. This step is for payment only — M-Pesa is simulated for now;
-        real gateway integration will replace it later.
+        M-Pesa sends an STK Push to your phone. Cash on Delivery and Bank Transfer skip instant
+        payment.
       </p>
     </div>
   );

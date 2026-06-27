@@ -72,7 +72,7 @@ export const SIMPLIFIED_PAYMENT_OPTIONS = [
   {
     code: "mpesa" as const,
     label: "M-Pesa",
-    description: "Pay instantly with Vodacom M-Pesa",
+    description: "STK Push to your Vodacom M-Pesa number",
     icon: "🟢",
   },
   {
@@ -119,3 +119,6 @@ export const ORDER_STATUS_LABELS: Record<string, string> = {
   delivered: "Delivered",
   cancelled: "Cancelled",
 };
+
+/** Client polling interval while waiting for M-Pesa STK confirmation (ms). */
+export const PAYMENT_VERIFY_POLL_MS = 2_000;

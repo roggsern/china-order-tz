@@ -14,9 +14,13 @@ import {
 } from "@/lib/checkout/idempotency";
 import type { Order } from "@/lib/types/order";
 import type { PaymentMethodCode } from "@/lib/types/payment";
-import { PAYMENT_METHOD_CODES } from "@/lib/types/payment";
+import { PAYMENT_METHOD_CODES, PAYMENT_STATUS } from "@/lib/types/payment";
 import { paymentService } from "@/lib/payment/PaymentService";
 import { getOrderById as getStoredOrderById } from "@/lib/payment/order-storage";
+import {
+  getPaymentTransaction,
+  savePaymentTransaction,
+} from "@/lib/payment/payment-session";
 import { shouldRedirectToOrderSuccess } from "@/lib/order/placement";
 import { CheckoutSection } from "./CheckoutSection";
 import { CheckoutOrderSummary } from "./CheckoutOrderSummary";
@@ -26,6 +30,16 @@ import { SimplifiedPaymentMethodSelector } from "@/components/payment/Simplified
 function redirectToOrderSuccess(router: ReturnType<typeof useRouter>, orderId: string): void {
   clearCheckoutDraft();
   router.replace(`/order-success/${orderId}`);
+}
+
+function redirectToPaymentConfirmation(
+  router: ReturnType<typeof useRouter>,
+  orderId: string,
+  transactionId: string,
+): void {
+  savePaymentTransaction(orderId, transactionId);
+  clearCheckoutDraft();
+  router.replace(`/checkout/payment/confirm/${orderId}?transactionId=${encodeURIComponent(transactionId)}`);
 }
 
 function finishOrder(
@@ -69,6 +83,18 @@ export function PaymentPageContent() {
         if (shouldRedirectToOrderSuccess(existing)) {
           finishOrder(existing, clearPurchasedItems, router);
           return;
+        }
+
+        if (
+          existing.paymentMethod === PAYMENT_METHOD_CODES.MPESA &&
+          existing.paymentStatus === PAYMENT_STATUS.PENDING
+        ) {
+          const transactionId =
+            existing.paymentTransactionId ?? getPaymentTransaction(existing.id);
+          if (transactionId) {
+            redirectToPaymentConfirmation(router, existing.id, transactionId);
+            return;
+          }
         }
 
         lockCartForOrder(existing.id, clearPurchasedItems);
@@ -135,6 +161,19 @@ export function PaymentPageContent() {
         idempotencyKey: draft.draftId,
       });
 
+      lockCartForOrder(order.id, clearPurchasedItems);
+
+      if (paymentMethod === PAYMENT_METHOD_CODES.MPESA) {
+        const payment = await paymentService.initiatePayment(order);
+
+        if (!payment.success || !payment.transactionId) {
+          throw new Error(payment.message ?? "M-Pesa payment could not be initiated.");
+        }
+
+        redirectToPaymentConfirmation(router, order.id, payment.transactionId);
+        return;
+      }
+
       finishOrder(order, clearPurchasedItems, router);
     } catch (error) {
       releaseDraftSubmissionLock(draft.draftId);
@@ -179,7 +218,7 @@ export function PaymentPageContent() {
   const submitLabel =
     paymentMethod === PAYMENT_METHOD_CODES.MPESA
       ? isProcessingPayment
-        ? "Processing M-Pesa…"
+        ? "Sending STK Push…"
         : failedOrder
           ? "Retry M-Pesa Payment"
           : "Pay with M-Pesa"
@@ -269,7 +308,9 @@ export function PaymentPageContent() {
           submitLabel={submitLabel}
           submitHint={
             isProcessingPayment
-              ? "Processing — please do not refresh or click again"
+              ? paymentMethod === PAYMENT_METHOD_CODES.MPESA
+                ? "Initiating STK Push — please wait"
+                : "Processing — please do not refresh or click again"
               : failedOrder
                 ? "Retry payment — your order is already saved"
                 : "Payment step — shipping already confirmed"

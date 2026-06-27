@@ -1,5 +1,9 @@
 /** Routes where cart catalog re-validation must not run (post-checkout). */
-export const POST_CHECKOUT_PATH_PREFIXES = ["/order-success", "/track-order"] as const;
+export const POST_CHECKOUT_PATH_PREFIXES = [
+  "/order-success",
+  "/track-order",
+  "/checkout/payment/confirm",
+] as const;
 
 export function isPostCheckoutPath(pathname: string): boolean {
   return POST_CHECKOUT_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));

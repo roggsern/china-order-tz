@@ -1,4 +1,10 @@
 export { PaymentService, paymentService } from "./PaymentService";
+export { initiatePaymentRequest, verifyPaymentRequest } from "./client-api";
+export {
+  savePaymentTransaction,
+  getPaymentTransaction,
+  clearPaymentTransaction,
+} from "./payment-session";
 export {
   PAYMENT_CATEGORY_OPTIONS,
   MOBILE_MONEY_OPTIONS,

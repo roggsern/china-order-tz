@@ -92,6 +92,8 @@ export type Order = {
   paymentStatus: PaymentStatus;
   paymentMethod: PaymentMethodCode | null;
   paymentReference: string | null;
+  /** Active gateway transaction while M-Pesa STK push is pending */
+  paymentTransactionId?: string | null;
   status: OrderStatus;
   createdAt: string;
   updatedAt: string;
@@ -216,6 +218,7 @@ export function normalizeOrder(raw: Partial<Order> & Pick<Order, "orderNumber">)
     paymentStatus: (raw.paymentStatus ?? "pending") as PaymentStatus,
     paymentMethod: raw.paymentMethod ?? null,
     paymentReference: raw.paymentReference ?? null,
+    paymentTransactionId: raw.paymentTransactionId ?? null,
     status: raw.status ?? ORDER_STATUS.PENDING,
     createdAt: raw.createdAt ?? new Date().toISOString(),
     updatedAt: raw.updatedAt ?? raw.createdAt ?? new Date().toISOString(),
