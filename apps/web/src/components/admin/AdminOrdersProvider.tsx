@@ -22,6 +22,7 @@ type AdminOrdersContextValue = {
   markPaymentReceived: (orderId: string) => void;
   markOrderShipped: (orderId: string) => void;
   markOrderDelivered: (orderId: string) => void;
+  markOrderProcessing: (orderId: string) => void;
   updateOrderStatus: (orderId: string, status: OrderStatus) => void;
   getOrder: (orderNumber: string) => Order | undefined;
   getOrderById: (orderId: string) => Order | undefined;
@@ -75,6 +76,16 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
     [refreshOrders],
   );
 
+  const markOrderProcessing = useCallback(
+    (orderId: string) => {
+      const order = paymentService.getOrderById(orderId);
+      if (!order) return;
+      paymentService.updateOrderStatus(order.orderNumber, ORDER_STATUS.PROCESSING);
+      refreshOrders();
+    },
+    [refreshOrders],
+  );
+
   const markOrderShipped = useCallback(
     (orderId: string) => {
       const order = paymentService.getOrderById(orderId);
@@ -121,6 +132,7 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
       isHydrated,
       refreshOrders,
       markPaymentReceived,
+      markOrderProcessing,
       markOrderShipped,
       markOrderDelivered,
       updateOrderStatus,
@@ -132,6 +144,7 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
       isHydrated,
       refreshOrders,
       markPaymentReceived,
+      markOrderProcessing,
       markOrderShipped,
       markOrderDelivered,
       updateOrderStatus,

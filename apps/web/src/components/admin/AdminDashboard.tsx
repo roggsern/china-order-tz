@@ -4,11 +4,21 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { useAdminProducts } from "@/components/admin/AdminProductsProvider";
 import { useAdminOrders } from "@/components/admin/AdminOrdersProvider";
+import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { computeOrderAnalytics } from "@/lib/admin/order-analytics";
 import { formatPrice } from "@/lib/catalog/utils";
 import { getCategoryBySlug } from "@/lib/catalog/categories";
-import { PlusIcon, PackageIcon, ChartBarIcon } from "@/components/home/icons";
+import { getOrderFulfillmentLabel } from "@/lib/payment/order-filters";
+import { PlusIcon, PackageIcon, DocumentIcon } from "@/components/home/icons";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import { PaymentStatusBadge } from "@/components/payment/PaymentStatusBadge";
+
+function formatOrderDate(timestamp: string): string {
+  return new Intl.DateTimeFormat("en-TZ", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(timestamp));
+}
 
 export function AdminDashboard() {
   const { products } = useAdminProducts();
@@ -16,250 +26,226 @@ export function AdminDashboard() {
 
   const orderAnalytics = useMemo(() => computeOrderAnalytics(orders), [orders]);
 
+  const recentOrders = useMemo(
+    () => [...orders].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 6),
+    [orders],
+  );
+
+  const recentProducts = [...products].sort((a, b) => b.id - a.id).slice(0, 4);
   const activeCount = products.filter((p) => p.status === "active").length;
-  const hiddenCount = products.filter((p) => p.status === "hidden").length;
-  const featuredCount = products.filter((p) => p.featured).length;
-  const inStockCount = products.filter((p) => p.stock > 0).length;
-  const outOfStockCount = products.filter((p) => p.stock <= 0).length;
-  const onSaleCount = products.filter((p) => p.oldPrice > p.price).length;
-  const totalValue = products.reduce((sum, p) => sum + p.price * p.stock, 0);
-
-  const recentProducts = [...products].sort((a, b) => b.id - a.id).slice(0, 5);
-
-  const categoryBreakdown = products.reduce<Record<string, number>>((acc, p) => {
-    acc[p.categorySlug] = (acc[p.categorySlug] ?? 0) + 1;
-    return acc;
-  }, {});
-
-  const topCategories = Object.entries(categoryBreakdown)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 4);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="admin-page-header">
         <div>
-          <h1 className="text-xl font-semibold text-zinc-900 sm:text-2xl">Dashboard</h1>
-          <p className="mt-0.5 text-sm text-zinc-500">
-            Store overview — orders, revenue, and catalog at a glance.
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#c9a227]">
+            Store overview
+          </p>
+          <h1 className="mt-1 text-2xl font-bold text-zinc-900 sm:text-3xl">Dashboard</h1>
+          <p className="mt-1 text-sm text-zinc-500">
+            Order metrics from stored checkout snapshots — separate from live cart data.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link
-            href="/admin/orders"
-            className="inline-flex items-center justify-center rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
-          >
-            View orders
+          <Link href="/admin/orders" className="admin-btn-secondary">
+            Manage orders
           </Link>
-          <Link
-            href="/admin/products/new"
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#c9a227] px-4 py-2 text-sm font-semibold text-zinc-900 transition hover:bg-[#e8c547]"
-          >
+          <Link href="/admin/products/new" className="admin-btn-primary inline-flex items-center gap-2">
             <PlusIcon className="h-4 w-4" />
             Add product
           </Link>
         </div>
       </div>
 
-      <section className="mt-6">
-        <h2 className="text-sm font-semibold text-zinc-900">Order analytics</h2>
-        <div className="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard
+      <section className="mt-8">
+        <h2 className="text-sm font-bold text-zinc-900">Order analytics</h2>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <AdminStatCard
             label="Total orders"
             value={ordersHydrated ? orderAnalytics.totalOrders : "—"}
             href="/admin/orders"
+            variant="dark"
           />
-          <StatCard
+          <AdminStatCard
             label="Total revenue"
             value={ordersHydrated ? formatPrice(orderAnalytics.totalRevenue) : "—"}
-            sub="Paid orders only"
+            sub="From paid orders"
             isText
+            accent="text-[#c9a227]"
+            variant="gold"
           />
-          <StatCard
-            label="Paid orders"
-            value={ordersHydrated ? orderAnalytics.paidOrders : "—"}
-            accent="text-emerald-600"
-          />
-          <StatCard
-            label="Pending payments"
-            value={ordersHydrated ? orderAnalytics.pendingPayments : "—"}
+          <AdminStatCard
+            label="Pending orders"
+            value={ordersHydrated ? orderAnalytics.pendingOrders : "—"}
+            sub="Awaiting completion"
             accent="text-amber-600"
+          />
+          <AdminStatCard
+            label="Completed orders"
+            value={ordersHydrated ? orderAnalytics.completedOrders : "—"}
+            sub="Delivered"
+            accent="text-emerald-600"
           />
         </div>
       </section>
 
-      {/* Catalog stats */}
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Total products"
-          value={products.length}
-          icon={<PackageIcon className="h-5 w-5 text-[#8b6914]" />}
-          href="/admin/products"
-        />
-        <StatCard
-          label="Active products"
-          value={activeCount}
-          sub={`${hiddenCount} hidden`}
-          icon={<ChartBarIcon className="h-5 w-5 text-emerald-600" />}
-        />
-        <StatCard
-          label="In stock"
-          value={inStockCount}
-          sub={`${outOfStockCount} out of stock`}
-          icon={<PackageIcon className="h-5 w-5 text-blue-600" />}
-        />
-        <StatCard
-          label="Inventory value"
-          value={formatPrice(totalValue)}
-          sub={`${onSaleCount} on sale · ${featuredCount} featured`}
-          isText
-        />
-      </div>
-
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        {/* Recent products */}
-        <section className="admin-card lg:col-span-2">
+      <div className="mt-8 grid gap-6 xl:grid-cols-3">
+        <section className="admin-card overflow-hidden xl:col-span-2">
           <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-4">
-            <h2 className="text-sm font-semibold text-zinc-900">Recent products</h2>
-            <Link
-              href="/admin/products"
-              className="text-xs font-medium text-[#8b6914] hover:underline"
-            >
+            <div className="flex items-center gap-2">
+              <DocumentIcon className="h-4 w-4 text-[#8b6914]" />
+              <h2 className="text-sm font-bold text-zinc-900">Recent orders</h2>
+            </div>
+            <Link href="/admin/orders" className="text-xs font-semibold text-[#8b6914] hover:underline">
               View all
             </Link>
           </div>
-          <ul className="divide-y divide-zinc-100">
+
+          {!ordersHydrated ? (
+            <div className="p-8">
+              <div className="h-40 animate-pulse rounded-xl bg-zinc-50" />
+            </div>
+          ) : recentOrders.length === 0 ? (
+            <div className="px-6 py-12 text-center text-sm text-zinc-500">No orders yet.</div>
+          ) : (
+            <>
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full min-w-[640px] text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-zinc-100 bg-zinc-50/80">
+                      <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                        Order ID
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                        Customer
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                        Total
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100">
+                    {recentOrders.map((order) => {
+                      const customerName =
+                        `${order.customer.firstName} ${order.customer.lastName}`.trim();
+                      return (
+                        <tr key={order.id} className="hover:bg-zinc-50/80">
+                          <td className="px-4 py-3">
+                            <Link
+                              href={`/admin/orders/${order.id}`}
+                              className="font-mono text-sm font-semibold text-zinc-900 hover:text-[#8b6914]"
+                            >
+                              {order.id.slice(0, 8)}
+                            </Link>
+                          </td>
+                          <td className="px-4 py-3">
+                            <p className="font-medium text-zinc-900">{customerName || "—"}</p>
+                          </td>
+                          <td className="px-4 py-3 font-semibold">
+                            {formatPrice(order.grandTotal ?? order.totals.grandTotal)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-wrap gap-1.5">
+                              <PaymentStatusBadge status={order.paymentStatus} size="sm" />
+                              <span className="inline-flex rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold text-zinc-700">
+                                {getOrderFulfillmentLabel(order.status)}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <ul className="divide-y divide-zinc-100 md:hidden">
+                {recentOrders.map((order) => {
+                  const customerName =
+                    `${order.customer.firstName} ${order.customer.lastName}`.trim();
+                  return (
+                    <li key={order.id}>
+                      <Link
+                        href={`/admin/orders/${order.id}`}
+                        className="block px-4 py-4 transition hover:bg-zinc-50"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-mono text-sm font-semibold text-zinc-900">
+                              {order.id.slice(0, 8)}
+                            </p>
+                            <p className="mt-0.5 text-sm text-zinc-600">{customerName || "—"}</p>
+                            <p className="mt-1 text-xs text-zinc-400">
+                              {formatOrderDate(order.createdAt)}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-semibold text-zinc-900">
+                              {formatPrice(order.grandTotal ?? order.totals.grandTotal)}
+                            </p>
+                            <div className="mt-2 flex flex-wrap justify-end gap-1">
+                              <PaymentStatusBadge status={order.paymentStatus} size="sm" />
+                            </div>
+                          </div>
+                        </div>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+        </section>
+
+        <section className="admin-card overflow-hidden">
+          <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-4">
+            <div className="flex items-center gap-2">
+              <PackageIcon className="h-4 w-4 text-[#8b6914]" />
+              <h2 className="text-sm font-bold text-zinc-900">Catalog</h2>
+            </div>
+            <Link href="/admin/products" className="text-xs font-semibold text-[#8b6914] hover:underline">
+              View all
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 gap-3 p-4">
+            <div className="rounded-xl bg-zinc-50 p-3">
+              <p className="text-xs text-zinc-500">Products</p>
+              <p className="mt-1 text-xl font-bold text-zinc-900">{products.length}</p>
+            </div>
+            <div className="rounded-xl bg-zinc-50 p-3">
+              <p className="text-xs text-zinc-500">Active</p>
+              <p className="mt-1 text-xl font-bold text-emerald-600">{activeCount}</p>
+            </div>
+          </div>
+          <ul className="divide-y divide-zinc-100 border-t border-zinc-100">
             {recentProducts.map((product) => {
               const category = getCategoryBySlug(product.categorySlug);
               return (
                 <li key={product.id}>
                   <Link
                     href={`/admin/products/${product.id}/edit`}
-                    className="flex items-center gap-3 px-5 py-3 transition hover:bg-zinc-50"
+                    className="flex items-center gap-3 px-4 py-3 transition hover:bg-zinc-50"
                   >
                     <div
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${product.gradient}`}
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${product.gradient}`}
                     >
-                      <span className="text-lg">{product.emoji}</span>
+                      <span className="text-base">{product.emoji}</span>
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-zinc-900">{product.name}</p>
                       <p className="text-xs text-zinc-500">{category?.name}</p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium text-zinc-900">
-                        {formatPrice(product.price)}
-                      </p>
-                      <StatusBadge status={product.status} />
-                    </div>
+                    <StatusBadge status={product.status} />
                   </Link>
                 </li>
               );
             })}
           </ul>
         </section>
-
-        {/* Category breakdown */}
-        <section className="admin-card">
-          <div className="border-b border-zinc-200 px-5 py-4">
-            <h2 className="text-sm font-semibold text-zinc-900">Top categories</h2>
-          </div>
-          <ul className="divide-y divide-zinc-100 p-2">
-            {topCategories.map(([slug, count]) => {
-              const category = getCategoryBySlug(slug);
-              const pct = Math.round((count / products.length) * 100);
-              return (
-                <li key={slug} className="px-3 py-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium text-zinc-800">
-                      {category?.icon} {category?.name ?? slug}
-                    </span>
-                    <span className="text-zinc-500">{count}</span>
-                  </div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-100">
-                    <div
-                      className="h-full rounded-full bg-[#c9a227]"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
       </div>
-
-      {/* Quick actions */}
-      <section className="admin-card mt-6 p-5">
-        <h2 className="text-sm font-semibold text-zinc-900">Quick actions</h2>
-        <div className="mt-4 flex flex-wrap gap-3">
-          <Link
-            href="/admin/products/new"
-            className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
-          >
-            Add new product
-          </Link>
-          <Link
-            href="/admin/orders"
-            className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
-          >
-            Manage orders
-          </Link>
-          <Link
-            href="/admin/products"
-            className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
-          >
-            Manage products
-          </Link>
-          <Link
-            href="/"
-            className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
-          >
-            View storefront
-          </Link>
-        </div>
-      </section>
     </div>
   );
-}
-
-function StatCard({
-  label,
-  value,
-  sub,
-  icon,
-  href,
-  isText,
-  accent,
-}: {
-  label: string;
-  value: number | string;
-  sub?: string;
-  icon?: React.ReactNode;
-  href?: string;
-  isText?: boolean;
-  accent?: string;
-}) {
-  const content = (
-    <div className="admin-card p-5 transition hover:shadow-md">
-      <div className="flex items-start justify-between">
-        <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">{label}</p>
-        {icon}
-      </div>
-      <p className={`mt-2 font-semibold ${accent ?? "text-zinc-900"} ${isText ? "text-lg" : "text-2xl"}`}>
-        {value}
-      </p>
-      {sub && <p className="mt-1 text-xs text-zinc-500">{sub}</p>}
-    </div>
-  );
-
-  if (href) {
-    return (
-      <Link href={href} className="block">
-        {content}
-      </Link>
-    );
-  }
-
-  return content;
 }

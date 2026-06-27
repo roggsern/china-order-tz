@@ -13,6 +13,7 @@ import { PAYMENT_METHOD_LABELS } from "@/lib/payment/constants";
 import { PAYMENT_STATUS } from "@/lib/types/payment";
 import { getMethodByCode } from "@/lib/shipping/engine";
 import { useAdminOrders } from "@/components/admin/AdminOrdersProvider";
+import { OrderStatusSelect } from "@/components/admin/OrderStatusSelect";
 import { OrderSummaryPayment } from "@/components/payment/OrderSummaryPayment";
 import { PaymentStatusBadge } from "@/components/payment/PaymentStatusBadge";
 import { OrderCustomerDetails } from "@/components/order/OrderCustomerDetails";
@@ -40,8 +41,10 @@ export function AdminOrderDetailContent({ orderId }: AdminOrderDetailContentProp
     getOrderById,
     isHydrated,
     markPaymentReceived,
+    markOrderProcessing,
     markOrderShipped,
     markOrderDelivered,
+    updateOrderStatus,
   } = useAdminOrders();
   const order = getOrderById(orderId);
 
@@ -232,30 +235,61 @@ export function AdminOrderDetailContent({ orderId }: AdminOrderDetailContentProp
             <h2 className="text-sm font-semibold text-zinc-900">Order actions</h2>
 
             {editable ? (
-              <div className="mt-4 flex flex-col gap-2">
-                {!isPaid && (
-                  <ActionButton
-                    label="Mark as Paid"
-                    description="Manual payment override"
-                    onClick={() => markPaymentReceived(order.id)}
-                    variant="success"
-                  />
-                )}
-                {order.status !== ORDER_STATUS.SHIPPED && order.status !== ORDER_STATUS.DELIVERED && (
-                  <ActionButton
-                    label="Mark as Shipped"
-                    description="Order is in transit"
-                    onClick={() => markOrderShipped(order.id)}
-                  />
-                )}
-                {order.status !== ORDER_STATUS.DELIVERED && (
-                  <ActionButton
-                    label="Mark as Delivered"
-                    description="Order completed"
-                    onClick={() => markOrderDelivered(order.id)}
-                    variant="muted"
-                  />
-                )}
+              <div className="mt-4 space-y-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                    Update order status
+                  </p>
+                  <div className="mt-2">
+                    <OrderStatusSelect
+                      value={
+                        order.status === ORDER_STATUS.CONFIRMED ||
+                        order.status === ORDER_STATUS.PENDING_PAYMENT
+                          ? ORDER_STATUS.PENDING
+                          : order.status === ORDER_STATUS.CANCELLED
+                            ? ORDER_STATUS.PENDING
+                            : order.status
+                      }
+                      onChange={(status) => updateOrderStatus(order.id, status)}
+                      className="w-full text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  {!isPaid && (
+                    <ActionButton
+                      label="Mark as Paid"
+                      description="Manual payment override"
+                      onClick={() => markPaymentReceived(order.id)}
+                      variant="success"
+                    />
+                  )}
+                  {order.status !== ORDER_STATUS.PROCESSING &&
+                    order.status !== ORDER_STATUS.SHIPPED &&
+                    order.status !== ORDER_STATUS.DELIVERED && (
+                      <ActionButton
+                        label="Mark as Processing"
+                        description="Start preparing the order"
+                        onClick={() => markOrderProcessing(order.id)}
+                      />
+                    )}
+                  {order.status !== ORDER_STATUS.SHIPPED && order.status !== ORDER_STATUS.DELIVERED && (
+                    <ActionButton
+                      label="Mark as Shipped"
+                      description="Order is in transit"
+                      onClick={() => markOrderShipped(order.id)}
+                    />
+                  )}
+                  {order.status !== ORDER_STATUS.DELIVERED && (
+                    <ActionButton
+                      label="Mark as Completed"
+                      description="Order delivered to customer"
+                      onClick={() => markOrderDelivered(order.id)}
+                      variant="muted"
+                    />
+                  )}
+                </div>
               </div>
             ) : (
               <p className="mt-4 text-sm text-zinc-500">
