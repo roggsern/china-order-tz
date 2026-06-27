@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/lib/cart/context";
-import { clearCartIfOrderPaid } from "@/lib/checkout/completion";
+import { lockCartForOrder } from "@/lib/checkout/completion";
 import { clearCheckoutDraft, getCheckoutDraft } from "@/lib/checkout/draft";
 import type { CheckoutDraft } from "@/lib/checkout/draft";
 import {
@@ -12,10 +12,12 @@ import {
   getOrderIdForDraft,
   releaseDraftSubmissionLock,
 } from "@/lib/checkout/idempotency";
+import type { Order } from "@/lib/types/order";
 import type { PaymentMethodCode } from "@/lib/types/payment";
 import { PAYMENT_METHOD_CODES } from "@/lib/types/payment";
 import { paymentService } from "@/lib/payment/PaymentService";
 import { getOrderById as getStoredOrderById } from "@/lib/payment/order-storage";
+import { shouldRedirectToOrderSuccess } from "@/lib/order/placement";
 import { CheckoutSection } from "./CheckoutSection";
 import { CheckoutOrderSummary } from "./CheckoutOrderSummary";
 import { CheckoutStepIndicator } from "./CheckoutStepIndicator";
@@ -27,12 +29,12 @@ function redirectToOrderSuccess(router: ReturnType<typeof useRouter>, orderId: s
 }
 
 function finishOrder(
-  orderId: string,
+  order: Order,
   clearPurchasedItems: () => void,
   router: ReturnType<typeof useRouter>,
 ): void {
-  clearCartIfOrderPaid(orderId, clearPurchasedItems);
-  redirectToOrderSuccess(router, orderId);
+  lockCartForOrder(order.id, clearPurchasedItems);
+  redirectToOrderSuccess(router, order.id);
 }
 
 export function PaymentPageContent() {
@@ -43,6 +45,7 @@ export function PaymentPageContent() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode | null>(null);
   const [paymentError, setPaymentError] = useState<string | undefined>();
   const [submitError, setSubmitError] = useState<string | undefined>();
+  const [failedOrder, setFailedOrder] = useState<Order | null>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const paymentLockRef = useRef(false);
   const mountedRef = useRef(false);
@@ -60,9 +63,17 @@ export function PaymentPageContent() {
     }
 
     const existingOrderId = getOrderIdForDraft(savedDraft.draftId);
-    if (existingOrderId && getStoredOrderById(existingOrderId)) {
-      finishOrder(existingOrderId, clearPurchasedItems, router);
-      return;
+    if (existingOrderId) {
+      const existing = getStoredOrderById(existingOrderId);
+      if (existing) {
+        if (shouldRedirectToOrderSuccess(existing)) {
+          finishOrder(existing, clearPurchasedItems, router);
+          return;
+        }
+
+        lockCartForOrder(existing.id, clearPurchasedItems);
+        setFailedOrder(existing);
+      }
     }
 
     setDraft(savedDraft);
@@ -85,20 +96,27 @@ export function PaymentPageContent() {
     }
 
     const existingOrderId = getOrderIdForDraft(draft.draftId);
-    if (existingOrderId && getStoredOrderById(existingOrderId)) {
-      finishOrder(existingOrderId, clearPurchasedItems, router);
-      return;
+    if (existingOrderId) {
+      const existing = getStoredOrderById(existingOrderId);
+      if (existing && shouldRedirectToOrderSuccess(existing)) {
+        finishOrder(existing, clearPurchasedItems, router);
+        return;
+      }
     }
 
     if (!acquireDraftSubmissionLock(draft.draftId)) {
       const lockedOrderId = getOrderIdForDraft(draft.draftId);
-      if (lockedOrderId && getStoredOrderById(lockedOrderId)) {
-        finishOrder(lockedOrderId, clearPurchasedItems, router);
+      if (lockedOrderId) {
+        const lockedOrder = getStoredOrderById(lockedOrderId);
+        if (lockedOrder && shouldRedirectToOrderSuccess(lockedOrder)) {
+          finishOrder(lockedOrder, clearPurchasedItems, router);
+        }
       }
       return;
     }
 
     setPaymentError(undefined);
+    setFailedOrder(null);
     paymentLockRef.current = true;
     setIsProcessingPayment(true);
     setSubmitError(undefined);
@@ -117,10 +135,20 @@ export function PaymentPageContent() {
         idempotencyKey: draft.draftId,
       });
 
-      finishOrder(order.id, clearPurchasedItems, router);
+      finishOrder(order, clearPurchasedItems, router);
     } catch (error) {
       releaseDraftSubmissionLock(draft.draftId);
       paymentLockRef.current = false;
+
+      const linkedOrderId = getOrderIdForDraft(draft.draftId);
+      if (linkedOrderId) {
+        const linkedOrder = getStoredOrderById(linkedOrderId);
+        if (linkedOrder) {
+          lockCartForOrder(linkedOrder.id, clearPurchasedItems);
+          setFailedOrder(linkedOrder);
+        }
+      }
+
       const message =
         error instanceof Error ? error.message : "We couldn't place your order. Please try again.";
       setSubmitError(message);
@@ -152,14 +180,20 @@ export function PaymentPageContent() {
     paymentMethod === PAYMENT_METHOD_CODES.MPESA
       ? isProcessingPayment
         ? "Processing M-Pesa…"
-        : "Pay with M-Pesa"
+        : failedOrder
+          ? "Retry M-Pesa Payment"
+          : "Pay with M-Pesa"
       : paymentMethod === PAYMENT_METHOD_CODES.COD
         ? isProcessingPayment
           ? "Placing order…"
-          : "Place Order (COD)"
+          : failedOrder
+            ? "Retry Order (COD)"
+            : "Place Order (COD)"
         : isProcessingPayment
           ? "Placing order…"
-          : "Place Order";
+          : failedOrder
+            ? "Retry Order"
+            : "Place Order";
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
@@ -187,6 +221,20 @@ export function PaymentPageContent() {
       </div>
 
       <CheckoutStepIndicator current="payment" />
+
+      {failedOrder ? (
+        <div
+          role="alert"
+          className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-4 sm:px-5"
+        >
+          <p className="text-sm font-semibold text-red-800">Previous payment attempt failed</p>
+          <p className="mt-1 text-sm text-red-700">
+            Order <span className="font-mono font-semibold">[{failedOrder.orderNumber}]</span> was
+            created but payment did not go through. Your cart is locked — select a payment method
+            and try again.
+          </p>
+        </div>
+      ) : null}
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start">
         <fieldset disabled={isProcessingPayment} className="space-y-6 border-0 p-0">
@@ -222,7 +270,9 @@ export function PaymentPageContent() {
           submitHint={
             isProcessingPayment
               ? "Processing — please do not refresh or click again"
-              : "Payment step — shipping already confirmed"
+              : failedOrder
+                ? "Retry payment — your order is already saved"
+                : "Payment step — shipping already confirmed"
           }
           backHref="/checkout"
           backLabel="← Back to checkout"

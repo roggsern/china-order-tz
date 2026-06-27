@@ -1,4 +1,4 @@
-import type { CartState } from "@/lib/types/cart";
+import type { CartState, CartLineItem } from "@/lib/types/cart";
 import type { CreateOrderInput, FinalizeOrderInput, Order, OrderLineItem, OrderStatus } from "@/lib/types/order";
 import { ORDER_STATUS, normalizeOrder } from "@/lib/types/order";
 import type { CorePaymentStatus, PaymentMethodCode, PaymentStatus } from "@/lib/types/payment";
@@ -14,6 +14,7 @@ import { generateOrderNumber } from "@/lib/payment/order-number";
 import {
   generateMpesaReference,
   reconcilePaymentStates,
+  resolvePaymentOutcome,
 } from "@/lib/payment/payment-outcome";
 import {
   getOrderIdForDraft,
@@ -28,7 +29,7 @@ import {
   updateOrderById,
 } from "@/lib/payment/order-storage";
 import { syncTimelineWithOrder } from "@/lib/payment/timeline";
-import type { CartLineItem } from "@/lib/types/cart";
+import { lockCartForOrderInStorage } from "@/lib/order/cart-lock";
 
 function applyOrderUpdate(order: Order, patch: Partial<Order>): Order {
   const now = new Date().toISOString();
@@ -188,6 +189,9 @@ export class PaymentService {
       if (existingOrderId) {
         const existing = getStoredOrderById(existingOrderId);
         if (existing) {
+          if (existing.paymentStatus === PAYMENT_STATUS.FAILED) {
+            return this.retryFailedOrderPayment(existing, input);
+          }
           return this.hydrateOrder(existing);
         }
       }
@@ -227,6 +231,7 @@ export class PaymentService {
 
     order.timeline = syncTimelineWithOrder(order);
     saveOrder(order);
+    lockCartForOrderInStorage(orderId);
 
     if (input.paymentMethod === PAYMENT_METHOD_CODES.MPESA) {
       const paymentResult = await this.initiatePayment({
@@ -251,7 +256,68 @@ export class PaymentService {
       return paid;
     }
 
-    return this.hydrateOrder(order);
+    const outcome = resolvePaymentOutcome(input.paymentMethod);
+    const reconciled = reconcilePaymentStates({
+      paymentStatus: outcome.paymentStatus,
+      status: outcome.orderStatus,
+      paymentMethod: input.paymentMethod,
+    });
+    const finalized = applyOrderUpdate(order, {
+      paymentStatus: reconciled.paymentStatus,
+      status: reconciled.status,
+    });
+    saveOrder(finalized);
+    return this.hydrateOrder(finalized);
+  }
+
+  private async retryFailedOrderPayment(
+    existing: Order,
+    input: CreateOrderInput,
+  ): Promise<Order> {
+    const reset = applyOrderUpdate(existing, {
+      paymentMethod: input.paymentMethod,
+      paymentStatus: PAYMENT_STATUS.PENDING,
+      status: ORDER_STATUS.PENDING,
+      paymentReference: null,
+    });
+    saveOrder(reset);
+    lockCartForOrderInStorage(existing.id);
+
+    if (input.paymentMethod === PAYMENT_METHOD_CODES.MPESA) {
+      const paymentResult = await this.initiatePayment({
+        method: input.paymentMethod,
+        amount: input.totals.grandTotal,
+        phone: input.customer.phone,
+      });
+
+      if (!paymentResult.success) {
+        this.updatePaymentStatus(existing.id, "failed");
+        throw new Error(paymentResult.message ?? "Payment failed. Please try again.");
+      }
+
+      const paid = this.updatePaymentStatus(existing.id, "paid", {
+        paymentReference: paymentResult.reference,
+      });
+
+      if (!paid) {
+        throw new Error("Payment succeeded but the order could not be updated.");
+      }
+
+      return paid;
+    }
+
+    const outcome = resolvePaymentOutcome(input.paymentMethod);
+    const reconciled = reconcilePaymentStates({
+      paymentStatus: outcome.paymentStatus,
+      status: outcome.orderStatus,
+      paymentMethod: input.paymentMethod,
+    });
+    const finalized = applyOrderUpdate(reset, {
+      paymentStatus: reconciled.paymentStatus,
+      status: reconciled.status,
+    });
+    saveOrder(finalized);
+    return this.hydrateOrder(finalized);
   }
 
   getActiveCheckoutOrder(): Order | null {
