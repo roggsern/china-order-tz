@@ -50,7 +50,7 @@ export function AddToCartButton({
 
   const baseClasses =
     variant === "card"
-      ? "inline-flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white transition hover:bg-[#c9a227] hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-zinc-900 disabled:hover:text-white"
+      ? "inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-[#c9a227] to-[#e8c547] py-2.5 text-xs font-bold text-zinc-900 shadow-sm transition hover:from-[#b8921f] hover:to-[#d4b83d] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:from-zinc-300 disabled:to-zinc-300 disabled:text-zinc-500 sm:gap-2 sm:py-2.5 sm:text-sm"
       : "inline-flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 py-3.5 text-sm font-semibold text-white transition hover:bg-[#c9a227] hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-zinc-900 disabled:hover:text-white";
 
   const label = disabled
@@ -66,7 +66,7 @@ export function AddToCartButton({
       type="button"
       onClick={handleClick}
       disabled={isDisabled}
-      className={`${baseClasses} ${added ? "bg-[#c9a227] text-zinc-900 hover:bg-[#c9a227] hover:text-zinc-900" : ""} ${variant === "detail" ? "flex-1" : ""} ${className}`}
+      className={`${baseClasses} ${added ? "from-emerald-500 to-emerald-400 text-white hover:from-emerald-500 hover:to-emerald-400" : ""} ${variant === "detail" ? "flex-1" : ""} ${className}`}
     >
       <CartIcon className="h-4 w-4" />
       {label}

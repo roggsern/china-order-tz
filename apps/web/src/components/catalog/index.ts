@@ -1,4 +1,5 @@
 export { ProductCard } from "./ProductCard";
+export { ProductCardBadges } from "./ProductCardBadges";
 export { ProductGrid } from "./ProductGrid";
 export { ProductFilters } from "./ProductFilters";
 export { ProductGallery } from "./ProductGallery";

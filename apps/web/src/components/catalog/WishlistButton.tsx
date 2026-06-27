@@ -4,21 +4,38 @@ import { useState } from "react";
 
 interface WishlistButtonProps {
   className?: string;
+  size?: "sm" | "md";
 }
 
-export function WishlistButton({ className = "" }: WishlistButtonProps) {
+const sizeClasses = {
+  sm: "h-8 w-8 rounded-lg",
+  md: "h-12 w-12 rounded-xl",
+};
+
+const iconSizes = {
+  sm: "h-4 w-4",
+  md: "h-5 w-5",
+};
+
+export function WishlistButton({ className = "", size = "md" }: WishlistButtonProps) {
   const [active, setActive] = useState(false);
 
   return (
     <button
       type="button"
-      onClick={() => setActive((prev) => !prev)}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setActive((prev) => !prev);
+      }}
       aria-label={active ? "Remove from wishlist" : "Add to wishlist"}
       aria-pressed={active}
-      className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition hover:border-[#c9a227]/40 hover:text-[#8b6914] ${active ? "border-[#c9a227]/50 text-[#c9a227]" : ""} ${className}`}
+      className={`inline-flex shrink-0 items-center justify-center border bg-white/95 text-zinc-600 shadow-sm backdrop-blur-sm transition active:scale-95 hover:border-[#c9a227]/40 hover:text-[#8b6914] ${
+        active ? "border-[#c9a227]/50 text-[#c9a227]" : "border-zinc-200/80"
+      } ${sizeClasses[size]} ${className}`}
     >
       <svg
-        className="h-5 w-5"
+        className={iconSizes[size]}
         fill={active ? "currentColor" : "none"}
         viewBox="0 0 24 24"
         stroke="currentColor"
