@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { HorizontalBrandLogo } from "@/components/branding/HorizontalBrandLogo";
 import { AccountLinkButton } from "@/components/home/AccountLinkButton";
@@ -9,7 +9,8 @@ import { headerSecondaryNav } from "@/lib/home-data";
 import { BrandMegaMenu } from "./BrandMegaMenu";
 import { CloseIcon, MenuIcon, SearchIcon, UserIcon } from "./icons";
 import { MegaMenu } from "./MegaMenu";
-import { SearchBar } from "./SearchBar";
+import { SearchExperience } from "@/components/search/SearchExperience";
+import { SearchOverlay } from "@/components/search/SearchOverlay";
 
 const navLinkClass =
   "inline-flex shrink-0 items-center whitespace-nowrap rounded-lg px-3.5 py-2 text-[13px] font-medium tracking-wide text-zinc-600 transition-colors hover:bg-zinc-50 hover:text-zinc-900 xl:px-4 xl:text-sm";
@@ -28,8 +29,8 @@ const mobileHeaderIconClass =
 
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [drawerActive, setDrawerActive] = useState(false);
-  const mobileSearchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (mobileOpen) {
@@ -49,9 +50,8 @@ export function Header() {
 
   const openMobile = () => setMobileOpen(true);
 
-  const focusMobileSearch = () => {
-    mobileSearchRef.current?.focus();
-    mobileSearchRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  const openMobileSearch = () => {
+    setMobileSearchOpen(true);
   };
 
   return (
@@ -63,7 +63,7 @@ export function Header() {
           <div className="mx-auto grid min-h-[88px] max-w-[1440px] grid-cols-[1fr_auto_1fr] items-center gap-6 px-6 lg:gap-8 lg:px-8 xl:px-10">
             <HorizontalBrandLogo className="justify-self-start" size="header" height={64} />
 
-            <SearchBar
+            <SearchExperience
               size="large"
               className="w-full max-w-[700px] justify-self-center lg:w-[700px]"
             />
@@ -118,7 +118,7 @@ export function Header() {
             <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1">
               <button
                 type="button"
-                onClick={focusMobileSearch}
+                onClick={openMobileSearch}
                 className={mobileHeaderIconClass}
                 aria-label="Search products"
               >
@@ -148,17 +148,11 @@ export function Header() {
               </button>
             </div>
           </div>
-
-          <div className="pb-4">
-            <SearchBar
-              placeholder="Search products, brands or categories..."
-              inputId="mobile-header-search"
-              inputRef={mobileSearchRef}
-            />
-          </div>
         </div>
       </div>
     </header>
+
+      <SearchOverlay open={mobileSearchOpen} onClose={() => setMobileSearchOpen(false)} />
 
       {mobileOpen && (
         <div className="fixed inset-0 z-[60] md:hidden" role="presentation">
