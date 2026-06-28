@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { getPaymentMode, isPaymentTestMode } from "@/lib/payment/server/config";
-import type { PaymentConfigResponse } from "@/lib/payment/server/types";
+import { getPaymentMode, isPaymentTestMode } from "@/lib/payments/config";
+import { paymentRouter } from "@/lib/payments/payment-router";
+import type { PaymentConfigResponse } from "@/lib/payments/types";
 
 export async function GET() {
   const mode = getPaymentMode();
@@ -10,6 +11,7 @@ export async function GET() {
     testMode,
     mode,
     simulateEnabled: testMode,
+    providers: paymentRouter.listProviders(),
   };
 
   return NextResponse.json(config);

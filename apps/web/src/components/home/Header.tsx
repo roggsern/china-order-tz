@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { HorizontalBrandLogo } from "@/components/branding/HorizontalBrandLogo";
 import { AccountLinkButton } from "@/components/home/AccountLinkButton";
 import { CartIconButton } from "@/components/cart/CartIconButton";
+import { NotificationBellButton } from "@/components/notifications/NotificationBellButton";
 import { headerSecondaryNav } from "@/lib/home-data";
 import { BrandMegaMenu } from "./BrandMegaMenu";
 import { CloseIcon, MenuIcon, SearchIcon, UserIcon } from "./icons";
@@ -63,10 +64,12 @@ export function Header() {
           <div className="mx-auto grid min-h-[88px] max-w-[1440px] grid-cols-[1fr_auto_1fr] items-center gap-6 px-6 lg:gap-8 lg:px-8 xl:px-10">
             <HorizontalBrandLogo className="justify-self-start" size="header" height={64} />
 
-            <SearchExperience
-              size="large"
-              className="w-full max-w-[700px] justify-self-center lg:w-[700px]"
-            />
+            <Suspense fallback={<div className="h-[52px] w-full max-w-[700px] animate-pulse rounded-xl bg-zinc-100" />}>
+              <SearchExperience
+                size="large"
+                className="w-full max-w-[700px] justify-self-center lg:w-[700px]"
+              />
+            </Suspense>
 
             <div className="flex shrink-0 items-center justify-self-end gap-6 lg:gap-8">
               <Link
@@ -76,6 +79,12 @@ export function Header() {
                 <UserIcon className="h-[18px] w-[18px] shrink-0" />
                 <span className="hidden lg:inline">Login</span>
               </Link>
+
+              <NotificationBellButton
+                showLabel
+                className="inline-flex h-[52px] shrink-0 items-center gap-2 whitespace-nowrap text-[13px] font-medium text-zinc-600 transition-colors hover:text-zinc-900 xl:text-sm"
+                labelClassName="hidden lg:inline"
+              />
 
               <CartIconButton
                 showLabel
@@ -131,6 +140,12 @@ export function Header() {
                 labelClassName="text-[10px] font-semibold leading-none text-zinc-700 sm:text-[11px]"
               />
 
+              <NotificationBellButton
+                className={`${mobileHeaderIconClass} relative`}
+                iconClassName="h-5 w-5"
+                badgeClassName="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#c9a227] px-0.5 text-[9px] font-bold text-zinc-900"
+              />
+
               <CartIconButton
                 className={`${mobileHeaderIconClass} relative`}
                 iconClassName="h-5 w-5"
@@ -152,7 +167,9 @@ export function Header() {
       </div>
     </header>
 
-      <SearchOverlay open={mobileSearchOpen} onClose={() => setMobileSearchOpen(false)} />
+      <Suspense fallback={null}>
+        <SearchOverlay open={mobileSearchOpen} onClose={() => setMobileSearchOpen(false)} />
+      </Suspense>
 
       {mobileOpen && (
         <div className="fixed inset-0 z-[60] md:hidden" role="presentation">

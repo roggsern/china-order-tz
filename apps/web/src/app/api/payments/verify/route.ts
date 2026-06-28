@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { serverPaymentGateway } from "@/lib/payment/server/gateway";
+import { paymentService } from "@/lib/payments/paymentService";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -9,7 +9,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "transactionId query parameter is required." }, { status: 400 });
   }
 
-  const result = serverPaymentGateway.verifyPayment(transactionId);
+  const result = paymentService.verifyPayment(transactionId);
   if (!result) {
     return NextResponse.json({ error: "Transaction not found." }, { status: 404 });
   }

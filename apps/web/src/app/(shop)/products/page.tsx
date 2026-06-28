@@ -35,7 +35,9 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
   const inStockOnly = params.inStock === "true";
   const catalog = await getProducts();
 
-  let filtered = query ? await searchProducts(query) : [...catalog];
+  let filtered = query
+    ? await searchProducts(query, { origin: params.origin })
+    : [...catalog];
   filtered = filterProducts(filtered, {
     category: categorySlug || undefined,
     inStock: inStockOnly || undefined,
@@ -45,7 +47,10 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
     minPrice: params.minPrice ? Number(params.minPrice) : undefined,
     maxPrice: params.maxPrice ? Number(params.maxPrice) : undefined,
   });
-  filtered = sortProducts(filtered, sort);
+
+  if (!query || sort !== "featured") {
+    filtered = sortProducts(filtered, sort);
+  }
 
   const category = categorySlug ? getCategoryBySlug(categorySlug) : undefined;
   const pageTitle = category ? category.name : query ? `Results for "${query}"` : "All Products";

@@ -1,12 +1,12 @@
 import type { Order } from "@/lib/types/order";
 import type {
-  InitiatePaymentResult,
+  InitiateStkPushResult,
   PaymentConfigResponse,
-  SimulatePaymentResult,
+  SimulateStkPushResult,
   VerifyPaymentResult,
-} from "@/lib/payment/server/types";
+} from "@/lib/payments/types";
 
-export async function initiatePaymentRequest(order: Order): Promise<InitiatePaymentResult> {
+export async function initiatePaymentRequest(order: Order): Promise<InitiateStkPushResult> {
   const response = await fetch("/api/payments/initiate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -17,10 +17,11 @@ export async function initiatePaymentRequest(order: Order): Promise<InitiatePaym
       phone: order.customer.phone,
       accountReference: order.orderNumber,
       description: "CHINA ORDER TZ",
+      paymentMethod: order.paymentMethod,
     }),
   });
 
-  const data = (await response.json()) as InitiatePaymentResult & { error?: string };
+  const data = (await response.json()) as InitiateStkPushResult & { error?: string };
 
   if (response.status >= 500) {
     throw new Error(data.error ?? `Payment initiation failed (${response.status})`);
@@ -55,7 +56,7 @@ export async function fetchPaymentConfig(): Promise<PaymentConfigResponse> {
   return data;
 }
 
-export async function simulatePaymentRequest(order: Order): Promise<SimulatePaymentResult> {
+export async function simulatePaymentRequest(order: Order): Promise<SimulateStkPushResult> {
   const response = await fetch("/api/payments/simulate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -69,7 +70,7 @@ export async function simulatePaymentRequest(order: Order): Promise<SimulatePaym
     }),
   });
 
-  const data = (await response.json()) as SimulatePaymentResult & { error?: string };
+  const data = (await response.json()) as SimulateStkPushResult & { error?: string };
 
   if (!response.ok) {
     throw new Error(data.error ?? `Simulate payment failed (${response.status})`);

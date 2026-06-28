@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useAdminOrders } from "@/components/admin/AdminOrdersProvider";
 import { AdminOrderTable } from "@/components/admin/AdminOrderTable";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
+import { AdminOrderStatusLegend } from "@/components/admin/AdminOrderStatusLegend";
 import { computeOrderAnalytics } from "@/lib/admin/order-analytics";
 import { formatPrice } from "@/lib/catalog/utils";
 
@@ -20,7 +21,7 @@ export default function AdminOrdersPage() {
           </p>
           <h1 className="mt-1 text-2xl font-bold text-zinc-900 sm:text-3xl">Orders</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Manage payments, fulfillment, and lifecycle from stored order snapshots.
+            Live order control — updates via WebSocket or polling as customers checkout and pay.
           </p>
         </div>
       </header>
@@ -30,6 +31,7 @@ export default function AdminOrdersPage() {
           label="Total orders"
           value={isHydrated ? analytics.totalOrders : "—"}
           variant="dark"
+          livePulse
         />
         <AdminStatCard
           label="Total revenue"
@@ -37,20 +39,25 @@ export default function AdminOrdersPage() {
           accent="text-[#c9a227]"
           isText
           variant="gold"
+          livePulse
         />
         <AdminStatCard
           label="Pending orders"
           value={isHydrated ? analytics.pendingOrders : "—"}
-          accent="text-amber-600"
+          accent="text-red-600"
+          livePulse
         />
         <AdminStatCard
-          label="Completed orders"
-          value={isHydrated ? analytics.completedOrders : "—"}
+          label="Paid orders"
+          value={isHydrated ? analytics.paidOrders : "—"}
           accent="text-emerald-600"
+          livePulse
         />
       </div>
 
-      <div className="mt-8">
+      <AdminOrderStatusLegend />
+
+      <div className="mt-6">
         <AdminOrderTable />
       </div>
     </div>

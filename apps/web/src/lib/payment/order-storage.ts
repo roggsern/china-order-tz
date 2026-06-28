@@ -1,5 +1,6 @@
 import type { Order } from "@/lib/types/order";
 import { normalizeOrder } from "@/lib/types/order";
+import { queueOrderServerSync } from "@/lib/admin/order-sync-client";
 
 export const ORDERS_STORAGE_KEY = "china-order-tz-orders";
 export const ORDERS_UPDATED_EVENT = "china-order-tz-orders-updated";
@@ -48,6 +49,7 @@ export function saveOrder(order: Order): void {
   }
 
   writeOrders(orders);
+  queueOrderServerSync(order);
 }
 
 export function getOrderByNumber(orderNumber: string): Order | null {
@@ -100,6 +102,7 @@ export function updateOrder(
   const updated = updater(orders[index]);
   orders[index] = updated;
   writeOrders(orders);
+  queueOrderServerSync(updated);
   return updated;
 }
 
@@ -117,5 +120,6 @@ export function updateOrderById(
   const updated = updater(orders[index]);
   orders[index] = updated;
   writeOrders(orders);
+  queueOrderServerSync(updated);
   return updated;
 }

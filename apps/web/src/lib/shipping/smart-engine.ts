@@ -1,4 +1,5 @@
 import { normalizeDeliveryDays } from "@/lib/catalog/delivery";
+import { isLocalProduct } from "@/lib/catalog/product-type";
 import {
   getDefaultFlatShippingDeliveryDays,
   getDefaultFlatShippingUnitCost,
@@ -19,7 +20,8 @@ export type ResolvedShippingOption = {
   label: string;
   name: string;
   icon: string;
-  unitCost: number;
+  /** Null for local products — delivery is negotiated before dispatch. */
+  unitCost: number | null;
   deliveryDays: string;
 };
 
@@ -63,11 +65,29 @@ function resolveEligibleMethod(
   return origin === "tz" ? "local_delivery" : "sea_freight";
 }
 
+function buildLocalNegotiatedOption(
+  deliveryDays: string = getDefaultFlatShippingDeliveryDays("local_delivery"),
+): ResolvedShippingOption {
+  const meta = METHOD_META.local_delivery;
+  return {
+    type: "local",
+    methodCode: "local_delivery",
+    label: meta.label,
+    name: meta.name,
+    icon: meta.icon,
+    unitCost: null,
+    deliveryDays,
+  };
+}
+
 function buildFlatFallbackOptions(
   input: ProductShippingContext,
 ): ResolvedShippingOption[] {
-  const methodCodes: ShippingMethodCode[] =
-    input.origin === "tz" ? ["local_delivery"] : ["air_freight", "sea_freight"];
+  if (isLocalProduct(input.origin)) {
+    return [buildLocalNegotiatedOption()];
+  }
+
+  const methodCodes: ShippingMethodCode[] = ["air_freight", "sea_freight"];
 
   return methodCodes
     .map((methodCode) => {
@@ -95,6 +115,10 @@ export function resolveProductShippingOptions(
   const configured = Array.isArray(input.shippingOptions)
     ? input.shippingOptions
         .map((option) => {
+          if (option.type === "local") {
+            return buildLocalNegotiatedOption(rawDeliveryDays(option.deliveryDays));
+          }
+
           const unitCost = positivePrice(option.price);
           if (!unitCost) return null;
 
@@ -118,24 +142,9 @@ export function resolveProductShippingOptions(
     return configured;
   }
 
-  if (input.origin === "tz") {
-    const localCost = positivePrice(input.airCost);
-    if (localCost) {
-      const meta = METHOD_META.local_delivery;
-      return [
-        {
-          type: "local",
-          methodCode: "local_delivery",
-          label: meta.label,
-          name: meta.name,
-          icon: meta.icon,
-          unitCost: localCost,
-          deliveryDays: rawDeliveryDays(input.airDeliveryDays),
-        },
-      ];
-    }
-
-    return buildFlatFallbackOptions(input);
+  if (isLocalProduct(input.origin)) {
+    const deliveryDays = rawDeliveryDays(input.airDeliveryDays);
+    return [buildLocalNegotiatedOption(deliveryDays !== "—" ? deliveryDays : undefined)];
   }
 
   const options: ResolvedShippingOption[] = [];
@@ -185,7 +194,7 @@ function resolveBaseShippingPrice(
   const selected = options.find((option) => option.methodCode === eligibleMethod);
   if (selected) {
     return {
-      unitCost: selected.unitCost,
+      unitCost: selected.unitCost ?? 0,
       deliveryDays: selected.deliveryDays,
     };
   }
@@ -300,10 +309,10 @@ export function getDefaultShippingMethod(item: LineShippingInput): ShippingMetho
 
   const quantity = Math.max(1, item.quantity ?? 1);
   let cheapest = options[0]!;
-  let cheapestTotal = calculateQuantityShipping(cheapest.unitCost, quantity);
+  let cheapestTotal = calculateQuantityShipping(cheapest.unitCost ?? 0, quantity);
 
   for (const option of options.slice(1)) {
-    const total = calculateQuantityShipping(option.unitCost, quantity);
+    const total = calculateQuantityShipping(option.unitCost ?? 0, quantity);
     if (total < cheapestTotal) {
       cheapest = option;
       cheapestTotal = total;

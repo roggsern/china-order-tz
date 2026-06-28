@@ -2,6 +2,7 @@
 export const POST_CHECKOUT_PATH_PREFIXES = [
   "/order-success",
   "/track-order",
+  "/track",
   "/checkout/payment/confirm",
   "/checkout/payment/processing",
 ] as const;

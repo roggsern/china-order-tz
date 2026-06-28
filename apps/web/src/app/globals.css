@@ -186,6 +186,36 @@ body {
   color: #ffffff;
 }
 
+@keyframes admin-stat-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+    color: var(--gold);
+  }
+}
+
+.admin-stat-pulse {
+  display: inline-block;
+  animation: admin-stat-pulse 0.55s ease;
+}
+
+@keyframes admin-order-row-highlight {
+  0%,
+  100% {
+    background-color: color-mix(in srgb, var(--gold) 8%, transparent);
+  }
+  50% {
+    background-color: color-mix(in srgb, var(--gold) 18%, transparent);
+  }
+}
+
+.admin-order-row-new {
+  animation: admin-order-row-highlight 2s ease-in-out 2;
+}
+
 .admin-page-header {
   display: flex;
   flex-direction: column;

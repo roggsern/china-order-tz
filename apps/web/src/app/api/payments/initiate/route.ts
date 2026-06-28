@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
-import { serverPaymentGateway } from "@/lib/payment/server/gateway";
-import type { InitiatePaymentInput } from "@/lib/payment/server/types";
+import {
+  mapPaymentMethodToProvider,
+  paymentRouter,
+} from "@/lib/payments/payment-router";
+import { PAYMENT_PROVIDER } from "@/lib/payments/providers/types";
+import type { InitiateStkPushInput } from "@/lib/payments/types";
+import type { PaymentMethodCode } from "@/lib/types/payment";
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as Partial<InitiatePaymentInput>;
+    const body = (await request.json()) as Partial<InitiateStkPushInput>;
 
     if (!body.orderId || !body.orderNumber || !body.amount || !body.phone) {
       return NextResponse.json(
@@ -17,7 +22,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Amount must be greater than zero." }, { status: 400 });
     }
 
-    const result = await serverPaymentGateway.initiatePayment({
+    const providerCode =
+      body.provider ??
+      (body.paymentMethod
+        ? mapPaymentMethodToProvider(body.paymentMethod as PaymentMethodCode)
+        : null) ??
+      PAYMENT_PROVIDER.MPESA;
+
+    const result = await paymentRouter.initiatePayment(providerCode, {
       orderId: body.orderId,
       orderNumber: body.orderNumber,
       amount: body.amount,

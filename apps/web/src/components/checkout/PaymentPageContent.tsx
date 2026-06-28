@@ -15,13 +15,15 @@ import {
 import type { Order } from "@/lib/types/order";
 import type { PaymentMethodCode } from "@/lib/types/payment";
 import { PAYMENT_METHOD_CODES, PAYMENT_STATUS } from "@/lib/types/payment";
-import { paymentService } from "@/lib/payment/PaymentService";
+import { PAYMENT_METHOD_LABELS } from "@/lib/payment/constants";
+import { paymentService } from "@/lib/payments/checkout-service";
 import { getOrderById as getStoredOrderById } from "@/lib/payment/order-storage";
 import {
   getPaymentTransaction,
 } from "@/lib/payment/payment-session";
 import { redirectToPaymentProcessing } from "@/lib/payment/stk-flow";
 import { shouldRedirectToOrderSuccess } from "@/lib/order/placement";
+import { isGatewayPaymentMethod } from "@/lib/payment/payment-outcome";
 import { usePaymentTestMode } from "@/hooks/use-payment-test-mode";
 import { CheckoutSection } from "./CheckoutSection";
 import { CheckoutOrderSummary } from "./CheckoutOrderSummary";
@@ -81,7 +83,7 @@ export function PaymentPageContent() {
         }
 
         if (
-          existing.paymentMethod === PAYMENT_METHOD_CODES.MPESA &&
+          isGatewayPaymentMethod(existing.paymentMethod) &&
           existing.paymentStatus === PAYMENT_STATUS.PENDING
         ) {
           const transactionId =
@@ -159,7 +161,7 @@ export function PaymentPageContent() {
 
       lockCartForOrder(order.id, clearPurchasedItems);
 
-      if (paymentMethod === PAYMENT_METHOD_CODES.MPESA) {
+      if (isGatewayPaymentMethod(paymentMethod)) {
         const { transactionId } = await paymentService.beginStkPaymentProcessing(order);
         clearCheckoutDraft();
         redirectToPaymentProcessing(router, order.id, transactionId);
@@ -275,24 +277,36 @@ export function PaymentPageContent() {
     );
   }
 
-  const submitLabel =
-    paymentMethod === PAYMENT_METHOD_CODES.MPESA
-      ? isProcessingPayment
-        ? "Sending STK Push…"
+  const submitLabel = (() => {
+    if (isGatewayPaymentMethod(paymentMethod)) {
+      if (isProcessingPayment) {
+        return "Processing payment…";
+      }
+      if (failedOrder) {
+        return `Retry ${PAYMENT_METHOD_LABELS[paymentMethod ?? ""] ?? "Payment"}`;
+      }
+      const labels: Record<string, string> = {
+        mpesa: "Pay with M-Pesa",
+        nmb: "Pay with NMB",
+        selcom: "Pay with Selcom",
+      };
+      return labels[paymentMethod ?? ""] ?? "Pay now";
+    }
+
+    if (paymentMethod === PAYMENT_METHOD_CODES.COD) {
+      return isProcessingPayment
+        ? "Placing order…"
         : failedOrder
-          ? "Retry M-Pesa Payment"
-          : "Pay with M-Pesa"
-      : paymentMethod === PAYMENT_METHOD_CODES.COD
-        ? isProcessingPayment
-          ? "Placing order…"
-          : failedOrder
-            ? "Retry Order (COD)"
-            : "Place Order (COD)"
-        : isProcessingPayment
-          ? "Placing order…"
-          : failedOrder
-            ? "Retry Order"
-            : "Place Order";
+          ? "Retry Order (COD)"
+          : "Place Order (COD)";
+    }
+
+    return isProcessingPayment
+      ? "Placing order…"
+      : failedOrder
+        ? "Retry Order"
+        : "Place Order";
+  })();
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
@@ -371,7 +385,7 @@ export function PaymentPageContent() {
                 isLoading={isSimulating}
               />
               <p className="mt-2 text-xs leading-relaxed text-zinc-500">
-                Marks the order as processing, simulates STK Push timing (~4s), then confirms
+                Marks the order as processing, simulates STK Push timing (~2.5s), then confirms
                 payment — safe for local testing only.
               </p>
             </CheckoutSection>
@@ -387,7 +401,7 @@ export function PaymentPageContent() {
           submitLabel={submitLabel}
           submitHint={
             isProcessingPayment || isSimulating
-              ? paymentMethod === PAYMENT_METHOD_CODES.MPESA || isSimulating
+              ? isGatewayPaymentMethod(paymentMethod) || isSimulating
                 ? "Redirecting to payment processing…"
                 : "Processing — please do not refresh or click again"
               : failedOrder

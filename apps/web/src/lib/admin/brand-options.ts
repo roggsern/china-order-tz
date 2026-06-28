@@ -1,4 +1,4 @@
-import { buyFromTzBrandMenu } from "@/lib/catalog/brands";
+import { buyFromTzBrandMenu, formatBrandDisplayName } from "@/lib/catalog/brands";
 
 export type AdminBrandOption = {
   slug: string;
@@ -15,10 +15,7 @@ const chinaBrandOptions: AdminBrandOption[] = [
 
 const tzBrandOptions: AdminBrandOption[] = buyFromTzBrandMenu.map((brand) => ({
   slug: brand.slug,
-  name: brand.name
-    .split(" ")
-    .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
-    .join(" "),
+  name: formatBrandDisplayName(brand.name),
   origin: "tz" as const,
 }));
 

@@ -2,11 +2,14 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { CloseIcon, SearchIcon } from "@/components/home/icons";
 import { useSearchSuggestions } from "@/hooks/use-search-suggestions";
 import { addRecentSearch, clearRecentSearches } from "@/lib/search/recent-searches";
+import { buildProductSearchHref } from "@/lib/search/search-url";
+import type { SearchMarketplaceScope } from "@/components/search/SearchMarketplaceScope";
+import { scopeToOrigin } from "@/components/search/SearchMarketplaceScope";
 import { SearchResultsPanel } from "./SearchResultsPanel";
 
 interface SearchOverlayProps {
@@ -16,9 +19,18 @@ interface SearchOverlayProps {
 
 export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
+  const [marketplaceScope, setMarketplaceScope] = useState<SearchMarketplaceScope>(() => {
+    const origin = searchParams.get("origin");
+    return origin === "china" || origin === "tz" ? origin : "all";
+  });
   const inputRef = useRef<HTMLInputElement>(null);
-  const { results, recentSearches, isLoading, isSearching } = useSearchSuggestions(query, open);
+  const { results, recentSearches, isLoading, isSearching, origin } = useSearchSuggestions(
+    query,
+    open,
+    marketplaceScope,
+  );
 
   useEffect(() => {
     if (!open) {
@@ -67,7 +79,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
     if (trimmed) {
       addRecentSearch(trimmed);
       onClose();
-      router.push(`/products?q=${encodeURIComponent(trimmed)}`);
+      router.push(buildProductSearchHref(trimmed, scopeToOrigin(marketplaceScope)));
     }
   };
 
@@ -120,6 +132,9 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
               recentSearches={recentSearches}
               isLoading={isLoading}
               isSearching={isSearching}
+              origin={origin}
+              marketplaceScope={marketplaceScope}
+              onMarketplaceScopeChange={setMarketplaceScope}
               onSelect={handleSelect}
               onClearRecent={() => {
                 clearRecentSearches();

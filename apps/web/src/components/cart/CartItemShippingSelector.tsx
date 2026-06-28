@@ -133,7 +133,7 @@ export const CartItemShippingSelector = CartItemShippingSelectorInner;
 
 interface LocalDeliveryBadgeProps {
   shippingMethod: ShippingMethodCode;
-  shippingCost: number;
+  shippingCost: number | null;
   estimatedDeliveryDays: string;
 }
 

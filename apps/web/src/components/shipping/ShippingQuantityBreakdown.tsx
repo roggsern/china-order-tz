@@ -1,6 +1,7 @@
 import type { ItemShippingBreakdown } from "@/lib/types/order";
 import type { ShippingMethodCode } from "@/lib/shipping/types";
 import { formatPrice } from "@/lib/catalog/utils";
+import { LOCAL_DELIVERY_NEGOTIATED_LABEL } from "@/lib/catalog/product-type";
 import { getShippingMethodLabel } from "@/lib/shipping/smart-engine";
 
 interface ShippingQuantityBreakdownProps {
@@ -9,6 +10,7 @@ interface ShippingQuantityBreakdownProps {
   unitCost: number;
   quantity: number;
   totalCost: number;
+  isNegotiated?: boolean;
   className?: string;
   compact?: boolean;
 }
@@ -19,11 +21,20 @@ export function ShippingQuantityBreakdown({
   unitCost,
   quantity,
   totalCost,
+  isNegotiated = false,
   className = "",
   compact = false,
 }: ShippingQuantityBreakdownProps) {
   const label = methodLabel ?? getShippingMethodLabel(method);
   const qty = Math.max(1, quantity);
+
+  if (isNegotiated || (totalCost <= 0 && method === "local_delivery")) {
+    return (
+      <p className={`text-xs font-medium text-[#8b6914] ${className}`}>
+        {label}: {LOCAL_DELIVERY_NEGOTIATED_LABEL}
+      </p>
+    );
+  }
 
   if (compact && qty <= 1) {
     return (

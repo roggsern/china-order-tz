@@ -34,6 +34,7 @@ export function productToCartSnapshot(
     unitPrice: product.price,
     origin: product.origin,
     brand: product.brand,
+    brandSlug: product.brandSlug,
     categorySlug: product.categorySlug,
     weightKg: product.weightKg,
     airCost: product.airCost,

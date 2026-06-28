@@ -1,6 +1,6 @@
 import type { ProductShippingContext } from "@/lib/types/catalog";
-import { formatPrice } from "@/lib/catalog/utils";
-import { formatDays } from "@/lib/catalog/utils";
+import { formatDays, formatPrice } from "@/lib/catalog/utils";
+import { LOCAL_DELIVERY_NEGOTIATED_LABEL } from "@/lib/catalog/product-type";
 import { getProductShippingOptions } from "@/lib/catalog/delivery";
 
 type ShippingOptionsCardProps = ProductShippingContext & {
@@ -57,8 +57,10 @@ export function ShippingOptionsCard({
 
               <p className="mt-3 text-sm font-semibold text-zinc-900">{option.name}</p>
 
-              <p className="mt-2 break-words text-sm font-semibold leading-snug tabular-nums text-[#8b6914] md:text-base">
-                {formatPrice(option.shippingCost)}
+              <p className="mt-2 break-words text-sm font-semibold leading-snug text-[#8b6914] md:text-base">
+                {option.shippingCost === null
+                  ? LOCAL_DELIVERY_NEGOTIATED_LABEL
+                  : formatPrice(option.shippingCost)}
               </p>
 
               <p className="mt-1 text-xs text-zinc-500">

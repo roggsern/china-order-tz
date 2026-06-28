@@ -14,6 +14,7 @@ export type CartItemSnapshot = {
   unitPrice: number;
   origin: ProductOrigin;
   brand?: string;
+  brandSlug?: string;
   categorySlug: string;
   weightKg?: number;
   image: Pick<ProductImage, "id" | "emoji" | "gradient" | "alt" | "url">;

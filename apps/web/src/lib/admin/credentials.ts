@@ -1,26 +1,54 @@
-/**
- * Default admin credentials for the client-side admin gate (demo / local use).
- *
- * Override via environment variables in apps/web/.env.local:
- *   NEXT_PUBLIC_ADMIN_EMAIL=admin@china.com
- *   NEXT_PUBLIC_ADMIN_PASSWORD=admin123
- *
- * Production should replace this with server-side auth — these values are
- * bundled into the client when using NEXT_PUBLIC_* vars.
- */
-export const DEFAULT_ADMIN_EMAIL =
-  process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? "admin@china.com";
+import { isProduction } from "@/lib/config/env";
 
-export const DEFAULT_ADMIN_PASSWORD =
-  process.env.NEXT_PUBLIC_ADMIN_PASSWORD ?? "admin123";
+/**
+ * Admin credentials for the client-side admin gate.
+ *
+ * Production requires NEXT_PUBLIC_ADMIN_EMAIL and NEXT_PUBLIC_ADMIN_PASSWORD.
+ * Development falls back to demo credentials when unset.
+ */
+function getAdminEmail(): string {
+  const fromEnv = process.env.NEXT_PUBLIC_ADMIN_EMAIL?.trim();
+  if (fromEnv) {
+    return fromEnv;
+  }
+  if (isProduction()) {
+    return "";
+  }
+  return "admin@china.com";
+}
+
+function getAdminPassword(): string {
+  const fromEnv = process.env.NEXT_PUBLIC_ADMIN_PASSWORD?.trim();
+  if (fromEnv) {
+    return fromEnv;
+  }
+  if (isProduction()) {
+    return "";
+  }
+  return "admin123";
+}
+
+export const DEFAULT_ADMIN_EMAIL = getAdminEmail();
+export const DEFAULT_ADMIN_PASSWORD = getAdminPassword();
 
 export function normalizeAdminEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
 export function verifyAdminCredentials(email: string, password: string): boolean {
+  const adminEmail = getAdminEmail();
+  const adminPassword = getAdminPassword();
+
+  if (!adminEmail || !adminPassword) {
+    return false;
+  }
+
   return (
-    normalizeAdminEmail(email) === normalizeAdminEmail(DEFAULT_ADMIN_EMAIL) &&
-    password === DEFAULT_ADMIN_PASSWORD
+    normalizeAdminEmail(email) === normalizeAdminEmail(adminEmail) &&
+    password === adminPassword
   );
+}
+
+export function isAdminConfigured(): boolean {
+  return Boolean(getAdminEmail() && getAdminPassword());
 }

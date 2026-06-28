@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 type AdminStatCardProps = {
   label: string;
@@ -12,7 +12,35 @@ type AdminStatCardProps = {
   isText?: boolean;
   accent?: string;
   variant?: "default" | "gold" | "dark";
+  livePulse?: boolean;
 };
+
+function AnimatedStatValue({
+  value,
+  className,
+  livePulse,
+}: {
+  value: number | string;
+  className: string;
+  livePulse?: boolean;
+}) {
+  const prevRef = useRef(value);
+  const [pulse, setPulse] = useState(false);
+
+  useEffect(() => {
+    if (!livePulse || prevRef.current === value) {
+      prevRef.current = value;
+      return;
+    }
+
+    prevRef.current = value;
+    setPulse(true);
+    const timer = setTimeout(() => setPulse(false), 600);
+    return () => clearTimeout(timer);
+  }, [value, livePulse]);
+
+  return <span className={`${className} ${pulse ? "admin-stat-pulse" : ""}`}>{value}</span>;
+}
 
 export function AdminStatCard({
   label,
@@ -23,6 +51,7 @@ export function AdminStatCard({
   isText,
   accent,
   variant = "default",
+  livePulse = false,
 }: AdminStatCardProps) {
   const variantClasses = {
     default: "admin-stat-card",
@@ -36,11 +65,11 @@ export function AdminStatCard({
         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">{label}</p>
         {icon}
       </div>
-      <p
-        className={`mt-2 font-bold ${accent ?? "text-zinc-900"} ${isText ? "text-lg sm:text-xl" : "text-2xl sm:text-3xl"}`}
-      >
-        {value}
-      </p>
+      <AnimatedStatValue
+        value={value}
+        livePulse={livePulse}
+        className={`mt-2 block font-bold ${accent ?? "text-zinc-900"} ${isText ? "text-lg sm:text-xl" : "text-2xl sm:text-3xl"}`}
+      />
       {sub ? <p className="mt-1.5 text-xs text-zinc-500">{sub}</p> : null}
     </div>
   );

@@ -8,6 +8,7 @@ export type OrderAnalytics = {
   pendingOrders: number;
   completedOrders: number;
   paidOrders: number;
+  activeDeliveries: number;
 };
 
 /** Analytics from frozen order snapshots — no recalculation from cart or catalog. */
@@ -16,11 +17,20 @@ export function computeOrderAnalytics(orders: Order[]): OrderAnalytics {
   let paidOrders = 0;
   let pendingOrders = 0;
   let completedOrders = 0;
+  let activeDeliveries = 0;
 
   for (const order of orders) {
     if (order.paymentStatus === PAYMENT_STATUS.PAID) {
       paidOrders += 1;
       totalRevenue += order.grandTotal ?? order.totals.grandTotal;
+    }
+
+    if (
+      order.status === ORDER_STATUS.PACKED ||
+      order.status === ORDER_STATUS.SHIPPED ||
+      order.status === ORDER_STATUS.IN_TRANSIT
+    ) {
+      activeDeliveries += 1;
     }
 
     if (order.status === ORDER_STATUS.DELIVERED) {
@@ -36,5 +46,6 @@ export function computeOrderAnalytics(orders: Order[]): OrderAnalytics {
     pendingOrders,
     completedOrders,
     paidOrders,
+    activeDeliveries,
   };
 }

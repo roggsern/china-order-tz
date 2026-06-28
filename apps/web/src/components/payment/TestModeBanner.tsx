@@ -1,8 +1,11 @@
 interface TestModeBannerProps {
   className?: string;
+  variant?: "light" | "dark";
 }
 
-export function TestModeBanner({ className = "" }: TestModeBannerProps) {
+export function TestModeBanner({ className = "", variant = "light" }: TestModeBannerProps) {
+  const isDark = variant === "dark";
+
   return (
     <div
       role="status"
@@ -16,13 +19,14 @@ export function TestModeBanner({ className = "" }: TestModeBannerProps) {
           🧪
         </span>
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#8b6914]">
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#c9a227]">
             Test mode — no real money involved
           </p>
-          <p className="mt-1 text-sm leading-relaxed text-zinc-600">
-            Payments are simulated for development. Use{" "}
-            <span className="font-semibold text-zinc-800">Simulate Payment</span> for a realistic
-            STK flow with processing delay, or pay with M-Pesa for the full async experience.
+          <p
+            className={`mt-1 text-sm leading-relaxed ${isDark ? "text-zinc-400" : "text-zinc-600"}`}
+          >
+            Payments are simulated for development. STK steps run with realistic timing; payment
+            auto-confirms in test mode.
           </p>
         </div>
       </div>

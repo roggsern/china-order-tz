@@ -3,32 +3,32 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useCart } from "@/lib/cart/context";
 import { clearCheckoutDraft } from "@/lib/checkout/draft";
 import { lockCartForOrder } from "@/lib/checkout/completion";
 import { formatPrice } from "@/lib/catalog/utils";
-import { PAYMENT_VERIFY_POLL_MS, PAYMENT_SUCCESS_REDIRECT_MS } from "@/lib/payment/constants";
-import { paymentService } from "@/lib/payment/PaymentService";
+import { PAYMENT_SUCCESS_REDIRECT_MS, PAYMENT_VERIFY_POLL_MS } from "@/lib/payment/constants";
+import { paymentService } from "@/lib/payments/checkout-service";
 import {
   clearPaymentTransaction,
   getPaymentTransaction,
 } from "@/lib/payment/payment-session";
 import {
+  getStkPhaseHeadline,
+  getStkPhaseSubtext,
   orderSnapshotForProcessing,
-  resolveStkVisualStep,
-  type StkVisualStep,
+  resolveStkFlowPhase,
+  type StkFlowPhase,
 } from "@/lib/payment/stk-flow";
 import { logPaymentEvent } from "@/lib/payment/payment-logger";
 import { useOrderById } from "@/lib/order/use-order-by-id";
 import { isOrderPaymentFailed, isOrderPaymentPaid } from "@/lib/order/placement";
 import { ORDER_STATUS } from "@/lib/types/order";
-import { PaymentStatusBadge } from "@/components/payment/PaymentStatusBadge";
-import { PaymentStkStepIndicator } from "@/components/payment/PaymentStkStepIndicator";
+import { MpesaPaymentStatusHero } from "@/components/payment/MpesaPaymentStatusHero";
+import { MpesaPaymentSuccessPanel } from "@/components/payment/MpesaPaymentSuccessPanel";
+import { MpesaStkFlowSteps } from "@/components/payment/MpesaStkFlowSteps";
 import { TestModeBanner } from "@/components/payment/TestModeBanner";
-import { OrderSummaryTotals } from "@/components/cart/OrderSummaryTotals";
-import { OrderSuccessItemsList } from "@/components/order/OrderSuccessItemsList";
-import { CopyOrderNumber } from "@/components/order/CopyOrderNumber";
 import { usePaymentTestMode } from "@/hooks/use-payment-test-mode";
 
 interface PaymentProcessingContentProps {
@@ -43,14 +43,14 @@ export function PaymentProcessingContent({ orderId }: PaymentProcessingContentPr
   const { testMode } = usePaymentTestMode();
 
   const [transactionId, setTransactionId] = useState<string | null>(null);
+  const [paymentReference, setPaymentReference] = useState<string | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
-  const [confirmingStarted, setConfirmingStarted] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("Waiting for M-Pesa STK Push...");
+  const [paidElapsedMs, setPaidElapsedMs] = useState<number | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const pollingRef = useRef(false);
   const redirectScheduledRef = useRef(false);
   const fulfillmentLockedRef = useRef(false);
-
-  const isSimulated = searchParams.get("simulated") === "1";
+  const paidTimerStartedRef = useRef(false);
 
   useEffect(() => {
     const fromQuery = searchParams.get("transactionId");
@@ -62,7 +62,7 @@ export function PaymentProcessingContent({ orderId }: PaymentProcessingContentPr
     const startedAt = Date.now();
     const timer = setInterval(() => {
       setElapsedMs(Date.now() - startedAt);
-    }, 200);
+    }, 100);
     return () => clearInterval(timer);
   }, []);
 
@@ -70,19 +70,34 @@ export function PaymentProcessingContent({ orderId }: PaymentProcessingContentPr
     if (!order) {
       return;
     }
-
     lockCartForOrder(order.id, clearPurchasedItems);
   }, [clearPurchasedItems, order]);
 
   const paymentPaid = order ? isOrderPaymentPaid(order) : false;
   const paymentFailed = order ? isOrderPaymentFailed(order) : false;
 
-  const visualStep: StkVisualStep = resolveStkVisualStep({
+  useEffect(() => {
+    if (!paymentPaid || paidTimerStartedRef.current) {
+      return;
+    }
+    paidTimerStartedRef.current = true;
+    const started = Date.now();
+    setPaidElapsedMs(0);
+    const tick = setInterval(() => {
+      setPaidElapsedMs(Date.now() - started);
+    }, 100);
+    return () => clearInterval(tick);
+  }, [paymentPaid]);
+
+  const phase: StkFlowPhase = resolveStkFlowPhase({
+    elapsedMs,
     paymentFailed,
     paymentPaid,
-    confirmingStarted,
-    elapsedMs,
+    msSincePaid: paidElapsedMs,
   });
+
+  const headline = statusMessage ?? getStkPhaseHeadline(phase);
+  const subtext = getStkPhaseSubtext(phase, testMode);
 
   const pollPayment = useCallback(async () => {
     if (!transactionId || pollingRef.current || paymentPaid || paymentFailed) {
@@ -95,8 +110,7 @@ export function PaymentProcessingContent({ orderId }: PaymentProcessingContentPr
       const result = await paymentService.verifyPayment(transactionId);
 
       if (result.status === "paid") {
-        setConfirmingStarted(true);
-        setStatusMessage("Payment confirmed. Finalizing your order…");
+        setPaymentReference(result.paymentReference);
         logPaymentEvent("stk:confirmed", {
           orderId,
           transactionId,
@@ -105,8 +119,6 @@ export function PaymentProcessingContent({ orderId }: PaymentProcessingContentPr
       } else if (result.status === "failed") {
         setStatusMessage(result.message);
         logPaymentEvent("stk:failed", { orderId, transactionId, message: result.message });
-      } else if (elapsedMs >= 1200) {
-        setStatusMessage("Enter your M-Pesa PIN on your phone to complete payment.");
       }
     } catch (error) {
       setStatusMessage(
@@ -115,7 +127,7 @@ export function PaymentProcessingContent({ orderId }: PaymentProcessingContentPr
     } finally {
       pollingRef.current = false;
     }
-  }, [elapsedMs, orderId, paymentFailed, paymentPaid, transactionId]);
+  }, [orderId, paymentFailed, paymentPaid, transactionId]);
 
   useEffect(() => {
     if (!transactionId || paymentPaid || paymentFailed) {
@@ -141,8 +153,6 @@ export function PaymentProcessingContent({ orderId }: PaymentProcessingContentPr
       paymentService.updateOrderStatus(order.orderNumber, ORDER_STATUS.PROCESSING);
     }
 
-    setConfirmingStarted(true);
-    setStatusMessage("Payment successful. Redirecting to confirmation…");
     clearPaymentTransaction(orderId);
     clearCheckoutDraft();
 
@@ -154,7 +164,7 @@ export function PaymentProcessingContent({ orderId }: PaymentProcessingContentPr
   }, [order, orderId, paymentPaid, transactionId]);
 
   useEffect(() => {
-    if (!paymentPaid || redirectScheduledRef.current) {
+    if (phase !== "success" || redirectScheduledRef.current) {
       return;
     }
 
@@ -165,135 +175,101 @@ export function PaymentProcessingContent({ orderId }: PaymentProcessingContentPr
     }, PAYMENT_SUCCESS_REDIRECT_MS);
 
     return () => clearTimeout(timeoutId);
-  }, [orderId, paymentPaid, router]);
-
-  useEffect(() => {
-    if (paymentFailed) {
-      setStatusMessage("Payment was not completed. You can retry from the payment page.");
-    }
-  }, [paymentFailed]);
+  }, [orderId, phase, router]);
 
   if (isLoading || !order) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6" aria-busy="true">
-        <div className="mx-auto h-16 w-16 animate-pulse rounded-full bg-zinc-100" />
-        <div className="mx-auto mt-6 h-8 w-56 animate-pulse rounded-lg bg-zinc-100" />
-        <div className="mt-10 h-80 animate-pulse rounded-3xl bg-zinc-50" />
+      <div className="min-h-[70vh] bg-zinc-950 px-4 py-16 sm:px-6" aria-busy="true">
+        <div className="mx-auto max-w-md">
+          <div className="mx-auto h-24 w-24 animate-pulse rounded-full bg-zinc-800" />
+          <div className="mx-auto mt-6 h-8 w-56 animate-pulse rounded-lg bg-zinc-800" />
+          <div className="mt-10 h-64 animate-pulse rounded-2xl bg-zinc-900" />
+        </div>
       </div>
     );
   }
 
   const snapshot = orderSnapshotForProcessing(order);
+  const showSuccessPanel = phase === "success";
+  const showSteps = phase !== "failed" && phase !== "success";
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
-      {testMode ? <TestModeBanner className="mb-6" /> : null}
+    <div className="min-h-[70vh] bg-zinc-950 px-4 py-8 sm:px-6 sm:py-12">
+      <div className="mx-auto max-w-md">
+        {testMode ? <TestModeBanner className="mb-6" variant="dark" /> : null}
 
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={visualStep}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.28 }}
-          className="text-center"
-        >
-          {visualStep !== "failed" ? (
-            <>
-              <div className="relative mx-auto flex h-20 w-20 items-center justify-center">
-                {visualStep !== "complete" && visualStep !== "confirming" ? (
-                  <span className="absolute inset-0 animate-ping rounded-full bg-[#c9a227]/20" />
-                ) : null}
-                <span
-                  className={`relative flex h-20 w-20 items-center justify-center rounded-full text-3xl ${
-                    visualStep === "complete" || visualStep === "confirming"
-                      ? "bg-emerald-100 text-emerald-600"
-                      : "bg-[#c9a227]/15 text-[#8b6914]"
-                  }`}
-                >
-                  {visualStep === "complete" || (visualStep === "confirming" && paymentPaid)
-                    ? "✓"
-                    : "📱"}
-                </span>
-              </div>
+        <AnimatePresence mode="wait">
+          <MpesaPaymentStatusHero
+            phase={phase}
+            headline={headline}
+            subtext={subtext}
+            testMode={testMode}
+          />
+        </AnimatePresence>
 
-              <p className="mt-6 text-xs font-bold uppercase tracking-[0.16em] text-[#c9a227]">
-                {isSimulated ? "Simulated STK Push" : "M-Pesa Payment"}
-              </p>
-              <h1 className="mt-2 text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">
-                {paymentPaid
-                  ? "Payment confirmed"
-                  : visualStep === "processing"
-                    ? "Processing payment"
-                    : "Waiting for M-Pesa STK Push…"}
-              </h1>
-              <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-zinc-500">
-                {statusMessage}
-              </p>
-
-              {snapshot.orderProcessing && !paymentPaid ? (
-                <p className="mt-2 text-xs font-medium text-zinc-400">
-                  Order is being prepared while we confirm your payment.
-                </p>
-              ) : null}
-            </>
-          ) : (
-            <>
-              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-red-100 text-3xl text-red-600">
-                ✕
-              </div>
-              <h1 className="mt-6 text-2xl font-bold tracking-tight text-zinc-900">
-                Payment failed
-              </h1>
-              <p className="mx-auto mt-3 max-w-md text-sm text-zinc-500">{statusMessage}</p>
-            </>
-          )}
-        </motion.div>
-      </AnimatePresence>
-
-      <div className="mt-8 rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm sm:p-6">
-        <PaymentStkStepIndicator activeStep={visualStep} />
-      </div>
-
-      <article className="mt-6 space-y-6 rounded-3xl border border-zinc-200/80 bg-white p-6 shadow-[0_4px_24px_rgba(0,0,0,0.06)] sm:p-8">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <CopyOrderNumber orderNumber={order.orderNumber} />
-          <PaymentStatusBadge status={order.paymentStatus} />
-        </div>
-
-        <section aria-labelledby="processing-summary-heading" className="space-y-4">
-          <h2
-            id="processing-summary-heading"
-            className="text-xs font-bold uppercase tracking-[0.14em] text-zinc-500"
-          >
-            Order Summary
-          </h2>
-          <OrderSuccessItemsList items={order.items} />
-          <OrderSummaryTotals totals={order.totals} />
-          <p className="text-right text-sm font-bold text-zinc-900">
-            Total: {formatPrice(order.totals.grandTotal)}
-          </p>
-        </section>
-
-        {transactionId ? (
-          <p className="text-center text-xs text-zinc-400">
-            Transaction ref: <span className="font-mono">{transactionId.slice(0, 20)}…</span>
-          </p>
+        {showSuccessPanel ? (
+          <MpesaPaymentSuccessPanel
+            orderNumber={order.orderNumber}
+            transactionId={transactionId}
+            paymentReference={paymentReference ?? order.paymentReference}
+            amount={order.totals.grandTotal}
+          />
         ) : null}
 
-        {visualStep === "failed" ? (
-          <Link
-            href="/checkout/payment"
-            className="inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#c9a227] to-[#e8c547] px-5 py-3 text-sm font-bold text-zinc-900"
+        {showSteps ? (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.35 }}
+            className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900/80 p-5 shadow-xl shadow-black/20 backdrop-blur sm:p-6"
           >
-            Retry Payment
-          </Link>
-        ) : (
-          <p className="text-center text-xs text-zinc-400">
-            Please do not close this page until payment is confirmed.
+            <MpesaStkFlowSteps phase={phase} />
+
+            {testMode && phase === "waiting_pin" ? (
+              <button
+                type="button"
+                onClick={() => void pollPayment()}
+                className="mt-4 w-full rounded-xl border border-[#c9a227]/40 bg-[#c9a227]/10 px-4 py-2.5 text-sm font-semibold text-[#e8c547] transition hover:bg-[#c9a227]/20"
+              >
+                Check payment status
+              </button>
+            ) : null}
+
+            {snapshot.orderProcessing && !paymentPaid ? (
+              <p className="mt-4 text-center text-xs text-zinc-500">
+                Order #{order.orderNumber.slice(-8)} is being prepared while payment confirms.
+              </p>
+            ) : null}
+          </motion.div>
+        ) : null}
+
+        {phase === "failed" ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mt-8 space-y-4"
+          >
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-5 text-center">
+              <p className="text-sm text-zinc-400">
+                Total due:{" "}
+                <span className="font-bold text-white">{formatPrice(order.totals.grandTotal)}</span>
+              </p>
+            </div>
+            <Link
+              href="/checkout/payment"
+              className="inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#c9a227] to-[#e8c547] px-5 py-3.5 text-sm font-bold text-zinc-950 shadow-lg shadow-[#c9a227]/20 transition hover:brightness-105"
+            >
+              Retry Payment
+            </Link>
+          </motion.div>
+        ) : null}
+
+        {!showSuccessPanel && phase !== "failed" ? (
+          <p className="mt-6 text-center text-xs text-zinc-600">
+            Do not close this page until payment is confirmed.
           </p>
-        )}
-      </article>
+        ) : null}
+      </div>
     </div>
   );
 }

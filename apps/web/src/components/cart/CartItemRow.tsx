@@ -6,6 +6,7 @@ import type { CartLineItem } from "@/lib/types/cart";
 import { formatPrice, formatDays } from "@/lib/catalog/utils";
 import { getLineTotal } from "@/lib/cart/utils";
 import { getOriginLabel } from "@/lib/catalog/delivery";
+import { LOCAL_DELIVERY_NEGOTIATED_LABEL } from "@/lib/catalog/product-type";
 import { getMethodByCode } from "@/lib/shipping/engine";
 import { ProductImageDisplay } from "@/components/catalog/ProductImageDisplay";
 import { QuantitySelector } from "@/components/catalog/QuantitySelector";
@@ -103,7 +104,7 @@ function CartItemRowComponent({ item }: CartItemRowProps) {
         ) : (
           <LocalDeliveryBadge
             shippingMethod={item.shippingMethod}
-            shippingCost={item.shippingCost}
+            shippingCost={item.origin === "tz" ? null : item.shippingCost}
             estimatedDeliveryDays={item.estimatedDeliveryDays}
           />
         )}
@@ -119,6 +120,7 @@ function CartItemRowComponent({ item }: CartItemRowProps) {
           unitCost={item.unitShippingCost}
           quantity={item.quantity}
           totalCost={item.shippingCost}
+          isNegotiated={item.origin === "tz"}
           className="mt-1"
         />
 
@@ -145,8 +147,10 @@ function CartItemRowComponent({ item }: CartItemRowProps) {
         <p className="mt-1 text-lg font-semibold tabular-nums text-zinc-900">
           {formatPrice(getLineTotal(item))}
         </p>
-        <p className="mt-2 text-xs tabular-nums text-zinc-500">
-          + {formatPrice(item.shippingCost)} shipping
+        <p className="mt-2 text-xs text-zinc-500">
+          {item.origin === "tz"
+            ? LOCAL_DELIVERY_NEGOTIATED_LABEL
+            : `+ ${formatPrice(item.shippingCost)} shipping`}
         </p>
       </div>
     </article>

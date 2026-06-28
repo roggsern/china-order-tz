@@ -1,6 +1,7 @@
-import type { Product, ProductFilterOptions, SortOption } from "@/lib/types/catalog";
+import type { Product, ProductFilterOptions, ProductOrigin, SortOption } from "@/lib/types/catalog";
 import { getActiveServerProducts } from "@/lib/services/product-service.server";
 import { SEED_PRODUCTS } from "@/lib/catalog/seed-products";
+import { smartSearchProducts } from "@/lib/search/search-engine";
 
 export { SEED_PRODUCTS };
 
@@ -62,16 +63,15 @@ export async function getFeaturedProducts(limit = 8): Promise<Product[]> {
   return products.filter((product) => product.featured && product.status === "active").slice(0, limit);
 }
 
-export async function searchProducts(query: string): Promise<Product[]> {
+export async function searchProducts(
+  query: string,
+  options?: { origin?: ProductOrigin },
+): Promise<Product[]> {
   const products = await getProducts();
-  const q = query.toLowerCase().trim();
-  if (!q) return products;
-  return products.filter(
-    (product) =>
-      product.name.toLowerCase().includes(q) ||
-      product.description.toLowerCase().includes(q) ||
-      product.categorySlug.includes(q),
-  );
+  return smartSearchProducts(products, query, {
+    origin: options?.origin,
+    activeOnly: true,
+  });
 }
 
 export function sortProducts(items: Product[], sort: SortOption): Product[] {

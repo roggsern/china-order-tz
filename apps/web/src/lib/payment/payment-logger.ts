@@ -1,3 +1,5 @@
+import { isDebugLoggingEnabled } from "@/lib/config/env";
+
 const LOG_PREFIX = "[CHINA ORDER TZ · Payment]";
 
 export type PaymentLogEvent =
@@ -24,7 +26,7 @@ export function logPaymentEvent(
   event: PaymentLogEvent,
   payload?: Record<string, unknown>,
 ): void {
-  if (typeof window === "undefined") {
+  if (typeof window === "undefined" || !isDebugLoggingEnabled()) {
     return;
   }
 

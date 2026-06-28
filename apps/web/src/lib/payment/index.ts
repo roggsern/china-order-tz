@@ -1,5 +1,15 @@
 export { PaymentService, paymentService } from "./PaymentService";
-export { initiatePaymentRequest, verifyPaymentRequest, simulatePaymentRequest, fetchPaymentConfig } from "./client-api";
+export { paymentService as checkoutPaymentService } from "@/lib/payments/checkout-service";
+export {
+  initiatePaymentRequest,
+  verifyPaymentRequest,
+  simulatePaymentRequest,
+  fetchPaymentConfig,
+} from "./client-api";
+export {
+  PAYMENT_TRANSACTION_STATUS,
+  type PaymentTransactionStatus,
+} from "@/lib/payments/types";
 export { logPaymentEvent } from "./payment-logger";
 export {
   savePaymentTransaction,

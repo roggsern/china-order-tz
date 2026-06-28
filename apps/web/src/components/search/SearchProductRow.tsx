@@ -4,8 +4,9 @@ import Link from "next/link";
 import type { Product } from "@/lib/types/catalog";
 import { getProductPrimaryImage } from "@/lib/catalog/product-images";
 import { formatPrice } from "@/lib/catalog/utils";
+import { resolveSearchSourceBadge } from "@/lib/search/search-source-badge";
 import { ProductImageDisplay } from "@/components/catalog/ProductImageDisplay";
-import { RatingStars } from "@/components/catalog/RatingStars";
+import { SearchProductSourceBadge } from "./SearchProductSourceBadge";
 
 interface SearchProductRowProps {
   product: Product;
@@ -14,6 +15,7 @@ interface SearchProductRowProps {
 
 export function SearchProductRow({ product, onSelect }: SearchProductRowProps) {
   const image = getProductPrimaryImage(product);
+  const sourceBadge = resolveSearchSourceBadge(product);
 
   return (
     <Link
@@ -31,15 +33,15 @@ export function SearchProductRow({ product, onSelect }: SearchProductRowProps) {
         />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="line-clamp-2 text-sm font-semibold leading-snug text-zinc-900">{product.name}</p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="line-clamp-2 text-sm font-semibold leading-snug text-zinc-900">{product.name}</p>
+          <SearchProductSourceBadge badge={sourceBadge} className="mt-0.5" />
+        </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
           <span className="text-sm font-bold text-zinc-900">{formatPrice(product.price)}</span>
           {product.oldPrice > product.price && (
             <span className="text-xs text-zinc-400 line-through">{formatPrice(product.oldPrice)}</span>
           )}
-        </div>
-        <div className="mt-1">
-          <RatingStars rating={product.rating} size="sm" showValue reviewCount={product.reviews} compactReviews />
         </div>
       </div>
     </Link>

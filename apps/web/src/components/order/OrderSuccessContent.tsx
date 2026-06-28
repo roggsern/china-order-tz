@@ -120,7 +120,7 @@ export function OrderSuccessContent({ orderId }: OrderSuccessContentProps) {
     return formatOrderDeliveryEstimate(order);
   }, [order]);
 
-  const trackOrderHref = `/track-order/${orderId}`;
+  const trackOrderHref = `/track/${orderId}`;
 
   if (isLoading) {
     return (

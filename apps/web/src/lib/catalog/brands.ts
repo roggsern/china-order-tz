@@ -65,11 +65,15 @@ export const buyFromTzBrandMenu: readonly BrandMenuItem[] = [
   },
 ] as const;
 
-export const buyFromTzBrands = buyFromTzBrandMenu.map((brand) => ({
-  label: brand.name
+export function formatBrandDisplayName(name: string): string {
+  return name
     .split(" ")
     .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
-    .join(" "),
+    .join(" ");
+}
+
+export const buyFromTzBrands = buyFromTzBrandMenu.map((brand) => ({
+  label: formatBrandDisplayName(brand.name),
   slug: brand.slug,
 }));
 
@@ -79,6 +83,23 @@ export function getBrandCategoryHref(brandSlug: string, categorySlug: string): s
 
 export function getBrandBySlug(slug: string): BrandMenuItem | undefined {
   return buyFromTzBrandMenu.find((brand) => brand.slug === slug);
+}
+
+export function getBrandDisplayLabel(slug: string): string | undefined {
+  const brand = getBrandBySlug(slug);
+  return brand ? formatBrandDisplayName(brand.name) : undefined;
+}
+
+export function getBrandSubcategories(brandSlug: string): readonly BrandCategory[] {
+  return getBrandBySlug(brandSlug)?.subcategories ?? [];
+}
+
+export function isValidBrandSubcategory(brandSlug: string, subcategorySlug: string): boolean {
+  return getBrandSubcategories(brandSlug).some((item) => item.slug === subcategorySlug);
+}
+
+export function getDefaultBuyFromDarBrand(): BrandMenuItem {
+  return buyFromTzBrandMenu[0];
 }
 
 export function getBrandCategory(

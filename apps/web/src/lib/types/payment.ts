@@ -14,6 +14,8 @@ export type CorePaymentStatus = "pending" | "paid" | "failed";
 
 export const PAYMENT_METHOD_CODES = {
   MPESA: "mpesa",
+  NMB: "nmb",
+  SELCOM: "selcom",
   COD: "cod",
   AIRTEL_MONEY: "airtel_money",
   MIXX_BY_YAS: "mixx_by_yas",

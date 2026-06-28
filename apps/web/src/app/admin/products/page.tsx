@@ -1,12 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useAdminProducts } from "@/components/admin/AdminProductsProvider";
 import { ProductTable } from "@/components/admin/ProductTable";
 import { PlusIcon } from "@/components/home/icons";
 
 export default function AdminProductsPage() {
+  const searchParams = useSearchParams();
   const { products, deleteProduct, deleteProducts, isHydrated } = useAdminProducts();
+  const initialCategory = searchParams.get("category") ?? undefined;
+  const initialBrand = searchParams.get("brand") ?? undefined;
+  const initialSearch = searchParams.get("search") ?? undefined;
 
   const activeCount = products.filter((product) => product.status === "active").length;
   const featuredCount = products.filter((product) => product.featured).length;
@@ -57,6 +62,9 @@ export default function AdminProductsPage() {
           isHydrated={isHydrated}
           onDelete={deleteProduct}
           onBulkDelete={deleteProducts}
+          initialCategory={initialCategory}
+          initialBrand={initialBrand}
+          initialSearch={initialSearch}
         />
       </div>
     </div>

@@ -17,10 +17,10 @@ import {
 
 const navItems = [
   { label: "Dashboard", href: "/admin", icon: HomeIcon, exact: true },
+  { label: "Analytics", href: "/admin/analytics", icon: ChartBarIcon, exact: false },
   { label: "Orders", href: "/admin/orders", icon: DocumentIcon, exact: false },
   { label: "Products", href: "/admin/products", icon: PackageIcon, exact: false },
   { label: "Categories", href: "/admin/categories", icon: TagIcon, exact: false },
-  { label: "Brands", href: "/admin/brands", icon: ChartBarIcon, exact: false },
   { label: "Customers", href: "/admin/customers", icon: UserIcon, exact: false },
   { label: "Settings", href: "/admin/settings", icon: SettingsIcon, exact: false },
 ];

@@ -2,11 +2,16 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Product, ProductFormData, ProductOrigin, ProductStatus } from "@/lib/types/catalog";
-import { getAdminBrandsForOrigin } from "@/lib/admin/brand-options";
+import type { Product, ProductFormData, ProductStatus, ProductType } from "@/lib/types/catalog";
+import {
+  buyFromTzBrands,
+  getBrandBySlug,
+  getBrandSubcategories,
+  getDefaultBuyFromDarBrand,
+} from "@/lib/catalog/brands";
 import { validateProductForm } from "@/lib/admin/product-utils";
-import { getBrandBySlug } from "@/lib/catalog/brands";
 import { categories, getSubcategories } from "@/lib/catalog/categories";
+import { isLocalProductType, productTypeToOrigin } from "@/lib/catalog/product-type";
 import { slugify } from "@/lib/catalog/utils";
 import { productToFormData } from "@/components/admin/AdminProductsProvider";
 import { ImageUploader } from "@/components/admin/ImageUploader";
@@ -38,9 +43,10 @@ const defaultFormData: ProductFormData = {
   badge: "New",
   gradient: "from-zinc-500 to-zinc-700",
   emoji: "📦",
+  type: "china",
   origin: "china",
-  brandSlug: "china-direct",
-  brand: "China Direct",
+  brandSlug: "",
+  brand: "",
   categorySlug: categories[0]?.slug ?? "",
   subcategorySlug: "",
   stock: 0,
@@ -61,19 +67,6 @@ const defaultFormData: ProductFormData = {
   variants: {},
 };
 
-const gradientOptions = [
-  "from-zinc-900 to-zinc-700",
-  "from-slate-800 to-blue-900",
-  "from-rose-300 to-pink-500",
-  "from-orange-400 to-red-500",
-  "from-violet-500 to-purple-800",
-  "from-teal-300 to-emerald-500",
-  "from-amber-600 to-stone-800",
-  "from-cyan-500 to-blue-700",
-  "from-emerald-600 to-teal-800",
-  "from-sky-400 to-blue-600",
-];
-
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
   return <p className="mt-1 text-xs text-red-600">{message}</p>;
@@ -88,54 +81,92 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
   const [autoSlug, setAutoSlug] = useState(!isEditMode);
   const [errors, setErrors] = useState<ReturnType<typeof validateProductForm>>({});
 
-  const brandOptions = useMemo(
-    () => getAdminBrandsForOrigin(form.origin),
-    [form.origin],
+  const isLocalMode = isLocalProductType(form.type);
+
+  const chinaSubcategoryOptions = useMemo(
+    () =>
+      getSubcategories(form.categorySlug).map((item) => ({
+        label: item,
+        value: slugify(item),
+      })),
+    [form.categorySlug],
   );
 
-  const subcategoryOptions = useMemo(() => {
-    if (form.origin === "tz" && form.brandSlug) {
-      const brand = getBrandBySlug(form.brandSlug);
-      return brand?.subcategories.map((item) => ({
-        label: item.name,
-        value: item.slug,
-      })) ?? [];
+  const localSubcategoryOptions = useMemo(
+    () => getBrandSubcategories(form.brandSlug),
+    [form.brandSlug],
+  );
+
+  const applyProductType = (type: ProductType, prev: ProductFormData): ProductFormData => {
+    const origin = productTypeToOrigin(type);
+
+    if (type === "local") {
+      const brand = getBrandBySlug(prev.brandSlug) ?? getDefaultBuyFromDarBrand();
+      const subcategories = getBrandSubcategories(brand.slug);
+      const subcategorySlug =
+        subcategories.find((item) => item.slug === prev.subcategorySlug)?.slug ??
+        subcategories[0]?.slug ??
+        "";
+
+      return {
+        ...prev,
+        type,
+        origin,
+        brandSlug: brand.slug,
+        brand: buyFromTzBrands.find((item) => item.slug === brand.slug)?.label ?? brand.name,
+        categorySlug: brand.slug,
+        subcategorySlug,
+        seaCost: 0,
+        seaDeliveryDays: "",
+      };
     }
 
-    return getSubcategories(form.categorySlug).map((item) => ({
-      label: item,
-      value: slugify(item),
-    }));
-  }, [form.origin, form.brandSlug, form.categorySlug]);
+    const categorySlug = categories.some((item) => item.slug === prev.categorySlug)
+      ? prev.categorySlug
+      : categories[0]?.slug ?? "";
+
+    return {
+      ...prev,
+      type,
+      origin,
+      brandSlug: "",
+      brand: "",
+      categorySlug,
+      subcategorySlug: categories.some((item) => item.slug === prev.categorySlug)
+        ? prev.subcategorySlug
+        : "",
+      seaCost: prev.seaCost || 9500,
+      seaDeliveryDays: prev.seaDeliveryDays || "21",
+    };
+  };
 
   const updateField = <K extends keyof ProductFormData>(key: K, value: ProductFormData[K]) => {
     setForm((prev) => {
-      const next = { ...prev, [key]: value };
+      let next = { ...prev, [key]: value };
 
       if (key === "name" && autoSlug) {
         next.slug = slugify(String(value));
       }
 
-      if (key === "origin") {
-        const origin = value as ProductOrigin;
-        const brands = getAdminBrandsForOrigin(origin);
-        const firstBrand = brands[0];
-        if (firstBrand) {
-          next.brandSlug = firstBrand.slug;
-          next.brand = firstBrand.name;
-        }
-        if (origin === "tz") {
-          next.seaCost = 0;
-          next.seaDeliveryDays = "";
-        } else {
-          next.seaCost = prev.seaCost || 9500;
-          next.seaDeliveryDays = prev.seaDeliveryDays || "21";
-        }
+      if (key === "type") {
+        next = applyProductType(value as ProductType, prev);
       }
 
-      if (key === "brandSlug") {
-        const brand = brandOptions.find((item) => item.slug === value);
-        if (brand) next.brand = brand.name;
+      if (key === "brandSlug" && isLocalProductType(next.type)) {
+        const brand = getBrandBySlug(String(value));
+        if (brand) {
+          next.brand = buyFromTzBrands.find((item) => item.slug === brand.slug)?.label ?? brand.name;
+          next.categorySlug = brand.slug;
+        }
+        const subcategories = getBrandSubcategories(String(value));
+        next.subcategorySlug =
+          subcategories.find((item) => item.slug === prev.subcategorySlug)?.slug ??
+          subcategories[0]?.slug ??
+          "";
+      }
+
+      if (key === "categorySlug" && next.type === "china") {
+        next.subcategorySlug = "";
       }
 
       return next;
@@ -238,80 +269,129 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
           </section>
 
           <section className="admin-card p-5">
-            <h2 className="text-sm font-semibold text-zinc-900">Organization</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="admin-label" htmlFor="origin">
-                  Origin *
-                </label>
-                <select
-                  id="origin"
-                  value={form.origin}
-                  onChange={(event) => updateField("origin", event.target.value as ProductOrigin)}
-                  className="admin-input mt-1.5"
-                >
-                  <option value="china">Buy From China</option>
-                  <option value="tz">Buy From TZ</option>
-                </select>
-                <FieldError message={errors.origin} />
-              </div>
+            <h2 className="text-sm font-semibold text-zinc-900">Marketplace</h2>
+            <p className="mt-1 text-xs text-zinc-500">
+              Choose how this product is sold — form fields adapt to the selected mode.
+            </p>
 
-              <div>
-                <label className="admin-label" htmlFor="brand">
-                  Brand *
-                </label>
-                <select
-                  id="brand"
-                  value={form.brandSlug}
-                  onChange={(event) => updateField("brandSlug", event.target.value)}
-                  className="admin-input mt-1.5"
-                >
-                  {brandOptions.map((brand) => (
-                    <option key={brand.slug} value={brand.slug}>
-                      {brand.name}
-                    </option>
-                  ))}
-                </select>
-                <FieldError message={errors.brandSlug} />
+            <div className="mt-4">
+              <span className="admin-label">Product type *</span>
+              <div className="mt-2 flex flex-wrap gap-2" role="tablist" aria-label="Product type">
+                {(
+                  [
+                    { id: "china" as const, label: "China Order" },
+                    { id: "local" as const, label: "Buy from Dar" },
+                  ] as const
+                ).map((option) => {
+                  const isActive = form.type === option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={isActive}
+                      onClick={() => updateField("type", option.id)}
+                      className={`rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 ${
+                        isActive
+                          ? "bg-[#c9a227] text-zinc-900 shadow-sm ring-1 ring-[#c9a227]/50"
+                          : "bg-zinc-50 text-zinc-600 ring-1 ring-zinc-200/80 hover:bg-zinc-100 hover:text-zinc-900"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
               </div>
+              <FieldError message={errors.type} />
+            </div>
 
-              <div>
-                <label className="admin-label" htmlFor="category">
-                  Category *
-                </label>
-                <select
-                  id="category"
-                  value={form.categorySlug}
-                  onChange={(event) => updateField("categorySlug", event.target.value)}
-                  className="admin-input mt-1.5"
-                >
-                  {categories.map((category) => (
-                    <option key={category.slug} value={category.slug}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-                <FieldError message={errors.categorySlug} />
-              </div>
+            <div
+              key={form.type}
+              className="mt-5 grid gap-4 transition-all duration-200 sm:grid-cols-2"
+            >
+              {isLocalMode ? (
+                <>
+                  <div className="sm:col-span-2">
+                    <label className="admin-label" htmlFor="localBrand">
+                      Brand *
+                    </label>
+                    <select
+                      id="localBrand"
+                      value={form.brandSlug}
+                      onChange={(event) => updateField("brandSlug", event.target.value)}
+                      className="admin-input mt-1.5"
+                    >
+                      {buyFromTzBrands.map((brand) => (
+                        <option key={brand.slug} value={brand.slug}>
+                          {brand.label}
+                        </option>
+                      ))}
+                    </select>
+                    <FieldError message={errors.brandSlug} />
+                  </div>
 
-              <div>
-                <label className="admin-label" htmlFor="subcategory">
-                  Subcategory
-                </label>
-                <select
-                  id="subcategory"
-                  value={form.subcategorySlug}
-                  onChange={(event) => updateField("subcategorySlug", event.target.value)}
-                  className="admin-input mt-1.5"
-                >
-                  <option value="">Select subcategory</option>
-                  {subcategoryOptions.map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <div className="sm:col-span-2">
+                    <label className="admin-label" htmlFor="localSubcategory">
+                      Subcategory *
+                    </label>
+                    <select
+                      id="localSubcategory"
+                      value={form.subcategorySlug}
+                      onChange={(event) => updateField("subcategorySlug", event.target.value)}
+                      className="admin-input mt-1.5"
+                      disabled={localSubcategoryOptions.length === 0}
+                    >
+                      <option value="">Select subcategory</option>
+                      {localSubcategoryOptions.map((item) => (
+                        <option key={item.slug} value={item.slug}>
+                          {item.name}
+                        </option>
+                      ))}
+                    </select>
+                    <FieldError message={errors.subcategorySlug} />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="admin-label" htmlFor="category">
+                      Category *
+                    </label>
+                    <select
+                      id="category"
+                      value={form.categorySlug}
+                      onChange={(event) => updateField("categorySlug", event.target.value)}
+                      className="admin-input mt-1.5"
+                    >
+                      {categories.map((category) => (
+                        <option key={category.slug} value={category.slug}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </select>
+                    <FieldError message={errors.categorySlug} />
+                  </div>
+
+                  <div>
+                    <label className="admin-label" htmlFor="subcategory">
+                      Subcategory
+                    </label>
+                    <select
+                      id="subcategory"
+                      value={form.subcategorySlug}
+                      onChange={(event) => updateField("subcategorySlug", event.target.value)}
+                      className="admin-input mt-1.5"
+                    >
+                      <option value="">Select subcategory</option>
+                      {chinaSubcategoryOptions.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
             </div>
           </section>
 
@@ -387,7 +467,7 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
             onChange={(variants) => updateField("variants", variants)}
           />
 
-          {form.origin === "china" && (
+          {form.type === "china" && (
             <section className="admin-card p-5">
               <h2 className="text-sm font-semibold text-zinc-900">China shipping</h2>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -451,32 +531,22 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
             </section>
           )}
 
-          {form.origin === "tz" && (
+          {form.type === "local" && (
             <section className="admin-card p-5">
               <h2 className="text-sm font-semibold text-zinc-900">Local delivery</h2>
+              <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">
+                Delivery price is not shown at checkout — customers see &quot;To be negotiated before
+                delivery&quot;.
+              </p>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="admin-label" htmlFor="airCost">
-                    Delivery cost (TZS) *
-                  </label>
-                  <input
-                    id="airCost"
-                    type="number"
-                    min={0}
-                    value={form.airCost || ""}
-                    onChange={(event) => updateField("airCost", Number(event.target.value))}
-                    className="admin-input mt-1.5"
-                  />
-                  <FieldError message={errors.airCost} />
-                </div>
-                <div>
+                <div className="sm:col-span-2">
                   <label className="admin-label" htmlFor="airDeliveryDays">
-                    Delivery days *
+                    Estimated delivery days
                   </label>
                   <input
                     id="airDeliveryDays"
                     type="text"
-                    placeholder='e.g. 1-5'
+                    placeholder="e.g. 1-5"
                     value={form.airDeliveryDays}
                     onChange={(event) => updateField("airDeliveryDays", event.target.value)}
                     className="admin-input mt-1.5"
@@ -602,7 +672,7 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
                   {form.name || "Product title"}
                 </p>
                 <p className="mt-0.5 text-xs text-zinc-500">
-                  {form.origin === "china" ? "Buy From China" : "Buy From TZ"}
+                  {form.type === "china" ? "China Order" : "Buy from Dar"}
                 </p>
                 <p className="mt-1 text-xs font-semibold text-zinc-900">
                   {form.price ? `TZS ${form.price.toLocaleString("en-TZ")}` : "—"}

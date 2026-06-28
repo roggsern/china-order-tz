@@ -2,7 +2,7 @@ import type { CartState, CartLineItem } from "@/lib/types/cart";
 import type { CreateOrderInput, FinalizeOrderInput, Order, OrderLineItem, OrderStatus } from "@/lib/types/order";
 import { ORDER_STATUS, normalizeOrder } from "@/lib/types/order";
 import type { CorePaymentStatus, PaymentMethodCode, PaymentStatus } from "@/lib/types/payment";
-import { PAYMENT_METHOD_CODES, PAYMENT_STATUS } from "@/lib/types/payment";
+import { PAYMENT_STATUS } from "@/lib/types/payment";
 import { deepCopyCart, mapCartToOrderItems, buildShippingSnapshotFromOrderItems } from "@/lib/checkout/cart-snapshot";
 import {
   clearCheckoutSession,
@@ -14,6 +14,7 @@ import { generateOrderNumber } from "@/lib/payment/order-number";
 import {
   reconcilePaymentStates,
   resolvePaymentOutcome,
+  isGatewayPaymentMethod,
 } from "@/lib/payment/payment-outcome";
 import {
   getOrderIdForDraft,
@@ -31,15 +32,24 @@ import {
 import { syncTimelineWithOrder } from "@/lib/payment/timeline";
 import { lockCartForOrderInStorage } from "@/lib/order/cart-lock";
 import { initiatePaymentRequest, simulatePaymentRequest, verifyPaymentRequest } from "@/lib/payment/client-api";
-import type { InitiatePaymentResult, SimulatePaymentResult, VerifyPaymentResult } from "@/lib/payment/server/types";
+import type { InitiateStkPushResult, SimulateStkPushResult, VerifyPaymentResult } from "@/lib/payments/types";
 import { logPaymentEvent } from "@/lib/payment/payment-logger";
+import {
+  applyOrderStatusHistoryPatch,
+  createInitialStatusHistory,
+} from "@/lib/order/status-history";
 
-function applyOrderUpdate(order: Order, patch: Partial<Order>): Order {
-  const now = new Date().toISOString();
+function applyOrderUpdate(
+  order: Order,
+  patch: Partial<Order>,
+  updatedBy: "system" | "admin" = "system",
+): Order {
+  const withHistory = applyOrderStatusHistoryPatch(order, patch, updatedBy);
   const next: Order = {
-    ...order,
+    ...withHistory,
     ...patch,
-    updatedAt: now,
+    updatedAt: withHistory.updatedAt,
+    statusHistory: withHistory.statusHistory,
   };
   next.timeline = syncTimelineWithOrder(next);
   return next;
@@ -102,6 +112,7 @@ function buildPendingOrder(input: {
     grandTotal: totals.grandTotal,
     totals,
     timeline: [],
+    statusHistory: createInitialStatusHistory(now),
   };
 }
 
@@ -253,7 +264,7 @@ export class PaymentService {
     saveOrder(order);
     lockCartForOrderInStorage(orderId);
 
-    if (input.paymentMethod === PAYMENT_METHOD_CODES.MPESA) {
+    if (isGatewayPaymentMethod(input.paymentMethod)) {
       return this.hydrateOrder(order);
     }
 
@@ -275,7 +286,7 @@ export class PaymentService {
     saveOrder(reset);
     lockCartForOrderInStorage(existing.id);
 
-    if (input.paymentMethod === PAYMENT_METHOD_CODES.MPESA) {
+    if (isGatewayPaymentMethod(input.paymentMethod)) {
       return this.hydrateOrder(reset);
     }
 
@@ -286,8 +297,8 @@ export class PaymentService {
   /**
    * Initiates M-Pesa STK Push for a pending order via the server payment gateway.
    */
-  async initiatePayment(order: Order): Promise<InitiatePaymentResult> {
-    if (order.paymentMethod !== PAYMENT_METHOD_CODES.MPESA) {
+  async initiatePayment(order: Order): Promise<InitiateStkPushResult> {
+    if (!isGatewayPaymentMethod(order.paymentMethod)) {
       return {
         success: true,
         transactionId: null,
@@ -368,7 +379,7 @@ export class PaymentService {
         orderId: order.id,
         message: result.message,
       });
-      throw new Error(result.message ?? "M-Pesa STK Push could not be initiated.");
+      throw new Error(result.message ?? "Payment could not be initiated.");
     }
 
     logPaymentEvent("stk:initiated", {
@@ -395,7 +406,7 @@ export class PaymentService {
       amount: order.totals.grandTotal,
     });
 
-    let result: SimulatePaymentResult;
+    let result: SimulateStkPushResult;
 
     try {
       result = await simulatePaymentRequest(order);
@@ -570,7 +581,7 @@ export class PaymentService {
             : PAYMENT_STATUS.CANCELLED;
       }
 
-      return applyOrderUpdate(order, patch);
+      return applyOrderUpdate(order, patch, "admin");
     });
   }
 

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import type { CustomerReview, ProductOrigin, ProductSpecification, ProductShippingContext } from "@/lib/types/catalog";
 import { formatDays, formatPrice } from "@/lib/catalog/utils";
+import { LOCAL_DELIVERY_NEGOTIATED_LABEL } from "@/lib/catalog/product-type";
 import { getProductShippingOptions, getDeliveryOptions } from "@/lib/catalog/delivery";
 import { RatingStars } from "../RatingStars";
 
@@ -171,7 +172,11 @@ function ShippingPanel({
             <span className="text-lg">{option.icon}</span>
             <div>
               <p className="text-sm font-semibold text-zinc-900">{option.name}</p>
-              <p className="text-sm font-bold text-[#8b6914]">{formatPrice(option.shippingCost)}</p>
+              <p className="text-sm font-bold text-[#8b6914]">
+                {option.shippingCost === null
+                  ? LOCAL_DELIVERY_NEGOTIATED_LABEL
+                  : formatPrice(option.shippingCost)}
+              </p>
               <p className="text-xs text-zinc-500">{formatDays(option.deliveryDays)}</p>
             </div>
           </li>
@@ -187,6 +192,12 @@ function ShippingPanel({
 
   return (
     <ul className="space-y-2.5">
+      <li className="rounded-xl border border-emerald-100 bg-emerald-50/60 px-3.5 py-3">
+        <p className="text-sm font-semibold text-[#8b6914]">{LOCAL_DELIVERY_NEGOTIATED_LABEL}</p>
+        <p className="mt-1 text-xs text-zinc-600">
+          Local delivery cost is confirmed with you before dispatch.
+        </p>
+      </li>
       {options.map((option) => (
         <li
           key={option.label}

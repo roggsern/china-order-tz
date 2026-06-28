@@ -1,5 +1,6 @@
 import type { ProductOrigin, ProductShippingContext } from "@/lib/types/catalog";
 import { formatPrice } from "@/lib/catalog/utils";
+import { LOCAL_DELIVERY_NEGOTIATED_LABEL } from "@/lib/catalog/product-type";
 import {
   resolveProductShippingOptions,
   type ResolvedShippingOption,
@@ -23,7 +24,8 @@ export type ProductShippingOption = {
   icon: string;
   label: string;
   name: string;
-  shippingCost: number;
+  /** Null for local products — shown as negotiated delivery. */
+  shippingCost: number | null;
   deliveryDays: string;
 };
 
@@ -78,6 +80,13 @@ export function getOriginLabel(origin: ProductOrigin): { flag: string; label: st
   return { flag: "🇨🇳", label: "Imported from China" };
 }
 
+function formatShippingCostDisplay(shippingCost: number | null): string {
+  if (shippingCost === null) {
+    return LOCAL_DELIVERY_NEGOTIATED_LABEL;
+  }
+  return formatPrice(shippingCost);
+}
+
 export function getProductCardShippingOptions(input: ProductShippingContext): {
   origin: { flag: string; label: string };
   options: CardShippingOption[];
@@ -94,7 +103,7 @@ export function getProductCardShippingOptions(input: ProductShippingContext): {
           : option.label === "Air Freight"
             ? "AIR"
             : "SEA",
-      shippingCost: formatPrice(option.shippingCost),
+      shippingCost: formatShippingCostDisplay(option.shippingCost),
       deliveryDays: option.deliveryDays,
     })),
   };

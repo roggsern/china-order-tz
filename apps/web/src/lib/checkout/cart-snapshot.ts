@@ -31,6 +31,9 @@ export function mapCartLineToOrderItem(item: CartLineItem): OrderLineItem {
     unitPrice: item.unitPrice,
     quantity,
     origin: item.origin,
+    brand: item.brand,
+    brandSlug: item.brandSlug,
+    categorySlug: item.categorySlug,
     selectedSize,
     variant: {
       size: selectedSize ?? undefined,

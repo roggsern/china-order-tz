@@ -1,9 +1,14 @@
 import type { Product, ProductFormData, ProductValidationErrors } from "@/lib/types/catalog";
 import {
+  getBrandDisplayLabel,
+  getBrandSubcategories,
+  getDefaultBuyFromDarBrand,
+  isValidBrandSubcategory,
+} from "@/lib/catalog/brands";
+import {
   getProductPrimaryImage,
   normalizeProductImagesForSave,
 } from "@/lib/catalog/product-images";
-import { getAdminBrandBySlug } from "@/lib/admin/brand-options";
 import { resolveProductBadges } from "@/lib/catalog/badges";
 import {
   getDefaultReviews,
@@ -11,6 +16,7 @@ import {
   getDefaultTrustBadges,
 } from "@/lib/catalog/product-meta";
 import { normalizeDeliveryDays } from "@/lib/catalog/delivery";
+import { isLocalProductType, productTypeToOrigin, resolveProductType } from "@/lib/catalog/product-type";
 import { normalizeProductVariants } from "@/lib/catalog/variants";
 import { slugify } from "@/lib/catalog/utils";
 
@@ -23,6 +29,7 @@ export function enrichProductForAdmin(product: Product): Product {
 
   return {
     ...product,
+    type: resolveProductType(product),
     images,
     image: product.image ?? images.find((img) => img.url)?.url,
     shortDescription: product.shortDescription ?? product.description.slice(0, 160),
@@ -56,7 +63,9 @@ export function resolvePricing(data: ProductFormData): { price: number; oldPrice
 
 export function formDataToProduct(data: ProductFormData, id: number, createdAt?: string): Product {
   const { price, oldPrice } = resolvePricing(data);
-  const brandMeta = getAdminBrandBySlug(data.brandSlug);
+  const productType = data.type;
+  const origin = productTypeToOrigin(productType);
+  const isLocal = isLocalProductType(productType);
   const normalizedImages = normalizeProductImagesForSave(data.images);
   const images =
     normalizedImages.length > 0
@@ -101,28 +110,29 @@ export function formDataToProduct(data: ProductFormData, id: number, createdAt?:
     reviews: data.reviews,
     badge: data.badge,
     badges: resolveProductBadges(data.badge, data.stock),
-    trustBadges: getDefaultTrustBadges(data.origin, data.rating),
-    origin: data.origin,
-    brand: data.brand || brandMeta?.name,
-    brandSlug: data.brandSlug || brandMeta?.slug,
-    subcategorySlug: data.subcategorySlug || undefined,
+    trustBadges: getDefaultTrustBadges(origin, data.rating),
+    type: productType,
+    origin,
+    brand: isLocal ? getBrandDisplayLabel(data.brandSlug) ?? data.brand : undefined,
+    brandSlug: isLocal ? data.brandSlug : undefined,
+    subcategorySlug: isLocal ? data.subcategorySlug : data.subcategorySlug || undefined,
     gradient: data.gradient,
     emoji: data.emoji,
-    categorySlug: data.categorySlug,
+    categorySlug: isLocal ? data.brandSlug : data.categorySlug,
     stock: data.stock,
     weightKg: data.weightKg ?? undefined,
     sku: data.sku,
     airCost: data.airCost > 0 ? data.airCost : undefined,
-    seaCost: data.origin === "china" && data.seaCost > 0 ? data.seaCost : undefined,
+    seaCost: productType === "china" && data.seaCost > 0 ? data.seaCost : undefined,
     airDeliveryDays: normalizeDeliveryDays(data.airDeliveryDays),
     seaDeliveryDays:
-      data.origin === "china" ? normalizeDeliveryDays(data.seaDeliveryDays) : undefined,
+      productType === "china" ? normalizeDeliveryDays(data.seaDeliveryDays) : undefined,
     discountPercent: data.discountPercent,
     images: orderedImages,
     image: orderedImages.find((img) => img.url)?.url,
     thumbnailImageId: thumbnailImageId ?? undefined,
     features,
-    specifications: getDefaultSpecifications(features, data.origin),
+    specifications: getDefaultSpecifications(features, origin),
     customerReviews: getDefaultReviews(data.name, data.rating),
     featured: data.featured,
     bestSeller: data.bestSeller,
@@ -136,6 +146,16 @@ export function formDataToProduct(data: ProductFormData, id: number, createdAt?:
 
 export function productToFormData(product: Product): ProductFormData {
   const enriched = enrichProductForAdmin(product);
+  const productType = resolveProductType(enriched);
+  const isLocal = isLocalProductType(productType);
+  const defaultLocalBrand = getDefaultBuyFromDarBrand();
+  const localBrandSlug = isLocal ? enriched.brandSlug ?? defaultLocalBrand.slug : "";
+  const localSubcategories = isLocal ? getBrandSubcategories(localBrandSlug) : [];
+  const localSubcategorySlug = isLocal
+    ? localSubcategories.find((item) => item.slug === enriched.subcategorySlug)?.slug ??
+      localSubcategories[0]?.slug ??
+      ""
+    : enriched.subcategorySlug ?? "";
 
   return {
     name: enriched.name,
@@ -151,12 +171,14 @@ export function productToFormData(product: Product): ProductFormData {
     badge: enriched.badge,
     gradient: enriched.gradient,
     emoji: enriched.emoji,
-    origin: enriched.origin,
-    brandSlug:
-      enriched.brandSlug ?? (enriched.origin === "china" ? "china-direct" : ""),
-    brand: enriched.brand ?? (enriched.origin === "china" ? "China Direct" : ""),
-    categorySlug: enriched.categorySlug,
-    subcategorySlug: enriched.subcategorySlug ?? "",
+    type: productType,
+    origin: productTypeToOrigin(productType),
+    brandSlug: isLocal ? localBrandSlug : "",
+    brand: isLocal
+      ? enriched.brand ?? getBrandDisplayLabel(localBrandSlug) ?? defaultLocalBrand.name
+      : "",
+    categorySlug: isLocal ? localBrandSlug : enriched.categorySlug,
+    subcategorySlug: localSubcategorySlug,
     stock: enriched.stock,
     sku: enriched.sku ?? "",
     weightKg: enriched.weightKg ?? null,
@@ -178,14 +200,29 @@ export function productToFormData(product: Product): ProductFormData {
 
 export function validateProductForm(data: ProductFormData): ProductValidationErrors {
   const errors: ProductValidationErrors = {};
+  const isLocal = isLocalProductType(data.type);
 
   if (!data.name.trim()) errors.name = "Product name is required.";
-  if (!data.categorySlug) errors.categorySlug = "Category is required.";
-  if (!data.brandSlug) errors.brandSlug = "Brand is required.";
-  if (!data.origin) errors.origin = "Origin is required.";
+  if (!data.type) errors.type = "Product type is required.";
   if (!data.price || data.price <= 0) errors.price = "Price must be greater than zero.";
 
-  if (data.origin === "china") {
+  if (isLocal) {
+    if (!data.brandSlug) {
+      errors.brandSlug = "Brand is required for Buy from Dar products.";
+    }
+    if (!data.subcategorySlug) {
+      errors.subcategorySlug = "Subcategory is required for Buy from Dar products.";
+    } else if (!isValidBrandSubcategory(data.brandSlug, data.subcategorySlug)) {
+      errors.subcategorySlug = "Choose a subcategory that matches the selected brand.";
+    }
+  } else {
+    if (!data.categorySlug) errors.categorySlug = "Category is required.";
+    if (data.brandSlug) {
+      errors.brandSlug = undefined;
+    }
+  }
+
+  if (data.type === "china") {
     if (!data.airCost || data.airCost <= 0) errors.airCost = "Air cost is required for China products.";
     if (!data.seaCost || data.seaCost <= 0) errors.seaCost = "Sea cost is required for China products.";
     if (!data.airDeliveryDays.trim()) {
@@ -194,10 +231,8 @@ export function validateProductForm(data: ProductFormData): ProductValidationErr
     if (!data.seaDeliveryDays.trim()) {
       errors.seaDeliveryDays = "Sea delivery days are required for China products.";
     }
-  } else if (!data.airCost || data.airCost <= 0) {
-    errors.airCost = "Local delivery cost is required for TZ products.";
   } else if (!data.airDeliveryDays.trim()) {
-    errors.airDeliveryDays = "Local delivery days are required for TZ products.";
+    errors.airDeliveryDays = "Local delivery days are optional but recommended for Dar products.";
   }
 
   return errors;

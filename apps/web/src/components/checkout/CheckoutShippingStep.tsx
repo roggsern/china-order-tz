@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import type { CartLineItem } from "@/lib/types/cart";
 import type { ShippingMethodCode } from "@/lib/shipping/types";
 import { formatPrice } from "@/lib/catalog/utils";
+import { LOCAL_DELIVERY_NEGOTIATED_LABEL } from "@/lib/catalog/product-type";
 import { formatDeliveryEstimate, getMethodByCode } from "@/lib/shipping/engine";
 import { getShippingQuote } from "@/lib/cart/shipping";
 
@@ -46,8 +47,8 @@ export function CheckoutShippingStep({
             <p className="mt-2 text-sm font-semibold text-[#8b6914]">
               Est. {localMethod ? formatDeliveryEstimate("local_delivery") : "1–5 days"}
             </p>
-            <p className="mt-1 text-sm text-zinc-700">
-              Shipping: {formatPrice(computeShippingTotal(tzItems, "local_delivery"))}
+            <p className="mt-1 text-sm font-semibold text-[#8b6914]">
+              {LOCAL_DELIVERY_NEGOTIATED_LABEL}
             </p>
           </div>
         </div>
@@ -114,8 +115,8 @@ export function CheckoutShippingStep({
 
       {tzItems.length > 0 && (
         <p className="text-xs text-zinc-500">
-          {tzItems.length} local item{tzItems.length === 1 ? "" : "s"} will use local delivery
-          rates included above.
+          {tzItems.length} local item{tzItems.length === 1 ? "" : "s"} —{" "}
+          {LOCAL_DELIVERY_NEGOTIATED_LABEL.toLowerCase()}.
         </p>
       )}
 

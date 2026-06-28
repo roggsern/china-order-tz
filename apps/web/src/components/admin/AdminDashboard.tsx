@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { useAdminProducts } from "@/components/admin/AdminProductsProvider";
 import { useAdminOrders } from "@/components/admin/AdminOrdersProvider";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
+import { AdminDeliveriesSection } from "@/components/admin/AdminDeliveriesSection";
 import { computeOrderAnalytics } from "@/lib/admin/order-analytics";
 import { formatPrice } from "@/lib/catalog/utils";
 import { getCategoryBySlug } from "@/lib/catalog/categories";
@@ -12,6 +13,7 @@ import { getOrderFulfillmentLabel } from "@/lib/payment/order-filters";
 import { PlusIcon, PackageIcon, DocumentIcon } from "@/components/home/icons";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { PaymentStatusBadge } from "@/components/payment/PaymentStatusBadge";
+import { OrderLiveStatusIndicator } from "@/components/admin/OrderLiveStatusIndicator";
 
 function formatOrderDate(timestamp: string): string {
   return new Intl.DateTimeFormat("en-TZ", {
@@ -23,7 +25,6 @@ function formatOrderDate(timestamp: string): string {
 export function AdminDashboard() {
   const { products } = useAdminProducts();
   const { orders, isHydrated: ordersHydrated } = useAdminOrders();
-
   const orderAnalytics = useMemo(() => computeOrderAnalytics(orders), [orders]);
 
   const recentOrders = useMemo(
@@ -43,7 +44,7 @@ export function AdminDashboard() {
           </p>
           <h1 className="mt-1 text-2xl font-bold text-zinc-900 sm:text-3xl">Dashboard</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Order metrics from stored checkout snapshots — separate from live cart data.
+            Live order metrics — updates via WebSocket or polling depending on environment.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -65,6 +66,7 @@ export function AdminDashboard() {
             value={ordersHydrated ? orderAnalytics.totalOrders : "—"}
             href="/admin/orders"
             variant="dark"
+            livePulse
           />
           <AdminStatCard
             label="Total revenue"
@@ -73,20 +75,34 @@ export function AdminDashboard() {
             isText
             accent="text-[#c9a227]"
             variant="gold"
+            livePulse
           />
           <AdminStatCard
             label="Pending orders"
             value={ordersHydrated ? orderAnalytics.pendingOrders : "—"}
             sub="Awaiting completion"
-            accent="text-amber-600"
+            accent="text-red-600"
+            livePulse
           />
           <AdminStatCard
-            label="Completed orders"
-            value={ordersHydrated ? orderAnalytics.completedOrders : "—"}
-            sub="Delivered"
+            label="Paid orders"
+            value={ordersHydrated ? orderAnalytics.paidOrders : "—"}
+            sub="Payment confirmed"
             accent="text-emerald-600"
+            livePulse
+          />
+          <AdminStatCard
+            label="Active deliveries"
+            value={ordersHydrated ? orderAnalytics.activeDeliveries : "—"}
+            sub="Packed, shipped, or in transit"
+            accent="text-indigo-600"
+            livePulse
           />
         </div>
+      </section>
+
+      <section className="mt-8">
+        <AdminDeliveriesSection />
       </section>
 
       <div className="mt-8 grid gap-6 xl:grid-cols-3">
@@ -148,7 +164,8 @@ export function AdminDashboard() {
                             {formatPrice(order.grandTotal ?? order.totals.grandTotal)}
                           </td>
                           <td className="px-4 py-3">
-                            <div className="flex flex-wrap gap-1.5">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <OrderLiveStatusIndicator order={order} showLabel />
                               <PaymentStatusBadge status={order.paymentStatus} size="sm" />
                               <span className="inline-flex rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold text-zinc-700">
                                 {getOrderFulfillmentLabel(order.status)}
@@ -186,7 +203,8 @@ export function AdminDashboard() {
                             <p className="font-semibold text-zinc-900">
                               {formatPrice(order.grandTotal ?? order.totals.grandTotal)}
                             </p>
-                            <div className="mt-2 flex flex-wrap justify-end gap-1">
+                            <div className="mt-2 flex flex-wrap items-center justify-end gap-1">
+                              <OrderLiveStatusIndicator order={order} />
                               <PaymentStatusBadge status={order.paymentStatus} size="sm" />
                             </div>
                           </div>

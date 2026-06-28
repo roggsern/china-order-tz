@@ -2,6 +2,16 @@ import type { OrderStatus } from "@/lib/types/order";
 import { ORDER_STATUS } from "@/lib/types/order";
 import type { PaymentMethodCode, PaymentStatus } from "@/lib/types/payment";
 import { PAYMENT_METHOD_CODES, PAYMENT_STATUS } from "@/lib/types/payment";
+import { GATEWAY_PAYMENT_METHODS } from "@/lib/payment/constants";
+
+export function isGatewayPaymentMethod(
+  method: PaymentMethodCode | null | undefined,
+): method is PaymentMethodCode {
+  if (!method) {
+    return false;
+  }
+  return (GATEWAY_PAYMENT_METHODS as readonly string[]).includes(method);
+}
 
 export type PaymentOutcome = {
   paymentStatus: PaymentStatus;
@@ -15,6 +25,8 @@ export function resolvePaymentOutcome(
 ): PaymentOutcome {
   switch (method) {
     case PAYMENT_METHOD_CODES.MPESA:
+    case PAYMENT_METHOD_CODES.NMB:
+    case PAYMENT_METHOD_CODES.SELCOM:
       return {
         paymentStatus: PAYMENT_STATUS.PAID,
         orderStatus: ORDER_STATUS.CONFIRMED,

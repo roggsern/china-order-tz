@@ -17,8 +17,8 @@ export default async function PaymentProcessingPage({ params }: PageProps) {
   return (
     <Suspense
       fallback={
-        <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6" aria-busy="true">
-          <div className="mx-auto h-16 w-16 animate-pulse rounded-full bg-zinc-100" />
+        <div className="min-h-[70vh] bg-zinc-950 px-4 py-16 sm:px-6" aria-busy="true">
+          <div className="mx-auto h-24 w-24 animate-pulse rounded-full bg-zinc-800" />
         </div>
       }
     >

@@ -1,21 +1,34 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Order, OrderStatus } from "@/lib/types/order";
 import { ORDER_STATUS } from "@/lib/types/order";
+import type { BulkOrderStatus } from "@/lib/admin/bulk-order-status";
+import {
+  extractAdminOrderFilterOptions,
+  filterAdminOrders,
+  type AdminOrderSourceFilter,
+} from "@/lib/admin/order-query-filters";
+import { ADMIN_SEARCH_DEBOUNCE_MS } from "@/lib/admin/admin-search-utils";
 import {
   ADMIN_ORDER_LIST_FILTERS,
   type AdminOrderListFilter,
   countOrdersByListFilter,
-  filterOrdersByListFilter,
   getOrderShippingMethodLabel,
 } from "@/lib/payment/order-filters";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { AdminFilterChips } from "@/components/admin/AdminFilterChips";
 import { formatPrice } from "@/lib/catalog/utils";
 import { PAYMENT_STATUS } from "@/lib/types/payment";
 import { useAdminOrders } from "@/components/admin/AdminOrdersProvider";
 import { PaymentStatusBadge } from "@/components/payment/PaymentStatusBadge";
 import { OrderStatusSelect } from "@/components/admin/OrderStatusSelect";
+import { OrderLiveStatusIndicator } from "@/components/admin/OrderLiveStatusIndicator";
+import { AdminOrderBulkActions } from "@/components/admin/AdminOrderBulkActions";
+import { AdminOrderProductCell } from "@/components/admin/AdminOrderProductCell";
+
+const PAGE_SIZE = 20;
 
 function formatOrderDate(timestamp: string): string {
   return new Intl.DateTimeFormat("en-TZ", {
@@ -52,33 +65,89 @@ export function AdminOrderTable() {
   const {
     orders,
     isHydrated,
+    newOrderIds,
     markPaymentReceived,
     markOrderDelivered,
     updateOrderStatus,
+    bulkUpdateOrderStatus,
+    isBulkUpdating,
   } = useAdminOrders();
   const [activeFilter, setActiveFilter] = useState<AdminOrderListFilter>("all");
+  const [sourceFilter, setSourceFilter] = useState<AdminOrderSourceFilter>("all");
+  const [brandFilter, setBrandFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, ADMIN_SEARCH_DEBOUNCE_MS);
+  const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const filterCounts = useMemo(() => countOrdersByListFilter(orders), [orders]);
 
-  const filtered = useMemo(() => {
-    const listOrders = filterOrdersByListFilter(orders, activeFilter);
-    const query = search.toLowerCase().trim();
+  const filterOptions = useMemo(() => extractAdminOrderFilterOptions(orders), [orders]);
 
-    if (!query) {
-      return listOrders;
+  const filtered = useMemo(
+    () =>
+      filterAdminOrders(orders, {
+        status: activeFilter,
+        source: sourceFilter,
+        brand: brandFilter === "all" ? undefined : brandFilter,
+        category: categoryFilter === "all" ? undefined : categoryFilter,
+        search: debouncedSearch,
+      }),
+    [orders, activeFilter, sourceFilter, brandFilter, categoryFilter, debouncedSearch],
+  );
+
+  const isSearchPending = search.trim() !== debouncedSearch.trim();
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeFilter, sourceFilter, brandFilter, categoryFilter, debouncedSearch]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const allVisibleSelected =
+    paginated.length > 0 && paginated.every((order) => selectedOrders.includes(order.id));
+
+  const toggleSelectAll = () => {
+    setSelectedOrders((current) => {
+      if (allVisibleSelected) {
+        const visibleIds = new Set(paginated.map((order) => order.id));
+        return current.filter((id) => !visibleIds.has(id));
+      }
+
+      const next = new Set(current);
+      for (const order of paginated) {
+        next.add(order.id);
+      }
+      return [...next];
+    });
+  };
+
+  const toggleSelectOrder = (orderId: string) => {
+    setSelectedOrders((current) =>
+      current.includes(orderId)
+        ? current.filter((id) => id !== orderId)
+        : [...current, orderId],
+    );
+  };
+
+  const handleBulkStatusUpdate = async (status: BulkOrderStatus) => {
+    if (selectedOrders.length === 0 || isBulkUpdating) {
+      return;
     }
 
-    return listOrders.filter((order) => {
-      const customerName = `${order.customer.firstName} ${order.customer.lastName}`.toLowerCase();
-      return (
-        order.id.toLowerCase().includes(query) ||
-        order.orderNumber.toLowerCase().includes(query) ||
-        order.customer.email.toLowerCase().includes(query) ||
-        customerName.includes(query)
-      );
-    });
-  }, [orders, activeFilter, search]);
+    setBulkError(null);
+
+    try {
+      await bulkUpdateOrderStatus(selectedOrders, status);
+      setSelectedOrders([]);
+    } catch (error) {
+      setBulkError(error instanceof Error ? error.message : "Bulk order update failed.");
+    }
+  };
 
   if (!isHydrated) {
     return (
@@ -91,59 +160,156 @@ export function AdminOrderTable() {
 
   const activeFilterMeta = ADMIN_ORDER_LIST_FILTERS.find((entry) => entry.id === activeFilter);
 
+  const statusChips = ADMIN_ORDER_LIST_FILTERS.map((filter) => ({
+    id: filter.id,
+    label: filter.label,
+    count: filterCounts[filter.id],
+  }));
+
+  const sourceChips = [
+    {
+      id: "all",
+      label: "All Orders",
+      count: filterAdminOrders(orders, { status: activeFilter, search: debouncedSearch }).length,
+    },
+    {
+      id: "china",
+      label: "China Orders",
+      count: filterAdminOrders(orders, {
+        status: activeFilter,
+        source: "china",
+        search: debouncedSearch,
+      }).length,
+    },
+    {
+      id: "local",
+      label: "Buy from Dar",
+      count: filterAdminOrders(orders, {
+        status: activeFilter,
+        source: "local",
+        search: debouncedSearch,
+      }).length,
+    },
+  ];
+
+  const brandChips = [
+    {
+      id: "all",
+      label: "All Brands",
+      count: filterAdminOrders(orders, {
+        status: activeFilter,
+        source: sourceFilter,
+        category: categoryFilter === "all" ? undefined : categoryFilter,
+        search: debouncedSearch,
+      }).length,
+    },
+    ...filterOptions.brands.map((brand) => ({
+      id: brand.slug,
+      label: brand.label,
+      count: filterAdminOrders(orders, {
+        status: activeFilter,
+        source: sourceFilter,
+        brand: brand.slug,
+        category: categoryFilter === "all" ? undefined : categoryFilter,
+        search: debouncedSearch,
+      }).length,
+    })),
+  ];
+
+  const categoryChips = [
+    {
+      id: "all",
+      label: "All Categories",
+      count: filterAdminOrders(orders, {
+        status: activeFilter,
+        source: sourceFilter,
+        brand: brandFilter === "all" ? undefined : brandFilter,
+        search: debouncedSearch,
+      }).length,
+    },
+    ...filterOptions.categories.map((category) => ({
+      id: category.slug,
+      label: category.label,
+      count: filterAdminOrders(orders, {
+        status: activeFilter,
+        source: sourceFilter,
+        brand: brandFilter === "all" ? undefined : brandFilter,
+        category: category.slug,
+        search: debouncedSearch,
+      }).length,
+    })),
+  ];
+
   return (
     <div className="admin-card overflow-hidden">
-      <div className="border-b border-zinc-200 p-4">
-        <div
-          className="flex gap-2 overflow-x-auto pb-1"
-          role="tablist"
-          aria-label="Order filters"
-        >
-          {ADMIN_ORDER_LIST_FILTERS.map((filter) => {
-            const isActive = activeFilter === filter.id;
-            const count = filterCounts[filter.id];
+      <div className="border-b border-zinc-200 p-4 space-y-4">
+        <AdminFilterChips
+          chips={statusChips}
+          activeId={activeFilter}
+          onChange={(id) => setActiveFilter(id as AdminOrderListFilter)}
+          ariaLabel="Order status filters"
+        />
 
-            return (
-              <button
-                key={filter.id}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => setActiveFilter(filter.id)}
-                className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                  isActive
-                    ? "bg-zinc-900 text-white shadow-sm"
-                    : "bg-zinc-50 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
-                }`}
-              >
-                {filter.label}
-                <span
-                  className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
-                    isActive ? "bg-white/15 text-white" : "bg-zinc-200 text-zinc-700"
-                  }`}
-                >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        <AdminFilterChips
+          chips={sourceChips}
+          activeId={sourceFilter}
+          onChange={(id) => setSourceFilter(id as AdminOrderSourceFilter)}
+          ariaLabel="Order source filters"
+        />
 
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <input
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search by order ID, number, or customer"
-            className="admin-input max-w-md"
-            aria-label="Search orders"
+        {brandChips.length > 1 && (
+          <AdminFilterChips
+            chips={brandChips}
+            activeId={brandFilter}
+            onChange={setBrandFilter}
+            ariaLabel="Brand filters"
           />
+        )}
+
+        {categoryChips.length > 1 && (
+          <AdminFilterChips
+            chips={categoryChips}
+            activeId={categoryFilter}
+            onChange={setCategoryFilter}
+            ariaLabel="Category filters"
+          />
+        )}
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative max-w-md flex-1">
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search order ID, customer, product, or category"
+              className="admin-input w-full"
+              aria-label="Search orders by ID, customer, product, or category"
+            />
+            {isSearchPending && (
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-zinc-400">
+                …
+              </span>
+            )}
+          </div>
           <p className="text-xs text-zinc-500 sm:ml-auto">
-            {filtered.length} of {filterCounts[activeFilter]} in{" "}
-            {activeFilterMeta?.label.toLowerCase()}
+            {filtered.length} result{filtered.length === 1 ? "" : "s"}
+            {filtered.length > PAGE_SIZE ? ` · page ${currentPage} of ${totalPages}` : ""}
           </p>
         </div>
       </div>
+
+      <AdminOrderBulkActions
+        selectedCount={selectedOrders.length}
+        isUpdating={isBulkUpdating}
+        onApply={handleBulkStatusUpdate}
+        onClear={() => setSelectedOrders([])}
+      />
+
+      {bulkError && (
+        <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-xs font-medium text-red-700">
+          {bulkError}
+        </div>
+      )}
 
       <div role="tabpanel">
         {filtered.length === 0 ? (
@@ -159,10 +325,13 @@ export function AdminOrderTable() {
         ) : (
           <>
             <div className="space-y-3 p-4 lg:hidden">
-              {filtered.map((order) => (
+              {paginated.map((order) => (
                 <OrderCard
                   key={order.id}
                   order={order}
+                  isNew={newOrderIds.has(order.id)}
+                  isSelected={selectedOrders.includes(order.id)}
+                  onToggleSelect={() => toggleSelectOrder(order.id)}
                   onMarkPaid={() => markPaymentReceived(order.id)}
                   onMarkDelivered={() => markOrderDelivered(order.id)}
                   onStatusChange={(status) => updateOrderStatus(order.id, status)}
@@ -171,11 +340,23 @@ export function AdminOrderTable() {
             </div>
 
             <div className="hidden overflow-x-auto lg:block">
-              <table className="w-full min-w-[960px] text-left text-sm">
+              <table className="w-full min-w-[1040px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-zinc-200 bg-zinc-50/80">
+                    <th className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        onChange={toggleSelectAll}
+                        aria-label="Select all visible orders"
+                        className="rounded border-zinc-300"
+                      />
+                    </th>
                     <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
                       Order ID
+                    </th>
+                    <th className="min-w-[220px] px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                      Product Info
                     </th>
                     <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
                       Customer
@@ -195,10 +376,13 @@ export function AdminOrderTable() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100">
-                  {filtered.map((order) => (
+                  {paginated.map((order) => (
                     <OrderRow
                       key={order.id}
                       order={order}
+                      isNew={newOrderIds.has(order.id)}
+                      isSelected={selectedOrders.includes(order.id)}
+                      onToggleSelect={() => toggleSelectOrder(order.id)}
                       onMarkPaid={() => markPaymentReceived(order.id)}
                       onMarkDelivered={() => markOrderDelivered(order.id)}
                       onStatusChange={(status) => updateOrderStatus(order.id, status)}
@@ -207,6 +391,33 @@ export function AdminOrderTable() {
                 </tbody>
               </table>
             </div>
+
+            {filtered.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between border-t border-zinc-200 px-4 py-3">
+                <p className="text-xs text-zinc-500">
+                  Showing {(currentPage - 1) * PAGE_SIZE + 1}–
+                  {Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={currentPage <= 1}
+                    onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                    className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                    className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -216,11 +427,17 @@ export function AdminOrderTable() {
 
 function OrderRow({
   order,
+  isNew,
+  isSelected,
+  onToggleSelect,
   onMarkPaid,
   onMarkDelivered,
   onStatusChange,
 }: {
   order: Order;
+  isNew?: boolean;
+  isSelected: boolean;
+  onToggleSelect: () => void;
   onMarkPaid: () => void;
   onMarkDelivered: () => void;
   onStatusChange: (status: OrderStatus) => void;
@@ -231,16 +448,35 @@ function OrderRow({
   const isDelivered = order.status === ORDER_STATUS.DELIVERED;
 
   return (
-    <tr className="transition hover:bg-zinc-50/80">
+    <tr
+      className={`transition hover:bg-zinc-50/80 ${isNew ? "admin-order-row-new bg-[#c9a227]/10" : ""} ${isSelected ? "bg-[#c9a227]/5" : ""}`}
+    >
       <td className="px-4 py-3">
-        <Link
-          href={`/admin/orders/${order.id}`}
-          className="font-mono text-sm font-semibold text-zinc-900 hover:text-[#8b6914] hover:underline"
-          title={order.id}
-        >
-          {shortenOrderId(order.id)}
-        </Link>
-        <p className="mt-0.5 font-mono text-xs text-zinc-400">{order.orderNumber}</p>
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={onToggleSelect}
+          aria-label={`Select order ${order.orderNumber}`}
+          className="rounded border-zinc-300"
+        />
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          <OrderLiveStatusIndicator order={order} />
+          <div>
+            <Link
+              href={`/admin/orders/${order.id}`}
+              className="font-mono text-sm font-semibold text-zinc-900 hover:text-[#8b6914] hover:underline"
+              title={order.id}
+            >
+              {shortenOrderId(order.id)}
+            </Link>
+            <p className="mt-0.5 font-mono text-xs text-zinc-400">{order.orderNumber}</p>
+          </div>
+        </div>
+      </td>
+      <td className="px-4 py-3">
+        <AdminOrderProductCell order={order} />
       </td>
       <td className="px-4 py-3">
         <p className="font-medium text-zinc-900">{customerName || "—"}</p>
@@ -299,11 +535,17 @@ function OrderRow({
 
 function OrderCard({
   order,
+  isNew,
+  isSelected,
+  onToggleSelect,
   onMarkPaid,
   onMarkDelivered,
   onStatusChange,
 }: {
   order: Order;
+  isNew?: boolean;
+  isSelected: boolean;
+  onToggleSelect: () => void;
   onMarkPaid: () => void;
   onMarkDelivered: () => void;
   onStatusChange: (status: OrderStatus) => void;
@@ -314,9 +556,23 @@ function OrderCard({
   const isDelivered = order.status === ORDER_STATUS.DELIVERED;
 
   return (
-    <article className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+    <article
+      className={`rounded-2xl border bg-white p-4 shadow-sm ${
+        isNew ? "admin-order-row-new border-[#c9a227]/50 bg-[#c9a227]/5" : "border-zinc-200"
+      } ${isSelected ? "ring-2 ring-[#c9a227]/40" : ""}`}
+    >
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={onToggleSelect}
+            aria-label={`Select order ${order.orderNumber}`}
+            className="mt-1 rounded border-zinc-300"
+          />
+          <div className="flex items-start gap-2">
+          <OrderLiveStatusIndicator order={order} size="md" />
+          <div>
           <Link
             href={`/admin/orders/${order.id}`}
             className="font-mono text-sm font-bold text-zinc-900 hover:text-[#8b6914]"
@@ -325,6 +581,8 @@ function OrderCard({
           </Link>
           <p className="mt-1 font-medium text-zinc-900">{customerName || "—"}</p>
           <p className="text-xs text-zinc-500">{formatOrderDate(order.createdAt)}</p>
+          </div>
+          </div>
         </div>
         <p className="text-lg font-bold text-zinc-900">
           {formatPrice(order.grandTotal ?? order.totals.grandTotal)}
@@ -342,6 +600,10 @@ function OrderCard({
         ) : (
           <span className="text-xs font-semibold text-zinc-500">Cancelled</span>
         )}
+      </div>
+
+      <div className="mt-3">
+        <AdminOrderProductCell order={order} compact />
       </div>
 
       <p className="mt-2 text-xs text-zinc-500">{getOrderShippingMethodLabel(order)}</p>

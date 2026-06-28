@@ -3,24 +3,32 @@
 import { useEffect, useMemo, useState } from "react";
 import { SEARCH_DEBOUNCE_MS } from "@/lib/search/constants";
 import { getRecentSearches } from "@/lib/search/recent-searches";
-import { searchCatalog } from "@/lib/search/search-engine";
+import { clearSearchQueryCache, searchCatalog } from "@/lib/search/search-engine";
 import type { SearchResults } from "@/lib/search/types";
 import type { Product } from "@/lib/types/catalog";
 import { productService } from "@/lib/services/product-service.client";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import type { SearchMarketplaceScope } from "@/components/search/SearchMarketplaceScope";
+import { scopeToOrigin } from "@/components/search/SearchMarketplaceScope";
 
 const EMPTY_RESULTS: SearchResults = {
   products: [],
+  groups: [],
   categories: [],
   terms: [],
 };
 
-export function useSearchSuggestions(query: string, enabled = true) {
+export function useSearchSuggestions(
+  query: string,
+  enabled = true,
+  scope: SearchMarketplaceScope = "all",
+) {
   const [catalog, setCatalog] = useState<Product[]>([]);
   const [isCatalogLoading, setIsCatalogLoading] = useState(false);
   const [catalogReady, setCatalogReady] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS);
+  const origin = scopeToOrigin(scope);
 
   useEffect(() => {
     if (!enabled) {
@@ -34,6 +42,7 @@ export function useSearchSuggestions(query: string, enabled = true) {
       if (cancelled) {
         return;
       }
+      clearSearchQueryCache();
       setCatalog(products);
       setCatalogReady(true);
       setIsCatalogLoading(false);
@@ -60,8 +69,8 @@ export function useSearchSuggestions(query: string, enabled = true) {
     if (!catalogReady) {
       return EMPTY_RESULTS;
     }
-    return searchCatalog(catalog, debouncedQuery);
-  }, [catalog, catalogReady, debouncedQuery]);
+    return searchCatalog(catalog, debouncedQuery, { origin });
+  }, [catalog, catalogReady, debouncedQuery, origin]);
 
   const isSearching = enabled && query.trim().length > 0 && debouncedQuery !== query;
   const isLoading = isCatalogLoading && !catalogReady;
@@ -73,5 +82,6 @@ export function useSearchSuggestions(query: string, enabled = true) {
     isSearching,
     catalogReady,
     debouncedQuery,
+    origin,
   };
 }

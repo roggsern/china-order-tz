@@ -1,22 +1,31 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Product, ProductOrigin, ProductStatus } from "@/lib/types/catalog";
 import { formatAdminDate, getProductThumbnail } from "@/lib/admin/product-utils";
 import { ProductImageDisplay } from "@/components/catalog/ProductImageDisplay";
-import { adminBrandOptions } from "@/lib/admin/brand-options";
 import { formatPrice } from "@/lib/catalog/utils";
 import { getCategoryBySlug } from "@/lib/catalog/categories";
 import { EditIcon, EyeIcon, TrashIcon, StarOutlineIcon } from "@/components/home/icons";
 import { DeleteProductModal } from "./DeleteProductModal";
 import { StatusBadge } from "./StatusBadge";
+import { AdminFilterChips } from "@/components/admin/AdminFilterChips";
+import { ADMIN_SEARCH_DEBOUNCE_MS } from "@/lib/admin/admin-search-utils";
+import {
+  extractAdminProductFilterOptions,
+  filterAdminProducts,
+} from "@/lib/admin/product-query-filters";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 
 interface ProductTableProps {
   products: Product[];
   isHydrated?: boolean;
   onDelete: (id: number) => void;
   onBulkDelete: (ids: number[]) => void;
+  initialCategory?: string;
+  initialBrand?: string;
+  initialSearch?: string;
 }
 
 type StatusFilter = "all" | ProductStatus;
@@ -33,45 +42,52 @@ export function ProductTable({
   isHydrated = true,
   onDelete,
   onBulkDelete,
+  initialCategory,
+  initialBrand,
+  initialSearch,
 }: ProductTableProps) {
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [bulkDeleteIds, setBulkDeleteIds] = useState<number[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch ?? "");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [brandFilter, setBrandFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState(initialCategory ?? "all");
+  const [brandFilter, setBrandFilter] = useState(initialBrand ?? "all");
   const [originFilter, setOriginFilter] = useState<OriginFilter>("all");
   const [page, setPage] = useState(1);
+  const debouncedSearch = useDebouncedValue(search, ADMIN_SEARCH_DEBOUNCE_MS);
 
-  const categories = useMemo(() => {
-    const slugs = [...new Set(products.map((product) => product.categorySlug))];
-    return slugs.map((slug) => getCategoryBySlug(slug)).filter(Boolean);
-  }, [products]);
+  const filterOptions = useMemo(() => extractAdminProductFilterOptions(products), [products]);
 
-  const brandSlugsInUse = useMemo(
-    () => [...new Set(products.map((product) => product.brandSlug).filter(Boolean))],
-    [products],
+  const filtered = useMemo(
+    () =>
+      filterAdminProducts(products, {
+        search: debouncedSearch,
+        status: statusFilter,
+        origin: originFilter,
+        category: categoryFilter,
+        brand: brandFilter,
+      }),
+    [products, debouncedSearch, statusFilter, originFilter, categoryFilter, brandFilter],
   );
 
-  const filtered = useMemo(() => {
-    const query = search.toLowerCase().trim();
-    return products.filter((product) => {
-      if (statusFilter !== "all" && product.status !== statusFilter) return false;
-      if (categoryFilter !== "all" && product.categorySlug !== categoryFilter) return false;
-      if (brandFilter !== "all" && product.brandSlug !== brandFilter) return false;
-      if (originFilter !== "all" && product.origin !== originFilter) return false;
-      if (
-        query &&
-        !product.name.toLowerCase().includes(query) &&
-        !product.slug.includes(query) &&
-        !(product.sku ?? "").toLowerCase().includes(query)
-      ) {
-        return false;
-      }
-      return true;
-    });
-  }, [products, search, statusFilter, categoryFilter, brandFilter, originFilter]);
+  const isSearchPending = search.trim() !== debouncedSearch.trim();
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, statusFilter, originFilter, categoryFilter, brandFilter]);
+
+  useEffect(() => {
+    if (initialCategory) {
+      setCategoryFilter(initialCategory);
+    }
+    if (initialBrand) {
+      setBrandFilter(initialBrand);
+    }
+    if (initialSearch) {
+      setSearch(initialSearch);
+    }
+  }, [initialCategory, initialBrand, initialSearch]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -146,98 +162,91 @@ export function ProductTable({
   return (
     <>
       <div className="admin-card overflow-hidden">
-        <div className="flex flex-col gap-3 border-b border-zinc-200 p-4 xl:flex-row xl:items-center">
-          <input
-            type="search"
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-              setPage(1);
-            }}
-            placeholder="Search products…"
-            className="admin-input max-w-xs"
-            aria-label="Search products"
-          />
-          <div className="flex flex-wrap gap-2">
-            <select
-              value={statusFilter}
-              onChange={(event) => {
-                setStatusFilter(event.target.value as StatusFilter);
-                setPage(1);
-              }}
-              className="admin-input max-w-[150px]"
-              aria-label="Filter by status"
-            >
-              <option value="all">All statuses</option>
-              <option value="active">Active</option>
-              <option value="draft">Draft</option>
-              <option value="hidden">Inactive</option>
-            </select>
-            <select
-              value={categoryFilter}
-              onChange={(event) => {
-                setCategoryFilter(event.target.value);
-                setPage(1);
-              }}
-              className="admin-input max-w-[180px]"
-              aria-label="Filter by category"
-            >
-              <option value="all">All categories</option>
-              {categories.map((category) =>
-                category ? (
-                  <option key={category.slug} value={category.slug}>
-                    {category.name}
-                  </option>
-                ) : null,
+        <div className="space-y-4 border-b border-zinc-200 p-4">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+            <div className="relative max-w-md flex-1">
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search product, category, brand, or SKU"
+                className="admin-input w-full"
+                aria-label="Search products by name, category, or brand"
+              />
+              {isSearchPending && (
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-zinc-400">
+                  …
+                </span>
               )}
-            </select>
-            <select
-              value={brandFilter}
-              onChange={(event) => {
-                setBrandFilter(event.target.value);
-                setPage(1);
-              }}
-              className="admin-input max-w-[180px]"
-              aria-label="Filter by brand"
-            >
-              <option value="all">All brands</option>
-              {adminBrandOptions
-                .filter((brand) => brandSlugsInUse.includes(brand.slug))
-                .map((brand) => (
-                  <option key={brand.slug} value={brand.slug}>
-                    {brand.name}
-                  </option>
-                ))}
-            </select>
-            <select
-              value={originFilter}
-              onChange={(event) => {
-                setOriginFilter(event.target.value as OriginFilter);
-                setPage(1);
-              }}
-              className="admin-input max-w-[160px]"
-              aria-label="Filter by origin"
-            >
-              <option value="all">All origins</option>
-              <option value="china">China</option>
-              <option value="tz">Buy From TZ</option>
-            </select>
+            </div>
+            <div className="flex items-center gap-3 xl:ml-auto">
+              {selectedIds.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setBulkDeleteIds([...selectedIds])}
+                  className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100"
+                >
+                  Delete selected ({selectedIds.size})
+                </button>
+              )}
+              <p className="text-xs text-zinc-500">
+                {filtered.length} of {products.length} products
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3 xl:ml-auto">
-            {selectedIds.size > 0 && (
-              <button
-                type="button"
-                onClick={() => setBulkDeleteIds([...selectedIds])}
-                className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100"
-              >
-                Delete selected ({selectedIds.size})
-              </button>
-            )}
-            <p className="text-xs text-zinc-500">
-              {filtered.length} of {products.length} products
-            </p>
-          </div>
+          <AdminFilterChips
+            chips={[
+              { id: "all", label: "All Statuses" },
+              { id: "active", label: "Active" },
+              { id: "draft", label: "Draft" },
+              { id: "hidden", label: "Inactive" },
+            ]}
+            activeId={statusFilter}
+            onChange={(id) => setStatusFilter(id as StatusFilter)}
+            ariaLabel="Product status filters"
+          />
+
+          <AdminFilterChips
+            chips={[
+              { id: "all", label: "All Origins" },
+              { id: "china", label: "China Orders" },
+              { id: "tz", label: "Buy from Dar" },
+            ]}
+            activeId={originFilter}
+            onChange={(id) => setOriginFilter(id as OriginFilter)}
+            ariaLabel="Product origin filters"
+          />
+
+          {filterOptions.brands.length > 0 && (
+            <AdminFilterChips
+              chips={[
+                { id: "all", label: "All Brands" },
+                ...filterOptions.brands.map((brand) => ({
+                  id: brand.slug,
+                  label: brand.label,
+                })),
+              ]}
+              activeId={brandFilter}
+              onChange={setBrandFilter}
+              ariaLabel="Brand filters"
+            />
+          )}
+
+          {filterOptions.categories.length > 0 && (
+            <AdminFilterChips
+              chips={[
+                { id: "all", label: "All Categories" },
+                ...filterOptions.categories.map((category) => ({
+                  id: category.slug,
+                  label: category.label,
+                })),
+              ]}
+              activeId={categoryFilter}
+              onChange={setCategoryFilter}
+              ariaLabel="Category filters"
+            />
+          )}
         </div>
 
         <div className="overflow-x-auto">

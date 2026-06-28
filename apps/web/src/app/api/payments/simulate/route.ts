@@ -1,18 +1,19 @@
 import { NextResponse } from "next/server";
-import { isPaymentTestMode } from "@/lib/payment/server/config";
-import { serverPaymentGateway } from "@/lib/payment/server/gateway";
-import type { InitiatePaymentInput } from "@/lib/payment/server/types";
+import { isProduction } from "@/lib/config/env";
+import { isPaymentTestMode } from "@/lib/payments/config";
+import { paymentService } from "@/lib/payments/paymentService";
+import type { InitiateStkPushInput } from "@/lib/payments/types";
 
 export async function POST(request: Request) {
-  if (!isPaymentTestMode()) {
+  if (isProduction() || !isPaymentTestMode()) {
     return NextResponse.json(
-      { error: "Simulate payment is disabled in live mode." },
-      { status: 403 },
+      { error: "Simulate payment is disabled in production." },
+      { status: 404 },
     );
   }
 
   try {
-    const body = (await request.json()) as Partial<InitiatePaymentInput>;
+    const body = (await request.json()) as Partial<InitiateStkPushInput>;
 
     if (!body.orderId || !body.orderNumber || !body.amount) {
       return NextResponse.json(
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = serverPaymentGateway.simulatePayment({
+    const result = paymentService.simulateSTKPush({
       orderId: body.orderId,
       orderNumber: body.orderNumber,
       amount: body.amount,

@@ -2,6 +2,7 @@
 
 import { SearchIcon } from "@/components/home/icons";
 import { useAdminAuth } from "@/components/admin/AdminAuthProvider";
+import { AdminLiveIndicator } from "@/components/admin/AdminLiveIndicator";
 
 interface AdminHeaderProps {
   title?: string;
@@ -31,6 +32,7 @@ export function AdminHeader({ title = "Admin Dashboard" }: AdminHeaderProps) {
       </div>
 
       <div className="flex items-center gap-3">
+        <AdminLiveIndicator />
         <div className="hidden text-right sm:block">
           <p className="text-xs font-medium text-white">Store Admin</p>
           <p className="text-[10px] text-zinc-500">{displayEmail}</p>

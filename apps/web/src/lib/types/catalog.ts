@@ -10,6 +10,9 @@ export type ProductStatus = "active" | "draft" | "hidden";
 
 export type ProductOrigin = "china" | "tz";
 
+/** Marketplace mode — `local` is Buy from Dar; `china` is China Order. */
+export type ProductType = "china" | "local";
+
 export type ProductBadgeType =
   | "NEW"
   | "BEST SELLER"
@@ -99,6 +102,7 @@ export type Product = {
   badge: string;
   badges: ProductBadgeType[];
   trustBadges: TrustBadgeType[];
+  type?: ProductType;
   origin: ProductOrigin;
   brand?: string;
   brandSlug?: string;
@@ -142,6 +146,7 @@ export type ProductFormData = {
   badge: string;
   gradient: string;
   emoji: string;
+  type: ProductType;
   origin: ProductOrigin;
   brandSlug: string;
   brand: string;

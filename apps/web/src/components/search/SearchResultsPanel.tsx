@@ -1,10 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import type { ProductOrigin } from "@/lib/types/catalog";
 import type { SearchResults } from "@/lib/search/types";
 import { POPULAR_SEARCHES, TRENDING_SEARCHES } from "@/lib/search/constants";
+import { buildProductSearchHref } from "@/lib/search/search-url";
 import { SearchProductRow } from "./SearchProductRow";
 import { SearchCategoryRow } from "./SearchCategoryRow";
+import { SearchResultsSkeleton } from "./SearchResultsSkeleton";
+import {
+  SearchMarketplaceScope,
+  type SearchMarketplaceScope as SearchScope,
+} from "./SearchMarketplaceScope";
 
 interface SearchResultsPanelProps {
   query: string;
@@ -12,6 +19,9 @@ interface SearchResultsPanelProps {
   recentSearches: string[];
   isLoading?: boolean;
   isSearching?: boolean;
+  origin?: ProductOrigin;
+  marketplaceScope?: SearchScope;
+  onMarketplaceScopeChange?: (scope: SearchScope) => void;
   onSelect: (href: string, label?: string) => void;
   onClearRecent?: () => void;
   className?: string;
@@ -49,6 +59,9 @@ export function SearchResultsPanel({
   recentSearches,
   isLoading,
   isSearching,
+  origin,
+  marketplaceScope = "all",
+  onMarketplaceScopeChange,
   onSelect,
   onClearRecent,
   className = "",
@@ -56,21 +69,29 @@ export function SearchResultsPanel({
   const trimmed = query.trim();
   const hasQuery = trimmed.length > 0;
   const hasProducts = results.products.length > 0;
+  const hasGroups = results.groups.some((group) => group.products.length > 0);
   const hasCategories = results.categories.length > 0;
   const hasTerms = results.terms.length > 0;
-  const showEmpty = hasQuery && !hasProducts && !hasCategories && !hasTerms && !isLoading && !isSearching;
+  const showLoadingState = isLoading || isSearching;
+  const showEmpty =
+    hasQuery && !hasProducts && !hasCategories && !hasTerms && !showLoadingState;
+  const resultsHref = buildProductSearchHref(trimmed, origin);
 
   return (
     <div className={`overflow-hidden ${className}`}>
-      <div className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain px-2 py-3 sm:px-3">
-        {(isLoading || isSearching) && (
-          <div className="flex items-center gap-2 px-2 py-4 text-sm text-zinc-500">
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#c9a227] border-t-transparent" />
-            Searching…
-          </div>
-        )}
+      {onMarketplaceScopeChange ? (
+        <div className="border-b border-zinc-100 py-3">
+          <p className="mb-2 px-2 text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-400">
+            Search in
+          </p>
+          <SearchMarketplaceScope value={marketplaceScope} onChange={onMarketplaceScopeChange} />
+        </div>
+      ) : null}
 
-        {!hasQuery && recentSearches.length > 0 && (
+      <div className="max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain px-2 py-3 sm:px-3">
+        {showLoadingState && <SearchResultsSkeleton />}
+
+        {!showLoadingState && !hasQuery && recentSearches.length > 0 && (
           <section className="mb-4">
             <div className="mb-2 flex items-center justify-between px-2">
               <SectionHeading>Recent searches</SectionHeading>
@@ -89,7 +110,7 @@ export function SearchResultsPanel({
                 <TermChip
                   key={term}
                   label={term}
-                  href={`/products?q=${encodeURIComponent(term)}`}
+                  href={buildProductSearchHref(term, origin)}
                   onSelect={onSelect}
                 />
               ))}
@@ -97,7 +118,7 @@ export function SearchResultsPanel({
           </section>
         )}
 
-        {!hasQuery && (
+        {!showLoadingState && !hasQuery && (
           <>
             <section className="mb-4">
               <div className="mb-2 px-2">
@@ -108,7 +129,7 @@ export function SearchResultsPanel({
                   <TermChip
                     key={term}
                     label={term}
-                    href={`/products?q=${encodeURIComponent(term)}`}
+                    href={buildProductSearchHref(term, origin)}
                     onSelect={onSelect}
                   />
                 ))}
@@ -124,7 +145,7 @@ export function SearchResultsPanel({
                   <TermChip
                     key={term}
                     label={term}
-                    href={`/products?q=${encodeURIComponent(term)}`}
+                    href={buildProductSearchHref(term, origin)}
                     onSelect={onSelect}
                   />
                 ))}
@@ -133,7 +154,28 @@ export function SearchResultsPanel({
           </>
         )}
 
-        {hasQuery && hasProducts && (
+        {!showLoadingState && hasQuery && hasGroups && (
+          <>
+            {results.groups.map((group) => (
+              <section key={group.tier} className="mb-3">
+                <div className="mb-1 px-2">
+                  <SectionHeading>{group.label}</SectionHeading>
+                </div>
+                <div className="space-y-0.5">
+                  {group.products.map((product) => (
+                    <SearchProductRow
+                      key={product.id}
+                      product={product}
+                      onSelect={() => onSelect(`/products/${product.slug}`, product.name)}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))}
+          </>
+        )}
+
+        {!showLoadingState && hasQuery && !hasGroups && hasProducts && (
           <section className="mb-3">
             <div className="mb-1 px-2">
               <SectionHeading>Products</SectionHeading>
@@ -150,7 +192,7 @@ export function SearchResultsPanel({
           </section>
         )}
 
-        {hasQuery && hasCategories && (
+        {!showLoadingState && hasQuery && hasCategories && (
           <section className="mb-3">
             <div className="mb-1 px-2">
               <SectionHeading>Categories</SectionHeading>
@@ -167,7 +209,7 @@ export function SearchResultsPanel({
           </section>
         )}
 
-        {hasQuery && hasTerms && (
+        {!showLoadingState && hasQuery && hasTerms && (
           <section className="mb-2">
             <div className="mb-2 px-2">
               <SectionHeading>Suggestions</SectionHeading>
@@ -181,24 +223,35 @@ export function SearchResultsPanel({
         )}
 
         {showEmpty && (
-          <div className="px-2 py-8 text-center">
-            <p className="text-sm font-medium text-zinc-700">No results for &ldquo;{trimmed}&rdquo;</p>
-            <p className="mt-1 text-xs text-zinc-500">Try a different keyword or browse categories.</p>
+          <div className="px-2 py-10 text-center">
+            <span className="text-3xl" aria-hidden>
+              🔍
+            </span>
+            <p className="mt-3 text-sm font-semibold text-zinc-800">No results found</p>
+            <p className="mt-1 text-xs text-zinc-500">
+              No matches for &ldquo;{trimmed}&rdquo;
+              {origin === "china"
+                ? " in China products"
+                : origin === "tz"
+                  ? " in Buy from Dar"
+                  : ""}
+              . Try another keyword or switch marketplace.
+            </p>
             <Link
-              href={`/products?q=${encodeURIComponent(trimmed)}`}
-              onClick={() => onSelect(`/products?q=${encodeURIComponent(trimmed)}`, trimmed)}
+              href={resultsHref}
+              onClick={() => onSelect(resultsHref, trimmed)}
               className="mt-4 inline-flex text-sm font-semibold text-[#8b6914] hover:text-[#c9a227]"
             >
-              View all results →
+              View all results {"→"}
             </Link>
           </div>
         )}
 
-        {hasQuery && (hasProducts || hasCategories) && (
+        {!showLoadingState && hasQuery && (hasProducts || hasCategories) && (
           <div className="border-t border-zinc-100 px-2 pt-3">
             <Link
-              href={`/products?q=${encodeURIComponent(trimmed)}`}
-              onClick={() => onSelect(`/products?q=${encodeURIComponent(trimmed)}`, trimmed)}
+              href={resultsHref}
+              onClick={() => onSelect(resultsHref, trimmed)}
               className="flex w-full items-center justify-center rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white transition hover:bg-[#c9a227] hover:text-zinc-900"
             >
               View all results for &ldquo;{trimmed}&rdquo;

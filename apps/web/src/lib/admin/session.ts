@@ -2,6 +2,7 @@ import {
   normalizeAdminEmail,
   verifyAdminCredentials,
 } from "@/lib/admin/credentials";
+import { ADMIN_AUTH_COOKIE, ADMIN_AUTH_COOKIE_MAX_AGE_SECONDS } from "@/lib/admin/auth-cookie";
 
 const ADMIN_SESSION_KEY = "china-order-tz-admin-session";
 
@@ -32,12 +33,29 @@ function readSession(): AdminSession | null {
   }
 }
 
+function setAdminAuthCookie(): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  document.cookie = `${ADMIN_AUTH_COOKIE}=1; path=/; max-age=${ADMIN_AUTH_COOKIE_MAX_AGE_SECONDS}; SameSite=Lax`;
+}
+
+function clearAdminAuthCookie(): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  document.cookie = `${ADMIN_AUTH_COOKIE}=; path=/; max-age=0; SameSite=Lax`;
+}
+
 function writeSession(session: AdminSession): void {
   if (typeof window === "undefined") {
     return;
   }
 
   window.localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session));
+  setAdminAuthCookie();
 }
 
 export function getAdminSession(): AdminSession | null {
@@ -70,4 +88,5 @@ export function signOutAdmin(): void {
   }
 
   window.localStorage.removeItem(ADMIN_SESSION_KEY);
+  clearAdminAuthCookie();
 }

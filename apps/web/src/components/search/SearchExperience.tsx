@@ -1,11 +1,14 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { SearchIcon } from "@/components/home/icons";
 import { useSearchSuggestions } from "@/hooks/use-search-suggestions";
 import { addRecentSearch, clearRecentSearches } from "@/lib/search/recent-searches";
+import { buildProductSearchHref } from "@/lib/search/search-url";
+import type { SearchMarketplaceScope } from "@/components/search/SearchMarketplaceScope";
+import { scopeToOrigin } from "@/components/search/SearchMarketplaceScope";
 import { SearchResultsPanel } from "./SearchResultsPanel";
 
 interface SearchExperienceProps {
@@ -22,11 +25,20 @@ export function SearchExperience({
   inputId,
 }: SearchExperienceProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const [marketplaceScope, setMarketplaceScope] = useState<SearchMarketplaceScope>(() => {
+    const origin = searchParams.get("origin");
+    return origin === "china" || origin === "tz" ? origin : "all";
+  });
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { results, recentSearches, isLoading, isSearching } = useSearchSuggestions(query, open);
+  const { results, recentSearches, isLoading, isSearching, origin } = useSearchSuggestions(
+    query,
+    open,
+    marketplaceScope,
+  );
 
   const isLarge = size === "large";
 
@@ -56,6 +68,13 @@ export function SearchExperience({
     };
   }, [open]);
 
+  useEffect(() => {
+    const origin = searchParams.get("origin");
+    if (origin === "china" || origin === "tz") {
+      setMarketplaceScope(origin);
+    }
+  }, [searchParams]);
+
   const handleSelect = useCallback(
     (href: string, label?: string) => {
       if (label) {
@@ -74,7 +93,7 @@ export function SearchExperience({
     if (trimmed) {
       addRecentSearch(trimmed);
       setOpen(false);
-      router.push(`/products?q=${encodeURIComponent(trimmed)}`);
+      router.push(buildProductSearchHref(trimmed, scopeToOrigin(marketplaceScope)));
     } else {
       router.push("/products");
     }
@@ -133,6 +152,9 @@ export function SearchExperience({
               recentSearches={recentSearches}
               isLoading={isLoading}
               isSearching={isSearching}
+              origin={origin}
+              marketplaceScope={marketplaceScope}
+              onMarketplaceScopeChange={setMarketplaceScope}
               onSelect={handleSelect}
               onClearRecent={() => clearRecentSearches()}
             />

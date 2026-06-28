@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { Category } from "@/lib/types/catalog";
+import { buildSearchCategoryHref } from "@/lib/search/search-url";
 
 interface SearchCategoryRowProps {
   category: Category;
@@ -11,7 +12,7 @@ interface SearchCategoryRowProps {
 export function SearchCategoryRow({ category, onSelect }: SearchCategoryRowProps) {
   return (
     <Link
-      href={`/categories/${category.slug}`}
+      href={buildSearchCategoryHref(category.slug)}
       onClick={onSelect}
       className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition hover:bg-zinc-50 active:bg-zinc-100"
     >

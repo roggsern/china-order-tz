@@ -76,6 +76,18 @@ export const SIMPLIFIED_PAYMENT_OPTIONS = [
     icon: "🟢",
   },
   {
+    code: "nmb" as const,
+    label: "NMB Bank",
+    description: "Pay via NMB mobile banking",
+    icon: "🏦",
+  },
+  {
+    code: "selcom" as const,
+    label: "Selcom",
+    description: "Pay via Selcom mobile checkout",
+    icon: "📲",
+  },
+  {
     code: "cod" as const,
     label: "Cash on Delivery",
     description: "Pay when your order arrives",
@@ -85,12 +97,19 @@ export const SIMPLIFIED_PAYMENT_OPTIONS = [
     code: "bank_transfer" as const,
     label: "Bank Transfer",
     description: "Transfer to our account (details after order)",
-    icon: "🏦",
+    icon: "🏛️",
   },
 ];
 
+/** Gateway methods that require provider initiation + processing page. */
+export const GATEWAY_PAYMENT_METHODS = ["mpesa", "nmb", "selcom"] as const;
+
+export type GatewayPaymentMethod = (typeof GATEWAY_PAYMENT_METHODS)[number];
+
 export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   mpesa: "M-Pesa",
+  nmb: "NMB Bank",
+  selcom: "Selcom",
   cod: "Cash on Delivery",
   airtel_money: "Airtel Money",
   mixx_by_yas: "Mixx by Yas",
@@ -124,7 +143,7 @@ export const ORDER_STATUS_LABELS: Record<string, string> = {
 export const PAYMENT_VERIFY_POLL_MS = 2_000;
 
 /** Target STK auto-complete window in test mode (ms) — aligns with server gateway delay. */
-export const PAYMENT_STK_COMPLETE_MS = 4_000;
+export const PAYMENT_STK_COMPLETE_MS = 2_500;
 
-/** Brief pause on "Confirming" before redirect to order success (ms). */
-export const PAYMENT_SUCCESS_REDIRECT_MS = 800;
+/** Brief pause on success screen before redirect to order success (ms). */
+export const PAYMENT_SUCCESS_REDIRECT_MS = 2_500;

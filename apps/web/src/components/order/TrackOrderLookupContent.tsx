@@ -8,7 +8,7 @@ import { paymentService } from "@/lib/payment/PaymentService";
 
 const EXAMPLE_HINT = "e.g. CO-TZ-20250627-ABC123 or your order UUID";
 
-export function TrackOrderLookupContent() {
+export function TrackOrderLookupContent({ lookupPath = "/track" }: { lookupPath?: string }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +32,7 @@ export function TrackOrderLookupContent() {
       return;
     }
 
-    router.push(`/track-order/${order.id}`);
+    router.push(`${lookupPath}/${order.id}`);
   }
 
   return (

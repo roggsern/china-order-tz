@@ -9,7 +9,7 @@ import { lockCartForOrder } from "@/lib/checkout/completion";
 import { clearCheckoutDraft } from "@/lib/checkout/draft";
 import { formatPrice } from "@/lib/catalog/utils";
 import { PAYMENT_VERIFY_POLL_MS } from "@/lib/payment/constants";
-import { paymentService } from "@/lib/payment/PaymentService";
+import { paymentService } from "@/lib/payments/checkout-service";
 import {
   clearPaymentTransaction,
   getPaymentTransaction,
@@ -143,7 +143,7 @@ export function PaymentConfirmationContent({ orderId }: PaymentConfirmationConte
     );
   }
 
-  const trackOrderHref = `/track-order/${orderId}`;
+  const trackOrderHref = `/track/${orderId}`;
   const retryHref = `/checkout/payment`;
 
   return (

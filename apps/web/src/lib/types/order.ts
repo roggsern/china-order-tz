@@ -6,6 +6,25 @@ import { deriveUnitShippingCost, reconcileOrderShipping } from "@/lib/shipping/s
 import type { CustomerInformation, ShippingAddress } from "@/lib/types/checkout";
 import type { PaymentMethodCode, PaymentStatus } from "@/lib/types/payment";
 import type { ShippingMethodCode } from "@/lib/shipping/types";
+import type { ProductImage } from "@/lib/types/catalog";
+import type { OrderStatusHistoryEntry } from "@/lib/order/tracking-status";
+import { ensureStatusHistory } from "@/lib/order/status-history";
+
+export type AdminOrderType = "china" | "dar";
+
+export type AdminOrderListSummary = {
+  orderType: AdminOrderType;
+  /** API-aligned source: china imports vs local Dar fulfillment */
+  source: "china" | "local";
+  primaryProductName: string;
+  primaryProductImage: ProductImage;
+  productNames: string[];
+  categorySlugs: string[];
+  categoryNames: string[];
+  brandSlugs: string[];
+  brandNames: string[];
+  additionalItemCount: number;
+};
 
 export const ORDER_STATUS = {
   PENDING: "pending",
@@ -61,6 +80,9 @@ export type OrderLineItem = {
   unitPrice: number;
   quantity: number;
   origin?: ProductOrigin;
+  brand?: string;
+  brandSlug?: string;
+  categorySlug?: string;
   /** Selected size at checkout — frozen from cart; null when not applicable. */
   selectedSize: string | null;
   variant?: OrderItemVariant;
@@ -112,6 +134,10 @@ export type Order = {
   /** Full totals breakdown — derived from frozen snapshot */
   totals: CartTotals;
   timeline: OrderTimelineEvent[];
+  /** Logistics status audit trail — source of truth for customer tracking. */
+  statusHistory?: OrderStatusHistoryEntry[];
+  /** Lightweight list metadata for admin tables — optional, computed when missing. */
+  adminListSummary?: AdminOrderListSummary;
 };
 
 export type CreateOrderInput = {
@@ -250,6 +276,11 @@ export function normalizeOrder(raw: Partial<Order> & Pick<Order, "orderNumber">)
       grandTotal: totals.grandTotal,
     },
     timeline: raw.timeline ?? [],
+    statusHistory: ensureStatusHistory({
+      ...(raw as Order),
+      timeline: raw.timeline ?? [],
+    }),
+    adminListSummary: raw.adminListSummary,
   };
 }
 

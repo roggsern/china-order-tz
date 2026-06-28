@@ -1,4 +1,5 @@
 import type { Product, ProductImage } from "@/lib/types/catalog";
+import { getApiUrl, getAppUrl, isDevelopment } from "@/lib/config/env";
 
 export const PRODUCT_PLACEHOLDER_IMAGE = "/images/product-placeholder.svg";
 
@@ -7,12 +8,7 @@ function getImageBaseUrl(): string {
     return window.location.origin;
   }
 
-  return (
-    process.env.NEXT_PUBLIC_API_URL ??
-    process.env.API_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    "http://localhost:3000"
-  );
+  return getApiUrl() || getAppUrl() || (isDevelopment() ? "http://localhost:3000" : "");
 }
 
 /** Resolve a stored image path to a browser-loadable URL. */

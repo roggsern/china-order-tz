@@ -8,7 +8,7 @@ type PageProps = {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { orderId } = await params;
   return {
-    title: `Order Confirmation — CHINA ORDER TZ`,
+    title: `Order ${orderId.slice(0, 8).toUpperCase()} — CHINA ORDER TZ`,
     description: "Your order confirmation from CHINA ORDER TZ.",
   };
 }

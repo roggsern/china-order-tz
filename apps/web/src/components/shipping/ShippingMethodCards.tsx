@@ -5,6 +5,7 @@ import type { ShippingMethodCode } from "@/lib/shipping/types";
 import { formatDeliveryEstimate, getMethodByCode, getSelectableMethodsForOrigin } from "@/lib/shipping/engine";
 import { getShippingTotal, type ShippingItemInput } from "@/lib/shipping/smart-engine";
 import { formatDays, formatPrice } from "@/lib/catalog/utils";
+import { LOCAL_DELIVERY_NEGOTIATED_LABEL } from "@/lib/catalog/product-type";
 import {
   ShippingMethodCard,
   ShippingMethodCardGrid,
@@ -143,7 +144,7 @@ export function LocalDeliveryCard({
   compact = false,
 }: {
   shippingMethod: ShippingMethodCode;
-  shippingCost: number;
+  shippingCost: number | null;
   estimatedDeliveryDays: string | number;
   compact?: boolean;
 }) {
@@ -152,6 +153,8 @@ export function LocalDeliveryCard({
     typeof estimatedDeliveryDays === "number"
       ? `Est. ${estimatedDeliveryDays} day${estimatedDeliveryDays === 1 ? "" : "s"}`
       : formatDays(estimatedDeliveryDays);
+  const priceLabel =
+    shippingCost === null ? LOCAL_DELIVERY_NEGOTIATED_LABEL : `${formatPrice(shippingCost)} shipping`;
 
   return (
     <div
@@ -173,9 +176,8 @@ export function LocalDeliveryCard({
               Auto-assigned
             </span>
           </p>
-          <p className="mt-1 truncate text-xs text-zinc-600">
-            {deliveryLabel} · {formatPrice(shippingCost)} shipping
-          </p>
+          <p className="mt-1 text-xs text-zinc-600">{deliveryLabel}</p>
+          <p className="mt-1 text-xs font-semibold text-[#8b6914]">{priceLabel}</p>
         </div>
       </div>
     </div>

@@ -40,8 +40,8 @@ export function SimplifiedPaymentMethodSelector({
       ) : null}
 
       <p className="text-xs leading-relaxed text-zinc-500">
-        M-Pesa sends an STK Push to your phone. Cash on Delivery and Bank Transfer skip instant
-        payment.
+        M-Pesa, NMB, and Selcom send a payment prompt to your phone or banking app. Cash on Delivery
+        and Bank Transfer skip instant payment.
       </p>
     </div>
   );
