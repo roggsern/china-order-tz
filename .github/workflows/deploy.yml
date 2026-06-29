@@ -2,17 +2,15 @@ name: Deploy Next.js to VPS
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   deploy:
-    name: Deploy to VPS
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy application on VPS via SSH
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.HOST }}
@@ -20,7 +18,7 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
 
           script: |
-            set -euo pipefail
+            set -e
 
             echo "🚀 Starting deployment..."
 
@@ -29,19 +27,18 @@ jobs:
             echo "📥 Pulling latest code..."
             git pull origin main
 
-            echo "⚙️ Setting Node memory..."
+            echo "🧹 Cleaning old build..."
+            rm -rf node_modules apps/web/.next
+
+            echo "📦 Installing dependencies (optimized)..."
             export NODE_OPTIONS="--max-old-space-size=512"
+            npm install --no-audit --no-fund
 
-            echo "📦 Installing dependencies..."
-            npm ci
-
-            echo "🏗️ Building project..."
+            echo "🏗 Building Next.js..."
             npm run build --workspace=apps/web
 
-            echo "🔄 Restarting PM2..."
-            pm2 delete china-order-tz || true
-            pm2 start npm --name china-order-tz -- run start:web --workspace=apps/web
-
+            echo "♻ Restarting PM2..."
+            pm2 reload china-order-tz || pm2 start npm --name china-order-tz -- run start:web --workspace=apps/web
             pm2 save
 
-            echo "✅ Deployment completed successfully!"
+            echo "✅ Deployment SUCCESS"
