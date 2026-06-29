@@ -1,7 +1,4 @@
-# Deploy the Next.js monorepo (apps/web) to the production Ubuntu VPS over SSH.
-# Requires repository secrets: HOST, USERNAME, SSH_KEY
-
-name: Deploy
+name: Deploy Next.js to VPS
 
 on:
   push:
@@ -15,18 +12,36 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy application on VPS
+      - name: Deploy application on VPS via SSH
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_KEY }}
+
           script: |
             set -euo pipefail
+
+            echo "🚀 Starting deployment..."
+
             cd /root/china-order-tz
+
+            echo "📥 Pulling latest code..."
             git pull origin main
+
+            echo "⚙️ Setting Node memory..."
             export NODE_OPTIONS="--max-old-space-size=512"
+
+            echo "📦 Installing dependencies..."
             npm ci
-            npm run build
-            pm2 reload china-order-tz || pm2 start npm --name china-order-tz -- run start:web --workspace=apps/web
+
+            echo "🏗️ Building project..."
+            npm run build --workspace=apps/web
+
+            echo "🔄 Restarting PM2..."
+            pm2 delete china-order-tz || true
+            pm2 start npm --name china-order-tz -- run start:web --workspace=apps/web
+
             pm2 save
+
+            echo "✅ Deployment completed successfully!"
