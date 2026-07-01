@@ -26,8 +26,12 @@ return new class extends Migration
         });
 
         Schema::create('product_variant_attribute_value', function (Blueprint $table) {
-            $table->foreignUuid('product_variant_id')->constrained('product_variants')->cascadeOnDelete();
-            $table->foreignUuid('product_attribute_value_id')->constrained('product_attribute_values')->cascadeOnDelete();
+            $table->foreignUuid('product_variant_id')
+                ->constrained('product_variants', indexName: 'pvav_variant_id_foreign')
+                ->cascadeOnDelete();
+            $table->foreignUuid('product_attribute_value_id')
+                ->constrained('product_attribute_values', indexName: 'pvav_attr_value_id_foreign')
+                ->cascadeOnDelete();
             $table->primary(['product_variant_id', 'product_attribute_value_id'], 'variant_attribute_value_primary');
         });
     }
