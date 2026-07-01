@@ -6,11 +6,16 @@ use App\Actions\AdminAuth\LoginAdminAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\LoginRequest;
 use App\Http\Resources\AdminResource;
+use Illuminate\Http\JsonResponse;
 
 class AuthController extends Controller
 {
-    public function login(LoginRequest $request, LoginAdminAction $action): AdminResource
+    public function login(LoginRequest $request, LoginAdminAction $action): JsonResponse
     {
-        return new AdminResource($action->handle($request));
+        return response()->json([
+            'success' => true,
+            'message' => 'Login successful',
+            'data' => new AdminResource($action->handle($request)),
+        ]);
     }
 }
