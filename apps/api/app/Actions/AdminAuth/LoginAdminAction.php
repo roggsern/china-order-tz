@@ -10,7 +10,10 @@ use Illuminate\Validation\ValidationException;
 
 class LoginAdminAction
 {
-    public function handle(LoginRequest $request): Admin
+    /**
+     * @return array{admin: Admin, token: string}
+     */
+    public function handle(LoginRequest $request): array
     {
         $credentials = $request->only('email', 'password');
 
@@ -39,8 +42,13 @@ class LoginAdminAction
             ], 403));
         }
 
-        $request->session()->regenerate();
+        $token = $admin->createToken('admin-api')->plainTextToken;
 
-        return $admin->load('role');
+        Auth::guard('admin')->logout();
+
+        return [
+            'admin' => $admin->load('role'),
+            'token' => $token,
+        ];
     }
 }

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureAdminIsActive;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -17,6 +18,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->statefulApi();
 
+        $middleware->redirectGuestsTo(fn (): ?string => null);
+
         $middleware->alias([
             'admin.active' => EnsureAdminIsActive::class,
         ]);
@@ -24,5 +27,13 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(function (Request $request, \Throwable $throwable) {
             return $request->is('api/*') || $request->expectsJson();
+        });
+
+        $exceptions->render(function (AuthenticationException $exception, Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return response()->json([
+                    'message' => $exception->getMessage() ?: 'Unauthenticated.',
+                ], 401);
+            }
         });
     })->create();
