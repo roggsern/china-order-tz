@@ -12,7 +12,13 @@ trait HasUuidPrimaryKey
 {
     use HasUuids;
 
-    public $incrementing = false;
+    public function getIncrementing(): bool
+    {
+        return false;
+    }
 
-    protected $keyType = 'string';
+    public function getKeyType(): string
+    {
+        return 'string';
+    }
 }

@@ -9,11 +9,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 class Admin extends Authenticatable
 {
     /** @use HasFactory<AdminFactory> */
-    use HasFactory, HasUuidPrimaryKey, Notifiable, SoftDeletes;
+    use HasApiTokens, HasFactory, HasUuidPrimaryKey, Notifiable, SoftDeletes;
 
     protected $fillable = [
         'role_id',
