@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Actions\AdminProducts\CreateProductAction;
 use App\Actions\AdminProducts\DeleteProductAction;
 use App\Actions\AdminProducts\GetAdminProductsAction;
+use App\Actions\AdminProducts\GetTrashedProductsAction;
 use App\Actions\AdminProducts\ShowProductAction;
 use App\Actions\AdminProducts\UpdateProductAction;
 use App\Http\Controllers\Controller;
@@ -18,6 +19,12 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 class AdminProductController extends Controller
 {
     public function index(GetAdminProductsAction $action): AnonymousResourceCollection
+    {
+        return ProductResource::collection($action->handle())
+            ->additional(['success' => true]);
+    }
+
+    public function trash(GetTrashedProductsAction $action): AnonymousResourceCollection
     {
         return ProductResource::collection($action->handle())
             ->additional(['success' => true]);
