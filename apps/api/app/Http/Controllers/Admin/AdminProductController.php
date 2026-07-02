@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Admin;
 
 use App\Actions\AdminProducts\CreateProductAction;
 use App\Actions\AdminProducts\GetAdminProductsAction;
+use App\Actions\AdminProducts\ShowProductAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreProductRequest;
 use App\Http\Resources\ProductResource;
+use App\Models\Product;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -24,5 +26,13 @@ class AdminProductController extends Controller
             'success' => true,
             'data' => new ProductResource($action->handle($request)),
         ], 201);
+    }
+
+    public function show(Product $product, ShowProductAction $action): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'data' => new ProductResource($action->handle($product)),
+        ]);
     }
 }
