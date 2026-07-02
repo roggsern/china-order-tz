@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Actions\AdminProducts\CreateProductAction;
+use App\Actions\AdminProducts\DeleteProductAction;
 use App\Actions\AdminProducts\GetAdminProductsAction;
 use App\Actions\AdminProducts\ShowProductAction;
 use App\Actions\AdminProducts\UpdateProductAction;
@@ -46,6 +47,16 @@ class AdminProductController extends Controller
         return response()->json([
             'success' => true,
             'data' => new ProductResource($action->handle($request, $product)),
+        ]);
+    }
+
+    public function destroy(Product $product, DeleteProductAction $action): JsonResponse
+    {
+        $action->handle($product);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Product deleted successfully.',
         ]);
     }
 }

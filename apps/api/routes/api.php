@@ -22,6 +22,7 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::post('/products', [AdminProductController::class, 'store']);
     Route::get('/products/{product}', [AdminProductController::class, 'show']);
     Route::put('/products/{product}', [AdminProductController::class, 'update']);
+    Route::delete('/products/{product}', [AdminProductController::class, 'destroy']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
 });
