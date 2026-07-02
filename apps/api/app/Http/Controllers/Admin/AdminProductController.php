@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Actions\AdminProducts\CreateProductAction;
 use App\Actions\AdminProducts\DeleteProductAction;
+use App\Actions\AdminProducts\ForceDeleteProductAction;
 use App\Actions\AdminProducts\GetAdminProductsAction;
 use App\Actions\AdminProducts\GetTrashedProductsAction;
 use App\Actions\AdminProducts\RestoreProductAction;
@@ -74,6 +75,16 @@ class AdminProductController extends Controller
             'success' => true,
             'message' => 'Product restored successfully.',
             'data' => new ProductResource($action->handle($id)),
+        ]);
+    }
+
+    public function forceDestroy(string $id, ForceDeleteProductAction $action): JsonResponse
+    {
+        $action->handle($id);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Product permanently deleted successfully.',
         ]);
     }
 }
