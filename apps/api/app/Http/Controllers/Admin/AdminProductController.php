@@ -6,6 +6,7 @@ use App\Actions\AdminProducts\CreateProductAction;
 use App\Actions\AdminProducts\DeleteProductAction;
 use App\Actions\AdminProducts\GetAdminProductsAction;
 use App\Actions\AdminProducts\GetTrashedProductsAction;
+use App\Actions\AdminProducts\RestoreProductAction;
 use App\Actions\AdminProducts\ShowProductAction;
 use App\Actions\AdminProducts\UpdateProductAction;
 use App\Http\Controllers\Controller;
@@ -64,6 +65,15 @@ class AdminProductController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Product deleted successfully.',
+        ]);
+    }
+
+    public function restore(string $id, RestoreProductAction $action): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'message' => 'Product restored successfully.',
+            'data' => new ProductResource($action->handle($id)),
         ]);
     }
 }
