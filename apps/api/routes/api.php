@@ -25,6 +25,7 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::put('/products/{product}', [AdminProductController::class, 'update']);
     Route::delete('/products/{product}', [AdminProductController::class, 'destroy']);
     Route::post('/products/{id}/restore', [AdminProductController::class, 'restore']);
+    Route::delete('/products/{id}/force', [AdminProductController::class, 'forceDestroy']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
 });
