@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AdminProductController;
+use App\Http\Controllers\Admin\AdminProductImageController;
 use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\DashboardController;
 use Illuminate\Support\Facades\Route;
@@ -28,6 +29,7 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::delete('/products/{product}', [AdminProductController::class, 'destroy']);
     Route::post('/products/{id}/restore', [AdminProductController::class, 'restore']);
     Route::delete('/products/{id}/force', [AdminProductController::class, 'forceDestroy']);
+    Route::delete('/product-images/{image}', [AdminProductImageController::class, 'destroy']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
 });
