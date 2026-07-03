@@ -6,6 +6,7 @@ use App\Actions\AdminProducts\CreateProductAction;
 use App\Actions\AdminProducts\DeleteProductAction;
 use App\Actions\AdminProducts\ForceDeleteProductAction;
 use App\Actions\AdminProducts\GetAdminProductsAction;
+use App\Actions\AdminProducts\GetProductImagesAction;
 use App\Actions\AdminProducts\GetTrashedProductsAction;
 use App\Actions\AdminProducts\RestoreProductAction;
 use App\Actions\AdminProducts\ShowProductAction;
@@ -106,5 +107,20 @@ class AdminProductController extends Controller
                 'url' => Storage::disk('public')->url($image->path),
             ],
         ], 201);
+    }
+
+    public function indexImages(Product $product, GetProductImagesAction $action): JsonResponse
+    {
+        $data = $action->handle($product)->map(fn ($image) => [
+            'id' => $image->id,
+            'path' => $image->path,
+            'url' => Storage::disk('public')->url($image->path),
+            'is_primary' => $image->is_primary,
+        ])->values();
+
+        return response()->json([
+            'success' => true,
+            'data' => $data,
+        ]);
     }
 }
