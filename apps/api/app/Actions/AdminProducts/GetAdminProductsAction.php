@@ -13,6 +13,17 @@ class GetAdminProductsAction
         $category = request()->query('category');
         $brand = request()->query('brand');
         $status = request()->query('status');
+        $sort = request()->query('sort');
+        $direction = strtolower((string) request()->query('direction', 'desc'));
+
+        $allowedSorts = ['name', 'price', 'created_at'];
+        $allowedDirections = ['asc', 'desc'];
+
+        if (! in_array($direction, $allowedDirections, true)) {
+            $direction = 'desc';
+        }
+
+        $sortField = in_array($sort, $allowedSorts, true) ? $sort : null;
 
         return Product::query()
             ->with(['category', 'brand'])
@@ -28,7 +39,11 @@ class GetAdminProductsAction
             ->when(filled($category), fn ($query) => $query->where('category_id', $category))
             ->when(filled($brand), fn ($query) => $query->where('brand_id', $brand))
             ->when(in_array($status, ['0', '1'], true), fn ($query) => $query->where('is_active', $status === '1'))
-            ->latest()
+            ->when(
+                $sortField !== null,
+                fn ($query) => $query->orderBy($sortField, $direction),
+                fn ($query) => $query->latest(),
+            )
             ->paginate(15);
     }
 }
