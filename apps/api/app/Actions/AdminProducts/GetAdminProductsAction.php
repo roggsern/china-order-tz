@@ -10,6 +10,9 @@ class GetAdminProductsAction
     public function handle(): LengthAwarePaginator
     {
         $search = trim((string) request()->query('search', ''));
+        $category = request()->query('category');
+        $brand = request()->query('brand');
+        $status = request()->query('status');
 
         return Product::query()
             ->with(['category', 'brand'])
@@ -22,6 +25,9 @@ class GetAdminProductsAction
                         ->orWhereRaw('LOWER(slug) LIKE ?', [$term]);
                 });
             })
+            ->when(filled($category), fn ($query) => $query->where('category_id', $category))
+            ->when(filled($brand), fn ($query) => $query->where('brand_id', $brand))
+            ->when(in_array($status, ['0', '1'], true), fn ($query) => $query->where('is_active', $status === '1'))
             ->latest()
             ->paginate(15);
     }
