@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AdminBrandController;
 use App\Http\Controllers\Admin\AdminCategoryController;
+use App\Http\Controllers\Admin\AdminMockPaymentController;
 use App\Http\Controllers\Admin\AdminOrderController;
 use App\Http\Controllers\Admin\AdminPaymentController;
 use App\Http\Controllers\Admin\AdminProductController;
@@ -54,6 +55,7 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::get('/orders/{order}', [AdminOrderController::class, 'show']);
     Route::get('/payments', [AdminPaymentController::class, 'index']);
     Route::post('/payments', [AdminPaymentController::class, 'store']);
+    Route::post('/payments/{payment}/mock', [AdminMockPaymentController::class, 'process']);
     Route::get('/payments/{payment}', [AdminPaymentController::class, 'show']);
     Route::put('/payments/{payment}', [AdminPaymentController::class, 'update']);
     Route::delete('/payments/{payment}', [AdminPaymentController::class, 'destroy']);
