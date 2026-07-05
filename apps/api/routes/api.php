@@ -30,6 +30,7 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::post('/products/{id}/restore', [AdminProductController::class, 'restore']);
     Route::delete('/products/{id}/force', [AdminProductController::class, 'forceDestroy']);
     Route::delete('/product-images/{image}', [AdminProductImageController::class, 'destroy']);
+    Route::patch('/product-images/{image}/primary', [AdminProductImageController::class, 'setPrimary']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
 });
