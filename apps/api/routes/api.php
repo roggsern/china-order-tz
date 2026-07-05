@@ -29,6 +29,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/cart/items/{item}', [AdminCartController::class, 'update']);
     Route::delete('/cart/items/{item}', [AdminCartController::class, 'destroyItem']);
     Route::delete('/cart', [AdminCartController::class, 'destroy']);
+    Route::post('/cart/checkout', [AdminCartController::class, 'checkout']);
 });
 
 Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
