@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Actions\AdminOrders\CancelOrderAction;
 use App\Actions\AdminOrders\CreateOrderAction;
 use App\Actions\AdminOrders\GetAdminOrdersAction;
 use App\Actions\AdminOrders\ShowOrderAction;
@@ -39,6 +40,15 @@ class AdminOrderController extends Controller
     ): JsonResponse {
         return response()->json([
             'success' => true,
+            'data' => new OrderResource($action->handle($order)),
+        ]);
+    }
+
+    public function cancel(Order $order, CancelOrderAction $action): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'message' => 'Order cancelled successfully',
             'data' => new OrderResource($action->handle($order)),
         ]);
     }
