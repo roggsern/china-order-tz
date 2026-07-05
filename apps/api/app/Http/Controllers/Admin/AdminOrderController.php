@@ -1,0 +1,35 @@
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Actions\AdminOrders\GetAdminOrdersAction;
+use App\Actions\AdminOrders\ShowOrderAction;
+use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\IndexAdminOrdersRequest;
+use App\Http\Requests\Admin\ShowOrderRequest;
+use App\Http\Resources\OrderResource;
+use App\Models\Order;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+
+class AdminOrderController extends Controller
+{
+    public function index(
+        IndexAdminOrdersRequest $request,
+        GetAdminOrdersAction $action,
+    ): AnonymousResourceCollection {
+        return OrderResource::collection($action->handle())
+            ->additional(['success' => true]);
+    }
+
+    public function show(
+        ShowOrderRequest $request,
+        Order $order,
+        ShowOrderAction $action,
+    ): JsonResponse {
+        return response()->json([
+            'success' => true,
+            'data' => new OrderResource($action->handle($order)),
+        ]);
+    }
+}
