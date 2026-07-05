@@ -22,6 +22,7 @@ class OrderResource extends JsonResource
             'currency' => $this->currency,
             'notes' => $this->notes,
             'placed_at' => $this->placed_at,
+            'paid_at' => $this->paid_at,
             'user' => new UserResource($this->whenLoaded('user')),
             'coupon' => new CouponResource($this->whenLoaded('coupon')),
             'items' => OrderItemResource::collection($this->whenLoaded('items')),
