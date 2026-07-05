@@ -11,11 +11,13 @@ use App\Actions\AdminProducts\GetTrashedProductsAction;
 use App\Actions\AdminProducts\RestoreProductAction;
 use App\Actions\AdminProducts\ShowProductAction;
 use App\Actions\AdminProducts\UpdateProductAction;
+use App\Actions\AdminProducts\UpdateProductStockAction;
 use App\Actions\AdminProducts\UploadProductImageAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreProductImageRequest;
 use App\Http\Requests\Admin\StoreProductRequest;
 use App\Http\Requests\Admin\UpdateProductRequest;
+use App\Http\Requests\Admin\UpdateProductStockRequest;
 use App\Http\Resources\ProductResource;
 use App\Models\Product;
 use Illuminate\Http\JsonResponse;
@@ -59,6 +61,18 @@ class AdminProductController extends Controller
     ): JsonResponse {
         return response()->json([
             'success' => true,
+            'data' => new ProductResource($action->handle($request, $product)),
+        ]);
+    }
+
+    public function updateStock(
+        UpdateProductStockRequest $request,
+        Product $product,
+        UpdateProductStockAction $action,
+    ): JsonResponse {
+        return response()->json([
+            'success' => true,
+            'message' => 'Stock updated successfully',
             'data' => new ProductResource($action->handle($request, $product)),
         ]);
     }
