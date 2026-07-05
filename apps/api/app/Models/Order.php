@@ -30,6 +30,7 @@ class Order extends Model
         'currency',
         'notes',
         'placed_at',
+        'paid_at',
         'cancelled_at',
     ];
 
@@ -43,6 +44,7 @@ class Order extends Model
             'shipping_amount' => 'decimal:2',
             'total' => 'decimal:2',
             'placed_at' => 'datetime',
+            'paid_at' => 'datetime',
             'cancelled_at' => 'datetime',
         ];
     }
