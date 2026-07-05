@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AdminBrandController;
 use App\Http\Controllers\Admin\AdminCategoryController;
+use App\Http\Controllers\Admin\AdminOrderController;
 use App\Http\Controllers\Admin\AdminProductController;
 use App\Http\Controllers\Admin\AdminProductImageController;
 use App\Http\Controllers\Admin\AuthController;
@@ -45,6 +46,8 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::get('/brands/{brand}', [AdminBrandController::class, 'show']);
     Route::put('/brands/{brand}', [AdminBrandController::class, 'update']);
     Route::delete('/brands/{brand}', [AdminBrandController::class, 'destroy']);
+    Route::get('/orders', [AdminOrderController::class, 'index']);
+    Route::get('/orders/{order}', [AdminOrderController::class, 'show']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
 });
