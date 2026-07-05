@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AdminBrandController;
+use App\Http\Controllers\Admin\AdminCartController;
 use App\Http\Controllers\Admin\AdminCategoryController;
 use App\Http\Controllers\Admin\AdminMockPaymentController;
 use App\Http\Controllers\Admin\AdminOrderController;
@@ -21,6 +22,14 @@ Route::get('/health', function () {
 
 Route::post('/admin/login', [AuthController::class, 'login'])
     ->middleware('throttle:admin-login');
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/cart', [AdminCartController::class, 'index']);
+    Route::post('/cart/items', [AdminCartController::class, 'store']);
+    Route::patch('/cart/items/{item}', [AdminCartController::class, 'update']);
+    Route::delete('/cart/items/{item}', [AdminCartController::class, 'destroyItem']);
+    Route::delete('/cart', [AdminCartController::class, 'destroy']);
+});
 
 Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index']);
