@@ -6,6 +6,7 @@ use App\Actions\AdminProducts\CreateProductAction;
 use App\Actions\AdminProducts\DeleteProductAction;
 use App\Actions\AdminProducts\ForceDeleteProductAction;
 use App\Actions\AdminProducts\GetAdminProductsAction;
+use App\Actions\AdminProducts\GetInventoryMovementsAction;
 use App\Actions\AdminProducts\GetProductImagesAction;
 use App\Actions\AdminProducts\GetTrashedProductsAction;
 use App\Actions\AdminProducts\RestoreProductAction;
@@ -18,6 +19,7 @@ use App\Http\Requests\Admin\StoreProductImageRequest;
 use App\Http\Requests\Admin\StoreProductRequest;
 use App\Http\Requests\Admin\UpdateProductRequest;
 use App\Http\Requests\Admin\UpdateProductStockRequest;
+use App\Http\Resources\InventoryMovementResource;
 use App\Http\Resources\ProductResource;
 use App\Models\Product;
 use Illuminate\Http\JsonResponse;
@@ -136,5 +138,13 @@ class AdminProductController extends Controller
             'success' => true,
             'data' => $data,
         ]);
+    }
+
+    public function indexInventoryMovements(
+        Product $product,
+        GetInventoryMovementsAction $action,
+    ): AnonymousResourceCollection {
+        return InventoryMovementResource::collection($action->handle($product))
+            ->additional(['success' => true]);
     }
 }
