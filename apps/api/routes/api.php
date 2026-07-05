@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AdminBrandController;
 use App\Http\Controllers\Admin\AdminCategoryController;
 use App\Http\Controllers\Admin\AdminOrderController;
+use App\Http\Controllers\Admin\AdminPaymentController;
 use App\Http\Controllers\Admin\AdminProductController;
 use App\Http\Controllers\Admin\AdminProductImageController;
 use App\Http\Controllers\Admin\AuthController;
@@ -51,6 +52,11 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::patch('/orders/{order}/pay', [AdminOrderController::class, 'pay']);
     Route::patch('/orders/{order}/cancel', [AdminOrderController::class, 'cancel']);
     Route::get('/orders/{order}', [AdminOrderController::class, 'show']);
+    Route::get('/payments', [AdminPaymentController::class, 'index']);
+    Route::post('/payments', [AdminPaymentController::class, 'store']);
+    Route::get('/payments/{payment}', [AdminPaymentController::class, 'show']);
+    Route::put('/payments/{payment}', [AdminPaymentController::class, 'update']);
+    Route::delete('/payments/{payment}', [AdminPaymentController::class, 'destroy']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
 });
