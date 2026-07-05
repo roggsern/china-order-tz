@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Actions\AdminOrders\CreateOrderAction;
 use App\Actions\AdminOrders\GetAdminOrdersAction;
+use App\Actions\AdminOrders\PayOrderAction;
 use App\Actions\AdminOrders\ShowOrderAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\IndexAdminOrdersRequest;
@@ -39,6 +40,15 @@ class AdminOrderController extends Controller
     ): JsonResponse {
         return response()->json([
             'success' => true,
+            'data' => new OrderResource($action->handle($order)),
+        ]);
+    }
+
+    public function pay(Order $order, PayOrderAction $action): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'message' => 'Order paid successfully.',
             'data' => new OrderResource($action->handle($order)),
         ]);
     }
