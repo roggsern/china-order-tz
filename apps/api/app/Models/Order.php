@@ -31,6 +31,7 @@ class Order extends Model
         'notes',
         'placed_at',
         'paid_at',
+        'cancelled_at',
     ];
 
     protected function casts(): array
@@ -44,6 +45,7 @@ class Order extends Model
             'total' => 'decimal:2',
             'placed_at' => 'datetime',
             'paid_at' => 'datetime',
+            'cancelled_at' => 'datetime',
         ];
     }
 
