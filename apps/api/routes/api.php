@@ -28,6 +28,7 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::get('/products/{product}/images', [AdminProductController::class, 'indexImages']);
     Route::post('/products/{product}/images', [AdminProductController::class, 'storeImage']);
     Route::patch('/products/{product}/stock', [AdminProductController::class, 'updateStock']);
+    Route::get('/products/{product}/inventory/movements', [AdminProductController::class, 'indexInventoryMovements']);
     Route::put('/products/{product}', [AdminProductController::class, 'update']);
     Route::delete('/products/{product}', [AdminProductController::class, 'destroy']);
     Route::post('/products/{id}/restore', [AdminProductController::class, 'restore']);
