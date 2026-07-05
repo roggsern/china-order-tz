@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AdminBrandController;
 use App\Http\Controllers\Admin\AdminCategoryController;
 use App\Http\Controllers\Admin\AdminProductController;
 use App\Http\Controllers\Admin\AdminProductImageController;
@@ -37,6 +38,11 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::get('/categories/{category}', [AdminCategoryController::class, 'show']);
     Route::put('/categories/{category}', [AdminCategoryController::class, 'update']);
     Route::delete('/categories/{category}', [AdminCategoryController::class, 'destroy']);
+    Route::get('/brands', [AdminBrandController::class, 'index']);
+    Route::post('/brands', [AdminBrandController::class, 'store']);
+    Route::get('/brands/{brand}', [AdminBrandController::class, 'show']);
+    Route::put('/brands/{brand}', [AdminBrandController::class, 'update']);
+    Route::delete('/brands/{brand}', [AdminBrandController::class, 'destroy']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
 });
