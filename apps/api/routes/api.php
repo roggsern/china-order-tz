@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AdminCategoryController;
 use App\Http\Controllers\Admin\AdminProductController;
 use App\Http\Controllers\Admin\AdminProductImageController;
 use App\Http\Controllers\Admin\AuthController;
@@ -31,6 +32,11 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::delete('/products/{id}/force', [AdminProductController::class, 'forceDestroy']);
     Route::delete('/product-images/{image}', [AdminProductImageController::class, 'destroy']);
     Route::patch('/product-images/{image}/primary', [AdminProductImageController::class, 'setPrimary']);
+    Route::get('/categories', [AdminCategoryController::class, 'index']);
+    Route::post('/categories', [AdminCategoryController::class, 'store']);
+    Route::get('/categories/{category}', [AdminCategoryController::class, 'show']);
+    Route::put('/categories/{category}', [AdminCategoryController::class, 'update']);
+    Route::delete('/categories/{category}', [AdminCategoryController::class, 'destroy']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
 });
