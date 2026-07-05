@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Actions\AdminOrders\CreateOrderAction;
 use App\Actions\AdminOrders\GetAdminOrdersAction;
 use App\Actions\AdminOrders\ShowOrderAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\IndexAdminOrdersRequest;
 use App\Http\Requests\Admin\ShowOrderRequest;
+use App\Http\Requests\Admin\StoreOrderRequest;
 use App\Http\Resources\OrderResource;
 use App\Models\Order;
 use Illuminate\Http\JsonResponse;
@@ -20,6 +22,14 @@ class AdminOrderController extends Controller
     ): AnonymousResourceCollection {
         return OrderResource::collection($action->handle())
             ->additional(['success' => true]);
+    }
+
+    public function store(StoreOrderRequest $request, CreateOrderAction $action): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'data' => new OrderResource($action->handle($request)),
+        ], 201);
     }
 
     public function show(
