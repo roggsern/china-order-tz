@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AdminSimulateNmbCallbackController;
 use App\Http\Controllers\Admin\AdminBrandController;
 use App\Http\Controllers\Admin\AdminCartController;
 use App\Http\Controllers\Admin\AdminCategoryController;
@@ -10,6 +11,8 @@ use App\Http\Controllers\Admin\AdminProductController;
 use App\Http\Controllers\Admin\AdminProductImageController;
 use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\Webhooks\NmbWebhookController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', function () {
@@ -19,6 +22,8 @@ Route::get('/health', function () {
         'timestamp' => now()->toIso8601String(),
     ]);
 });
+
+Route::post('/webhooks/payments/nmb', [NmbWebhookController::class, 'receive']);
 
 Route::post('/admin/login', [AuthController::class, 'login'])
     ->middleware('throttle:admin-login');
@@ -30,6 +35,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/cart/items/{item}', [AdminCartController::class, 'destroyItem']);
     Route::delete('/cart', [AdminCartController::class, 'destroy']);
     Route::post('/cart/checkout', [AdminCartController::class, 'checkout']);
+    Route::post('/payments/{payment}/initiate', [PaymentController::class, 'initiate']);
 });
 
 Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
@@ -66,6 +72,7 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::get('/payments', [AdminPaymentController::class, 'index']);
     Route::post('/payments', [AdminPaymentController::class, 'store']);
     Route::post('/payments/{payment}/mock', [AdminMockPaymentController::class, 'process']);
+    Route::post('/payments/{payment}/simulate-nmb-callback', [AdminSimulateNmbCallbackController::class, 'store']);
     Route::get('/payments/{payment}', [AdminPaymentController::class, 'show']);
     Route::put('/payments/{payment}', [AdminPaymentController::class, 'update']);
     Route::delete('/payments/{payment}', [AdminPaymentController::class, 'destroy']);

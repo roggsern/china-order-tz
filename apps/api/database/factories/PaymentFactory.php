@@ -40,4 +40,18 @@ class PaymentFactory extends Factory
             'paid_at' => now(),
         ]);
     }
+
+    public function nmb(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'method' => PaymentMethod::Nmb,
+        ]);
+    }
+
+    public function processing(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => PaymentStatus::Processing,
+        ]);
+    }
 }

@@ -3,13 +3,13 @@
 namespace App\Actions\Payments;
 
 use App\Enums\PaymentMethod;
-use App\Enums\PaymentStatus;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Payments\Contracts\AsyncPaymentGatewayInterface;
 use App\Payments\Services\PaymentService;
 use Illuminate\Validation\ValidationException;
 
-class ProcessPaymentAction
+class HandleNmbCallbackAction
 {
     public function __construct(
         private readonly PaymentService $paymentService,
@@ -19,18 +19,19 @@ class ProcessPaymentAction
     /**
      * @return array{payment?: Payment, order?: Order, failed: bool}
      */
-    public function handle(Payment $payment): array
+    public function handle(Payment $payment, string $result): array
     {
-        if ($payment->status !== PaymentStatus::Pending) {
-            $this->throwValidationError('Only pending payments can be processed.');
-        }
-
-        if (in_array($payment->method, [PaymentMethod::Nmb, PaymentMethod::BankTransfer], true)) {
-            $this->throwValidationError('NMB payments must be initiated and completed asynchronously.');
+        if (! in_array($payment->method, [PaymentMethod::Nmb, PaymentMethod::BankTransfer], true)) {
+            $this->throwValidationError('Payment is not an NMB payment.');
         }
 
         $gateway = $this->paymentService->gatewayFor($payment);
-        $paymentResult = $gateway->process($payment);
+
+        if (! $gateway instanceof AsyncPaymentGatewayInterface) {
+            $this->throwValidationError('The selected gateway does not support callbacks.');
+        }
+
+        $paymentResult = $gateway->handleCallback($payment, ['result' => $result]);
 
         if (! $paymentResult->success) {
             return ['failed' => true];

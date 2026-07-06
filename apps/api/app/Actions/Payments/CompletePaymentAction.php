@@ -29,15 +29,8 @@ class CompletePaymentAction
 
     private function throwValidationError(string $message): never
     {
-        $exception = ValidationException::withMessages([
+        throw ValidationException::withMessages([
             'payment' => [$message],
         ]);
-
-        $exception->response = response()->json([
-            'success' => false,
-            'message' => $message,
-        ], 422);
-
-        throw $exception;
     }
 }
