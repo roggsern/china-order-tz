@@ -4,6 +4,7 @@ namespace App\Payments\Services;
 
 use App\Enums\PaymentMethod;
 use App\Models\Payment;
+use App\Payments\Contracts\AsyncPaymentGatewayInterface;
 use App\Payments\Contracts\PaymentGatewayInterface;
 use App\Payments\Exceptions\PaymentGatewayNotFoundException;
 use App\Payments\Gateways\MockPaymentGateway;
@@ -30,6 +31,11 @@ class PaymentService
         }
 
         return $gateway;
+    }
+
+    public function supportsAsync(Payment $payment): bool
+    {
+        return $this->gatewayFor($payment) instanceof AsyncPaymentGatewayInterface;
     }
 
     private function defaultGatewayClass(): string
