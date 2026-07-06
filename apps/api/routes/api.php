@@ -9,8 +9,9 @@ use App\Http\Controllers\Admin\AdminOrderController;
 use App\Http\Controllers\Admin\AdminPaymentController;
 use App\Http\Controllers\Admin\AdminProductController;
 use App\Http\Controllers\Admin\AdminProductImageController;
-use App\Http\Controllers\Admin\AuthController;
+use App\Http\Controllers\Admin\AuthController as AdminAuthController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\Webhooks\NmbWebhookController;
 use Illuminate\Support\Facades\Route;
@@ -25,10 +26,18 @@ Route::get('/health', function () {
 
 Route::post('/webhooks/payments/nmb', [NmbWebhookController::class, 'receive']);
 
-Route::post('/admin/login', [AuthController::class, 'login'])
+Route::post('/register', [AuthController::class, 'register'])
+    ->middleware('throttle:customer-register');
+
+Route::post('/login', [AuthController::class, 'login'])
+    ->middleware('throttle:customer-login');
+
+Route::post('/admin/login', [AdminAuthController::class, 'login'])
     ->middleware('throttle:admin-login');
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'ensure.user', 'user.active'])->group(function () {
+    Route::get('/me', [AuthController::class, 'me']);
+    Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/cart', [AdminCartController::class, 'index']);
     Route::post('/cart/items', [AdminCartController::class, 'store']);
     Route::patch('/cart/items/{item}', [AdminCartController::class, 'update']);
@@ -38,7 +47,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/payments/{payment}/initiate', [PaymentController::class, 'initiate']);
 });
 
-Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
+Route::middleware(['auth:sanctum', 'ensure.admin'])->prefix('admin')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/products', [AdminProductController::class, 'index']);
     Route::get('/products/trash', [AdminProductController::class, 'trash']);
@@ -76,6 +85,6 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::get('/payments/{payment}', [AdminPaymentController::class, 'show']);
     Route::put('/payments/{payment}', [AdminPaymentController::class, 'update']);
     Route::delete('/payments/{payment}', [AdminPaymentController::class, 'destroy']);
-    Route::get('/me', [AuthController::class, 'me']);
-    Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/me', [AdminAuthController::class, 'me']);
+    Route::post('/logout', [AdminAuthController::class, 'logout']);
 });
