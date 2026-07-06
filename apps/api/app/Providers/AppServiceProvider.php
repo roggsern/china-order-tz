@@ -2,8 +2,6 @@
 
 namespace App\Providers;
 
-use App\Contracts\Payments\PaymentGatewayInterface;
-use App\Services\Payments\MockPaymentGateway;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -16,7 +14,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->bind(PaymentGatewayInterface::class, MockPaymentGateway::class);
+        //
     }
 
     /**

@@ -1,9 +1,9 @@
 <?php
 
-namespace App\Contracts\Payments;
+namespace App\Payments\Contracts;
 
-use App\DataTransferObjects\Payments\PaymentResult;
 use App\Models\Payment;
+use App\Payments\Results\PaymentResult;
 
 interface PaymentGatewayInterface
 {
