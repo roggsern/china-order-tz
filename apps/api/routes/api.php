@@ -15,6 +15,7 @@ use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CustomerOrderController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\Webhooks\NmbWebhookController;
 use Illuminate\Support\Facades\Route;
@@ -52,6 +53,9 @@ Route::middleware(['auth:sanctum', 'ensure.user', 'user.active'])->group(functio
     Route::delete('/cart', [AdminCartController::class, 'destroy']);
     Route::post('/cart/checkout', [AdminCartController::class, 'checkout']);
     Route::post('/payments/{payment}/initiate', [PaymentController::class, 'initiate']);
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
 });
 
 Route::middleware(['auth:sanctum', 'ensure.admin', 'admin.active'])->prefix('admin')->group(function () {

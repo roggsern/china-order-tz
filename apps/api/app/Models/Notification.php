@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\NotificationType;
 use App\Models\Concerns\HasUuidPrimaryKey;
 use Database\Factories\NotificationFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -26,9 +27,15 @@ class Notification extends Model
     protected function casts(): array
     {
         return [
+            'type' => NotificationType::class,
             'data' => 'array',
             'read_at' => 'datetime',
         ];
+    }
+
+    public function getIsReadAttribute(): bool
+    {
+        return $this->read_at !== null;
     }
 
     public function user(): BelongsTo

@@ -12,7 +12,7 @@ class NotificationResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'type' => $this->type,
+            'type' => $this->type->value,
             'title' => $this->title,
             'message' => $this->message,
             'data' => $this->data,
