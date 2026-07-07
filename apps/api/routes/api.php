@@ -43,6 +43,7 @@ Route::middleware(['auth:sanctum', 'ensure.user', 'user.active'])->group(functio
     Route::get('/dashboard', [DashboardController::class, 'show']);
     Route::get('/orders', [CustomerOrderController::class, 'index']);
     Route::get('/orders/{order}', [CustomerOrderController::class, 'show']);
+    Route::get('/orders/{order}/tracking', [CustomerOrderController::class, 'tracking']);
     Route::get('/cart', [AdminCartController::class, 'index']);
     Route::post('/cart/items', [AdminCartController::class, 'store']);
     Route::patch('/cart/items/{item}', [AdminCartController::class, 'update']);

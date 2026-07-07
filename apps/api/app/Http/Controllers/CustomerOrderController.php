@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Actions\CustomerOrders\ListCustomerOrdersAction;
 use App\Actions\CustomerOrders\ShowCustomerOrderAction;
+use App\Actions\CustomerOrders\ShowShipmentTrackingAction;
 use App\Http\Requests\CustomerOrders\IndexCustomerOrdersRequest;
 use App\Http\Resources\CustomerOrderDetailResource;
 use App\Http\Resources\CustomerOrderResource;
+use App\Http\Resources\ShipmentTrackingResource;
 use App\Models\Order;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -38,6 +40,17 @@ class CustomerOrderController extends Controller
         return response()->json([
             'success' => true,
             'data' => new CustomerOrderDetailResource($action->handle($order, $user)),
+        ]);
+    }
+
+    public function tracking(Order $order, ShowShipmentTrackingAction $action): JsonResponse
+    {
+        /** @var User $user */
+        $user = auth()->user();
+
+        return response()->json([
+            'success' => true,
+            'data' => new ShipmentTrackingResource($action->handle($order, $user)),
         ]);
     }
 }
