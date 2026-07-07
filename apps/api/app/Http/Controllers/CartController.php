@@ -1,27 +1,25 @@
 <?php
 
-namespace App\Http\Controllers\Admin;
+namespace App\Http\Controllers;
 
 use App\Actions\Cart\AddToCartAction;
-use App\Actions\Cart\CheckoutFromCartAction;
+use App\Actions\Cart\BuyNowAction;
 use App\Actions\Cart\ClearCartAction;
 use App\Actions\Cart\GetCartAction;
 use App\Actions\Cart\RemoveCartItemAction;
 use App\Actions\Cart\UpdateCartItemAction;
-use App\Http\Controllers\Controller;
-use App\Http\Requests\Cart\CheckoutRequest;
+use App\Http\Requests\Cart\BuyNowRequest;
 use App\Http\Requests\Cart\StoreCartItemRequest;
 use App\Http\Requests\Cart\UpdateCartItemRequest;
 use App\Http\Resources\CartResource;
-use App\Http\Resources\OrderResource;
-use App\Http\Resources\PaymentResource;
+use App\Http\Resources\CheckoutPreparationResource;
 use App\Models\CartItem;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 
-class AdminCartController extends Controller
+class CartController extends Controller
 {
-    public function index(GetCartAction $action): JsonResponse
+    public function show(GetCartAction $action): JsonResponse
     {
         /** @var User $user */
         $user = auth()->user();
@@ -79,19 +77,14 @@ class AdminCartController extends Controller
         ]);
     }
 
-    public function checkout(CheckoutRequest $request, CheckoutFromCartAction $action): JsonResponse
+    public function buyNow(BuyNowRequest $request, BuyNowAction $action): JsonResponse
     {
         /** @var User $user */
         $user = auth()->user();
 
-        $result = $action->handle($user);
-
         return response()->json([
             'success' => true,
-            'data' => [
-                'order' => new OrderResource($result['order']),
-                'payment' => new PaymentResource($result['payment']),
-            ],
+            'data' => new CheckoutPreparationResource($action->handle($request, $user)),
         ], 201);
     }
 }

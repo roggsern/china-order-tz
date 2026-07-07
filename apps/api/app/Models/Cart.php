@@ -41,6 +41,16 @@ class Cart extends Model
 
     public function subtotal(): string
     {
-        return (string) $this->items->sum(fn (CartItem $item) => $item->unit_price * $item->quantity);
+        $total = '0.00';
+
+        foreach ($this->items as $item) {
+            $total = bcadd(
+                $total,
+                bcmul((string) $item->unit_price, (string) $item->quantity, 2),
+                2,
+            );
+        }
+
+        return $total;
     }
 }

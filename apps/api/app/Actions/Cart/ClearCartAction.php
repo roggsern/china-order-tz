@@ -4,16 +4,16 @@ namespace App\Actions\Cart;
 
 use App\Models\Cart;
 use App\Models\User;
+use App\Services\Cart\CartService;
 
 class ClearCartAction
 {
-    use ResolvesUserCart;
+    public function __construct(
+        private readonly CartService $cartService,
+    ) {}
 
     public function handle(User $user): Cart
     {
-        $cart = $this->resolveUserCart($user);
-        $cart->items()->delete();
-
-        return $this->loadCart($cart);
+        return $this->cartService->clearCart($user);
     }
 }
