@@ -36,4 +36,11 @@ class AdminFactory extends Factory
             'is_super_admin' => true,
         ]);
     }
+
+    public function inactive(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_active' => false,
+        ]);
+    }
 }

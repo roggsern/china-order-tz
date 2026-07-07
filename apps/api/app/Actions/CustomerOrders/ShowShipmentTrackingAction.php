@@ -2,15 +2,15 @@
 
 namespace App\Actions\CustomerOrders;
 
-use App\Enums\OrderStatus;
-use App\Enums\ShipmentStatus;
 use App\Models\Order;
 use App\Models\User;
+use App\Shipments\OrderShipmentStatusResolver;
 use App\Shipments\ShipmentTimelineBuilder;
 
 class ShowShipmentTrackingAction
 {
     public function __construct(
+        private readonly OrderShipmentStatusResolver $statusResolver,
         private readonly ShipmentTimelineBuilder $timelineBuilder,
     ) {}
 
@@ -32,25 +32,14 @@ class ShowShipmentTrackingAction
             abort(404);
         }
 
-        $currentStatus = $this->resolveCurrentStatus($order);
+        $order->loadMissing(['shipmentStatusHistories']);
+
+        $currentStatus = $this->statusResolver->resolve($order);
 
         return [
             'order_number' => $order->order_number,
             'current_status' => $currentStatus->value,
             'timeline' => $this->timelineBuilder->build($currentStatus, $order),
         ];
-    }
-
-    private function resolveCurrentStatus(Order $order): ShipmentStatus
-    {
-        return match ($order->status) {
-            OrderStatus::Pending => ShipmentStatus::OrderReceived,
-            OrderStatus::Paid => ShipmentStatus::PaymentConfirmed,
-            OrderStatus::Confirmed => ShipmentStatus::SupplierProcessing,
-            OrderStatus::Processing => ShipmentStatus::ArrivedChinaWarehouse,
-            OrderStatus::Shipped => ShipmentStatus::OutForDelivery,
-            OrderStatus::Delivered => ShipmentStatus::Delivered,
-            OrderStatus::Cancelled, OrderStatus::Refunded => ShipmentStatus::OrderReceived,
-        };
     }
 }

@@ -18,6 +18,8 @@ class ShipmentTimelineBuilder
      */
     public function build(ShipmentStatus $currentStatus, Order $order): array
     {
+        $order->loadMissing(['shipmentStatusHistories']);
+
         $timeline = [];
         $currentIndex = $this->currentIndex($currentStatus);
 
@@ -44,11 +46,18 @@ class ShipmentTimelineBuilder
 
     private function completedAtFor(ShipmentStatus $status, Order $order): ?Carbon
     {
+        $history = $order->shipmentStatusHistories
+            ->firstWhere('new_status', $status->value);
+
+        if ($history !== null) {
+            return $history->created_at;
+        }
+
         return match ($status) {
             ShipmentStatus::OrderReceived => $order->placed_at ?? $order->created_at,
             ShipmentStatus::PaymentConfirmed => $order->paid_at,
             ShipmentStatus::Delivered => $order->status->value === 'delivered'
-                ? ($order->updated_at ?? $order->paid_at)
+                ? ($order->shipment_status_updated_at ?? $order->updated_at ?? $order->paid_at)
                 : null,
             default => null,
         };

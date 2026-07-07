@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\OrderStatus;
+use App\Enums\ShipmentStatus;
 use App\Models\Concerns\HasUuidPrimaryKey;
 use Database\Factories\OrderFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -22,6 +23,8 @@ class Order extends Model
         'coupon_id',
         'order_number',
         'status',
+        'shipment_status',
+        'shipment_status_updated_at',
         'subtotal',
         'discount_amount',
         'tax_amount',
@@ -38,6 +41,8 @@ class Order extends Model
     {
         return [
             'status' => OrderStatus::class,
+            'shipment_status' => ShipmentStatus::class,
+            'shipment_status_updated_at' => 'datetime',
             'subtotal' => 'decimal:2',
             'discount_amount' => 'decimal:2',
             'tax_amount' => 'decimal:2',
@@ -77,6 +82,11 @@ class Order extends Model
     public function reviews(): HasMany
     {
         return $this->hasMany(Review::class);
+    }
+
+    public function shipmentStatusHistories(): HasMany
+    {
+        return $this->hasMany(ShipmentStatusHistory::class);
     }
 
     public function resolveSource(): string
