@@ -56,6 +56,7 @@ Route::middleware(['auth:sanctum', 'ensure.user', 'user.active'])->group(functio
 
 Route::middleware(['auth:sanctum', 'ensure.admin', 'admin.active'])->prefix('admin')->group(function () {
     Route::get('/dashboard', [AdminDashboardController::class, 'index']);
+    Route::get('/operations-dashboard', [AdminDashboardController::class, 'operations']);
     Route::get('/products', [AdminProductController::class, 'index']);
     Route::get('/products/trash', [AdminProductController::class, 'trash']);
     Route::post('/products', [AdminProductController::class, 'store']);

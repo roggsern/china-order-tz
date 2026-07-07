@@ -31,4 +31,20 @@ class OrderShipmentStatusResolver
             OrderStatus::Cancelled, OrderStatus::Refunded => ShipmentStatus::OrderReceived,
         };
     }
+
+    public function effectiveStatusSqlExpression(): string
+    {
+        return <<<'SQL'
+CASE
+    WHEN shipment_status IS NOT NULL THEN shipment_status
+    WHEN status = 'pending' THEN 'order_received'
+    WHEN status = 'paid' THEN 'payment_confirmed'
+    WHEN status = 'confirmed' THEN 'supplier_processing'
+    WHEN status = 'processing' THEN 'arrived_china_warehouse'
+    WHEN status = 'shipped' THEN 'out_for_delivery'
+    WHEN status = 'delivered' THEN 'delivered'
+    ELSE 'order_received'
+END
+SQL;
+    }
 }
