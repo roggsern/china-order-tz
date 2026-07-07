@@ -17,6 +17,7 @@ use App\Http\Controllers\CustomerOrderController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Webhooks\NmbWebhookController;
 use Illuminate\Support\Facades\Route;
 
@@ -56,6 +57,10 @@ Route::middleware(['auth:sanctum', 'ensure.user', 'user.active'])->group(functio
     Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
+    Route::get('/profile/address', [ProfileController::class, 'showAddress']);
+    Route::patch('/profile/address', [ProfileController::class, 'updateAddress']);
+    Route::get('/profile', [ProfileController::class, 'show']);
+    Route::patch('/profile', [ProfileController::class, 'update']);
 });
 
 Route::middleware(['auth:sanctum', 'ensure.admin', 'admin.active'])->prefix('admin')->group(function () {
