@@ -61,7 +61,7 @@ class ShowCustomerDashboardAction
                 ->map(fn (Order $order) => [
                     'id' => $order->id,
                     'order_number' => $order->order_number,
-                    'source' => $this->resolveOrderSource($order),
+                    'source' => $order->resolveSource(),
                     'status' => $order->status->value,
                     'created_at' => $order->created_at,
                 ]),
@@ -72,16 +72,5 @@ class ShowCustomerDashboardAction
                 ['label' => 'My Payments'],
             ],
         ];
-    }
-
-    private function resolveOrderSource(Order $order): string
-    {
-        foreach ($order->items as $item) {
-            if (strcasecmp($item->product?->supplier?->country ?? '', 'China') === 0) {
-                return 'China';
-            }
-        }
-
-        return 'Dar';
     }
 }

@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\AdminProductImageController;
 use App\Http\Controllers\Admin\AuthController as AdminAuthController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CustomerOrderController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\Webhooks\NmbWebhookController;
@@ -40,6 +41,7 @@ Route::middleware(['auth:sanctum', 'ensure.user', 'user.active'])->group(functio
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/dashboard', [DashboardController::class, 'show']);
+    Route::get('/orders', [CustomerOrderController::class, 'index']);
     Route::get('/cart', [AdminCartController::class, 'index']);
     Route::post('/cart/items', [AdminCartController::class, 'store']);
     Route::patch('/cart/items/{item}', [AdminCartController::class, 'update']);
