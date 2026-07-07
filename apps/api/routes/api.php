@@ -10,8 +10,9 @@ use App\Http\Controllers\Admin\AdminPaymentController;
 use App\Http\Controllers\Admin\AdminProductController;
 use App\Http\Controllers\Admin\AdminProductImageController;
 use App\Http\Controllers\Admin\AuthController as AdminAuthController;
-use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\Webhooks\NmbWebhookController;
 use Illuminate\Support\Facades\Route;
@@ -38,6 +39,7 @@ Route::post('/admin/login', [AdminAuthController::class, 'login'])
 Route::middleware(['auth:sanctum', 'ensure.user', 'user.active'])->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/dashboard', [DashboardController::class, 'show']);
     Route::get('/cart', [AdminCartController::class, 'index']);
     Route::post('/cart/items', [AdminCartController::class, 'store']);
     Route::patch('/cart/items/{item}', [AdminCartController::class, 'update']);
@@ -48,7 +50,7 @@ Route::middleware(['auth:sanctum', 'ensure.user', 'user.active'])->group(functio
 });
 
 Route::middleware(['auth:sanctum', 'ensure.admin'])->prefix('admin')->group(function () {
-    Route::get('/dashboard', [DashboardController::class, 'index']);
+    Route::get('/dashboard', [AdminDashboardController::class, 'index']);
     Route::get('/products', [AdminProductController::class, 'index']);
     Route::get('/products/trash', [AdminProductController::class, 'trash']);
     Route::post('/products', [AdminProductController::class, 'store']);
