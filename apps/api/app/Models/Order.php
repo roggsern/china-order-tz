@@ -78,4 +78,17 @@ class Order extends Model
     {
         return $this->hasMany(Review::class);
     }
+
+    public function resolveSource(): string
+    {
+        $this->loadMissing(['items.product.supplier']);
+
+        foreach ($this->items as $item) {
+            if (strcasecmp($item->product?->supplier?->country ?? '', 'China') === 0) {
+                return 'China';
+            }
+        }
+
+        return 'Dar';
+    }
 }
