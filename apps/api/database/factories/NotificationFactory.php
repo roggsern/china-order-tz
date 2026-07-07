@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\NotificationType;
 use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -17,7 +18,7 @@ class NotificationFactory extends Factory
     {
         return [
             'user_id' => User::factory(),
-            'type' => fake()->randomElement(['order_update', 'promotion', 'stock_alert', 'payment']),
+            'type' => fake()->randomElement(NotificationType::cases()),
             'title' => fake()->sentence(4),
             'message' => fake()->paragraph(),
             'data' => ['source' => 'system'],
