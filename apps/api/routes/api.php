@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AdminShipmentController;
 use App\Http\Controllers\Admin\AdminSimulateNmbCallbackController;
 use App\Http\Controllers\Admin\AdminBrandController;
 use App\Http\Controllers\Admin\AdminCartController;
@@ -53,7 +54,7 @@ Route::middleware(['auth:sanctum', 'ensure.user', 'user.active'])->group(functio
     Route::post('/payments/{payment}/initiate', [PaymentController::class, 'initiate']);
 });
 
-Route::middleware(['auth:sanctum', 'ensure.admin'])->prefix('admin')->group(function () {
+Route::middleware(['auth:sanctum', 'ensure.admin', 'admin.active'])->prefix('admin')->group(function () {
     Route::get('/dashboard', [AdminDashboardController::class, 'index']);
     Route::get('/products', [AdminProductController::class, 'index']);
     Route::get('/products/trash', [AdminProductController::class, 'trash']);
@@ -83,6 +84,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->prefix('admin')->group(func
     Route::post('/orders', [AdminOrderController::class, 'store']);
     Route::patch('/orders/{order}/pay', [AdminOrderController::class, 'pay']);
     Route::patch('/orders/{order}/cancel', [AdminOrderController::class, 'cancel']);
+    Route::patch('/orders/{order}/shipment-status', [AdminShipmentController::class, 'update']);
     Route::get('/orders/{order}', [AdminOrderController::class, 'show']);
     Route::get('/payments', [AdminPaymentController::class, 'index']);
     Route::post('/payments', [AdminPaymentController::class, 'store']);
