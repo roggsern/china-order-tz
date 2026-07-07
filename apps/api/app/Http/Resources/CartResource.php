@@ -10,17 +10,21 @@ class CartResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $subtotal = $this->when(
+            $this->relationLoaded('items'),
+            fn () => $this->subtotal(),
+        );
+
         return [
             'id' => $this->id,
             'status' => $this->status,
-            'session_id' => $this->session_id,
-            'subtotal' => $this->when(
-                $this->relationLoaded('items'),
-                fn () => $this->subtotal()
-            ),
             'items' => CartItemResource::collection($this->whenLoaded('items')),
-            'user' => new UserResource($this->whenLoaded('user')),
-            'created_at' => $this->created_at,
+            'item_count' => $this->when(
+                $this->relationLoaded('items'),
+                fn () => $this->items->count(),
+            ),
+            'subtotal' => $subtotal,
+            'total' => $subtotal,
             'updated_at' => $this->updated_at,
         ];
     }

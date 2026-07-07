@@ -31,4 +31,11 @@ class CartFactory extends Factory
             'session_id' => Str::uuid()->toString(),
         ]);
     }
+
+    public function checkoutSession(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => CartStatus::CheckoutSession,
+        ]);
+    }
 }

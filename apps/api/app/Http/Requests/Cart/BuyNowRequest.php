@@ -4,7 +4,7 @@ namespace App\Http\Requests\Cart;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class StoreCartItemRequest extends FormRequest
+class BuyNowRequest extends FormRequest
 {
     use ValidatesCartProductFields;
 

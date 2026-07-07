@@ -45,8 +45,13 @@ class CartItem extends Model
         return $this->belongsTo(ProductVariant::class, 'product_variant_id');
     }
 
+    public function subtotal(): string
+    {
+        return bcmul((string) $this->unit_price, (string) $this->quantity, 2);
+    }
+
     public function lineTotal(): string
     {
-        return (string) ($this->unit_price * $this->quantity);
+        return $this->subtotal();
     }
 }
