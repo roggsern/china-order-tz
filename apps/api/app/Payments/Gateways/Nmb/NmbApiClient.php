@@ -21,7 +21,7 @@ class NmbApiClient
 
         return new InitiatePaymentResult(
             success: true,
-            status: PaymentStatus::Processing->value,
+            status: PaymentStatus::Initiated->value,
             message: 'Payment initiation stub.',
             checkoutRequestId: (string) Str::uuid(),
         );

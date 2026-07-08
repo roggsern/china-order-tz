@@ -38,4 +38,7 @@ return [
         'enabled' => env('PAYMENT_AIRTEL_ENABLED', false),
     ],
 
+    'reference_prefix' => env('PAYMENT_REFERENCE_PREFIX', 'PAY'),
+    'reference_sequence_padding' => (int) env('PAYMENT_REFERENCE_SEQUENCE_PADDING', 6),
+
 ];

@@ -11,8 +11,8 @@ class CompletePaymentAction
 {
     public function handle(Payment $payment): Order
     {
-        if ($payment->status !== PaymentStatus::Completed) {
-            $this->throwValidationError('Payment must be completed.');
+        if ($payment->status !== PaymentStatus::Paid) {
+            $this->throwValidationError('Payment must be paid.');
         }
 
         $order = $payment->order()->firstOrFail();

@@ -110,7 +110,7 @@ class EcommerceSeeder extends Seeder
             'order_id' => $order->id,
             'user_id' => $demoUser->id,
             'method' => PaymentMethod::Mpesa,
-            'status' => PaymentStatus::Completed,
+            'status' => PaymentStatus::Paid,
             'amount' => $order->total,
         ]);
 

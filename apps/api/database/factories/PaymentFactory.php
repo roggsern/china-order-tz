@@ -32,13 +32,18 @@ class PaymentFactory extends Factory
         ];
     }
 
-    public function completed(): static
+    public function paid(): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => PaymentStatus::Completed,
+            'status' => PaymentStatus::Paid,
             'transaction_id' => fake()->uuid(),
             'paid_at' => now(),
         ]);
+    }
+
+    public function completed(): static
+    {
+        return $this->paid();
     }
 
     public function nmb(): static
@@ -48,10 +53,15 @@ class PaymentFactory extends Factory
         ]);
     }
 
-    public function processing(): static
+    public function initiated(): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => PaymentStatus::Processing,
+            'status' => PaymentStatus::Initiated,
         ]);
+    }
+
+    public function processing(): static
+    {
+        return $this->initiated();
     }
 }

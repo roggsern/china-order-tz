@@ -54,7 +54,7 @@ class NmbPaymentGateway implements AsyncPaymentGatewayInterface, PaymentGatewayI
         }
 
         $payment->update([
-            'status' => PaymentStatus::Processing,
+            'status' => PaymentStatus::Initiated,
             'transaction_id' => $result->checkoutRequestId,
             'metadata' => array_merge($payment->metadata ?? [], [
                 'gateway' => 'nmb',
@@ -75,15 +75,15 @@ class NmbPaymentGateway implements AsyncPaymentGatewayInterface, PaymentGatewayI
             );
         }
 
-        if ($payment->status === PaymentStatus::Completed) {
+        if ($payment->status === PaymentStatus::Paid) {
             return new PaymentResult(
                 success: true,
-                status: PaymentStatus::Completed->value,
+                status: PaymentStatus::Paid->value,
                 message: 'Payment already completed.',
             );
         }
 
-        if (! in_array($payment->status, [PaymentStatus::Pending, PaymentStatus::Processing], true)) {
+        if (! in_array($payment->status, [PaymentStatus::Pending, PaymentStatus::Initiated], true)) {
             $this->throwValidationError('Payment cannot be updated from its current status.');
         }
 
@@ -99,13 +99,13 @@ class NmbPaymentGateway implements AsyncPaymentGatewayInterface, PaymentGatewayI
 
         return DB::transaction(function () use ($payment) {
             $payment->update([
-                'status' => PaymentStatus::Completed,
+                'status' => PaymentStatus::Paid,
                 'paid_at' => now(),
             ]);
 
             return new PaymentResult(
                 success: true,
-                status: PaymentStatus::Completed->value,
+                status: PaymentStatus::Paid->value,
                 message: 'Payment processed successfully.',
             );
         });
@@ -114,7 +114,7 @@ class NmbPaymentGateway implements AsyncPaymentGatewayInterface, PaymentGatewayI
     public function verify(Payment $payment): VerificationResult
     {
         return new VerificationResult(
-            verified: $payment->status === PaymentStatus::Completed,
+            verified: $payment->status === PaymentStatus::Paid,
             status: $payment->status->value,
             message: 'NMB payment verification stub.',
         );

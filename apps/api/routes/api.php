@@ -47,6 +47,8 @@ Route::middleware(['auth:sanctum', 'ensure.user', 'user.active'])->group(functio
     Route::get('/dashboard', [DashboardController::class, 'show']);
     Route::get('/orders', [CustomerOrderController::class, 'index']);
     Route::post('/orders/confirm', [CustomerOrderController::class, 'confirm']);
+    Route::post('/orders/{order}/payments', [CustomerOrderController::class, 'storePayment']);
+    Route::get('/orders/{order}/payment', [CustomerOrderController::class, 'showPayment']);
     Route::get('/orders/{order}', [CustomerOrderController::class, 'show']);
     Route::get('/orders/{order}/tracking', [CustomerOrderController::class, 'tracking']);
     Route::get('/cart', [CartController::class, 'show']);
