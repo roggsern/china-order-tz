@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\CustomerOrders\ConfirmCheckoutAction;
 use App\Actions\CustomerOrders\ListCustomerOrdersAction;
 use App\Actions\CustomerOrders\ShowCustomerOrderAction;
 use App\Actions\CustomerOrders\ShowShipmentTrackingAction;
 use App\Http\Requests\CustomerOrders\IndexCustomerOrdersRequest;
 use App\Http\Resources\CustomerOrderDetailResource;
 use App\Http\Resources\CustomerOrderResource;
+use App\Http\Resources\OrderConfirmationResource;
 use App\Http\Resources\ShipmentTrackingResource;
 use App\Models\Order;
 use App\Models\User;
@@ -30,6 +32,18 @@ class CustomerOrderController extends Controller
                 $request->validated('filter', 'all'),
             )
         )->additional(['success' => true]);
+    }
+
+    public function confirm(ConfirmCheckoutAction $action): JsonResponse
+    {
+        /** @var User $user */
+        $user = auth()->user();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Order created successfully.',
+            'data' => new OrderConfirmationResource($action->handle($user)),
+        ], 201);
     }
 
     public function show(Order $order, ShowCustomerOrderAction $action): JsonResponse
