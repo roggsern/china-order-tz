@@ -35,17 +35,20 @@ class NmbPaymentPreparationTest extends TestCase
 
         $payment = Payment::factory()->nmb()->create([
             'user_id' => $user->id,
+            'reference' => 'PAY-2026-000010',
         ]);
 
         $response = $this->postJson("/api/v1/payments/{$payment->id}/initiate");
 
         $response->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('data.status', PaymentStatus::Initiated->value);
+            ->assertJsonPath('data.status', PaymentStatus::Initiated->value)
+            ->assertJsonPath('data.checkout_url', fn ($url) => str_contains($url, 'PAY-2026-000010'));
 
         $payment->refresh();
         $this->assertSame(PaymentStatus::Initiated, $payment->status);
-        $this->assertNotNull($payment->transaction_id);
+        $this->assertNotNull($payment->gateway_reference);
+        $this->assertNotNull($payment->initiated_at);
     }
 
     public function test_admin_can_simulate_nmb_callback_success(): void

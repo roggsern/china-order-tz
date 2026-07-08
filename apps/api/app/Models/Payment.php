@@ -25,6 +25,10 @@ class Payment extends Model
         'currency',
         'transaction_id',
         'reference',
+        'initiated_at',
+        'gateway_reference',
+        'checkout_url',
+        'gateway_response',
         'paid_at',
         'metadata',
     ];
@@ -35,6 +39,8 @@ class Payment extends Model
             'method' => PaymentMethod::class,
             'status' => PaymentStatus::class,
             'amount' => 'decimal:2',
+            'initiated_at' => 'datetime',
+            'gateway_response' => 'array',
             'paid_at' => 'datetime',
             'metadata' => 'array',
         ];

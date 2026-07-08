@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Payments\InitiatePaymentAction;
-use App\Http\Resources\PaymentInitiateResource;
+use App\Http\Resources\PaymentSessionResource;
 use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -17,7 +17,8 @@ class PaymentController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => new PaymentInitiateResource($action->handle($payment, $user)),
+            'message' => 'Payment session created successfully.',
+            'data' => new PaymentSessionResource($action->handle($payment, $user)),
         ]);
     }
 }
