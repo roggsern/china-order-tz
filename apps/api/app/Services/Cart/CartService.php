@@ -152,6 +152,18 @@ class CartService
         return $this->loadCart($cart);
     }
 
+    public function finalizeAfterOrder(User $user): void
+    {
+        Cart::query()
+            ->where('user_id', $user->id)
+            ->where('status', CartStatus::Active)
+            ->each(function (Cart $cart): void {
+                $cart->items()->delete();
+            });
+
+        $this->clearCheckoutSessions($user);
+    }
+
     public function calculateCartSubtotal(Cart $cart): string
     {
         return $cart->subtotal();

@@ -24,6 +24,10 @@ class OrderItem extends Model
         'quantity',
         'unit_price',
         'total_price',
+        'shipping_method',
+        'shipping_price',
+        'shipping_subtotal',
+        'delivery_status',
     ];
 
     protected function casts(): array
@@ -32,6 +36,8 @@ class OrderItem extends Model
             'quantity' => 'integer',
             'unit_price' => 'decimal:2',
             'total_price' => 'decimal:2',
+            'shipping_price' => 'decimal:2',
+            'shipping_subtotal' => 'decimal:2',
         ];
     }
 
