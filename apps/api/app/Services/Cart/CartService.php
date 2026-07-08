@@ -3,6 +3,7 @@
 namespace App\Services\Cart;
 
 use App\Enums\CartStatus;
+use App\Enums\ShippingMethod;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Product;
@@ -21,15 +22,22 @@ class CartService
      *     item_count: int,
      *     ready_for_checkout: bool
      * }
+     * @param  array{
+     *     product_id: string,
+     *     quantity: int,
+     *     variant_id?: string|null,
+     *     shipping_method?: string|null
+     * }  $data
      */
     public function prepareBuyNow(User $user, array $data): array
     {
-        [$product, $variant, $unitPrice] = $this->resolvePurchasableProduct(
+        [$product, $variant, $unitPrice, $shippingMethod, $shippingPrice] = $this->resolvePurchasableProduct(
             $data['product_id'],
             $data['variant_id'] ?? null,
+            $data['shipping_method'] ?? null,
         );
 
-        $cart = DB::transaction(function () use ($user, $product, $variant, $unitPrice, $data): Cart {
+        $cart = DB::transaction(function () use ($user, $product, $variant, $unitPrice, $data, $shippingMethod, $shippingPrice): Cart {
             $this->clearCheckoutSessions($user);
 
             $cart = Cart::query()->create([
@@ -43,6 +51,8 @@ class CartService
                 'product_variant_id' => $variant?->id,
                 'quantity' => $data['quantity'],
                 'unit_price' => $unitPrice,
+                'shipping_method' => $shippingMethod,
+                'shipping_price' => $shippingPrice,
             ]);
 
             return $cart;
@@ -68,14 +78,16 @@ class CartService
      * @param  array{
      *     product_id: string,
      *     quantity: int,
-     *     variant_id?: string|null
+     *     variant_id?: string|null,
+     *     shipping_method?: string|null
      * }  $data
      */
     public function addItem(User $user, array $data): Cart
     {
-        [$product, $variant, $unitPrice] = $this->resolvePurchasableProduct(
+        [$product, $variant, $unitPrice, $shippingMethod, $shippingPrice] = $this->resolvePurchasableProduct(
             $data['product_id'],
             $data['variant_id'] ?? null,
+            $data['shipping_method'] ?? null,
         );
 
         $cart = $this->resolveActiveCart($user);
@@ -94,6 +106,8 @@ class CartService
             $existingItem->update([
                 'quantity' => $existingItem->quantity + $data['quantity'],
                 'unit_price' => $unitPrice,
+                'shipping_method' => $shippingMethod,
+                'shipping_price' => $shippingPrice,
             ]);
         } else {
             $cart->items()->create([
@@ -101,6 +115,8 @@ class CartService
                 'product_variant_id' => $variant?->id,
                 'quantity' => $data['quantity'],
                 'unit_price' => $unitPrice,
+                'shipping_method' => $shippingMethod,
+                'shipping_price' => $shippingPrice,
             ]);
         }
 
@@ -143,7 +159,7 @@ class CartService
 
     public function loadCart(Cart $cart): Cart
     {
-        return $cart->load(['items.product', 'items.variant']);
+        return $cart->load(['items.product.supplier', 'items.variant']);
     }
 
     public function authorizeCartItem(User $user, CartItem $item): void
@@ -167,11 +183,14 @@ class CartService
     }
 
     /**
-     * @return array{0: Product, 1: ProductVariant|null, 2: string}
+     * @return array{0: Product, 1: ProductVariant|null, 2: string, 3: ShippingMethod|null, 4: string|null}
      */
-    private function resolvePurchasableProduct(string $productId, ?string $variantId = null): array
-    {
-        $product = Product::query()->find($productId);
+    private function resolvePurchasableProduct(
+        string $productId,
+        ?string $variantId = null,
+        ?string $shippingMethod = null,
+    ): array {
+        $product = Product::query()->with('supplier')->find($productId);
 
         if ($product === null) {
             $this->throwValidationError('Product not found.');
@@ -203,7 +222,44 @@ class CartService
             ? $variant->effectivePrice()
             : (string) $product->price;
 
-        return [$product, $variant, $unitPrice];
+        [$resolvedShippingMethod, $resolvedShippingPrice] = $this->resolveShippingSelection(
+            $product,
+            $shippingMethod,
+        );
+
+        return [$product, $variant, $unitPrice, $resolvedShippingMethod, $resolvedShippingPrice];
+    }
+
+    /**
+     * @return array{0: ShippingMethod|null, 1: string|null}
+     */
+    private function resolveShippingSelection(Product $product, ?string $shippingMethod): array
+    {
+        if (! $product->isFromChina()) {
+            if (filled($shippingMethod)) {
+                $this->throwValidationError('Shipping method is not required for this product.');
+            }
+
+            return [null, null];
+        }
+
+        if (! filled($shippingMethod)) {
+            $this->throwValidationError('Shipping method is required for China products.');
+        }
+
+        $method = ShippingMethod::tryFrom($shippingMethod);
+
+        if ($method === null) {
+            $this->throwValidationError('Invalid shipping method selected.');
+        }
+
+        $shippingPrice = $product->shippingPriceForMethod($method->value);
+
+        if ($shippingPrice === null) {
+            $this->throwValidationError('Selected shipping method is not available for this product.');
+        }
+
+        return [$method, $shippingPrice];
     }
 
     private function clearCheckoutSessions(User $user): void

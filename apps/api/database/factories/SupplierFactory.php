@@ -29,4 +29,11 @@ class SupplierFactory extends Factory
             'is_active' => true,
         ];
     }
+
+    public function china(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'country' => 'China',
+        ]);
+    }
 }

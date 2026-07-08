@@ -13,6 +13,7 @@ use App\Http\Controllers\Admin\AuthController as AdminAuthController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CartController;
+use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\CustomerOrderController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\NotificationController;
@@ -53,6 +54,8 @@ Route::middleware(['auth:sanctum', 'ensure.user', 'user.active'])->group(functio
     Route::delete('/cart/items/{item}', [CartController::class, 'destroyItem']);
     Route::delete('/cart', [CartController::class, 'destroy']);
     Route::post('/cart/buy-now', [CartController::class, 'buyNow']);
+    Route::get('/checkout', [CheckoutController::class, 'show']);
+    Route::post('/checkout/prepare', [CheckoutController::class, 'prepare']);
     Route::post('/payments/{payment}/initiate', [PaymentController::class, 'initiate']);
     Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
     Route::get('/notifications', [NotificationController::class, 'index']);

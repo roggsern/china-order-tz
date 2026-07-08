@@ -55,4 +55,22 @@ class ProductFactory extends Factory
             'is_featured' => true,
         ]);
     }
+
+    public function fromChina(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'supplier_id' => Supplier::factory()->china(),
+            'air_shipping_price' => fake()->randomFloat(2, 3000, 15000),
+            'sea_shipping_price' => fake()->randomFloat(2, 1500, 8000),
+        ]);
+    }
+
+    public function fromDar(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'supplier_id' => Supplier::factory(),
+            'air_shipping_price' => null,
+            'sea_shipping_price' => null,
+        ]);
+    }
 }
