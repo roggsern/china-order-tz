@@ -27,6 +27,7 @@ trait ValidatesCartProductFields
                     ->whereNull('deleted_at'),
             ],
             'quantity' => ['required', 'integer', 'min:1'],
+            'shipping_method' => ['nullable', 'in:air,sea'],
         ];
     }
 }

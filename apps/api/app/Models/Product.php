@@ -25,6 +25,8 @@ class Product extends Model
         'description',
         'short_description',
         'price',
+        'air_shipping_price',
+        'sea_shipping_price',
         'compare_at_price',
         'cost_price',
         'weight',
@@ -39,6 +41,8 @@ class Product extends Model
     {
         return [
             'price' => 'decimal:2',
+            'air_shipping_price' => 'decimal:2',
+            'sea_shipping_price' => 'decimal:2',
             'compare_at_price' => 'decimal:2',
             'cost_price' => 'decimal:2',
             'weight' => 'decimal:3',
@@ -101,5 +105,21 @@ class Product extends Model
     {
         return $this->images()->where('is_primary', true)->first()
             ?? $this->images()->orderBy('sort_order')->first();
+    }
+
+    public function isFromChina(): bool
+    {
+        $this->loadMissing('supplier');
+
+        return strcasecmp($this->supplier?->country ?? '', 'China') === 0;
+    }
+
+    public function shippingPriceForMethod(string $method): ?string
+    {
+        return match ($method) {
+            'air' => $this->air_shipping_price !== null ? (string) $this->air_shipping_price : null,
+            'sea' => $this->sea_shipping_price !== null ? (string) $this->sea_shipping_price : null,
+            default => null,
+        };
     }
 }

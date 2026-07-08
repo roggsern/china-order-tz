@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ShippingMethod;
 use App\Models\Concerns\HasUuidPrimaryKey;
 use Database\Factories\CartItemFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -20,6 +21,8 @@ class CartItem extends Model
         'product_variant_id',
         'quantity',
         'unit_price',
+        'shipping_method',
+        'shipping_price',
     ];
 
     protected function casts(): array
@@ -27,6 +30,8 @@ class CartItem extends Model
         return [
             'quantity' => 'integer',
             'unit_price' => 'decimal:2',
+            'shipping_price' => 'decimal:2',
+            'shipping_method' => ShippingMethod::class,
         ];
     }
 
@@ -53,5 +58,14 @@ class CartItem extends Model
     public function lineTotal(): string
     {
         return $this->subtotal();
+    }
+
+    public function shippingSubtotal(): ?string
+    {
+        if ($this->shipping_price === null) {
+            return null;
+        }
+
+        return bcmul((string) $this->shipping_price, (string) $this->quantity, 2);
     }
 }
