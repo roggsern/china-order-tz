@@ -39,14 +39,14 @@ class MockPaymentGateway implements PaymentGatewayInterface
             );
 
             $payment->update([
-                'status' => PaymentStatus::Completed,
+                'status' => PaymentStatus::Paid,
                 'paid_at' => now(),
                 'reference' => $transactionReference?->value(),
             ]);
 
             return new PaymentResult(
                 success: true,
-                status: PaymentStatus::Completed->value,
+                status: PaymentStatus::Paid->value,
                 message: 'Payment processed successfully.',
                 transactionReference: $transactionReference,
             );

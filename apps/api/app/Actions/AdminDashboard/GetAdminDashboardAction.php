@@ -42,7 +42,7 @@ class GetAdminDashboardAction
             'pending_orders' => Order::where('status', OrderStatus::Pending)->count(),
             'completed_orders' => Order::where('status', OrderStatus::Delivered)->count(),
             'cancelled_orders' => Order::where('status', OrderStatus::Cancelled)->count(),
-            'total_revenue' => (float) Payment::where('status', PaymentStatus::Completed)->sum('amount'),
+            'total_revenue' => (float) Payment::where('status', PaymentStatus::Paid)->sum('amount'),
             'recent_orders' => Order::query()
                 ->with(['user'])
                 ->latest()

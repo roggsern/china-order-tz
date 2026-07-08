@@ -41,10 +41,10 @@ class NmbPaymentPreparationTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('data.status', PaymentStatus::Processing->value);
+            ->assertJsonPath('data.status', PaymentStatus::Initiated->value);
 
         $payment->refresh();
-        $this->assertSame(PaymentStatus::Processing, $payment->status);
+        $this->assertSame(PaymentStatus::Initiated, $payment->status);
         $this->assertNotNull($payment->transaction_id);
     }
 
@@ -52,7 +52,7 @@ class NmbPaymentPreparationTest extends TestCase
     {
         Sanctum::actingAs(Admin::factory()->create());
 
-        $payment = Payment::factory()->nmb()->processing()->create();
+        $payment = Payment::factory()->nmb()->initiated()->create();
 
         $response = $this->postJson("/api/v1/admin/payments/{$payment->id}/simulate-nmb-callback", [
             'result' => 'success',
@@ -63,7 +63,7 @@ class NmbPaymentPreparationTest extends TestCase
             ->assertJsonPath('message', 'Payment processed successfully.');
 
         $payment->refresh();
-        $this->assertSame(PaymentStatus::Completed, $payment->status);
+        $this->assertSame(PaymentStatus::Paid, $payment->status);
         $this->assertNotNull($payment->paid_at);
     }
 
