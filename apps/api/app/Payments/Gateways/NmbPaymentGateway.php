@@ -43,22 +43,27 @@ class NmbPaymentGateway implements AsyncPaymentGatewayInterface, PaymentGatewayI
 
     public function initiate(Payment $payment): InitiatePaymentResult
     {
-        if ($payment->status !== PaymentStatus::Pending) {
-            $this->throwValidationError('Only pending payments can be initiated.');
+        if (! in_array($payment->status, [PaymentStatus::Pending, PaymentStatus::Initiated, PaymentStatus::Failed], true)) {
+            $this->throwValidationError('Payment cannot be initiated from its current status.');
         }
 
-        $result = $this->apiClient->initiate($payment);
+        $result = $this->apiClient->createSession($payment);
 
         if (! $result->success) {
             return $result;
         }
 
+        $gatewayReference = $result->gatewayReference ?? $result->checkoutRequestId;
+
         $payment->update([
             'status' => PaymentStatus::Initiated,
-            'transaction_id' => $result->checkoutRequestId,
+            'gateway_reference' => $gatewayReference,
+            'transaction_id' => $gatewayReference,
+            'checkout_url' => $result->checkoutUrl,
+            'gateway_response' => $result->gatewayResponse,
+            'initiated_at' => now(),
             'metadata' => array_merge($payment->metadata ?? [], [
                 'gateway' => 'nmb',
-                'initiated_at' => now()->toIso8601String(),
             ]),
         ]);
 

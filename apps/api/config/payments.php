@@ -28,6 +28,7 @@ return [
         'merchant_id' => env('NMB_MERCHANT_ID'),
         'callback_url' => env('NMB_CALLBACK_URL'),
         'test_mode' => env('NMB_TEST_MODE', true),
+        'mock_checkout_url' => env('NMB_MOCK_CHECKOUT_URL', 'https://sandbox.nmb.co.tz/pay/mock'),
     ],
 
     'vodacom' => [
