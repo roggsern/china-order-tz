@@ -13,7 +13,15 @@ class NmbWebhookController extends Controller
     public function receive(Request $request, HandleNmbCallbackAction $action): JsonResponse
     {
         $payload = $request->all();
-        $result = $action->handle(is_array($payload) ? $payload : []);
+        $headers = collect($request->headers->all())
+            ->mapWithKeys(fn (array $values, string $key) => [$key => $values[0] ?? null])
+            ->all();
+
+        $result = $action->handle(
+            is_array($payload) ? $payload : [],
+            $headers,
+            $request->getContent(),
+        );
 
         return response()->json([
             'success' => true,

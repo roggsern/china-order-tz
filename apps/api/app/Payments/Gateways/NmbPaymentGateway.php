@@ -8,6 +8,7 @@ use App\Payments\Contracts\AsyncPaymentGatewayInterface;
 use App\Payments\Contracts\PaymentGatewayInterface;
 use App\Payments\DTOs\InitiatePaymentResult;
 use App\Payments\Gateways\Nmb\NmbApiClient;
+use App\Payments\Gateways\Nmb\NmbApiException;
 use App\Payments\Gateways\Nmb\NmbCheckoutSessionMapper;
 use App\Payments\Gateways\Nmb\NmbVerificationMapper;
 use App\Payments\Gateways\Nmb\NmbVerificationResult;
@@ -49,11 +50,11 @@ class NmbPaymentGateway implements AsyncPaymentGatewayInterface, PaymentGatewayI
             $this->throwValidationError('Payment cannot be initiated from its current status.');
         }
 
-        if (! $this->isSandboxConfigured()) {
+        if (! $this->isConfigured()) {
             return new InitiatePaymentResult(
                 success: false,
                 status: $payment->status->value,
-                message: 'NMB sandbox is not configured.',
+                message: 'NMB is not configured.',
             );
         }
 
@@ -119,20 +120,29 @@ class NmbPaymentGateway implements AsyncPaymentGatewayInterface, PaymentGatewayI
 
     public function verifyPayment(Payment $payment): NmbVerificationResult
     {
-        if (! $this->isSandboxConfigured()) {
+        if (! $this->isConfigured()) {
             return new NmbVerificationResult(
                 verified: false,
-                message: 'NMB sandbox is not configured.',
+                message: 'NMB is not configured.',
             );
         }
 
         $request = NmbRetrieveOrderRequest::fromPayment($payment);
-        $response = $this->apiClient->retrieveOrder($request->orderId());
+
+        try {
+            $response = $this->apiClient->retrieveOrder($request->orderId());
+        } catch (NmbApiException $exception) {
+            return new NmbVerificationResult(
+                verified: false,
+                message: $exception->getMessage(),
+                transientFailure: $exception->isTransient(),
+            );
+        }
 
         return $this->verificationMapper->fromResponse($response, $payment);
     }
 
-    private function isSandboxConfigured(): bool
+    private function isConfigured(): bool
     {
         if (! config('services.nmb.enabled')) {
             return false;
