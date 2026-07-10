@@ -8,19 +8,17 @@ use App\Payments\Contracts\AsyncPaymentGatewayInterface;
 use App\Payments\Contracts\PaymentGatewayInterface;
 use App\Payments\DTOs\InitiatePaymentResult;
 use App\Payments\Gateways\Nmb\NmbApiClient;
-use App\Payments\Gateways\Nmb\NmbCallbackVerifier;
-use App\Payments\Gateways\Nmb\NmbPayloadMapper;
+use App\Payments\Gateways\Nmb\NmbCheckoutSessionMapper;
+use App\Payments\Gateways\Nmb\Requests\NmbInitiateCheckoutRequest;
 use App\Payments\Results\PaymentResult;
 use App\Payments\Results\VerificationResult;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class NmbPaymentGateway implements AsyncPaymentGatewayInterface, PaymentGatewayInterface
 {
     public function __construct(
         private readonly NmbApiClient $apiClient,
-        private readonly NmbCallbackVerifier $callbackVerifier,
-        private readonly NmbPayloadMapper $payloadMapper,
+        private readonly NmbCheckoutSessionMapper $sessionMapper,
     ) {}
 
     public function process(Payment $payment): PaymentResult
@@ -47,82 +45,84 @@ class NmbPaymentGateway implements AsyncPaymentGatewayInterface, PaymentGatewayI
             $this->throwValidationError('Payment cannot be initiated from its current status.');
         }
 
-        $result = $this->apiClient->createSession($payment);
-
-        if (! $result->success) {
-            return $result;
+        if (! $this->isSandboxConfigured()) {
+            return new InitiatePaymentResult(
+                success: false,
+                status: $payment->status->value,
+                message: 'NMB sandbox is not configured.',
+            );
         }
 
-        $gatewayReference = $result->gatewayReference ?? $result->checkoutRequestId;
+        $payload = NmbInitiateCheckoutRequest::fromPayment($payment)->toArray();
+        $response = $this->apiClient->initiateCheckout($payload);
+        $session = $this->sessionMapper->fromResponse($response);
+
+        if (! $session->success) {
+            return new InitiatePaymentResult(
+                success: false,
+                status: $payment->status->value,
+                message: $session->message ?? 'Unable to create NMB checkout session.',
+                gatewayResponse: $session->rawResponse,
+            );
+        }
 
         $payment->update([
             'status' => PaymentStatus::Initiated,
-            'gateway_reference' => $gatewayReference,
-            'transaction_id' => $gatewayReference,
-            'checkout_url' => $result->checkoutUrl,
-            'gateway_response' => $result->gatewayResponse,
+            'gateway_session_id' => $session->sessionId,
+            'success_indicator' => $session->successIndicator,
+            'gateway_reference' => $session->gatewayReference,
+            'transaction_id' => $session->gatewayReference,
+            'checkout_url' => $session->checkoutUrl,
+            'gateway_response' => $session->rawResponse,
             'initiated_at' => now(),
             'metadata' => array_merge($payment->metadata ?? [], [
                 'gateway' => 'nmb',
             ]),
         ]);
 
-        return $result;
+        return new InitiatePaymentResult(
+            success: true,
+            status: PaymentStatus::Initiated->value,
+            message: 'Payment session created.',
+            checkoutRequestId: $session->sessionId,
+            gatewayReference: $session->gatewayReference,
+            gatewaySessionId: $session->sessionId,
+            successIndicator: $session->successIndicator,
+            checkoutUrl: $session->checkoutUrl,
+            gatewayResponse: $session->rawResponse,
+        );
     }
 
     public function handleCallback(Payment $payment, array $payload): PaymentResult
     {
-        if (! $this->callbackVerifier->verify($payload)) {
-            return new PaymentResult(
-                success: false,
-                status: $payment->status->value,
-                message: 'Callback verification failed.',
-            );
-        }
-
-        if ($payment->status === PaymentStatus::Paid) {
-            return new PaymentResult(
-                success: true,
-                status: PaymentStatus::Paid->value,
-                message: 'Payment already completed.',
-            );
-        }
-
-        if (! in_array($payment->status, [PaymentStatus::Pending, PaymentStatus::Initiated], true)) {
-            $this->throwValidationError('Payment cannot be updated from its current status.');
-        }
-
-        if (! $this->payloadMapper->isSuccessfulSimulation($payload)) {
-            $payment->update(['status' => PaymentStatus::Failed]);
-
-            return new PaymentResult(
-                success: false,
-                status: PaymentStatus::Failed->value,
-                message: 'Payment failed.',
-            );
-        }
-
-        return DB::transaction(function () use ($payment) {
-            $payment->update([
-                'status' => PaymentStatus::Paid,
-                'paid_at' => now(),
-            ]);
-
-            return new PaymentResult(
-                success: true,
-                status: PaymentStatus::Paid->value,
-                message: 'Payment processed successfully.',
-            );
-        });
+        return new PaymentResult(
+            success: false,
+            status: $payment->status->value,
+            message: 'NMB callback handling is not implemented yet.',
+        );
     }
 
     public function verify(Payment $payment): VerificationResult
     {
         return new VerificationResult(
-            verified: $payment->status === PaymentStatus::Paid,
+            verified: false,
             status: $payment->status->value,
-            message: 'NMB payment verification stub.',
+            message: 'NMB payment verification is not implemented yet.',
         );
+    }
+
+    private function isSandboxConfigured(): bool
+    {
+        if (! config('services.nmb.enabled')) {
+            return false;
+        }
+
+        return filled(config('services.nmb.base_url'))
+            && filled(config('services.nmb.merchant_id'))
+            && filled(config('services.nmb.password'))
+            && filled(config('services.nmb.return_url'))
+            && filled(config('services.nmb.merchant_name'))
+            && filled(config('services.nmb.merchant_url'));
     }
 
     private function throwValidationError(string $message): never

@@ -6,12 +6,6 @@ return [
     |--------------------------------------------------------------------------
     | Third Party Services
     |--------------------------------------------------------------------------
-    |
-    | This file is for storing the credentials for third party services such
-    | as Mailgun, Postmark, AWS and more. This file provides the de facto
-    | location for this type of information, allowing packages to have
-    | a conventional file to locate the various service credentials.
-    |
     */
 
     'postmark' => [
@@ -33,6 +27,19 @@ return [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
+    ],
+
+    'nmb' => [
+        'enabled' => env('PAYMENT_NMB_ENABLED', false),
+        'base_url' => env('NMB_BASE_URL'),
+        'api_version' => env('NMB_API_VERSION', '85'),
+        'merchant_id' => env('NMB_MERCHANT_ID'),
+        'username' => env('NMB_USERNAME'),
+        'password' => env('NMB_PASSWORD'),
+        'return_url' => env('NMB_RETURN_URL'),
+        'callback_url' => env('NMB_CALLBACK_URL'),
+        'merchant_name' => env('NMB_MERCHANT_NAME'),
+        'merchant_url' => env('NMB_MERCHANT_URL'),
     ],
 
 ];

@@ -13,6 +13,8 @@ class InitiatePaymentResult
         public readonly string $message,
         public readonly ?string $checkoutRequestId = null,
         public readonly ?string $gatewayReference = null,
+        public readonly ?string $gatewaySessionId = null,
+        public readonly ?string $successIndicator = null,
         public readonly ?string $checkoutUrl = null,
         public readonly ?array $gatewayResponse = null,
     ) {}

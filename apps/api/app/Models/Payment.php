@@ -27,6 +27,8 @@ class Payment extends Model
         'reference',
         'initiated_at',
         'gateway_reference',
+        'gateway_session_id',
+        'success_indicator',
         'checkout_url',
         'gateway_response',
         'paid_at',
