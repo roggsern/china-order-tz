@@ -2,20 +2,22 @@
 
 namespace App\Http\Controllers\Webhooks;
 
-use App\Actions\Payments\ReceiveNmbWebhookAction;
+use App\Actions\Payments\HandleNmbCallbackAction;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\WebhookAcknowledgmentResource;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class NmbWebhookController extends Controller
 {
-    public function receive(ReceiveNmbWebhookAction $action): JsonResponse
+    public function receive(Request $request, HandleNmbCallbackAction $action): JsonResponse
     {
-        $result = $action->handle();
+        $payload = $request->all();
+        $result = $action->handle(is_array($payload) ? $payload : []);
 
         return response()->json([
             'success' => true,
             'data' => new WebhookAcknowledgmentResource($result),
-        ], 501);
+        ]);
     }
 }

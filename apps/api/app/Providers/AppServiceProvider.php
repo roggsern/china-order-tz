@@ -39,5 +39,9 @@ class AppServiceProvider extends ServiceProvider
                 $request->ip().'|'.strtolower((string) $request->input('email'))
             );
         });
+
+        RateLimiter::for('webhooks', function (Request $request) {
+            return Limit::perMinute(60)->by($request->ip());
+        });
     }
 }

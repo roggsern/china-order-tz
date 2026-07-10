@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Actions\Payments\HandleNmbCallbackAction;
+use App\Actions\Payments\SimulateNmbCallbackAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\SimulateNmbCallbackRequest;
 use App\Http\Resources\OrderResource;
@@ -15,7 +15,7 @@ class AdminSimulateNmbCallbackController extends Controller
     public function store(
         SimulateNmbCallbackRequest $request,
         Payment $payment,
-        HandleNmbCallbackAction $action,
+        SimulateNmbCallbackAction $action,
     ): JsonResponse {
         $result = $action->handle($payment, $request->validated('result'));
 
