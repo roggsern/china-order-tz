@@ -9,7 +9,10 @@ use App\Payments\Contracts\PaymentGatewayInterface;
 use App\Payments\DTOs\InitiatePaymentResult;
 use App\Payments\Gateways\Nmb\NmbApiClient;
 use App\Payments\Gateways\Nmb\NmbCheckoutSessionMapper;
+use App\Payments\Gateways\Nmb\NmbVerificationMapper;
+use App\Payments\Gateways\Nmb\NmbVerificationResult;
 use App\Payments\Gateways\Nmb\Requests\NmbInitiateCheckoutRequest;
+use App\Payments\Gateways\Nmb\Requests\NmbRetrieveOrderRequest;
 use App\Payments\Results\PaymentResult;
 use App\Payments\Results\VerificationResult;
 use Illuminate\Validation\ValidationException;
@@ -19,6 +22,7 @@ class NmbPaymentGateway implements AsyncPaymentGatewayInterface, PaymentGatewayI
     public function __construct(
         private readonly NmbApiClient $apiClient,
         private readonly NmbCheckoutSessionMapper $sessionMapper,
+        private readonly NmbVerificationMapper $verificationMapper,
     ) {}
 
     public function process(Payment $payment): PaymentResult
@@ -104,11 +108,28 @@ class NmbPaymentGateway implements AsyncPaymentGatewayInterface, PaymentGatewayI
 
     public function verify(Payment $payment): VerificationResult
     {
+        $result = $this->verifyPayment($payment);
+
         return new VerificationResult(
-            verified: false,
-            status: $payment->status->value,
-            message: 'NMB payment verification is not implemented yet.',
+            verified: $result->verified,
+            status: $payment->fresh()->status->value,
+            message: $result->message,
         );
+    }
+
+    public function verifyPayment(Payment $payment): NmbVerificationResult
+    {
+        if (! $this->isSandboxConfigured()) {
+            return new NmbVerificationResult(
+                verified: false,
+                message: 'NMB sandbox is not configured.',
+            );
+        }
+
+        $request = NmbRetrieveOrderRequest::fromPayment($payment);
+        $response = $this->apiClient->retrieveOrder($request->orderId());
+
+        return $this->verificationMapper->fromResponse($response, $payment);
     }
 
     private function isSandboxConfigured(): bool

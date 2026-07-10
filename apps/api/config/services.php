@@ -40,6 +40,7 @@ return [
         'callback_url' => env('NMB_CALLBACK_URL'),
         'merchant_name' => env('NMB_MERCHANT_NAME'),
         'merchant_url' => env('NMB_MERCHANT_URL'),
+        'auto_verify_after_callback' => env('NMB_AUTO_VERIFY_AFTER_CALLBACK', true),
     ],
 
 ];

@@ -11,6 +11,15 @@ class NmbWebhookTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config([
+            'services.nmb.auto_verify_after_callback' => false,
+        ]);
+    }
+
     /**
      * @return array<string, mixed>
      */

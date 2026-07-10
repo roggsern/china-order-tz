@@ -11,6 +11,7 @@ class NmbCallbackService
 {
     public function __construct(
         private readonly NmbCallbackVerifier $callbackVerifier,
+        private readonly NmbVerificationService $verificationService,
     ) {}
 
     /**
@@ -37,6 +38,11 @@ class NmbCallbackService
 
         if ($payment !== null) {
             $this->storeCallback($payment, $payload);
+            $payment = $payment->fresh();
+
+            if (config('services.nmb.auto_verify_after_callback')) {
+                $this->verificationService->verify($payment);
+            }
         }
 
         return [
