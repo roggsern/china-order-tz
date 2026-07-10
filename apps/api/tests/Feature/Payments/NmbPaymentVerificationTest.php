@@ -30,6 +30,7 @@ class NmbPaymentVerificationTest extends TestCase
             'services.nmb.merchant_name' => 'China Order TZ',
             'services.nmb.merchant_url' => 'https://chinaorder.test',
             'services.nmb.auto_verify_after_callback' => false,
+            'services.nmb.auto_complete_after_verification' => false,
         ]);
     }
 
@@ -172,7 +173,10 @@ class NmbPaymentVerificationTest extends TestCase
 
     public function test_webhook_triggers_verification_when_enabled(): void
     {
-        config(['services.nmb.auto_verify_after_callback' => true]);
+        config([
+            'services.nmb.auto_verify_after_callback' => true,
+            'services.nmb.auto_complete_after_verification' => false,
+        ]);
 
         $this->fakeRetrieveOrderSuccess('PAY-2026-000456', 'TRANS000456');
 
