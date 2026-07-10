@@ -8,12 +8,40 @@ use App\Models\Admin;
 use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class NmbPaymentPreparationTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config([
+            'services.nmb.enabled' => true,
+            'services.nmb.base_url' => 'https://sandbox.nmb.test',
+            'services.nmb.api_version' => '85',
+            'services.nmb.merchant_id' => 'TESTMERCHANT',
+            'services.nmb.password' => 'sandbox-password',
+            'services.nmb.return_url' => 'https://app.chinaorder.test/payments/return',
+            'services.nmb.callback_url' => 'https://app.chinaorder.test/webhooks/nmb',
+            'services.nmb.merchant_name' => 'China Order TZ',
+            'services.nmb.merchant_url' => 'https://chinaorder.test',
+        ]);
+
+        Http::fake([
+            'sandbox.nmb.test/*' => Http::response([
+                'result' => 'SUCCESS',
+                'session' => [
+                    'id' => 'SESSION000010',
+                    'successIndicator' => 'indicator-010',
+                ],
+            ]),
+        ]);
+    }
 
     public function test_process_payment_rejects_nmb_method(): void
     {
@@ -43,15 +71,18 @@ class NmbPaymentPreparationTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.status', PaymentStatus::Initiated->value)
-            ->assertJsonPath('data.checkout_url', fn ($url) => str_contains($url, 'PAY-2026-000010'));
+            ->assertJsonPath('data.gateway_session_id', 'SESSION000010')
+            ->assertJsonPath('data.checkout_url', null);
 
         $payment->refresh();
         $this->assertSame(PaymentStatus::Initiated, $payment->status);
-        $this->assertNotNull($payment->gateway_reference);
+        $this->assertSame('SESSION000010', $payment->gateway_session_id);
+        $this->assertSame('indicator-010', $payment->success_indicator);
+        $this->assertNull($payment->checkout_url);
         $this->assertNotNull($payment->initiated_at);
     }
 
-    public function test_admin_can_simulate_nmb_callback_success(): void
+    public function test_admin_nmb_callback_simulation_is_not_implemented_yet(): void
     {
         Sanctum::actingAs(Admin::factory()->create());
 
@@ -63,11 +94,11 @@ class NmbPaymentPreparationTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('message', 'Payment processed successfully.');
+            ->assertJsonPath('message', 'Payment failed.');
 
         $payment->refresh();
-        $this->assertSame(PaymentStatus::Paid, $payment->status);
-        $this->assertNotNull($payment->paid_at);
+        $this->assertSame(PaymentStatus::Initiated, $payment->status);
+        $this->assertNull($payment->paid_at);
     }
 
     public function test_nmb_webhook_receiver_is_not_implemented_yet(): void

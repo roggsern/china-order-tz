@@ -19,6 +19,7 @@ class PaymentSessionResource extends JsonResource
             'currency' => $this->currency,
             'payment_method' => $this->method->value,
             'status' => $this->status->value,
+            'gateway_session_id' => $this->gateway_session_id,
             'gateway_reference' => $this->gateway_reference,
             'checkout_url' => $this->checkout_url,
             'initiated_at' => $this->initiated_at,

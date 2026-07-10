@@ -2,56 +2,69 @@
 
 namespace App\Payments\Gateways\Nmb;
 
-use App\Enums\PaymentStatus;
-use App\Models\Payment;
-use App\Payments\DTOs\InitiatePaymentResult;
-use Illuminate\Support\Str;
+use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Http;
 
 class NmbApiClient
 {
-    public function createSession(Payment $payment): InitiatePaymentResult
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public function initiateCheckout(array $payload): array
     {
-        if ($this->shouldUseMockSession()) {
-            return $this->mockSession($payment);
-        }
+        $response = Http::withBasicAuth($this->username(), $this->password())
+            ->acceptJson()
+            ->asJson()
+            ->post($this->sessionEndpoint(), $payload);
 
-        // Real sandbox integration will be plugged in here with minimal changes.
-        return $this->mockSession($payment);
+        return $this->decodeResponse($response);
     }
 
-    private function shouldUseMockSession(): bool
+    public function sessionEndpoint(): string
     {
-        if (! config('payments.nmb.enabled')) {
-            return true;
-        }
+        $baseUrl = rtrim((string) config('services.nmb.base_url'), '/');
+        $version = (string) config('services.nmb.api_version', '85');
+        $merchantId = (string) config('services.nmb.merchant_id');
 
-        return ! filled(config('payments.nmb.client_id'))
-            || ! filled(config('payments.nmb.client_secret'))
-            || ! filled(config('payments.nmb.base_url'));
+        return "{$baseUrl}/api/rest/version/{$version}/merchant/{$merchantId}/session";
     }
 
-    private function mockSession(Payment $payment): InitiatePaymentResult
+    public function username(): string
     {
-        $gatewayReference = (string) Str::uuid();
-        $checkoutUrl = rtrim((string) config('payments.nmb.mock_checkout_url'), '/')
-            .'/'.($payment->reference ?? $payment->id);
+        $configuredUsername = config('services.nmb.username');
 
-        $gatewayResponse = [
-            'mode' => 'mock',
-            'reference' => $payment->reference,
-            'amount' => (string) $payment->amount,
-            'currency' => $payment->currency,
-            'gateway_reference' => $gatewayReference,
+        if (filled($configuredUsername)) {
+            return (string) $configuredUsername;
+        }
+
+        $merchantId = (string) config('services.nmb.merchant_id');
+
+        return "merchant.{$merchantId}";
+    }
+
+    public function password(): string
+    {
+        return (string) config('services.nmb.password');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodeResponse(Response $response): array
+    {
+        $json = $response->json();
+
+        if (is_array($json)) {
+            return $json;
+        }
+
+        return [
+            'result' => 'ERROR',
+            'error' => [
+                'cause' => 'INVALID_RESPONSE',
+                'explanation' => $response->body(),
+            ],
         ];
-
-        return new InitiatePaymentResult(
-            success: true,
-            status: PaymentStatus::Initiated->value,
-            message: 'Payment session created.',
-            checkoutRequestId: $gatewayReference,
-            gatewayReference: $gatewayReference,
-            checkoutUrl: $checkoutUrl,
-            gatewayResponse: $gatewayResponse,
-        );
     }
 }

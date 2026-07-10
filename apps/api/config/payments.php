@@ -22,13 +22,6 @@ return [
 
     'nmb' => [
         'enabled' => env('PAYMENT_NMB_ENABLED', false),
-        'base_url' => env('NMB_BASE_URL'),
-        'client_id' => env('NMB_CLIENT_ID'),
-        'client_secret' => env('NMB_CLIENT_SECRET'),
-        'merchant_id' => env('NMB_MERCHANT_ID'),
-        'callback_url' => env('NMB_CALLBACK_URL'),
-        'test_mode' => env('NMB_TEST_MODE', true),
-        'mock_checkout_url' => env('NMB_MOCK_CHECKOUT_URL', 'https://sandbox.nmb.co.tz/pay/mock'),
     ],
 
     'vodacom' => [
