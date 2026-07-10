@@ -25,13 +25,14 @@ class NmbVerificationService
     public function __construct(
         private readonly NmbPaymentGateway $paymentGateway,
         private readonly NmbCallbackVerifier $callbackVerifier,
+        private readonly NmbPaymentCompletionService $completionService,
     ) {}
 
     public function verify(Payment $payment): NmbVerificationResult
     {
         $this->validatePayment($payment);
 
-        return DB::transaction(function () use ($payment): NmbVerificationResult {
+        $result = DB::transaction(function () use ($payment): NmbVerificationResult {
             /** @var Payment $lockedPayment */
             $lockedPayment = Payment::query()
                 ->whereKey($payment->id)
@@ -55,6 +56,19 @@ class NmbVerificationService
 
             return $result;
         });
+
+        $this->maybeComplete($payment, $result);
+
+        return $result;
+    }
+
+    private function maybeComplete(Payment $payment, NmbVerificationResult $result): void
+    {
+        if (! $result->verified || ! config('services.nmb.auto_complete_after_verification')) {
+            return;
+        }
+
+        $this->completionService->complete($payment->fresh());
     }
 
     private function validatePayment(Payment $payment): void

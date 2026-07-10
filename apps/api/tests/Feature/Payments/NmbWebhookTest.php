@@ -17,6 +17,7 @@ class NmbWebhookTest extends TestCase
 
         config([
             'services.nmb.auto_verify_after_callback' => false,
+            'services.nmb.auto_complete_after_verification' => false,
         ]);
     }
 

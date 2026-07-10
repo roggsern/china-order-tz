@@ -41,6 +41,7 @@ return [
         'merchant_name' => env('NMB_MERCHANT_NAME'),
         'merchant_url' => env('NMB_MERCHANT_URL'),
         'auto_verify_after_callback' => env('NMB_AUTO_VERIFY_AFTER_CALLBACK', true),
+        'auto_complete_after_verification' => env('NMB_AUTO_COMPLETE_AFTER_VERIFICATION', true),
     ],
 
 ];
