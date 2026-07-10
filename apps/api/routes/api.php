@@ -30,7 +30,8 @@ Route::get('/health', function () {
     ]);
 });
 
-Route::post('/webhooks/payments/nmb', [NmbWebhookController::class, 'receive']);
+Route::post('/webhooks/nmb', [NmbWebhookController::class, 'receive'])
+    ->middleware('throttle:webhooks');
 
 Route::post('/register', [AuthController::class, 'register'])
     ->middleware('throttle:customer-register');

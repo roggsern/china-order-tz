@@ -101,12 +101,20 @@ class NmbPaymentPreparationTest extends TestCase
         $this->assertNull($payment->paid_at);
     }
 
-    public function test_nmb_webhook_receiver_is_not_implemented_yet(): void
+    public function test_nmb_webhook_accepts_callback(): void
     {
-        $response = $this->postJson('/api/v1/webhooks/payments/nmb');
+        $response = $this->postJson('/api/v1/webhooks/nmb', [
+            'result' => 'SUCCESS',
+            'session' => [
+                'id' => 'SESSION000010',
+            ],
+            'order' => [
+                'id' => 'PAY-2026-000010',
+            ],
+        ]);
 
-        $response->assertStatus(501)
-            ->assertJsonPath('data.accepted', false);
+        $response->assertOk()
+            ->assertJsonPath('data.accepted', true);
     }
 
     public function test_payment_service_supports_async_for_nmb_methods(): void

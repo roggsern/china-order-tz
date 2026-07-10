@@ -12,6 +12,7 @@ class WebhookAcknowledgmentResource extends JsonResource
         return [
             'accepted' => $this->resource['accepted'],
             'message' => $this->resource['message'],
+            'payment_id' => $this->resource['payment_id'] ?? null,
         ];
     }
 }
