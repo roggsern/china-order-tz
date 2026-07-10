@@ -152,7 +152,7 @@ class NmbPaymentVerificationTest extends TestCase
             'sandbox.nmb.test/*' => Http::response([
                 'result' => 'FAILURE',
                 'error' => ['explanation' => 'Order not found.'],
-            ]),
+            ], 400),
         ]);
 
         $payment = Payment::factory()->nmb()->initiated()->create([
@@ -164,11 +164,36 @@ class NmbPaymentVerificationTest extends TestCase
         $result = app(NmbVerificationService::class)->verify($payment);
 
         $this->assertFalse($result->verified);
+        $this->assertFalse($result->transientFailure);
 
         $payment->refresh();
 
         $this->assertSame(PaymentStatus::Failed, $payment->status);
         $this->assertFalse($payment->metadata['nmb_verification']['verified'] ?? true);
+    }
+
+    public function test_transient_verification_failure_does_not_mark_payment_failed(): void
+    {
+        Http::fake([
+            'sandbox.nmb.test/*' => Http::response([
+                'error' => ['explanation' => 'Service unavailable.'],
+            ], 503),
+        ]);
+
+        $payment = Payment::factory()->nmb()->initiated()->create([
+            'reference' => 'PAY-2026-000124',
+            'amount' => 75000,
+            'currency' => 'TZS',
+        ]);
+
+        $result = app(NmbVerificationService::class)->verify($payment);
+
+        $this->assertFalse($result->verified);
+        $this->assertTrue($result->transientFailure);
+
+        $payment->refresh();
+
+        $this->assertSame(PaymentStatus::Initiated, $payment->status);
     }
 
     public function test_webhook_triggers_verification_when_enabled(): void

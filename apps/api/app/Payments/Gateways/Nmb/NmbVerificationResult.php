@@ -16,5 +16,6 @@ readonly class NmbVerificationResult
         public ?string $amount = null,
         public ?string $currency = null,
         public array $rawResponse = [],
+        public bool $transientFailure = false,
     ) {}
 }

@@ -48,7 +48,9 @@ class NmbVerificationService
             $result = $this->paymentGateway->verifyPayment($lockedPayment);
             $this->persistVerification($lockedPayment, $result);
 
-            if (! $result->verified && $lockedPayment->status === PaymentStatus::Initiated) {
+            if (! $result->verified
+                && ! $result->transientFailure
+                && $lockedPayment->status === PaymentStatus::Initiated) {
                 $lockedPayment->update([
                     'status' => PaymentStatus::Failed,
                 ]);
@@ -57,7 +59,9 @@ class NmbVerificationService
             return $result;
         });
 
-        $this->maybeComplete($payment, $result);
+        if (! $result->transientFailure) {
+            $this->maybeComplete($payment, $result);
+        }
 
         return $result;
     }
@@ -118,6 +122,7 @@ class NmbVerificationService
                 'nmb_verification' => [
                     'verified_at' => now()->toIso8601String(),
                     'verified' => $result->verified,
+                    'transient_failure' => $result->transientFailure,
                     'result' => $result->result,
                     'message' => $result->message,
                     'order_id' => $result->orderId,

@@ -2,23 +2,23 @@
 
 namespace App\Payments\Gateways\Nmb;
 
-use Illuminate\Http\Client\Response;
-use Illuminate\Support\Facades\Http;
-
 class NmbApiClient
 {
+    public function __construct(
+        private readonly NmbHttpClient $httpClient,
+    ) {}
+
     /**
      * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */
     public function initiateCheckout(array $payload): array
     {
-        $response = Http::withBasicAuth($this->username(), $this->password())
-            ->acceptJson()
-            ->asJson()
-            ->post($this->sessionEndpoint(), $payload);
-
-        return $this->decodeResponse($response);
+        return $this->httpClient->post(
+            $this->sessionEndpoint(),
+            $payload,
+            fn ($request) => $request->withBasicAuth($this->username(), $this->password()),
+        );
     }
 
     /**
@@ -26,11 +26,10 @@ class NmbApiClient
      */
     public function retrieveOrder(string $orderId): array
     {
-        $response = Http::withBasicAuth($this->username(), $this->password())
-            ->acceptJson()
-            ->get($this->orderEndpoint($orderId));
-
-        return $this->decodeResponse($response);
+        return $this->httpClient->get(
+            $this->orderEndpoint($orderId),
+            fn ($request) => $request->withBasicAuth($this->username(), $this->password()),
+        );
     }
 
     public function orderEndpoint(string $orderId): string
@@ -67,25 +66,5 @@ class NmbApiClient
     public function password(): string
     {
         return (string) config('services.nmb.password');
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function decodeResponse(Response $response): array
-    {
-        $json = $response->json();
-
-        if (is_array($json)) {
-            return $json;
-        }
-
-        return [
-            'result' => 'ERROR',
-            'error' => [
-                'cause' => 'INVALID_RESPONSE',
-                'explanation' => $response->body(),
-            ],
-        ];
     }
 }
