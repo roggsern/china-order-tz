@@ -21,6 +21,27 @@ class NmbApiClient
         return $this->decodeResponse($response);
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    public function retrieveOrder(string $orderId): array
+    {
+        $response = Http::withBasicAuth($this->username(), $this->password())
+            ->acceptJson()
+            ->get($this->orderEndpoint($orderId));
+
+        return $this->decodeResponse($response);
+    }
+
+    public function orderEndpoint(string $orderId): string
+    {
+        $baseUrl = rtrim((string) config('services.nmb.base_url'), '/');
+        $version = (string) config('services.nmb.api_version', '85');
+        $merchantId = (string) config('services.nmb.merchant_id');
+
+        return "{$baseUrl}/api/rest/version/{$version}/merchant/{$merchantId}/order/{$orderId}";
+    }
+
     public function sessionEndpoint(): string
     {
         $baseUrl = rtrim((string) config('services.nmb.base_url'), '/');

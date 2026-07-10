@@ -98,6 +98,32 @@ class NmbSandboxIntegrationTest extends TestCase
         $this->assertNull($session->checkoutUrl);
     }
 
+    public function test_retrieve_order_uses_basic_authentication(): void
+    {
+        Http::fake([
+            'sandbox.nmb.test/*' => Http::response([
+                'result' => 'SUCCESS',
+                'order' => [
+                    'id' => 'PAY-2026-000123',
+                    'amount' => '75000.00',
+                    'currency' => 'TZS',
+                ],
+            ]),
+        ]);
+
+        $client = app(NmbApiClient::class);
+        $client->retrieveOrder('PAY-2026-000123');
+
+        Http::assertSent(function ($request) {
+            $authHeader = $request->header('Authorization')[0] ?? '';
+            $expected = 'Basic '.base64_encode('merchant.TESTMERCHANT:sandbox-password');
+
+            return $authHeader === $expected
+                && $request->method() === 'GET'
+                && str_contains($request->url(), '/merchant/TESTMERCHANT/order/PAY-2026-000123');
+        });
+    }
+
     public function test_checkout_url_mapped_when_returned_by_gateway(): void
     {
         $mapper = app(NmbCheckoutSessionMapper::class);
