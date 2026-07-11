@@ -85,6 +85,7 @@ class NmbHttpClient
                 message: 'NMB API authentication failed.',
                 transient: false,
                 statusCode: 401,
+                gatewayResponse: $this->gatewayResponseFrom($response),
             );
         }
 
@@ -99,6 +100,13 @@ class NmbHttpClient
                 message: 'NMB API returned an invalid JSON response.',
                 transient: false,
                 statusCode: $response->status(),
+                gatewayResponse: [
+                    'result' => 'ERROR',
+                    'error' => [
+                        'cause' => 'INVALID_RESPONSE',
+                        'explanation' => $response->body(),
+                    ],
+                ],
             );
         }
 
@@ -110,7 +118,28 @@ class NmbHttpClient
             message: $message,
             transient: $transient,
             statusCode: $status,
+            gatewayResponse: $this->gatewayResponseFrom($response),
         );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function gatewayResponseFrom(Response $response): array
+    {
+        $json = $response->json();
+
+        if (is_array($json)) {
+            return $json;
+        }
+
+        return [
+            'result' => 'ERROR',
+            'error' => [
+                'cause' => 'HTTP_'.$response->status(),
+                'explanation' => $response->body() ?: 'NMB API request failed.',
+            ],
+        ];
     }
 
     private function logRequestStart(string $method, string $url): void

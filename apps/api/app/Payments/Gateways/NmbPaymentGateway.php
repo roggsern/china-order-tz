@@ -59,7 +59,18 @@ class NmbPaymentGateway implements AsyncPaymentGatewayInterface, PaymentGatewayI
         }
 
         $payload = NmbInitiateCheckoutRequest::fromPayment($payment)->toArray();
-        $response = $this->apiClient->initiateCheckout($payload);
+
+        try {
+            $response = $this->apiClient->initiateCheckout($payload);
+        } catch (NmbApiException $exception) {
+            return new InitiatePaymentResult(
+                success: false,
+                status: $payment->status->value,
+                message: $exception->getMessage(),
+                gatewayResponse: $exception->gatewayResponse(),
+            );
+        }
+
         $session = $this->sessionMapper->fromResponse($response);
 
         if (! $session->success) {
