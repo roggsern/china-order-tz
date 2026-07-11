@@ -5,6 +5,7 @@ namespace App\Payments\Gateways\Nmb;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class NmbHttpClient
 {
@@ -36,13 +37,15 @@ class NmbHttpClient
         ?array $payload,
         bool $retry,
     ): array {
-        $attempts = $retry ? max(1, (int) config('services.nmb.http.retry_times', 2) + 1) : 1;
+        $attempts = $retry ? max(1, (int) NmbConfig::get('http_retry_times', 2) + 1) : 1;
         $lastException = null;
 
         for ($attempt = 1; $attempt <= $attempts; $attempt++) {
             try {
-                $pendingRequest = Http::timeout((int) config('services.nmb.http.timeout', 30))
-                    ->connectTimeout((int) config('services.nmb.http.connect_timeout', 10))
+                $this->logRequestStart($method, $url);
+
+                $pendingRequest = Http::timeout((int) NmbConfig::get('http_timeout', 30))
+                    ->connectTimeout((int) NmbConfig::get('http_connect_timeout', 10))
                     ->acceptJson();
 
                 $pendingRequest = $configureAuth($pendingRequest);
@@ -50,6 +53,8 @@ class NmbHttpClient
                 $response = $method === 'post'
                     ? $pendingRequest->asJson()->post($url, $payload ?? [])
                     : $pendingRequest->get($url);
+
+                $this->logResponseStatus($method, $url, $response->status());
 
                 return $this->decodeResponse($response);
             } catch (ConnectionException $exception) {
@@ -75,6 +80,14 @@ class NmbHttpClient
      */
     private function decodeResponse(Response $response): array
     {
+        if ($response->status() === 401) {
+            throw new NmbApiException(
+                message: 'NMB API authentication failed.',
+                transient: false,
+                statusCode: 401,
+            );
+        }
+
         if ($response->successful()) {
             $json = $response->json();
 
@@ -82,13 +95,11 @@ class NmbHttpClient
                 return $json;
             }
 
-            return [
-                'result' => 'ERROR',
-                'error' => [
-                    'cause' => 'INVALID_RESPONSE',
-                    'explanation' => $response->body(),
-                ],
-            ];
+            throw new NmbApiException(
+                message: 'NMB API returned an invalid JSON response.',
+                transient: false,
+                statusCode: $response->status(),
+            );
         }
 
         $status = $response->status();
@@ -100,5 +111,29 @@ class NmbHttpClient
             transient: $transient,
             statusCode: $status,
         );
+    }
+
+    private function logRequestStart(string $method, string $url): void
+    {
+        Log::channel($this->logChannel())->info('nmb.api.request_started', [
+            'domain' => 'nmb_payments',
+            'method' => strtoupper($method),
+            'url' => $url,
+        ]);
+    }
+
+    private function logResponseStatus(string $method, string $url, int $status): void
+    {
+        Log::channel($this->logChannel())->info('nmb.api.response_received', [
+            'domain' => 'nmb_payments',
+            'method' => strtoupper($method),
+            'url' => $url,
+            'status' => $status,
+        ]);
+    }
+
+    private function logChannel(): string
+    {
+        return (string) NmbConfig::get('log_channel', 'stack');
     }
 }

@@ -34,37 +34,29 @@ class NmbApiClient
 
     public function orderEndpoint(string $orderId): string
     {
-        $baseUrl = rtrim((string) config('services.nmb.base_url'), '/');
-        $version = (string) config('services.nmb.api_version', '85');
-        $merchantId = (string) config('services.nmb.merchant_id');
+        $baseUrl = rtrim((string) NmbConfig::get('base_url'), '/');
+        $version = (string) NmbConfig::get('api_version', '85');
+        $merchantId = NmbConfig::merchantId();
 
         return "{$baseUrl}/api/rest/version/{$version}/merchant/{$merchantId}/order/{$orderId}";
     }
 
     public function sessionEndpoint(): string
     {
-        $baseUrl = rtrim((string) config('services.nmb.base_url'), '/');
-        $version = (string) config('services.nmb.api_version', '85');
-        $merchantId = (string) config('services.nmb.merchant_id');
+        $baseUrl = rtrim((string) NmbConfig::get('base_url'), '/');
+        $version = (string) NmbConfig::get('api_version', '85');
+        $merchantId = NmbConfig::merchantId();
 
         return "{$baseUrl}/api/rest/version/{$version}/merchant/{$merchantId}/session";
     }
 
     public function username(): string
     {
-        $configuredUsername = config('services.nmb.username');
-
-        if (filled($configuredUsername)) {
-            return (string) $configuredUsername;
-        }
-
-        $merchantId = (string) config('services.nmb.merchant_id');
-
-        return "merchant.{$merchantId}";
+        return NmbConfig::username();
     }
 
     public function password(): string
     {
-        return (string) config('services.nmb.password');
+        return NmbConfig::password();
     }
 }
