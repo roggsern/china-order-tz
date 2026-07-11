@@ -3,6 +3,7 @@
 namespace App\Payments\Gateways\Nmb\Requests;
 
 use App\Models\Payment;
+use App\Payments\Gateways\Nmb\NmbConfig;
 
 class NmbInitiateCheckoutRequest
 {
@@ -24,10 +25,10 @@ class NmbInitiateCheckoutRequest
             'apiOperation' => 'INITIATE_CHECKOUT',
             'interaction' => [
                 'operation' => 'PURCHASE',
-                'returnUrl' => (string) config('services.nmb.return_url'),
+                'returnUrl' => (string) NmbConfig::get('return_url'),
                 'merchant' => [
-                    'name' => (string) config('services.nmb.merchant_name'),
-                    'url' => (string) config('services.nmb.merchant_url'),
+                    'name' => (string) NmbConfig::get('merchant_name'),
+                    'url' => (string) NmbConfig::get('merchant_url'),
                 ],
             ],
             'order' => [
