@@ -144,16 +144,16 @@ class NmbPaymentGateway implements AsyncPaymentGatewayInterface, PaymentGatewayI
 
     private function isConfigured(): bool
     {
-        if (! config('services.nmb.enabled')) {
+        if (! config('payments.nmb.enabled')) {
             return false;
         }
 
-        return filled(config('services.nmb.base_url'))
-            && filled(config('services.nmb.merchant_id'))
-            && filled(config('services.nmb.password'))
-            && filled(config('services.nmb.return_url'))
-            && filled(config('services.nmb.merchant_name'))
-            && filled(config('services.nmb.merchant_url'));
+        return filled(config('payments.nmb.base_url'))
+            && filled(config('payments.nmb.merchant_id'))
+            && filled(config('payments.nmb.password'))
+            && filled(config('payments.nmb.return_url'))
+            && filled(config('payments.nmb.merchant_name'))
+            && filled(config('payments.nmb.merchant_url'));
     }
 
     private function throwValidationError(string $message): never
