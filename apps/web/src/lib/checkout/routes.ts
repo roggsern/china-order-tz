@@ -5,6 +5,8 @@ export const POST_CHECKOUT_PATH_PREFIXES = [
   "/track",
   "/checkout/payment/confirm",
   "/checkout/payment/processing",
+  "/checkout/payment/nmb",
+  "/payment/return",
 ] as const;
 
 export function isPostCheckoutPath(pathname: string): boolean {

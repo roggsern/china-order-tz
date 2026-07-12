@@ -17,6 +17,10 @@ import type { PaymentMethodCode } from "@/lib/types/payment";
 import { PAYMENT_METHOD_CODES, PAYMENT_STATUS } from "@/lib/types/payment";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment/constants";
 import { paymentService } from "@/lib/payments/checkout-service";
+import {
+  consumeNmbPendingPaymentId,
+  saveNmbCheckoutContext,
+} from "@/lib/nmb";
 import { getOrderById as getStoredOrderById } from "@/lib/payment/order-storage";
 import {
   getPaymentTransaction,
@@ -160,6 +164,28 @@ export function PaymentPageContent() {
       });
 
       lockCartForOrder(order.id, clearPurchasedItems);
+
+      if (paymentMethod === PAYMENT_METHOD_CODES.NMB) {
+        const paymentId = consumeNmbPendingPaymentId();
+
+        if (!paymentId) {
+          releaseDraftSubmissionLock(draft.draftId);
+          paymentLockRef.current = false;
+          setIsProcessingPayment(false);
+          setSubmitError(
+            "NMB card payment requires a prepared payment session. Sign in and complete checkout through the store before paying with NMB.",
+          );
+          return;
+        }
+
+        saveNmbCheckoutContext({
+          paymentId,
+          localOrderId: order.id,
+        });
+        clearCheckoutDraft();
+        router.push(`/checkout/payment/nmb/${paymentId}`);
+        return;
+      }
 
       if (isGatewayPaymentMethod(paymentMethod)) {
         const { transactionId } = await paymentService.beginStkPaymentProcessing(order);
