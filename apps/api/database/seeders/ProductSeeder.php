@@ -79,6 +79,15 @@ class ProductSeeder extends Seeder
             'brand_id' => fn () => $brands->random()->id,
             'supplier_id' => fn () => $suppliers->random()->id,
         ])->each(function (Product $product) use ($colors, $sizes) {
+            $product->loadMissing('supplier');
+
+            if ($product->isFromChina()) {
+                $product->update([
+                    'air_shipping_price' => fake()->randomFloat(2, 3000, 15000),
+                    'sea_shipping_price' => fake()->randomFloat(2, 1500, 8000),
+                ]);
+            }
+
             ProductImage::factory()->primary()->create(['product_id' => $product->id]);
             ProductImage::factory(2)->create(['product_id' => $product->id]);
 

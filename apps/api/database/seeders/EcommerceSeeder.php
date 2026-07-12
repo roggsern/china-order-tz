@@ -9,6 +9,7 @@ use App\Enums\PaymentStatus;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Coupon;
+use App\Models\DeliveryAddress;
 use App\Models\Notification;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -47,6 +48,12 @@ class EcommerceSeeder extends Seeder
 
         ShippingAddress::factory()->default()->create(['user_id' => $demoUser->id]);
         ShippingAddress::factory(2)->create(['user_id' => $demoUser->id]);
+
+        DeliveryAddress::factory()->create([
+            'user_id' => $demoUser->id,
+            'recipient_name' => $demoUser->name,
+            'phone' => $demoUser->phone,
+        ]);
 
         $products = Product::query()->inRandomOrder()->limit(5)->get();
 

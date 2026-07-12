@@ -21,6 +21,8 @@ class NmbInitiateCheckoutRequest
      */
     public function toArray(): array
     {
+        $orderReference = (string) ($this->payment->reference ?? $this->payment->id);
+
         return [
             'apiOperation' => 'INITIATE_CHECKOUT',
             'interaction' => [
@@ -32,7 +34,8 @@ class NmbInitiateCheckoutRequest
                 ],
             ],
             'order' => [
-                'id' => (string) ($this->payment->reference ?? $this->payment->id),
+                'id' => $orderReference,
+                'reference' => $orderReference,
                 'amount' => number_format((float) $this->payment->amount, 2, '.', ''),
                 'currency' => (string) $this->payment->currency,
                 'description' => 'China Order TZ payment '.($this->payment->reference ?? $this->payment->id),
