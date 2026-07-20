@@ -10,6 +10,7 @@ use App\Payments\DTOs\InitiatePaymentResult;
 use App\Payments\Gateways\Nmb\NmbApiClient;
 use App\Payments\Gateways\Nmb\NmbApiException;
 use App\Payments\Gateways\Nmb\NmbCheckoutSessionMapper;
+use App\Payments\Gateways\Nmb\NmbConfig;
 use App\Payments\Gateways\Nmb\NmbVerificationMapper;
 use App\Payments\Gateways\Nmb\NmbVerificationResult;
 use App\Payments\Gateways\Nmb\Requests\NmbInitiateCheckoutRequest;
@@ -155,16 +156,20 @@ class NmbPaymentGateway implements AsyncPaymentGatewayInterface, PaymentGatewayI
 
     private function isConfigured(): bool
     {
-        if (! config('payments.nmb.enabled')) {
+        // Use NmbConfig (services.nmb → payments.nmb) so runtime/test config()
+        // overrides match the same source as NmbApiClient. Empty credentials
+        // in both sources still fail closed.
+        $enabled = NmbConfig::get('enabled', false);
+        if (! filter_var($enabled, FILTER_VALIDATE_BOOLEAN)) {
             return false;
         }
 
-        return filled(config('payments.nmb.base_url'))
-            && filled(config('payments.nmb.merchant_id'))
-            && filled(config('payments.nmb.password'))
-            && filled(config('payments.nmb.return_url'))
-            && filled(config('payments.nmb.merchant_name'))
-            && filled(config('payments.nmb.merchant_url'));
+        return filled(NmbConfig::get('base_url'))
+            && filled(NmbConfig::merchantId())
+            && filled(NmbConfig::password())
+            && filled(NmbConfig::get('return_url'))
+            && filled(NmbConfig::get('merchant_name'))
+            && filled(NmbConfig::get('merchant_url'));
     }
 
     private function throwValidationError(string $message): never
