@@ -35,9 +35,16 @@ class AdminFactory extends Factory
 
     public function superAdmin(): static
     {
-        return $this->state(fn (array $attributes) => [
-            'is_super_admin' => true,
-        ]);
+        return $this->state(function (array $attributes) {
+            // Prefer the seeded administrator role so tests that call RoleSeeder
+            // do not also insert a random Role via Role::factory() (slug collisions).
+            $administratorId = Role::query()->where('slug', 'administrator')->value('id');
+
+            return array_filter([
+                'is_super_admin' => true,
+                'role_id' => $administratorId,
+            ], static fn ($value) => $value !== null);
+        });
     }
 
     public function inactive(): static
