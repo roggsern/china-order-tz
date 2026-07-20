@@ -17,9 +17,12 @@ class RoleFactory extends Factory
     {
         $name = fake()->unique()->jobTitle();
 
+        // Always suffix the slug. Job titles like "Manager" otherwise collide with
+        // RoleSeeder system roles (manager, support, …) and flake CI with UNIQUE
+        // constraint failures when Admin::factory() creates a role after seeding.
         return [
             'name' => $name,
-            'slug' => Str::slug($name),
+            'slug' => Str::slug($name).'-'.Str::lower(Str::random(8)),
             'description' => fake()->sentence(),
         ];
     }

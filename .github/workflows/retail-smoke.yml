@@ -72,4 +72,6 @@ jobs:
           php artisan key:generate
 
       - name: Retail smoke + POS/Analytics regression
-        run: php artisan test --filter="Pos|RetailAnalytics|RetailSmoke"
+        # Path suites (not a broad --filter with "|") so shell never treats OR as a pipe,
+        # and incidental substring matches outside Pos/Analytics are excluded.
+        run: php artisan test tests/Feature/Pos tests/Feature/Analytics
