@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import type { CustomerReview, ProductOrigin, ProductSpecification, ProductShippingContext } from "@/lib/types/catalog";
-import { formatDays, formatPrice } from "@/lib/catalog/utils";
+import { formatDeliveryWindow, formatPrice } from "@/lib/catalog/utils";
 import { LOCAL_DELIVERY_NEGOTIATED_LABEL } from "@/lib/catalog/product-type";
 import { getProductShippingOptions, getDeliveryOptions } from "@/lib/catalog/delivery";
-import { RatingStars } from "../RatingStars";
+import { ProductReviewsPanel } from "../ProductReviewsPanel";
+import { ProductOriginBanner } from "../ProductOriginBanner";
 
 type TabId = "description" | "specifications" | "shipping" | "reviews";
 
@@ -96,10 +97,11 @@ export function ProductMobileTabs({
               <ShippingPanel shippingContext={shippingContext} origin={origin} />
             )}
             {activeTab === "reviews" && (
-              <ReviewsPanel
+              <ProductReviewsPanel
                 reviews={reviews}
                 reviewCount={reviewCount}
                 averageRating={averageRating}
+                compact
               />
             )}
           </motion.div>
@@ -163,7 +165,46 @@ function ShippingPanel({
     const options = getProductShippingOptions(shippingContext);
 
     return (
+      <div className="space-y-2.5">
+        <ProductOriginBanner origin={origin} />
+        <ul className="space-y-2.5">
+          {options.map((option) => (
+            <li
+              key={option.label}
+              className="flex items-start gap-3 rounded-xl border border-zinc-100 bg-zinc-50 px-3.5 py-3"
+            >
+              <span className="text-lg">{option.icon}</span>
+              <div>
+                <p className="text-sm font-semibold text-zinc-900">{option.name}</p>
+                <p className="text-sm font-bold text-[#8b6914]">
+                  {option.shippingCost === null
+                    ? LOCAL_DELIVERY_NEGOTIATED_LABEL
+                    : formatPrice(option.shippingCost)}
+                </p>
+                <p className="text-xs text-zinc-500">{formatDeliveryWindow(option.deliveryDays)}</p>
+              </div>
+            </li>
+          ))}
+          <p className="text-xs leading-relaxed text-zinc-500">
+            Includes customs support and tracking from warehouse to Tanzania.
+          </p>
+        </ul>
+      </div>
+    );
+  }
+
+  const options = getDeliveryOptions("tz");
+
+  return (
+    <div className="space-y-2.5">
+      <ProductOriginBanner origin={origin} />
       <ul className="space-y-2.5">
+        <li className="rounded-xl border border-emerald-100 bg-emerald-50/60 px-3.5 py-3">
+          <p className="text-sm font-semibold text-[#8b6914]">{LOCAL_DELIVERY_NEGOTIATED_LABEL}</p>
+          <p className="mt-1 text-xs text-zinc-600">
+            Local delivery cost is confirmed with you before dispatch.
+          </p>
+        </li>
         {options.map((option) => (
           <li
             key={option.label}
@@ -171,94 +212,15 @@ function ShippingPanel({
           >
             <span className="text-lg">{option.icon}</span>
             <div>
-              <p className="text-sm font-semibold text-zinc-900">{option.name}</p>
-              <p className="text-sm font-bold text-[#8b6914]">
-                {option.shippingCost === null
-                  ? LOCAL_DELIVERY_NEGOTIATED_LABEL
-                  : formatPrice(option.shippingCost)}
-              </p>
-              <p className="text-xs text-zinc-500">{formatDays(option.deliveryDays)}</p>
+              <p className="text-sm font-semibold text-zinc-900">{option.label}</p>
+              <p className="text-sm text-zinc-600">{option.detail}</p>
+              {option.subdetail && (
+                <p className="text-xs font-semibold text-[#8b6914]">{option.subdetail}</p>
+              )}
             </div>
           </li>
         ))}
-        <p className="text-xs leading-relaxed text-zinc-500">
-          Includes customs support and tracking from warehouse to Tanzania.
-        </p>
       </ul>
-    );
-  }
-
-  const options = getDeliveryOptions("tz");
-
-  return (
-    <ul className="space-y-2.5">
-      <li className="rounded-xl border border-emerald-100 bg-emerald-50/60 px-3.5 py-3">
-        <p className="text-sm font-semibold text-[#8b6914]">{LOCAL_DELIVERY_NEGOTIATED_LABEL}</p>
-        <p className="mt-1 text-xs text-zinc-600">
-          Local delivery cost is confirmed with you before dispatch.
-        </p>
-      </li>
-      {options.map((option) => (
-        <li
-          key={option.label}
-          className="flex items-start gap-3 rounded-xl border border-zinc-100 bg-zinc-50 px-3.5 py-3"
-        >
-          <span className="text-lg">{option.icon}</span>
-          <div>
-            <p className="text-sm font-semibold text-zinc-900">{option.label}</p>
-            <p className="text-sm text-zinc-600">{option.detail}</p>
-            {option.subdetail && (
-              <p className="text-xs font-semibold text-[#8b6914]">{option.subdetail}</p>
-            )}
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function ReviewsPanel({
-  reviews,
-  reviewCount,
-  averageRating,
-}: {
-  reviews: CustomerReview[];
-  reviewCount: number;
-  averageRating: number;
-}) {
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-4 rounded-xl bg-zinc-50 px-4 py-3">
-        <p className="text-3xl font-bold text-zinc-900">{averageRating.toFixed(1)}</p>
-        <div>
-          <RatingStars rating={averageRating} size="md" />
-          <p className="mt-1 text-xs text-zinc-500">
-            {reviewCount.toLocaleString()} verified reviews
-          </p>
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        {reviews.map((review) => (
-          <article
-            key={review.id}
-            className="rounded-xl border border-zinc-100 bg-zinc-50/60 p-3.5"
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="text-sm font-semibold text-zinc-900">{review.author}</p>
-                <p className="text-[11px] text-zinc-400">{review.date}</p>
-              </div>
-              <RatingStars rating={review.rating} size="sm" />
-            </div>
-            <h4 className="mt-2 text-sm font-medium text-zinc-800">{review.title}</h4>
-            <p className="mt-1 text-sm leading-relaxed text-zinc-600">{review.comment}</p>
-            {review.verified && (
-              <p className="mt-2 text-[11px] font-medium text-emerald-600">✓ Verified Purchase</p>
-            )}
-          </article>
-        ))}
-      </div>
     </div>
   );
 }

@@ -1,22 +1,60 @@
+import {
+  CatalogApiError,
+  getFeaturedProducts as fetchFeaturedProducts,
+  getProduct as fetchApiProduct,
+  getProducts as fetchApiProducts,
+} from "@/lib/api/products";
+import {
+  mapApiProductCardToCatalogProduct,
+  mapApiProductDetailToCatalogProduct,
+} from "@/lib/catalog/map-api-product";
 import type { Product, ProductFilterOptions, ProductOrigin, SortOption } from "@/lib/types/catalog";
-import { getActiveServerProducts } from "@/lib/services/product-service.server";
-import { SEED_PRODUCTS } from "@/lib/catalog/seed-products";
 import { smartSearchProducts } from "@/lib/search/search-engine";
 
-export { SEED_PRODUCTS };
+export { CatalogApiError } from "@/lib/api/products";
+
+export type CatalogProductsResult = {
+  products: Product[];
+  meta: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+  };
+};
+
+export async function getProductsPage(options?: {
+  page?: number;
+  per_page?: number;
+  featured?: boolean;
+  category?: string;
+  brand?: string;
+  store?: string;
+  origin?: ProductOrigin;
+  search?: string;
+}): Promise<CatalogProductsResult> {
+  const result = await fetchApiProducts(options);
+
+  return {
+    products: result.products.map(mapApiProductCardToCatalogProduct),
+    meta: result.meta,
+  };
+}
 
 export async function getProducts(): Promise<Product[]> {
-  return getActiveServerProducts();
+  const result = await getProductsPage({ per_page: 48, page: 1 });
+  return result.products;
 }
 
 export async function getProductBrands(): Promise<string[]> {
-  const products = await getProducts();
-  return [...new Set(products.map((product) => product.brand).filter(Boolean))] as string[];
+  const { getBrands } = await import("@/lib/api/products");
+  const brands = await getBrands();
+  return brands.map((brand) => brand.name);
 }
 
 export async function getProductsByBrand(brand: string): Promise<Product[]> {
-  const products = await getProducts();
-  return products.filter((product) => product.brand === brand);
+  const result = await getProductsPage({ brand, per_page: 48 });
+  return result.products;
 }
 
 export async function getProductsByOrigin(origin: Product["origin"]): Promise<Product[]> {
@@ -32,8 +70,16 @@ export async function getPriceRange(items?: Product[]): Promise<{ min: number; m
 }
 
 export async function getProductBySlug(slug: string): Promise<Product | undefined> {
-  const products = await getProducts();
-  return products.find((product) => product.slug === slug);
+  try {
+    const product = await fetchApiProduct(slug);
+    return mapApiProductDetailToCatalogProduct(product);
+  } catch (error) {
+    if (error instanceof CatalogApiError && error.statusCode === 404) {
+      return undefined;
+    }
+
+    throw error;
+  }
 }
 
 export async function getProductById(id: number): Promise<Product | undefined> {
@@ -42,33 +88,67 @@ export async function getProductById(id: number): Promise<Product | undefined> {
 }
 
 export async function getProductsByCategory(categorySlug: string): Promise<Product[]> {
-  const products = await getProducts();
-  return products.filter((product) => product.categorySlug === categorySlug);
+  const result = await getProductsPage({ category: categorySlug, per_page: 48 });
+  return result.products;
 }
 
 export async function getRelatedProducts(product: Product, limit = 4): Promise<Product[]> {
-  const products = await getProducts();
-  return products
-    .filter(
-      (entry) =>
-        entry.categorySlug === product.categorySlug &&
-        entry.id !== product.id &&
-        entry.status === "active",
-    )
+  if (!product.categorySlug) {
+    return [];
+  }
+
+  const result = await getProductsPage({
+    category: product.categorySlug,
+    per_page: limit + 1,
+  });
+
+  return result.products
+    .filter((entry) => entry.slug !== product.slug)
     .slice(0, limit);
 }
 
 export async function getFeaturedProducts(limit = 8): Promise<Product[]> {
-  const products = await getProducts();
-  return products.filter((product) => product.featured && product.status === "active").slice(0, limit);
+  const featuredResult = await fetchFeaturedProducts(limit);
+
+  if (featuredResult.length > 0) {
+    return featuredResult.map(mapApiProductCardToCatalogProduct);
+  }
+
+  const fallbackResult = await fetchApiProducts({
+    per_page: Math.max(limit * 2, 16),
+    page: 1,
+  });
+
+  const fallbackCards = [...fallbackResult.products].sort((left, right) => {
+    if (left.is_featured !== right.is_featured) {
+      return left.is_featured ? -1 : 1;
+    }
+
+    return (right.average_rating ?? 0) - (left.average_rating ?? 0);
+  });
+
+  return fallbackCards.slice(0, limit).map(mapApiProductCardToCatalogProduct);
+}
+
+export async function getNewArrivalProducts(limit = 8): Promise<Product[]> {
+  const result = await getProductsPage({
+    per_page: Math.max(limit * 2, 16),
+    page: 1,
+  });
+
+  return sortProducts(result.products, "newest").slice(0, limit);
 }
 
 export async function searchProducts(
   query: string,
   options?: { origin?: ProductOrigin },
 ): Promise<Product[]> {
-  const products = await getProducts();
-  return smartSearchProducts(products, query, {
+  const result = await getProductsPage({
+    search: query,
+    per_page: 48,
+  });
+
+  return smartSearchProducts(result.products, query, {
     origin: options?.origin,
     activeOnly: true,
   });
@@ -97,7 +177,7 @@ export function filterProducts(items: Product[], options: ProductFilterOptions):
     if (options.maxPrice !== undefined && product.price > options.maxPrice) return false;
     if (options.inStock && product.stock <= 0) return false;
     if (options.origin && product.origin !== options.origin) return false;
-    if (options.brand && product.brand !== options.brand) return false;
+    if (options.brand && product.brand !== options.brand && product.brandSlug !== options.brand) return false;
     if (options.minRating !== undefined && product.rating < options.minRating) return false;
     return true;
   });

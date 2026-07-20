@@ -1,3 +1,8 @@
+/**
+ * Legacy helpers for display labels. BUY FROM TZ navigation must use
+ * `/buy-from-tz` + storefront stores API — never catalog brands.
+ */
+
 export interface BrandCategory {
   name: string;
   slug: string;
@@ -7,61 +12,39 @@ export interface BrandMenuItem {
   slug: string;
   name: string;
   icon: string;
+  tagline: string;
   subcategories: readonly BrandCategory[];
 }
 
+/** Canonical TZ retail units (slugs must match StoreSeeder). */
 export const buyFromTzBrandMenu: readonly BrandMenuItem[] = [
   {
     slug: "zion-mode",
     name: "ZION MODE",
     icon: "👗",
-    subcategories: [
-      { name: "Dresses", slug: "dresses" },
-      { name: "Tops & Blouses", slug: "tops-blouses" },
-      { name: "T-Shirts", slug: "t-shirts" },
-      { name: "Jeans", slug: "jeans" },
-      { name: "Trousers", slug: "trousers" },
-      { name: "Skirts", slug: "skirts" },
-      { name: "Jackets", slug: "jackets" },
-      { name: "Hoodies", slug: "hoodies" },
-      { name: "Sweaters", slug: "sweaters" },
-      { name: "Two Piece Sets", slug: "two-piece-sets" },
-      { name: "Activewear", slug: "activewear" },
-      { name: "Shoes", slug: "shoes" },
-      { name: "Handbags", slug: "handbags" },
-      { name: "Accessories", slug: "accessories" },
-      { name: "Beauty & Skin Care", slug: "beauty-skin-care" },
-    ],
+    tagline: "Premium women's fashion from Dar es Salaam",
+    subcategories: [],
   },
   {
     slug: "peachy-lingerie",
     name: "PEACHY LINGERIE",
     icon: "🩱",
-    subcategories: [
-      { name: "Underwear", slug: "underwear" },
-      { name: "Bras", slug: "bras" },
-      { name: "Lingerie Sets", slug: "lingerie-sets" },
-    ],
+    tagline: "Elegant lingerie & intimate apparel",
+    subcategories: [],
   },
   {
     slug: "tzur-jewelry",
     name: "TZUR JEWELRY",
     icon: "💎",
-    subcategories: [
-      { name: "Necklaces", slug: "necklaces" },
-      { name: "Rings", slug: "rings" },
-      { name: "Earrings", slug: "earrings" },
-      { name: "Bracelets", slug: "bracelets" },
-      { name: "Bangles", slug: "bangles" },
-      { name: "Anklets", slug: "anklets" },
-      { name: "Pendants", slug: "pendants" },
-      { name: "Chains", slug: "chains" },
-      { name: "Watches", slug: "watches" },
-      { name: "Jewelry Sets", slug: "jewelry-sets" },
-      { name: "Men's Jewelry", slug: "mens-jewelry" },
-      { name: "Women's Jewelry", slug: "womens-jewelry" },
-      { name: "Gift Collection", slug: "gift-collection" },
-    ],
+    tagline: "Fine jewelry & statement pieces",
+    subcategories: [],
+  },
+  {
+    slug: "rovi-beauty",
+    name: "ROVI BEAUTY",
+    icon: "💄",
+    tagline: "Wigs, skincare & beauty essentials",
+    subcategories: [],
   },
 ] as const;
 
@@ -78,7 +61,7 @@ export const buyFromTzBrands = buyFromTzBrandMenu.map((brand) => ({
 }));
 
 export function getBrandCategoryHref(brandSlug: string, categorySlug: string): string {
-  return `/brand/${brandSlug}/${categorySlug}`;
+  return `/buy-from-tz/${brandSlug}/category/${categorySlug}`;
 }
 
 export function getBrandBySlug(slug: string): BrandMenuItem | undefined {

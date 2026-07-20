@@ -1,0 +1,2 @@
+# Committed demo product image sources (Unsplash) copied to storage/app/public/demo-products during seeding.
+# Regenerate with: node scripts/generate-demo-product-images.mjs

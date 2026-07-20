@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Notifications\GetUnreadNotificationCountAction;
 use App\Actions\Notifications\ListNotificationsAction;
+use App\Actions\Notifications\MarkAllNotificationsAsReadAction;
 use App\Actions\Notifications\MarkNotificationAsReadAction;
 use App\Http\Requests\Notifications\IndexNotificationsRequest;
 use App\Http\Resources\NotificationResource;
@@ -49,6 +50,19 @@ class NotificationController extends Controller
         return response()->json([
             'success' => true,
             'data' => new NotificationResource($action->handle($notification, $user)),
+        ]);
+    }
+
+    public function markAllAsRead(MarkAllNotificationsAsReadAction $action): JsonResponse
+    {
+        /** @var User $user */
+        $user = auth()->user();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'marked' => $action->handle($user),
+            ],
         ]);
     }
 }

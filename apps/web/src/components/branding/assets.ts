@@ -6,8 +6,12 @@ export const BRAND_ASSETS = {
   favicon: "/branding/favicon.png",
   /** Version 3 — footer (dark background variant) */
   footer: "/branding/logo-footer.png",
+  /** Version 3b — footer lockup with transparent background for dark hero surfaces */
+  footerTransparent: "/branding/logo-footer-transparent.png",
   /** Version 4 — full brand lockup for branding pages only */
   branding: "/branding/logo-branding.png",
+  /** Version 4b — wordmark with transparent background for dark hero surfaces */
+  brandingTransparent: "/branding/logo-branding-transparent.png",
   appleTouchIcon: "/branding/apple-touch-icon.png",
 } as const;
 

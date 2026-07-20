@@ -156,6 +156,13 @@ apps/api/database/*.sqlite
 # Docker
 .docker/
 
+# Next.js local/runtime uploads (not release assets)
+apps/web/public/uploads/
+
+# Local audit / temp artifacts (never commit)
+_audit_*.txt
+.tmp-*
+
 # IDE
 .idea/
 .vscode/

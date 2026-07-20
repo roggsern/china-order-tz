@@ -8,6 +8,7 @@ import { DELIVERY_STATUS } from "@/lib/delivery/types";
 import { fetchDelivery } from "@/lib/delivery/delivery-api";
 import { DELIVERY_STATUS_LABELS, DELIVERIES_UPDATED_EVENT } from "@/lib/delivery/delivery-labels";
 import { useAdminOrders } from "@/components/admin/AdminOrdersProvider";
+import { isAdminLocalOrderAuthorityEnabled } from "@/lib/config/env";
 
 interface AdminDeliveryPanelProps {
   order: Order;
@@ -162,10 +163,17 @@ export function AdminDeliveryPanel({ order }: AdminDeliveryPanelProps) {
         {!delivery && order.status === ORDER_STATUS.PROCESSING ? (
           <ActionButton
             label="Mark as Packed"
-            description="Create delivery record and prepare for shipment"
-            disabled={isBusy}
+            description={
+              isAdminLocalOrderAuthorityEnabled()
+                ? "Demo only — create local packed label"
+                : "Use Warehouse queue — packing does not write order.status locally"
+            }
+            disabled={isBusy || !isAdminLocalOrderAuthorityEnabled()}
             onClick={() =>
               runAction(async () => {
+                if (!isAdminLocalOrderAuthorityEnabled()) {
+                  return;
+                }
                 updateOrderStatus(order.id, ORDER_STATUS.PACKED);
               })
             }

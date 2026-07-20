@@ -13,20 +13,23 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
+/**
+ * Legacy Payment rows remain for non-gateway methods (COD/bank).
+ * NMB must use Payment Orchestrator (POST /payments/start/{order}).
+ */
 class CustomerOrderPaymentPreparationTest extends TestCase
 {
     use RefreshDatabase;
 
     private function createPendingOrder(User $user, array $overrides = []): Order
     {
-        return Order::factory()->pending()->create(array_merge([
-            'user_id' => $user->id,
+        return $this->createPayableOrder($user, array_merge([
             'total' => 75000,
             'currency' => 'TZS',
         ], $overrides));
     }
 
-    public function test_payment_preparation(): void
+    public function test_nmb_prepare_is_rejected_in_favor_of_orchestrator(): void
     {
         $user = User::factory()->create();
         $order = $this->createPendingOrder($user);
@@ -35,19 +38,32 @@ class CustomerOrderPaymentPreparationTest extends TestCase
 
         $this->postJson("/api/v1/orders/{$order->id}/payments", [
             'payment_method' => PaymentMethod::Nmb->value,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['payment_method']);
+    }
+
+    public function test_bank_transfer_payment_preparation(): void
+    {
+        $user = User::factory()->create();
+        $order = $this->createPendingOrder($user);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/v1/orders/{$order->id}/payments", [
+            'payment_method' => PaymentMethod::BankTransfer->value,
         ])->assertCreated()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.order_id', $order->id)
             ->assertJsonPath('data.amount', '75000.00')
             ->assertJsonPath('data.currency', 'TZS')
-            ->assertJsonPath('data.payment_method', 'nmb')
+            ->assertJsonPath('data.payment_method', 'bank_transfer')
             ->assertJsonPath('data.status', PaymentStatus::Initiated->value)
             ->assertJsonPath('data.ready_for_payment', true);
 
         $this->assertDatabaseHas('payments', [
             'order_id' => $order->id,
             'user_id' => $user->id,
-            'method' => PaymentMethod::Nmb->value,
+            'method' => PaymentMethod::BankTransfer->value,
             'status' => PaymentStatus::Initiated->value,
             'amount' => '75000.00',
         ]);
@@ -58,9 +74,10 @@ class CustomerOrderPaymentPreparationTest extends TestCase
         $user = User::factory()->create();
         $order = $this->createPendingOrder($user);
 
-        $existingPayment = Payment::factory()->nmb()->create([
+        $existingPayment = Payment::factory()->create([
             'order_id' => $order->id,
             'user_id' => $user->id,
+            'method' => PaymentMethod::Cash,
             'status' => PaymentStatus::Pending,
             'amount' => 75000,
             'currency' => 'TZS',
@@ -70,7 +87,7 @@ class CustomerOrderPaymentPreparationTest extends TestCase
         Sanctum::actingAs($user);
 
         $this->postJson("/api/v1/orders/{$order->id}/payments", [
-            'payment_method' => PaymentMethod::Nmb->value,
+            'payment_method' => PaymentMethod::Cash->value,
         ])->assertCreated()
             ->assertJsonPath('data.id', $existingPayment->id)
             ->assertJsonPath('data.reference', 'PAY-2026-000099')
@@ -84,9 +101,11 @@ class CustomerOrderPaymentPreparationTest extends TestCase
         $user = User::factory()->create();
         $order = $this->createPendingOrder($user);
 
-        Payment::factory()->nmb()->initiated()->create([
+        Payment::factory()->create([
             'order_id' => $order->id,
             'user_id' => $user->id,
+            'method' => PaymentMethod::BankTransfer,
+            'status' => PaymentStatus::Initiated,
             'amount' => 75000,
             'reference' => 'PAY-2026-000010',
         ]);
@@ -96,7 +115,7 @@ class CustomerOrderPaymentPreparationTest extends TestCase
         $this->getJson("/api/v1/orders/{$order->id}/payment")
             ->assertOk()
             ->assertJsonPath('data.reference', 'PAY-2026-000010')
-            ->assertJsonPath('data.payment_method', 'nmb');
+            ->assertJsonPath('data.payment_method', 'bank_transfer');
     }
 
     public function test_paid_order_rejected(): void
@@ -110,7 +129,7 @@ class CustomerOrderPaymentPreparationTest extends TestCase
         Sanctum::actingAs($user);
 
         $this->postJson("/api/v1/orders/{$order->id}/payments", [
-            'payment_method' => PaymentMethod::Nmb->value,
+            'payment_method' => PaymentMethod::Cash->value,
         ])->assertUnprocessable()
             ->assertJsonValidationErrors(['order']);
     }
@@ -120,16 +139,19 @@ class CustomerOrderPaymentPreparationTest extends TestCase
         $user = User::factory()->create();
         $order = $this->createPendingOrder($user);
 
-        Payment::factory()->nmb()->paid()->create([
+        Payment::factory()->create([
             'order_id' => $order->id,
             'user_id' => $user->id,
+            'method' => PaymentMethod::Cash,
+            'status' => PaymentStatus::Paid,
             'amount' => 75000,
+            'paid_at' => now(),
         ]);
 
         Sanctum::actingAs($user);
 
         $this->postJson("/api/v1/orders/{$order->id}/payments", [
-            'payment_method' => PaymentMethod::Nmb->value,
+            'payment_method' => PaymentMethod::Cash->value,
         ])->assertUnprocessable()
             ->assertJsonValidationErrors(['order']);
     }
@@ -143,7 +165,7 @@ class CustomerOrderPaymentPreparationTest extends TestCase
         Sanctum::actingAs($otherUser);
 
         $this->postJson("/api/v1/orders/{$order->id}/payments", [
-            'payment_method' => PaymentMethod::Nmb->value,
+            'payment_method' => PaymentMethod::Cash->value,
         ])->assertNotFound();
 
         $this->getJson("/api/v1/orders/{$order->id}/payment")->assertNotFound();
@@ -154,7 +176,7 @@ class CustomerOrderPaymentPreparationTest extends TestCase
         $order = Order::factory()->pending()->create();
 
         $this->postJson("/api/v1/orders/{$order->id}/payments", [
-            'payment_method' => PaymentMethod::Nmb->value,
+            'payment_method' => PaymentMethod::Cash->value,
         ])->assertUnauthorized();
 
         $this->getJson("/api/v1/orders/{$order->id}/payment")->assertUnauthorized();
@@ -166,7 +188,7 @@ class CustomerOrderPaymentPreparationTest extends TestCase
         $order = Order::factory()->pending()->create();
 
         $this->postJson("/api/v1/orders/{$order->id}/payments", [
-            'payment_method' => PaymentMethod::Nmb->value,
+            'payment_method' => PaymentMethod::Cash->value,
         ])->assertUnauthorized();
 
         $this->getJson("/api/v1/orders/{$order->id}/payment")->assertUnauthorized();
@@ -180,7 +202,7 @@ class CustomerOrderPaymentPreparationTest extends TestCase
         Sanctum::actingAs($user);
 
         $response = $this->postJson("/api/v1/orders/{$order->id}/payments", [
-            'payment_method' => PaymentMethod::Nmb->value,
+            'payment_method' => PaymentMethod::BankTransfer->value,
         ])->assertCreated();
 
         $reference = $response->json('data.reference');

@@ -57,6 +57,23 @@ export function AdminOrderItemsList({ order, items }: AdminOrderItemsListProps) 
                 <span className="font-semibold text-zinc-700">Qty {item.quantity}</span>
                 <span aria-hidden>·</span>
                 <span>{formatPrice(item.price ?? item.unitPrice)} each</span>
+                {item.configurationSku ? (
+                  <>
+                    <span aria-hidden>·</span>
+                    <span className="font-mono">{item.configurationSku}</span>
+                  </>
+                ) : null}
+                {(item.shipping?.method || item.shippingMethod) && (
+                  <>
+                    <span aria-hidden>·</span>
+                    <span>
+                      Ship: {item.shipping?.method ?? item.shippingMethod}
+                      {(item.shipping?.cost ?? item.shippingCost ?? 0) > 0
+                        ? ` (${formatPrice(item.shipping?.cost ?? item.shippingCost)})`
+                        : ""}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
 

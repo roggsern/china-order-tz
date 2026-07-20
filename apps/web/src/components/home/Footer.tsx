@@ -1,9 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { footerLinks } from "@/lib/home-data";
+import { HomepageAdRail } from "@/components/home/commercial/HomepageAdBanner";
 import { OfficialLogoImage } from "@/components/branding/OfficialLogoImage";
+import { useTzStores } from "@/lib/catalog/use-tz-stores";
+import { filterActiveScheduled, getAdsByPlacement, homepageContentSeed } from "@/lib/content/homepage";
+import { useCustomerSession } from "@/lib/customer/use-customer-session";
+import { resolveStorefrontNavAudience } from "@/lib/storefront/navigation-policy";
+import { useStorefrontNavigation } from "@/lib/storefront/use-storefront-navigation";
 import { ArrowRightIcon } from "./icons";
 
 const socialLinks = [
@@ -67,11 +72,73 @@ function FooterNewsletter() {
 }
 
 export function Footer() {
+  const { isLoggedIn, isReady } = useCustomerSession();
+  const audience = resolveStorefrontNavAudience({ isLoggedIn: isReady && isLoggedIn });
+  const { navigation } = useStorefrontNavigation(audience);
+  const { stores: liveTzStores } = useTzStores();
+
+  const footerAds = useMemo(() => {
+    const active = filterActiveScheduled(homepageContentSeed.advertisements);
+    return getAdsByPlacement(active, "footer");
+  }, []);
+
+  const columns = navigation.footerColumns;
+
+  /** Prefer CMS-hydrated TZ stores; else live Store Engine; else column links already in fallback. */
+  const buyFromTzColumn = useMemo(() => {
+    const cmsTz = columns.find(
+      (col) =>
+        col.key.toLowerCase().includes("tz") ||
+        col.title.toLowerCase().includes("buy from tz") ||
+        col.title.toLowerCase().includes("tanzania"),
+    );
+
+    const stores =
+      navigation.footerTzStores.length > 0
+        ? navigation.footerTzStores
+        : liveTzStores.map((store) => ({
+            id: store.id,
+            name: store.name,
+            slug: store.slug,
+            logo_url: store.logo_url ?? null,
+          }));
+
+    // When CMS provided a TZ mega column with stores, keep it.
+    if (cmsTz && navigation.footerTzStores.length > 0) {
+      return cmsTz;
+    }
+
+    // When we have live/CMS stores, rebuild the Buy From TZ column from Store Engine.
+    if (stores.length > 0) {
+      return {
+        key: cmsTz?.key ?? "buyFromTz",
+        title: cmsTz?.title ?? "Buy From TZ",
+        links: [
+          { label: "All stores", href: "/buy-from-tz" },
+          ...stores.slice(0, 8).map((store) => ({
+            label: store.name,
+            href: `/buy-from-tz/${store.slug}`,
+          })),
+        ],
+      };
+    }
+
+    return cmsTz ?? null;
+  }, [columns, navigation.footerTzStores, liveTzStores]);
+
+  const otherColumns = columns.filter((col) => col.key !== buyFromTzColumn?.key);
+
   return (
     <footer id="contact" className="relative bg-zinc-950 text-zinc-400">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#c9a227]/40 to-transparent" />
 
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
+        {footerAds.length > 0 ? (
+          <div className="mb-12">
+            <HomepageAdRail ads={footerAds} compact />
+          </div>
+        ) : null}
+
         <div className="grid gap-12 lg:grid-cols-12 lg:gap-8">
           <div className="lg:col-span-4">
             <OfficialLogoImage variant="footer" height={72} />
@@ -94,63 +161,41 @@ export function Footer() {
           </div>
 
           <div className="grid gap-10 sm:grid-cols-2 lg:col-span-5 lg:grid-cols-3">
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-[#c9a227]">About</h3>
-              <ul className="mt-4 space-y-3">
-                {footerLinks.about.map((link) => (
-                  <li key={link.label}>
-                    <Link href={link.href} className="text-sm transition hover:text-white">
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-[#c9a227]">Contact</h3>
-              <ul className="mt-4 space-y-3">
-                {footerLinks.contact.map((link) => (
-                  <li key={link.label}>
-                    <Link href={link.href} className="text-sm transition hover:text-white">
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-[#c9a227]">
-                Quick Links
-              </h3>
-              <ul className="mt-4 space-y-3">
-                {footerLinks.quickLinks.map((link) => (
-                  <li key={link.label}>
-                    <Link href={link.href} className="text-sm transition hover:text-white">
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {otherColumns.slice(0, 3).map((column) => (
+              <div key={column.key}>
+                <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-[#c9a227]">
+                  {column.title}
+                </h3>
+                <ul className="mt-4 space-y-3">
+                  {column.links.map((link) => (
+                    <li key={`${column.key}-${link.label}-${link.href}`}>
+                      <Link href={link.href} className="text-sm transition hover:text-white">
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
           </div>
 
           <div className="grid gap-10 sm:grid-cols-2 lg:col-span-3 lg:grid-cols-1">
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-[#c9a227]">
-                Buy From TZ
-              </h3>
-              <ul className="mt-4 space-y-3">
-                {footerLinks.buyFromTz.map((link) => (
-                  <li key={link.label}>
-                    <Link href={link.href} className="text-sm transition hover:text-white">
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {buyFromTzColumn ? (
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-[#c9a227]">
+                  {buyFromTzColumn.title}
+                </h3>
+                <ul className="mt-4 space-y-3">
+                  {buyFromTzColumn.links.map((link) => (
+                    <li key={`${buyFromTzColumn.key}-${link.label}-${link.href}`}>
+                      <Link href={link.href} className="text-sm transition hover:text-white">
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
 
             <FooterNewsletter />
           </div>

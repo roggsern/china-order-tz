@@ -6,7 +6,9 @@ use App\Enums\CartStatus;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\DeliveryAddress;
+use App\Models\Inventory;
 use App\Models\User;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class CheckoutService
@@ -30,8 +32,12 @@ class CheckoutService
 
         $cart->load(['items.product.supplier', 'items.variant']);
 
-        $this->validateChinaItemsHaveShipping($cart);
+        foreach ($cart->items as $item) {
+            $this->logCartItemAvailabilityCheck($item);
+        }
 
+        // Shipping choice is enforced on the checkout session before order/payment,
+        // not on the legacy prepare preview.
         $subtotal = $this->calculateItemsSubtotal($cart);
         $chinaShippingTotal = $this->calculateChinaShippingTotal($cart);
         $grandTotal = bcadd($subtotal, $chinaShippingTotal, 2);
@@ -94,7 +100,7 @@ class CheckoutService
     private function validateChinaItemsHaveShipping(Cart $cart): void
     {
         foreach ($cart->items as $item) {
-            if (! $item->product->isFromChina()) {
+            if (! $item->product->requiresChinaShipping()) {
                 continue;
             }
 
@@ -123,7 +129,7 @@ class CheckoutService
         $total = '0.00';
 
         foreach ($cart->items as $item) {
-            if (! $item->product->isFromChina()) {
+            if (! $item->product->requiresChinaShipping()) {
                 continue;
             }
 
@@ -139,11 +145,11 @@ class CheckoutService
     private function buildShippingSummary(Cart $cart, string $chinaShippingTotal): array
     {
         $hasChinaItems = $cart->items->contains(
-            fn (CartItem $item) => $item->product->isFromChina(),
+            fn (CartItem $item) => $item->product->requiresChinaShipping(),
         );
 
         $hasDarItems = $cart->items->contains(
-            fn (CartItem $item) => ! $item->product->isFromChina(),
+            fn (CartItem $item) => ! $item->product->requiresChinaShipping(),
         );
 
         $summary = [];
@@ -151,7 +157,7 @@ class CheckoutService
         if ($hasChinaItems) {
             $summary['china_shipping_total'] = $chinaShippingTotal;
             $summary['china_items'] = $cart->items
-                ->filter(fn (CartItem $item) => $item->product->isFromChina())
+                ->filter(fn (CartItem $item) => $item->product->requiresChinaShipping())
                 ->map(fn (CartItem $item) => [
                     'product_id' => $item->product_id,
                     'shipping_method' => $item->shipping_method?->value,
@@ -174,6 +180,45 @@ class CheckoutService
     {
         throw ValidationException::withMessages([
             $field => [$message],
+        ]);
+    }
+
+    private function logCartItemAvailabilityCheck(CartItem $item): void
+    {
+        $product = $item->product;
+
+        $inventory = Inventory::query()
+            ->where('product_id', $item->product_id)
+            ->when(
+                $item->product_variant_id,
+                fn ($query) => $query->where('product_variant_id', $item->product_variant_id),
+                fn ($query) => $query->whereNull('product_variant_id'),
+            )
+            ->first();
+
+        $availableQuantity = $inventory?->availableQuantity();
+        $isActive = $product->isPurchasable();
+        $hasStock = $inventory !== null && $availableQuantity >= $item->quantity;
+
+        $failureReason = match (true) {
+            $product === null => 'Product record missing',
+            ! $isActive => 'Product is not available for purchase',
+            $inventory === null => 'No inventory record found',
+            $availableQuantity < $item->quantity => 'Insufficient stock',
+            default => null,
+        };
+
+        Log::info('checkout.cart_item_validation', [
+            'cart_item_id' => $item->id,
+            'cart_product_id' => $item->product_id,
+            'database_product_id' => $product?->id,
+            'product_name' => $product?->name,
+            'quantity_requested' => $item->quantity,
+            'stock_quantity' => $availableQuantity,
+            'inventory_record_id' => $inventory?->id,
+            'availability_status' => $hasStock ? 'available' : 'unavailable',
+            'active_status' => $isActive,
+            'validation_failure_reason' => $failureReason,
         ]);
     }
 }

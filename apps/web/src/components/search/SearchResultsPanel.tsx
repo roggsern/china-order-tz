@@ -3,7 +3,6 @@
 import Link from "next/link";
 import type { ProductOrigin } from "@/lib/types/catalog";
 import type { SearchResults } from "@/lib/search/types";
-import { POPULAR_SEARCHES, TRENDING_SEARCHES } from "@/lib/search/constants";
 import { buildProductSearchHref } from "@/lib/search/search-url";
 import { SearchProductRow } from "./SearchProductRow";
 import { SearchCategoryRow } from "./SearchCategoryRow";
@@ -118,40 +117,16 @@ export function SearchResultsPanel({
           </section>
         )}
 
-        {!showLoadingState && !hasQuery && (
-          <>
-            <section className="mb-4">
-              <div className="mb-2 px-2">
-                <SectionHeading>Trending</SectionHeading>
-              </div>
-              <div className="flex flex-wrap gap-2 px-2">
-                {TRENDING_SEARCHES.map((term) => (
-                  <TermChip
-                    key={term}
-                    label={term}
-                    href={buildProductSearchHref(term, origin)}
-                    onSelect={onSelect}
-                  />
-                ))}
-              </div>
-            </section>
-
-            <section className="mb-2">
-              <div className="mb-2 px-2">
-                <SectionHeading>Popular</SectionHeading>
-              </div>
-              <div className="flex flex-wrap gap-2 px-2">
-                {POPULAR_SEARCHES.map((term) => (
-                  <TermChip
-                    key={term}
-                    label={term}
-                    href={buildProductSearchHref(term, origin)}
-                    onSelect={onSelect}
-                  />
-                ))}
-              </div>
-            </section>
-          </>
+        {!showLoadingState && !hasQuery && recentSearches.length === 0 && (
+          <div className="px-2 py-10 text-center">
+            <span className="text-3xl" aria-hidden>
+              🔍
+            </span>
+            <p className="mt-3 text-sm font-bold text-zinc-900">Search the catalog</p>
+            <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+              Start typing to find products from the live catalog.
+            </p>
+          </div>
         )}
 
         {!showLoadingState && hasQuery && hasGroups && (
@@ -223,27 +198,29 @@ export function SearchResultsPanel({
         )}
 
         {showEmpty && (
-          <div className="px-2 py-10 text-center">
-            <span className="text-3xl" aria-hidden>
-              🔍
-            </span>
-            <p className="mt-3 text-sm font-semibold text-zinc-800">No results found</p>
-            <p className="mt-1 text-xs text-zinc-500">
-              No matches for &ldquo;{trimmed}&rdquo;
-              {origin === "china"
-                ? " in China products"
-                : origin === "tz"
-                  ? " in Buy from Dar"
-                  : ""}
-              . Try another keyword or switch marketplace.
-            </p>
-            <Link
-              href={resultsHref}
-              onClick={() => onSelect(resultsHref, trimmed)}
-              className="mt-4 inline-flex text-sm font-semibold text-[#8b6914] hover:text-[#c9a227]"
-            >
-              View all results {"→"}
-            </Link>
+          <div className="px-2 py-8">
+            <div className="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50/80 px-4 py-10 text-center">
+              <span className="text-3xl" aria-hidden>
+                🔍
+              </span>
+              <p className="mt-3 text-sm font-bold text-zinc-900">No matching products found</p>
+              <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                Try different keywords
+                {origin === "china"
+                  ? " or search in Buy from Dar"
+                  : origin === "tz"
+                    ? " or search China products"
+                    : ""}
+                .
+              </p>
+              <Link
+                href="/products"
+                onClick={() => onSelect("/products")}
+                className="mt-5 inline-flex text-sm font-semibold text-[#8b6914] hover:text-[#c9a227]"
+              >
+                Browse all products →
+              </Link>
+            </div>
           </div>
         )}
 

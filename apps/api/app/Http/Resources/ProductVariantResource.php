@@ -25,6 +25,7 @@ class ProductVariantResource extends JsonResource
             ),
             'attribute_values' => ProductAttributeValueResource::collection($this->whenLoaded('attributeValues')),
             'inventory' => new InventoryResource($this->whenLoaded('inventory')),
+            'price_tiers' => ConfigurationPriceTierResource::collection($this->whenLoaded('priceTiers')),
         ];
     }
 }

@@ -2,9 +2,12 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
-import { categories } from "@/lib/catalog/categories";
 import { useCatalogProducts } from "@/lib/catalog/use-catalog-products";
+import { useCatalogCategories } from "@/lib/catalog/use-catalog-categories";
+import { useCatalogBrands } from "@/lib/catalog/use-catalog-brands";
 import type { ProductOrigin, SortOption } from "@/lib/types/catalog";
+import { ProductFiltersSkeleton } from "@/components/catalog/ProductFiltersSkeleton";
+import { CatalogErrorState } from "@/components/catalog/CatalogErrorState";
 
 const sortOptions: { value: SortOption; label: string }[] = [
   { value: "featured", label: "Featured" },
@@ -40,16 +43,31 @@ function FilterPanel({ className = "" }: { className?: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const products = useCatalogProducts();
-  const productBrands = useMemo(
-    () => [...new Set(products.map((product) => product.brand).filter(Boolean))] as string[],
-    [products],
-  );
+  const { products, isLoading: productsLoading, error: productsError } = useCatalogProducts();
+  const { categories: categoryTree, isLoading: categoriesLoading, error: categoriesError } =
+    useCatalogCategories();
+  const { brands, isLoading: brandsLoading, error: brandsError } = useCatalogBrands();
+
+  const categories = useMemo(() => {
+    const flat: typeof categoryTree = [];
+    const walk = (nodes: typeof categoryTree) => {
+      for (const node of nodes) {
+        flat.push(node);
+        if (node.children?.length) {
+          walk(node.children);
+        }
+      }
+    };
+    walk(categoryTree);
+    return flat;
+  }, [categoryTree]);
+
   const priceRange = useMemo(() => {
     if (products.length === 0) return { min: 0, max: 0 };
     const prices = products.map((product) => product.price);
     return { min: Math.min(...prices), max: Math.max(...prices) };
   }, [products]);
+
   const basePath = pathname.startsWith("/categories/") ? pathname : "/products";
 
   const currentCategory = searchParams.get("category") ?? "";
@@ -64,6 +82,9 @@ function FilterPanel({ className = "" }: { className?: string }) {
   const [localMinPrice, setLocalMinPrice] = useState(minPrice || String(priceRange.min));
   const [localMaxPrice, setLocalMaxPrice] = useState(maxPrice || String(priceRange.max));
 
+  const isLoading = productsLoading || categoriesLoading || brandsLoading;
+  const loadError = productsError || categoriesError || brandsError;
+
   const updateParams = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
     if (value) {
@@ -71,6 +92,7 @@ function FilterPanel({ className = "" }: { className?: string }) {
     } else {
       params.delete(key);
     }
+    params.delete("page");
     router.push(`${basePath}?${params.toString()}`);
   };
 
@@ -85,6 +107,7 @@ function FilterPanel({ className = "" }: { className?: string }) {
     if (max < priceRange.max) params.set("maxPrice", String(max));
     else params.delete("maxPrice");
 
+    params.delete("page");
     router.push(`${basePath}?${params.toString()}`);
   };
 
@@ -92,6 +115,7 @@ function FilterPanel({ className = "" }: { className?: string }) {
     const params = new URLSearchParams(searchParams.toString());
     if (inStockOnly) params.delete("inStock");
     else params.set("inStock", "true");
+    params.delete("page");
     router.push(`${basePath}?${params.toString()}`);
   };
 
@@ -110,6 +134,20 @@ function FilterPanel({ className = "" }: { className?: string }) {
     maxPrice ||
     inStockOnly ||
     currentSort !== "featured";
+
+  if (isLoading) {
+    return <ProductFiltersSkeleton className={className} />;
+  }
+
+  if (loadError) {
+    return (
+      <CatalogErrorState
+        title="Filters unavailable"
+        message={loadError}
+        className={className}
+      />
+    );
+  }
 
   return (
     <aside className={`space-y-6 ${className}`}>
@@ -164,7 +202,7 @@ function FilterPanel({ className = "" }: { className?: string }) {
             </div>
           </FilterSection>
 
-          {productBrands.length > 0 && (
+          {brands.length > 0 && (
             <FilterSection title="Brand">
               <ul className="space-y-1">
                 <li>
@@ -180,18 +218,18 @@ function FilterPanel({ className = "" }: { className?: string }) {
                     All Brands
                   </button>
                 </li>
-                {productBrands.map((brand) => (
-                  <li key={brand}>
+                {brands.map((brand) => (
+                  <li key={brand.id}>
                     <button
                       type="button"
-                      onClick={() => updateParams("brand", brand)}
+                      onClick={() => updateParams("brand", brand.slug)}
                       className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
-                        currentBrand === brand
+                        currentBrand === brand.slug
                           ? "bg-[#c9a227]/10 font-semibold text-[#8b6914]"
                           : "text-zinc-600 hover:bg-zinc-50"
                       }`}
                     >
-                      {brand}
+                      {brand.name}
                     </button>
                   </li>
                 ))}
@@ -214,22 +252,26 @@ function FilterPanel({ className = "" }: { className?: string }) {
                   All Categories
                 </button>
               </li>
-              {categories.map((category) => (
-                <li key={category.slug}>
-                  <button
-                    type="button"
-                    onClick={() => updateParams("category", category.slug)}
-                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition ${
-                      currentCategory === category.slug
-                        ? "bg-[#c9a227]/10 font-semibold text-[#8b6914]"
-                        : "text-zinc-600 hover:bg-zinc-50"
-                    }`}
-                  >
-                    <span>{category.icon}</span>
-                    {category.name}
-                  </button>
-                </li>
-              ))}
+              {categories.length === 0 ? (
+                <li className="px-3 py-2 text-sm text-zinc-400">No categories configured.</li>
+              ) : (
+                categories.map((category) => (
+                  <li key={category.slug}>
+                    <button
+                      type="button"
+                      onClick={() => updateParams("category", category.slug)}
+                      className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition ${
+                        currentCategory === category.slug
+                          ? "bg-[#c9a227]/10 font-semibold text-[#8b6914]"
+                          : "text-zinc-600 hover:bg-zinc-50"
+                      }`}
+                    >
+                      <span>{category.icon}</span>
+                      {category.name}
+                    </button>
+                  </li>
+                ))
+              )}
             </ul>
           </FilterSection>
 

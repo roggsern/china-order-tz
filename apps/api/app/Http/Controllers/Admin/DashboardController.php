@@ -4,16 +4,19 @@ namespace App\Http\Controllers\Admin;
 
 use App\Actions\AdminDashboard\GetAdminDashboardAction;
 use App\Http\Controllers\Controller;
-use App\Http\Resources\AdminDashboardResource;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
-    public function index(GetAdminDashboardAction $action): JsonResponse
+    public function index(Request $request, GetAdminDashboardAction $action): JsonResponse
     {
         return response()->json([
             'success' => true,
-            'data' => new AdminDashboardResource($action->handle()),
+            'data' => $action->handle(
+                $request->query('from'),
+                $request->query('to'),
+            ),
         ]);
     }
 }

@@ -2,8 +2,11 @@
 
 namespace App\Providers;
 
+use App\Support\PreventsDestructiveDatabaseCommands;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
@@ -22,6 +25,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Event::listen(CommandStarting::class, PreventsDestructiveDatabaseCommands::class);
+
         RateLimiter::for('admin-login', function (Request $request) {
             return Limit::perMinute(5)->by(
                 $request->ip().'|'.strtolower((string) $request->input('email'))

@@ -27,6 +27,8 @@ class ProductVariantFactory extends Factory
             'barcode' => fake()->optional()->numerify('############'),
             'weight' => fake()->randomFloat(3, 0.1, 5),
             'is_active' => true,
+            'is_default' => false,
+            'sort_order' => 0,
         ];
     }
 }

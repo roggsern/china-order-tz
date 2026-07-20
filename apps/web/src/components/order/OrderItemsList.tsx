@@ -1,7 +1,6 @@
 "use client";
 
 import type { OrderLineItem } from "@/lib/types/order";
-import { formatDays } from "@/lib/catalog/utils";
 import { formatPrice } from "@/lib/catalog/utils";
 import { getMethodByCode } from "@/lib/shipping/engine";
 import { ProductImageDisplay } from "@/components/catalog/ProductImageDisplay";
@@ -35,12 +34,27 @@ export function OrderItemsList({ items, showShipping = true }: OrderItemsListPro
               <p className="line-clamp-2 text-sm font-semibold leading-snug text-zinc-900">
                 {item.name}
               </p>
-              <VariantLabel variant={item.variant} className="mt-0.5" />
-              <p className="mt-1 text-xs text-zinc-500">Qty {item.quantity}</p>
+              {(item.configurationLabel || item.variant) && (
+                item.configurationLabel ? (
+                  <p className="mt-0.5 text-xs text-zinc-500">{item.configurationLabel}</p>
+                ) : (
+                  <VariantLabel variant={item.variant} className="mt-0.5" />
+                )
+              )}
+              {item.configurationSku ? (
+                <p className="mt-0.5 font-mono text-[11px] text-zinc-400">
+                  {item.configurationSku}
+                </p>
+              ) : null}
+              <p className="mt-1 text-xs text-zinc-500">
+                Qty {item.quantity} · {formatPrice(item.price ?? item.unitPrice)} each
+              </p>
               {showShipping && method && (
                 <p className="mt-1.5 text-xs text-zinc-500">
-                  {method.icon} {method.name} ·{" "}
-                  {formatDays(item.shipping?.days ?? item.estimatedDeliveryDays)} est.
+                  {method.icon} {method.name}
+                  {(item.shipping?.cost ?? item.shippingCost) > 0
+                    ? ` · ${formatPrice(item.shipping?.cost ?? item.shippingCost)} ship`
+                    : ""}
                 </p>
               )}
             </div>

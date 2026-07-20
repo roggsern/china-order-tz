@@ -21,7 +21,11 @@ FROM base AS development
 WORKDIR /app
 COPY apps/web/ ./
 COPY --from=node_modules_flat /out/node_modules ./node_modules
+COPY --from=node_modules_flat /out/node_modules /opt/node_modules
+COPY docker/node/docker-entrypoint.dev.sh /usr/local/bin/docker-entrypoint.dev.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.dev.sh
 EXPOSE 3000
+ENTRYPOINT ["docker-entrypoint.dev.sh"]
 CMD ["npm", "run", "dev", "--", "--hostname", "0.0.0.0", "--port", "3000"]
 
 FROM deps AS builder

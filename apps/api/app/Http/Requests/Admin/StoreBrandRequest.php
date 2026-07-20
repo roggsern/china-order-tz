@@ -18,6 +18,27 @@ class StoreBrandRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255', 'unique:brands,name'],
+            'description' => ['sometimes', 'nullable', 'string'],
+            'logo' => ['sometimes', 'nullable', 'string', 'max:2048'],
+            'banner' => ['sometimes', 'nullable', 'string', 'max:2048'],
+            'website' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'country' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'is_featured' => ['sometimes', 'boolean'],
+            'sort_order' => ['sometimes', 'integer', 'min:0', 'max:999999'],
+            'is_active' => ['sometimes', 'boolean'],
+            'category_ids' => ['sometimes', 'array'],
+            'category_ids.*' => ['uuid', 'exists:categories,id'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        foreach (['is_active', 'is_featured'] as $field) {
+            if ($this->has($field) && ! is_bool($this->input($field))) {
+                $this->merge([
+                    $field => filter_var($this->input($field), FILTER_VALIDATE_BOOLEAN),
+                ]);
+            }
+        }
     }
 }

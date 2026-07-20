@@ -6,6 +6,7 @@ use App\Models\Concerns\HasUuidPrimaryKey;
 use Database\Factories\ReviewFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Model;
 
@@ -20,8 +21,10 @@ class Review extends Model
         'order_id',
         'rating',
         'title',
+        'body',
         'comment',
         'is_approved',
+        'status',
         'is_verified_purchase',
     ];
 
@@ -47,5 +50,10 @@ class Review extends Model
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
+    }
+
+    public function images(): HasMany
+    {
+        return $this->hasMany(ReviewImage::class);
     }
 }

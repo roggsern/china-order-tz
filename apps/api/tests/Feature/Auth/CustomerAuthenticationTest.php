@@ -27,7 +27,7 @@ class CustomerAuthenticationTest extends TestCase
         $response = $this->postJson('/api/v1/register', [
             'name' => 'Jane Customer',
             'email' => 'jane@example.com',
-            'phone' => '0712345678',
+            'phone' => '+255712345678',
             'password' => 'password123',
             'password_confirmation' => 'password123',
         ]);

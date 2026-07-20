@@ -37,15 +37,27 @@ import {
   cartItemsMatch,
   clampQuantity,
   createCartItemId,
+  createConfigurationCartItemId,
   createSavedItemId,
   productToCartSnapshot,
 } from "@/lib/cart/utils";
 import { validateCartAgainstCatalog } from "@/lib/cart/validation";
+import { fetchClientCatalogProducts } from "@/lib/catalog/client-catalog";
 import { productService } from "@/lib/services/product-service.client";
 import { applyCartItemShipping } from "@/lib/cart/shipping";
 import { clearCheckoutDraft } from "@/lib/checkout/draft";
 import { isAdminPath, isPostCheckoutPath } from "@/lib/checkout/routes";
 import { PRODUCTS_UPDATED_EVENT } from "@/lib/admin/product-storage";
+import { getCustomerApiToken } from "@/lib/api/customer-auth";
+import {
+  addServerCartItem,
+  clearServerCartEngine,
+  fetchServerCart,
+  isServerCartItemId,
+  mapServerCartItems,
+  removeServerCartItem,
+  updateServerCartItemQuantity,
+} from "@/lib/api/customer-cart";
 import { CartDrawerProvider } from "@/lib/cart/drawer-context";
 import { CartDrawer } from "./CartDrawer";
 
@@ -76,7 +88,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [isHydrated, setIsHydrated] = useState(false);
   const hydrationRef = useRef(false);
   const itemsRef = useRef(state.items);
+  const serverModeRef = useRef(false);
   itemsRef.current = state.items;
+
+  const applyServerCart = useCallback((serverItems: CartLineItem[], prev: CartState): CartState => {
+    serverModeRef.current = true;
+    return normalizeCartState({
+      ...prev,
+      items: serverItems,
+      discount: 0,
+    });
+  }, []);
 
   useEffect(() => {
     if (hydrationRef.current || typeof window === "undefined") {
@@ -93,11 +115,68 @@ export function CartProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    void productService.list().then((products) => {
-      setState(validateCartAgainstCatalog(loaded, products));
+    const hydrateCart = async () => {
+      let products;
+
+      try {
+        products = await fetchClientCatalogProducts();
+      } catch {
+        products = await productService.list();
+      }
+
+      const validated = validateCartAgainstCatalog(loaded, products);
+      const token = getCustomerApiToken();
+
+      if (!token) {
+        serverModeRef.current = false;
+        setState(validated);
+        setIsHydrated(true);
+        return;
+      }
+
+      try {
+        let serverCart = await fetchServerCart(token);
+
+        if ((serverCart.items?.length ?? 0) === 0) {
+          const syncable = validated.items.filter(
+            (item) => item.configurationId && item.catalogProductId,
+          );
+
+          for (const item of syncable) {
+            await addServerCartItem(
+              {
+                productId: item.catalogProductId!,
+                productVariantId: item.configurationId!,
+                quantity: item.quantity,
+              },
+              token,
+            );
+          }
+
+          if (syncable.length > 0) {
+            serverCart = await fetchServerCart(token);
+          }
+        }
+
+        if ((serverCart.items?.length ?? 0) > 0) {
+          const mapped = mapServerCartItems(serverCart);
+          const next = applyServerCart(mapped, validated);
+          persistState(next);
+          setState(next);
+        } else {
+          serverModeRef.current = false;
+          setState(validated);
+        }
+      } catch {
+        serverModeRef.current = false;
+        setState(validated);
+      }
+
       setIsHydrated(true);
-    });
-  }, []);
+    };
+
+    void hydrateCart();
+  }, [applyServerCart]);
 
   useEffect(() => {
     if (!isHydrated || typeof window === "undefined") {
@@ -114,13 +193,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      void productService.list({ refresh: true }).then((products) => {
+      void (async () => {
+        let products;
+
+        try {
+          products = await fetchClientCatalogProducts();
+        } catch {
+          products = await productService.list({ refresh: true });
+        }
+
         setState((prev) => {
           const next = validateCartAgainstCatalog(prev, products);
           persistState(next);
           return next;
         });
-      });
+      })();
     };
 
     const onProductsUpdated = () => revalidateCart();
@@ -147,28 +234,129 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addToCart = useCallback(
-    ({ product, quantity = 1, variant }: AddToCartInput) => {
-      if (product.stock <= 0) {
+    ({
+      product,
+      quantity = 1,
+      variant,
+      configurationId = null,
+      configurationLabel,
+      configurationSku,
+      selectedAttributes,
+      quotedUnitPrice,
+      compareAtUnitPrice,
+      stockOverride,
+    }: AddToCartInput) => {
+      const stockLimit = stockOverride ?? product.stock;
+      if (stockLimit <= 0) {
         return;
       }
 
       clearCheckoutDraft();
 
       const normalizedVariant = normalizeVariantChoice(variant);
-      if (!canAddProductToCart(product, normalizedVariant)) {
+      if (!configurationId && !canAddProductToCart(product, normalizedVariant)) {
         return;
       }
 
-      const snapshot = productToCartSnapshot(product, { variant: normalizedVariant });
-      const nextQuantity = clampQuantity(quantity, product.stock);
+      const token = getCustomerApiToken();
+      const catalogProductId = product.catalogProductId?.trim();
+
+      if (token && configurationId && catalogProductId) {
+        void (async () => {
+          try {
+            const serverCart = await addServerCartItem(
+              {
+                productId: catalogProductId,
+                productVariantId: configurationId,
+                quantity: clampQuantity(quantity, stockLimit),
+              },
+              token,
+            );
+            updateState((prev) => applyServerCart(mapServerCartItems(serverCart), prev));
+          } catch {
+            // Fall through to local cart so the shopper still sees the item.
+            const snapshot = productToCartSnapshot(product, {
+              variant: normalizedVariant,
+              configurationId,
+              configurationLabel,
+              configurationSku,
+              selectedAttributes,
+              quotedUnitPrice,
+              compareAtUnitPrice,
+              stockOverride,
+            });
+            const nextQuantity = clampQuantity(quantity, stockLimit);
+
+            updateState((prev) => {
+              const existing = prev.items.find((item) =>
+                cartItemsMatch(item, {
+                  productId: product.id,
+                  variant: normalizedVariant,
+                  configurationId,
+                }),
+              );
+
+              if (existing) {
+                const mergedQuantity = clampQuantity(
+                  existing.quantity + nextQuantity,
+                  stockLimit,
+                );
+                return {
+                  ...prev,
+                  items: prev.items.map((item) =>
+                    item.id === existing.id
+                      ? applyCartItemShipping({
+                          ...existing,
+                          ...snapshot,
+                          quantity: mergedQuantity,
+                          shippingMethod: existing.shippingMethod,
+                        })
+                      : item,
+                  ),
+                };
+              }
+
+              return {
+                ...prev,
+                items: [
+                  ...prev.items,
+                  withShipping({
+                    id: createConfigurationCartItemId(product.id, configurationId),
+                    ...snapshot,
+                    quantity: nextQuantity,
+                    addedAt: new Date().toISOString(),
+                  }),
+                ],
+              };
+            });
+          }
+        })();
+        return;
+      }
+
+      const snapshot = productToCartSnapshot(product, {
+        variant: normalizedVariant,
+        configurationId,
+        configurationLabel,
+        configurationSku,
+        selectedAttributes,
+        quotedUnitPrice,
+        compareAtUnitPrice,
+        stockOverride,
+      });
+      const nextQuantity = clampQuantity(quantity, stockLimit);
 
       updateState((prev) => {
         const existing = prev.items.find((item) =>
-          cartItemsMatch(item, { productId: product.id, variant: normalizedVariant }),
+          cartItemsMatch(item, {
+            productId: product.id,
+            variant: normalizedVariant,
+            configurationId,
+          }),
         );
 
         if (existing) {
-          const mergedQuantity = clampQuantity(existing.quantity + nextQuantity, product.stock);
+          const mergedQuantity = clampQuantity(existing.quantity + nextQuantity, stockLimit);
           const merged = applyCartItemShipping({
             ...existing,
             ...snapshot,
@@ -182,7 +370,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
         }
 
         const newItem = withShipping({
-          id: createCartItemId(product.id, normalizedVariant),
+          id: configurationId
+            ? createConfigurationCartItemId(product.id, configurationId)
+            : createCartItemId(product.id, normalizedVariant),
           ...snapshot,
           quantity: nextQuantity,
           addedAt: new Date().toISOString(),
@@ -194,11 +384,36 @@ export function CartProvider({ children }: { children: ReactNode }) {
         };
       });
     },
-    [updateState],
+    [applyServerCart, updateState],
   );
 
   const updateQuantity = useCallback(
     (itemId: string, quantity: number) => {
+      const token = getCustomerApiToken();
+      const shouldSyncServer =
+        Boolean(token) && (serverModeRef.current || isServerCartItemId(itemId));
+
+      if (shouldSyncServer && token) {
+        void (async () => {
+          try {
+            const serverCart =
+              quantity <= 0
+                ? await removeServerCartItem(itemId, token)
+                : await updateServerCartItemQuantity(
+                    itemId,
+                    clampQuantity(
+                      quantity,
+                      itemsRef.current.find((entry) => entry.id === itemId)?.stock ?? quantity,
+                    ),
+                    token,
+                  );
+            updateState((prev) => applyServerCart(mapServerCartItems(serverCart), prev));
+          } catch {
+            // Keep optimistic local update when the API is unavailable.
+          }
+        })();
+      }
+
       updateState((prev) => {
         const item = prev.items.find((entry) => entry.id === itemId);
         if (!item) {
@@ -223,6 +438,35 @@ export function CartProvider({ children }: { children: ReactNode }) {
         };
       });
     },
+    [applyServerCart, updateState],
+  );
+
+  const updateLinePricing = useCallback(
+    (itemId: string, pricing: { unitPrice: number; compareAtUnitPrice?: number }) => {
+      updateState((prev) => ({
+        ...prev,
+        items: prev.items.map((entry) => {
+          if (entry.id !== itemId) return entry;
+          const unitPrice = Number.isFinite(pricing.unitPrice)
+            ? pricing.unitPrice
+            : entry.unitPrice;
+          const compareAt =
+            typeof pricing.compareAtUnitPrice === "number" &&
+            Number.isFinite(pricing.compareAtUnitPrice) &&
+            pricing.compareAtUnitPrice > unitPrice
+              ? pricing.compareAtUnitPrice
+              : pricing.compareAtUnitPrice === undefined
+                ? entry.compareAtUnitPrice
+                : undefined;
+
+          return applyCartItemShipping({
+            ...entry,
+            unitPrice,
+            compareAtUnitPrice: compareAt,
+          });
+        }),
+      }));
+    },
     [updateState],
   );
 
@@ -242,12 +486,24 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const removeItem = useCallback(
     (itemId: string) => {
+      const token = getCustomerApiToken();
+      if (token && (serverModeRef.current || isServerCartItemId(itemId))) {
+        void (async () => {
+          try {
+            const serverCart = await removeServerCartItem(itemId, token);
+            updateState((prev) => applyServerCart(mapServerCartItems(serverCart), prev));
+          } catch {
+            // Local removal still applied below.
+          }
+        })();
+      }
+
       updateState((prev) => ({
         ...prev,
         items: prev.items.filter((item) => item.id !== itemId),
       }));
     },
-    [updateState],
+    [applyServerCart, updateState],
   );
 
   const saveForLater = useCallback(
@@ -264,11 +520,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
         const savedItem: SavedForLaterItem = {
           id: savedId,
           productId: item.productId,
+          catalogProductId: item.catalogProductId,
           slug: item.slug,
           name: item.name,
           unitPrice: item.unitPrice,
+          compareAtUnitPrice: item.compareAtUnitPrice,
           origin: item.origin,
           brand: item.brand,
+          brandSlug: item.brandSlug,
           categorySlug: item.categorySlug,
           weightKg: item.weightKg,
           airCost: item.airCost,
@@ -279,10 +538,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
           stock: item.stock,
           variant: item.variant,
           selectedSize: item.selectedSize,
+          configurationId: item.configurationId,
+          configurationLabel: item.configurationLabel,
+          configurationSku: item.configurationSku,
+          selectedAttributes: item.selectedAttributes,
           unitShippingCost: item.unitShippingCost,
           shippingMethod: item.shippingMethod,
           shippingCost: item.shippingCost,
           estimatedDeliveryDays: item.estimatedDeliveryDays,
+          shippingOptions: item.shippingOptions,
           savedAt: new Date().toISOString(),
         };
 
@@ -333,13 +597,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
         }
 
         const newItem = withShipping({
-          id: createCartItemId(savedItem.productId, savedItem.variant),
+          id: savedItem.configurationId
+            ? createConfigurationCartItemId(savedItem.productId, savedItem.configurationId)
+            : createCartItemId(savedItem.productId, savedItem.variant),
           productId: savedItem.productId,
+          catalogProductId: savedItem.catalogProductId,
           slug: savedItem.slug,
           name: savedItem.name,
           unitPrice: savedItem.unitPrice,
+          compareAtUnitPrice: savedItem.compareAtUnitPrice,
           origin: savedItem.origin,
           brand: savedItem.brand,
+          brandSlug: savedItem.brandSlug,
           categorySlug: savedItem.categorySlug,
           weightKg: savedItem.weightKg,
           airCost: savedItem.airCost,
@@ -350,8 +619,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
           stock: savedItem.stock,
           variant: savedItem.variant,
           selectedSize: savedItem.selectedSize,
+          configurationId: savedItem.configurationId,
+          configurationLabel: savedItem.configurationLabel,
+          configurationSku: savedItem.configurationSku,
+          selectedAttributes: savedItem.selectedAttributes,
+          shippingOptions: savedItem.shippingOptions,
           quantity: nextQuantity,
           addedAt: new Date().toISOString(),
+          shippingMethod: savedItem.shippingMethod,
         });
 
         return {
@@ -375,6 +650,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
   );
 
   const clearPurchasedItems = useCallback(() => {
+    const token = getCustomerApiToken();
+    if (token && serverModeRef.current) {
+      void clearServerCartEngine(token).catch(() => undefined);
+    }
+
     updateState((prev) => ({
       ...prev,
       items: [],
@@ -383,8 +663,28 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [updateState]);
 
   const clearCart = useCallback(() => {
+    const token = getCustomerApiToken();
+    if (token && (serverModeRef.current || itemsRef.current.some((item) => isServerCartItemId(item.id)))) {
+      void (async () => {
+        try {
+          const serverCart = await clearServerCartEngine(token);
+          updateState((prev) =>
+            applyServerCart(mapServerCartItems(serverCart), {
+              ...prev,
+              savedForLater: [],
+              discount: 0,
+            }),
+          );
+        } catch {
+          updateState(() => EMPTY_CART_STATE);
+        }
+      })();
+      return;
+    }
+
+    serverModeRef.current = false;
     updateState(() => EMPTY_CART_STATE);
-  }, [updateState]);
+  }, [applyServerCart, updateState]);
 
   const isInCart = useCallback(
     (productId: number) => itemsRef.current.some((item) => item.productId === productId),
@@ -411,6 +711,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     () => ({
       addToCart,
       updateQuantity,
+      updateLinePricing,
       updateShippingMethod,
       removeItem,
       saveForLater,
@@ -423,6 +724,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     [
       addToCart,
       updateQuantity,
+      updateLinePricing,
       updateShippingMethod,
       removeItem,
       saveForLater,
@@ -458,6 +760,13 @@ export function useAddToCart(
   quantity = 1,
   options?: {
     variant?: ProductVariantChoice;
+    configurationId?: string | null;
+    configurationLabel?: string;
+    configurationSku?: string;
+    selectedAttributes?: AddToCartInput["selectedAttributes"];
+    quotedUnitPrice?: number;
+    compareAtUnitPrice?: number;
+    stockOverride?: number;
     disabled?: boolean;
   },
 ) {
@@ -469,6 +778,26 @@ export function useAddToCart(
       product,
       quantity,
       variant: options?.variant,
+      configurationId: options?.configurationId,
+      configurationLabel: options?.configurationLabel,
+      configurationSku: options?.configurationSku,
+      selectedAttributes: options?.selectedAttributes,
+      quotedUnitPrice: options?.quotedUnitPrice,
+      compareAtUnitPrice: options?.compareAtUnitPrice,
+      stockOverride: options?.stockOverride,
     });
-  }, [addToCart, product, quantity, options?.variant, options?.disabled]);
+  }, [
+    addToCart,
+    product,
+    quantity,
+    options?.variant,
+    options?.configurationId,
+    options?.configurationLabel,
+    options?.configurationSku,
+    options?.selectedAttributes,
+    options?.quotedUnitPrice,
+    options?.compareAtUnitPrice,
+    options?.stockOverride,
+    options?.disabled,
+  ]);
 }

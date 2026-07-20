@@ -1,6 +1,6 @@
 import type { CheckoutFormData, CheckoutFormErrors } from "@/lib/types/checkout";
 import type { ShippingMethodCode } from "@/lib/shipping/types";
-import { formatTanzaniaPhone, isValidTanzaniaPhone, TZ_PHONE_VALIDATION_MESSAGE } from "@/lib/checkout/phone";
+import { formatPhoneOnBlur, isValidPhoneNumber, PHONE_VALIDATION_MESSAGE } from "@/lib/phone";
 import { isValidTanzaniaRegion } from "@/lib/checkout/tanzania-regions";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -142,8 +142,8 @@ export function validatePhone(value: string): string | undefined {
   if (!trimmed) {
     return "Phone number is required";
   }
-  if (!isValidTanzaniaPhone(trimmed)) {
-    return TZ_PHONE_VALIDATION_MESSAGE;
+  if (!isValidPhoneNumber(trimmed)) {
+    return PHONE_VALIDATION_MESSAGE;
   }
   return undefined;
 }
@@ -242,7 +242,7 @@ export function normalizeCheckoutForm(form: CheckoutFormData): CheckoutFormData 
       firstName: form.customer.firstName.trim(),
       lastName: form.customer.lastName.trim(),
       email: form.customer.email.trim(),
-      phone: formatTanzaniaPhone(form.customer.phone),
+      phone: formatPhoneOnBlur(form.customer.phone),
     },
     shippingAddress: {
       ...form.shippingAddress,

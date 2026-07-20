@@ -22,7 +22,7 @@ export function RecentlyViewedProducts({ currentProductId }: RecentlyViewedProdu
   return (
     <ProductHorizontalScroll
       title="Recently Viewed"
-      subtitle="Continue browsing"
+      subtitle="Customers also viewed"
       products={items}
     />
   );

@@ -19,10 +19,7 @@ export function buildProductSearchHref(query: string, origin?: ProductOrigin): s
 export function buildSearchCategoryHref(slug: string): string {
   const brand = getBrandBySlug(slug);
   if (brand) {
-    const firstSubcategory = brand.subcategories[0];
-    return firstSubcategory
-      ? `/brand/${slug}/${firstSubcategory.slug}`
-      : buildProductSearchHref("", "tz");
+    return `/buy-from-tz/${brand.slug}`;
   }
 
   return `/categories/${slug}`;

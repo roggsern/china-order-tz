@@ -9,11 +9,10 @@ import { ChevronLeftIcon } from "@/components/home/icons";
 
 export default function NewProductPage() {
   const { addProduct, isHydrated } = useAdminProducts();
-  const isEditMode = false;
 
   const handleSaveProduct = useCallback(
-    (data: ProductFormData) => {
-      addProduct(data);
+    async (data: ProductFormData, options?: { pendingFiles?: Map<number, File> }) => {
+      await addProduct(data, options);
     },
     [addProduct],
   );
@@ -40,12 +39,12 @@ export default function NewProductPage() {
       <div className="mt-4">
         <h1 className="text-xl font-semibold text-zinc-900 sm:text-2xl">Add product</h1>
         <p className="mt-0.5 text-sm text-zinc-500">
-          Create a new product for your catalog.
+          Create a new product in the Laravel catalog.
         </p>
       </div>
 
       <div className="mt-6">
-        <ProductForm isEditMode={isEditMode} onSubmit={handleSaveProduct} />
+        <ProductForm isEditMode={false} onSubmit={handleSaveProduct} />
       </div>
     </div>
   );

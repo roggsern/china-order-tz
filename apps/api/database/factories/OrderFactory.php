@@ -34,6 +34,7 @@ class OrderFactory extends Factory
             'shipping_amount' => $shipping,
             'total' => $total,
             'currency' => 'TZS',
+            'is_demo' => false,
             'notes' => fake()->optional()->sentence(),
             'placed_at' => now(),
         ];

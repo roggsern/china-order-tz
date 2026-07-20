@@ -1,7 +1,7 @@
 "use client";
 
 import type { CheckoutFormData, CheckoutFormErrors } from "@/lib/types/checkout";
-import { formatTanzaniaPhone } from "@/lib/checkout/phone";
+import { formatPhoneOnBlur } from "@/lib/phone";
 import { CheckoutField, checkoutInputClassName } from "./CheckoutField";
 import { SearchableRegionSelect } from "./SearchableRegionSelect";
 
@@ -58,7 +58,7 @@ export function CheckoutCustomerStep({
         label="Phone Number"
         required
         error={errors.customer?.phone}
-        hint="Tanzania mobile — formatted automatically"
+        hint="International mobile — formatted to +country code on blur"
       >
         <input
           id="checkout-phone"
@@ -71,13 +71,13 @@ export function CheckoutCustomerStep({
             onClearError?.("customer", "phone");
           }}
           onBlur={() => {
-            const formatted = formatTanzaniaPhone(form.customer.phone);
+            const formatted = formatPhoneOnBlur(form.customer.phone);
             if (formatted !== form.customer.phone) {
               onCustomerChange({ ...form.customer, phone: formatted });
             }
             onBlurField?.("phone");
           }}
-          placeholder="0712345678"
+          placeholder="0712345678 or +255712345678"
           className={checkoutInputClassName(Boolean(errors.customer?.phone))}
           aria-invalid={Boolean(errors.customer?.phone)}
         />

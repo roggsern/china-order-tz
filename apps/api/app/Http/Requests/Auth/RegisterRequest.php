@@ -2,7 +2,10 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Enums\CustomerRegistrationSource;
+use App\Rules\E164PhoneNumber;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 
 class RegisterRequest extends FormRequest
@@ -20,8 +23,10 @@ class RegisterRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'phone' => ['nullable', 'string', 'max:20', 'regex:/^07\d{8}$/'],
+            'phone' => ['nullable', 'string', 'max:20', new E164PhoneNumber()],
             'password' => ['required', 'confirmed', Password::min(8)],
+            // Optional CRM source (e.g. checkout_registration). Defaults to self_registration.
+            'registration_source' => ['sometimes', 'nullable', Rule::enum(CustomerRegistrationSource::class)],
         ];
     }
 

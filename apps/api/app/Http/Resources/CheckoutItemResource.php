@@ -10,7 +10,7 @@ class CheckoutItemResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $isChina = $this->product->isFromChina();
+        $isChina = $this->product->requiresChinaShipping();
 
         $data = [
             'id' => $this->id,

@@ -53,9 +53,37 @@ class User extends Authenticatable
         return $this->hasMany(Cart::class);
     }
 
+    /** Active shopping cart (Cart Engine). */
+    public function activeCart(): HasOne
+    {
+        return $this->hasOne(Cart::class)
+            ->where('status', \App\Enums\CartStatus::Active)
+            ->latestOfMany();
+    }
+
+    public function checkoutSessions(): HasMany
+    {
+        return $this->hasMany(CheckoutSession::class);
+    }
+
+    public function profile(): HasOne
+    {
+        return $this->hasOne(UserProfile::class);
+    }
+
+    public function addresses(): HasMany
+    {
+        return $this->hasMany(UserAddress::class);
+    }
+
     public function wishlists(): HasMany
     {
         return $this->hasMany(Wishlist::class);
+    }
+
+    public function customerProfile(): HasOne
+    {
+        return $this->hasOne(CustomerProfile::class);
     }
 
     public function orders(): HasMany
@@ -66,6 +94,11 @@ class User extends Authenticatable
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);
+    }
+
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(Refund::class);
     }
 
     public function shippingAddresses(): HasMany
@@ -86,6 +119,21 @@ class User extends Authenticatable
     public function appNotifications(): HasMany
     {
         return $this->hasMany(Notification::class);
+    }
+
+    public function notificationPreferences(): HasMany
+    {
+        return $this->hasMany(NotificationPreference::class);
+    }
+
+    public function couponUsages(): HasMany
+    {
+        return $this->hasMany(CouponUsage::class);
+    }
+
+    public function chinaOrderRequests(): HasMany
+    {
+        return $this->hasMany(ChinaOrderRequest::class);
     }
 
     public function hasRole(string $slug): bool

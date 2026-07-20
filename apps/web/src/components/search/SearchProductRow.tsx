@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { Product } from "@/lib/types/catalog";
-import { getProductPrimaryImage } from "@/lib/catalog/product-images";
+import { getCatalogProductImageSrc } from "@/lib/catalog/product-images";
 import { formatPrice } from "@/lib/catalog/utils";
 import { resolveSearchSourceBadge } from "@/lib/search/search-source-badge";
 import { ProductImageDisplay } from "@/components/catalog/ProductImageDisplay";
@@ -14,7 +14,6 @@ interface SearchProductRowProps {
 }
 
 export function SearchProductRow({ product, onSelect }: SearchProductRowProps) {
-  const image = getProductPrimaryImage(product);
   const sourceBadge = resolveSearchSourceBadge(product);
 
   return (
@@ -25,7 +24,8 @@ export function SearchProductRow({ product, onSelect }: SearchProductRowProps) {
     >
       <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-zinc-100 bg-zinc-50">
         <ProductImageDisplay
-          image={image}
+          src={getCatalogProductImageSrc(product)}
+          product={product}
           fallbackEmoji={product.emoji}
           fallbackGradient={product.gradient}
           className="aspect-square h-full w-full"

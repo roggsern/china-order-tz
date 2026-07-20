@@ -20,7 +20,7 @@ class CustomerProfileAndAddressTest extends TestCase
     {
         return array_merge([
             'recipient_name' => 'Jane Customer',
-            'phone' => '0712345678',
+            'phone' => '+255712345678',
             'country' => 'Tanzania',
             'region' => 'Dar es Salaam',
             'city' => 'Dar es Salaam',
@@ -60,7 +60,7 @@ class CustomerProfileAndAddressTest extends TestCase
         $this->patchJson('/api/v1/profile', [
             'first_name' => 'Janet',
             'last_name' => 'Mbuya',
-            'phone' => '0798765432',
+            'phone' => '+255798765432',
             'email' => 'janet@example.com',
         ])->assertOk()
             ->assertJsonPath('data.first_name', 'Janet')

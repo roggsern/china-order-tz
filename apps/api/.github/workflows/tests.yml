@@ -45,3 +45,31 @@ jobs:
 
       - name: Execute tests
         run: php artisan test
+
+  retail-smoke-gate:
+    name: Retail smoke gate (040B)
+    runs-on: ubuntu-latest
+    needs: tests
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Copy environment file
+        run: cp .env.example .env
+
+      - name: Generate app key
+        run: php artisan key:generate
+
+      - name: RetailSmokeLifecycle + POS/Analytics suite
+        run: php artisan test --filter="Pos|RetailAnalytics|RetailSmoke"

@@ -75,9 +75,9 @@ export function getDeliveryOptions(origin: ProductOrigin): DeliveryOption[] {
 
 export function getOriginLabel(origin: ProductOrigin): { flag: string; label: string } {
   if (origin === "tz") {
-    return { flag: "🇹🇿", label: "Buy From TZ" };
+    return { flag: "🇹🇿", label: "Available In Tanzania" };
   }
-  return { flag: "🇨🇳", label: "Imported from China" };
+  return { flag: "🇨🇳", label: "Imported From China" };
 }
 
 function formatShippingCostDisplay(shippingCost: number | null): string {

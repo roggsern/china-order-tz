@@ -2,6 +2,7 @@
 
 namespace App\Services\Payments;
 
+use App\Enums\DeliveryType;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
@@ -27,14 +28,23 @@ class PaymentPreparationService
 
     public function prepare(Order $order, User $user, PaymentMethod $method): Payment
     {
+        if ($method === PaymentMethod::Nmb) {
+            $this->throwValidationError(
+                'payment_method',
+                'NMB payments must use POST /api/v1/payments/start/{order}.',
+            );
+        }
+
         $this->authorizeOrder($order, $user);
         $this->validateOrderNotPaid($order);
+        $this->assertShippingChoiceReady($order);
 
-        if (bccomp((string) $order->total, '0', 2) <= 0) {
+        $amount = (string) ($order->grand_total ?? $order->total);
+        if (bccomp($amount, '0', 2) <= 0) {
             $this->throwValidationError('order', 'Order total must be greater than zero.');
         }
 
-        return DB::transaction(function () use ($order, $user, $method): Payment {
+        return DB::transaction(function () use ($order, $user, $method, $amount): Payment {
             $payment = Payment::query()
                 ->where('order_id', $order->id)
                 ->whereIn('status', self::ACTIVE_PAYMENT_STATUSES)
@@ -42,7 +52,7 @@ class PaymentPreparationService
                 ->first();
 
             if ($payment !== null) {
-                return $this->reuseActivePayment($payment, $order, $method);
+                return $this->reuseActivePayment($payment, $order, $method, $amount);
             }
 
             return Payment::query()->create([
@@ -50,7 +60,7 @@ class PaymentPreparationService
                 'user_id' => $user->id,
                 'method' => $method,
                 'status' => PaymentStatus::Initiated,
-                'amount' => $order->total,
+                'amount' => $amount,
                 'currency' => $order->currency,
                 'reference' => $this->paymentReferenceGenerator->generate(),
             ])->load('order');
@@ -73,14 +83,18 @@ class PaymentPreparationService
         return $payment->load('order');
     }
 
-    private function reuseActivePayment(Payment $payment, Order $order, PaymentMethod $method): Payment
-    {
+    private function reuseActivePayment(
+        Payment $payment,
+        Order $order,
+        PaymentMethod $method,
+        string $amount,
+    ): Payment {
         if ($payment->method !== $method) {
             $this->throwValidationError('payment_method', 'An active payment already exists for this order.');
         }
 
-        if (bccomp((string) $payment->amount, (string) $order->total, 2) !== 0) {
-            $this->throwValidationError('order', 'Payment amount must equal the order total.');
+        if (bccomp((string) $payment->amount, $amount, 2) !== 0) {
+            $payment->amount = $amount;
         }
 
         if ($payment->reference === null) {
@@ -120,6 +134,39 @@ class PaymentPreparationService
 
         if ($hasPaidPayment) {
             $this->throwValidationError('order', 'This order has already been paid.');
+        }
+    }
+
+    private function assertShippingChoiceReady(Order $order): void
+    {
+        $order->loadMissing('deliveryOption');
+        $option = $order->deliveryOption;
+
+        if ($option === null || $option->delivery_type === null) {
+            $this->throwValidationError('shipping_choice', 'Select a shipping option before payment.');
+        }
+
+        $choice = $option->delivery_type instanceof DeliveryType
+            ? $option->delivery_type
+            : DeliveryType::from((string) $option->delivery_type);
+
+        $shippingAmount = (string) ($order->shipping_amount ?? '0.00');
+
+        if ($choice === DeliveryType::CompanyShipping) {
+            if ($option->shipping_method === null) {
+                $this->throwValidationError('shipping_method', 'Company shipping requires air or sea before payment.');
+            }
+            if (bccomp($shippingAmount, '0.00', 2) <= 0) {
+                $this->throwValidationError('shipping', 'Company shipping total must be included before payment.');
+            }
+        }
+
+        if (in_array($choice, [
+            DeliveryType::CustomerAgent,
+            DeliveryType::SelfPickup,
+            DeliveryType::NegotiatedDelivery,
+        ], true) && bccomp($shippingAmount, '0.00', 2) !== 0) {
+            $this->throwValidationError('shipping', 'This shipping choice must have zero company shipping charges.');
         }
     }
 

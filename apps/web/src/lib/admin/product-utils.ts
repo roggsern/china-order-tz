@@ -1,11 +1,5 @@
 import type { Product, ProductFormData, ProductValidationErrors } from "@/lib/types/catalog";
 import {
-  getBrandDisplayLabel,
-  getBrandSubcategories,
-  getDefaultBuyFromDarBrand,
-  isValidBrandSubcategory,
-} from "@/lib/catalog/brands";
-import {
   getProductPrimaryImage,
   normalizeProductImagesForSave,
 } from "@/lib/catalog/product-images";
@@ -16,7 +10,7 @@ import {
   getDefaultTrustBadges,
 } from "@/lib/catalog/product-meta";
 import { normalizeDeliveryDays } from "@/lib/catalog/delivery";
-import { isLocalProductType, productTypeToOrigin, resolveProductType } from "@/lib/catalog/product-type";
+import { productTypeToOrigin, resolveProductType } from "@/lib/catalog/product-type";
 import { normalizeProductVariants } from "@/lib/catalog/variants";
 import { slugify } from "@/lib/catalog/utils";
 
@@ -51,6 +45,7 @@ export function enrichProductForAdmin(product: Product): Product {
         ? Math.floor(((product.oldPrice - product.price) / product.oldPrice) * 100)
         : 0),
     variants: normalizeProductVariants(product.variants),
+    configurations: product.configurations ?? [],
   };
 }
 
@@ -65,7 +60,6 @@ export function formDataToProduct(data: ProductFormData, id: number, createdAt?:
   const { price, oldPrice } = resolvePricing(data);
   const productType = data.type;
   const origin = productTypeToOrigin(productType);
-  const isLocal = isLocalProductType(productType);
   const normalizedImages = normalizeProductImagesForSave(data.images);
   const images =
     normalizedImages.length > 0
@@ -113,17 +107,31 @@ export function formDataToProduct(data: ProductFormData, id: number, createdAt?:
     trustBadges: getDefaultTrustBadges(origin, data.rating),
     type: productType,
     origin,
-    brand: isLocal ? getBrandDisplayLabel(data.brandSlug) ?? data.brand : undefined,
-    brandSlug: isLocal ? data.brandSlug : undefined,
-    subcategorySlug: isLocal ? data.subcategorySlug : data.subcategorySlug || undefined,
+    brand: data.brand || undefined,
+    brandSlug: data.brandSlug || undefined,
+    subcategorySlug: data.subcategorySlug || undefined,
     gradient: data.gradient,
     emoji: data.emoji,
-    categorySlug: isLocal ? data.brandSlug : data.categorySlug,
+    categorySlug: data.categorySlug,
+    categoryId: data.categoryId || undefined,
+    parentCategoryId: data.parentCategoryId || undefined,
+    brandId: data.brandId || undefined,
     stock: data.stock,
     weightKg: data.weightKg ?? undefined,
     sku: data.sku,
-    airCost: data.airCost > 0 ? data.airCost : undefined,
-    seaCost: productType === "china" && data.seaCost > 0 ? data.seaCost : undefined,
+    airCost: data.airAvailable && data.airCost > 0 ? data.airCost : undefined,
+    seaCost: productType === "china" && data.seaAvailable && data.seaCost > 0 ? data.seaCost : undefined,
+    shippingOptions:
+      productType === "china"
+        ? [
+            ...(data.airAvailable && data.airCost > 0
+              ? [{ type: "air" as const, price: data.airCost }]
+              : []),
+            ...(data.seaAvailable && data.seaCost > 0
+              ? [{ type: "sea" as const, price: data.seaCost }]
+              : []),
+          ]
+        : undefined,
     airDeliveryDays: normalizeDeliveryDays(data.airDeliveryDays),
     seaDeliveryDays:
       productType === "china" ? normalizeDeliveryDays(data.seaDeliveryDays) : undefined,
@@ -138,24 +146,18 @@ export function formDataToProduct(data: ProductFormData, id: number, createdAt?:
     bestSeller: data.bestSeller,
     trending: data.trending,
     newArrival: data.newArrival,
-    status: data.status,
+    status: data.status === "hidden" ? "archived" : data.status,
+    isDemo: data.isDemo,
+    priceTiers: data.priceTiers ?? [],
     createdAt: createdAt ?? new Date().toISOString(),
     variants: normalizeProductVariants(data.variants),
+    configurations: data.configurations ?? [],
   };
 }
 
 export function productToFormData(product: Product): ProductFormData {
   const enriched = enrichProductForAdmin(product);
   const productType = resolveProductType(enriched);
-  const isLocal = isLocalProductType(productType);
-  const defaultLocalBrand = getDefaultBuyFromDarBrand();
-  const localBrandSlug = isLocal ? enriched.brandSlug ?? defaultLocalBrand.slug : "";
-  const localSubcategories = isLocal ? getBrandSubcategories(localBrandSlug) : [];
-  const localSubcategorySlug = isLocal
-    ? localSubcategories.find((item) => item.slug === enriched.subcategorySlug)?.slug ??
-      localSubcategories[0]?.slug ??
-      ""
-    : enriched.subcategorySlug ?? "";
 
   return {
     name: enriched.name,
@@ -173,17 +175,27 @@ export function productToFormData(product: Product): ProductFormData {
     emoji: enriched.emoji,
     type: productType,
     origin: productTypeToOrigin(productType),
-    brandSlug: isLocal ? localBrandSlug : "",
-    brand: isLocal
-      ? enriched.brand ?? getBrandDisplayLabel(localBrandSlug) ?? defaultLocalBrand.name
-      : "",
-    categorySlug: isLocal ? localBrandSlug : enriched.categorySlug,
-    subcategorySlug: localSubcategorySlug,
+    categoryId: enriched.categoryId ?? "",
+    parentCategoryId: enriched.parentCategoryId ?? "",
+    brandId: enriched.brandId ?? "",
+    brandSlug: enriched.brandSlug ?? "",
+    brand: enriched.brand ?? "",
+    categorySlug: enriched.categorySlug ?? "",
+    subcategorySlug: enriched.subcategorySlug ?? "",
     stock: enriched.stock,
     sku: enriched.sku ?? "",
+    skuOverride: Boolean(enriched.sku),
     weightKg: enriched.weightKg ?? null,
     airCost: enriched.airCost ?? 0,
     seaCost: enriched.seaCost ?? 0,
+    airAvailable: enriched.shippingOptions
+      ? enriched.shippingOptions.some((o) => o.type === "air" && o.price > 0)
+      : (enriched.airCost ?? 0) > 0,
+    seaAvailable: enriched.shippingOptions
+      ? enriched.shippingOptions.some((o) => o.type === "sea" && o.price > 0)
+      : (enriched.seaCost ?? 0) > 0,
+    airNotes: "",
+    seaNotes: "",
     airDeliveryDays: enriched.airDeliveryDays ?? "",
     seaDeliveryDays: enriched.seaDeliveryDays ?? "",
     features: enriched.features.join("\n"),
@@ -191,48 +203,63 @@ export function productToFormData(product: Product): ProductFormData {
     bestSeller: enriched.bestSeller ?? false,
     trending: enriched.trending ?? false,
     newArrival: enriched.newArrival ?? false,
-    status: enriched.status,
+    status:
+      enriched.status === "hidden"
+        ? "archived"
+        : enriched.status === "draft" ||
+            enriched.status === "out_of_stock" ||
+            enriched.status === "archived"
+          ? enriched.status
+          : "active",
+    isDemo: Boolean(enriched.isDemo),
+    wholesaleEnabled: (enriched.priceTiers?.length ?? 0) > 0,
+    priceTiers: enriched.priceTiers ?? [],
     images: enriched.images,
     thumbnailImageId: enriched.thumbnailImageId ?? enriched.images[0]?.id ?? null,
     variants: normalizeProductVariants(enriched.variants) ?? {},
+    configurations: enriched.configurations ?? [],
   };
 }
 
 export function validateProductForm(data: ProductFormData): ProductValidationErrors {
   const errors: ProductValidationErrors = {};
-  const isLocal = isLocalProductType(data.type);
 
   if (!data.name.trim()) errors.name = "Product name is required.";
   if (!data.type) errors.type = "Product type is required.";
   if (!data.price || data.price <= 0) errors.price = "Price must be greater than zero.";
-
-  if (isLocal) {
-    if (!data.brandSlug) {
-      errors.brandSlug = "Brand is required for Buy from Dar products.";
-    }
-    if (!data.subcategorySlug) {
-      errors.subcategorySlug = "Subcategory is required for Buy from Dar products.";
-    } else if (!isValidBrandSubcategory(data.brandSlug, data.subcategorySlug)) {
-      errors.subcategorySlug = "Choose a subcategory that matches the selected brand.";
+  if (!data.categoryId.trim() && !data.parentCategoryId.trim()) {
+    errors.categorySlug = "Category is required.";
+  }
+  // SKU is auto-generated by the API when left blank (privileged override still allowed).
+  if (data.skuOverride && !data.sku.trim()) {
+    errors.sku = "SKU is required when override is enabled.";
+  }
+  if (data.configurations.length === 0) {
+    if (data.stock < 0 || Number.isNaN(data.stock)) {
+      errors.stock = "Stock quantity must be zero or greater.";
     }
   } else {
-    if (!data.categorySlug) errors.categorySlug = "Category is required.";
-    if (data.brandSlug) {
-      errors.brandSlug = undefined;
+    const invalidStock = data.configurations.some(
+      (row) => row.stock < 0 || Number.isNaN(row.stock),
+    );
+    if (invalidStock) {
+      errors.configurations = "Each configuration needs stock of zero or greater.";
     }
   }
 
   if (data.type === "china") {
-    if (!data.airCost || data.airCost <= 0) errors.airCost = "Air cost is required for China products.";
-    if (!data.seaCost || data.seaCost <= 0) errors.seaCost = "Sea cost is required for China products.";
-    if (!data.airDeliveryDays.trim()) {
-      errors.airDeliveryDays = "Air delivery days are required for China products.";
+    const airOk = data.airAvailable && data.airCost > 0;
+    const seaOk = data.seaAvailable && data.seaCost > 0;
+    if (!airOk && !seaOk) {
+      errors.airCost =
+        "Enable at least one company shipping option (Air or Sea) with a price.";
     }
-    if (!data.seaDeliveryDays.trim()) {
-      errors.seaDeliveryDays = "Sea delivery days are required for China products.";
+    if (data.airAvailable && (!data.airCost || data.airCost <= 0)) {
+      errors.airCost = "Air shipping price is required when Air is available.";
     }
-  } else if (!data.airDeliveryDays.trim()) {
-    errors.airDeliveryDays = "Local delivery days are optional but recommended for Dar products.";
+    if (data.seaAvailable && (!data.seaCost || data.seaCost <= 0)) {
+      errors.seaCost = "Sea shipping price is required when Sea is available.";
+    }
   }
 
   return errors;

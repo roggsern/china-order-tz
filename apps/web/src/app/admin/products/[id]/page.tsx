@@ -52,7 +52,7 @@ export default function ProductViewPage({ params }: ProductViewPageProps) {
     { label: "Subcategory", value: product.subcategorySlug ?? "—" },
     {
       label: "Origin",
-      value: product.origin === "china" ? "Buy From China" : "Buy From TZ",
+      value: product.origin === "china" ? "Order From China" : "Buy From TZ",
     },
     { label: "SKU", value: product.sku ?? "—" },
     { label: "Stock", value: String(product.stock) },

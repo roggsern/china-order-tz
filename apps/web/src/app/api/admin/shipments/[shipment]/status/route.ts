@@ -1,0 +1,21 @@
+import { proxyAdminApiRequest } from "@/lib/api/admin-upstream";
+
+type RouteContext = { params: Promise<{ shipment: string }> };
+
+/** PATCH /api/admin/shipments/[shipment]/status */
+export async function PATCH(request: Request, context: RouteContext) {
+  const { shipment } = await context.params;
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json(
+      { success: false, message: "Invalid JSON body." },
+      { status: 422 },
+    );
+  }
+  return proxyAdminApiRequest(`/shipments/${encodeURIComponent(shipment)}/status`, {
+    method: "PATCH",
+    body,
+  });
+}

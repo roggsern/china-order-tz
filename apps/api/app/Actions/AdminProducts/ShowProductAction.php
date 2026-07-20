@@ -8,6 +8,21 @@ class ShowProductAction
 {
     public function handle(Product $product): Product
     {
-        return $product->load(['category', 'brand', 'inventory']);
+        return $product->load([
+            'commerceChannel',
+            'category.productType',
+            'category.department',
+            'category.parent',
+            'brand',
+            'catalogProductType.subcategory',
+            'productType',
+            'inventory',
+            'images',
+            'priceTiers',
+            'shippingOptions',
+            'variants.attributeValues.attribute',
+            'variants.inventory',
+            'variants.priceTiers',
+        ]);
     }
 }

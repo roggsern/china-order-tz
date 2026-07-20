@@ -16,6 +16,7 @@ class Supplier extends Model
 
     protected $fillable = [
         'name',
+        'code',
         'slug',
         'contact_person',
         'email',
@@ -23,6 +24,8 @@ class Supplier extends Model
         'address',
         'city',
         'country',
+        'payment_terms',
+        'notes',
         'is_active',
     ];
 
@@ -36,5 +39,20 @@ class Supplier extends Model
     public function products(): HasMany
     {
         return $this->hasMany(Product::class);
+    }
+
+    public function supplierProducts(): HasMany
+    {
+        return $this->hasMany(SupplierProduct::class);
+    }
+
+    public function purchaseOrders(): HasMany
+    {
+        return $this->hasMany(PurchaseOrder::class);
+    }
+
+    public function costHistories(): HasMany
+    {
+        return $this->hasMany(SupplierCostHistory::class);
     }
 }

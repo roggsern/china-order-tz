@@ -129,23 +129,38 @@ function DrawerBody({
   onClose: () => void;
 }) {
   if (!isHydrated) {
-    return <p className="py-8 text-center text-sm text-zinc-500">Loading cart…</p>;
+    return (
+      <div className="space-y-3 py-4" aria-busy="true" aria-label="Loading cart">
+        {[1, 2].map((key) => (
+          <div key={key} className="flex gap-3 rounded-xl border border-zinc-100 p-3">
+            <div className="h-16 w-16 shrink-0 skeleton-shimmer rounded-lg" />
+            <div className="flex-1 space-y-2">
+              <div className="h-3 w-3/4 skeleton-shimmer rounded" />
+              <div className="h-3 w-1/2 skeleton-shimmer rounded" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
   }
 
   if (items.length === 0) {
     return (
       <div className="py-10 text-center">
-        <p className="text-4xl" aria-hidden>
+        <span
+          className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#c9a227]/25 bg-[#c9a227]/8 text-2xl"
+          aria-hidden
+        >
           🛒
-        </p>
-        <p className="mt-3 text-base font-semibold text-zinc-900">Your cart is empty</p>
-        <p className="mt-1 text-sm text-zinc-500">Add products to get started.</p>
+        </span>
+        <p className="mt-4 text-base font-bold text-zinc-900">Your cart is waiting</p>
+        <p className="mt-1 text-sm text-zinc-500">Discover products and start shopping.</p>
         <Link
           href="/products"
           onClick={onClose}
-          className="mt-5 inline-flex items-center justify-center rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#c9a227] hover:text-zinc-900"
+          className="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl bg-gradient-to-r from-[#c9a227] to-[#e8c547] px-5 py-2.5 text-sm font-bold text-zinc-900 shadow-md shadow-[#c9a227]/25 transition hover:brightness-105"
         >
-          Browse Products
+          Continue Shopping
         </Link>
       </div>
     );
@@ -180,7 +195,7 @@ function DrawerFooter({
 }) {
   return (
     <div className="shrink-0 border-t border-zinc-100 bg-white px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:px-6">
-      <OrderSummaryTotals totals={totals} hideZeroDiscount />
+      <OrderSummaryTotals totals={totals} variant="cart" hideZeroDiscount />
 
       <button
         type="button"

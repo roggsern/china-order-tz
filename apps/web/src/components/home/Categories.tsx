@@ -1,13 +1,18 @@
 import Link from "next/link";
-import { categories } from "@/lib/home-data";
-import { getProducts } from "@/lib/catalog/products";
+import {
+  getHomeCategories,
+  getHomeCategoryProductCounts,
+} from "@/lib/catalog/home-catalog";
+import { CatalogApiError } from "@/lib/catalog/products";
 import { ArrowRightIcon } from "./icons";
+import { CatalogErrorState } from "@/components/catalog/CatalogErrorState";
+import type { Category } from "@/lib/types/catalog";
 
 function PremiumCategoryCard({
   category,
   productCount,
 }: {
-  category: (typeof categories)[number];
+  category: Category;
   productCount: number;
 }) {
   return (
@@ -50,49 +55,73 @@ function PremiumCategoryCard({
 }
 
 export async function Categories() {
-  const catalog = await getProducts();
-  const featuredCategories = categories.slice(0, 8);
+  try {
+    const catalogCategories = await getHomeCategories();
+    const featuredCategories = catalogCategories.slice(0, 8);
+    const categoryCounts = await getHomeCategoryProductCounts(
+      featuredCategories.map((category) => category.slug),
+    );
 
-  return (
-    <section id="categories" className="relative overflow-hidden bg-white py-20 sm:py-28">
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -left-32 top-0 h-96 w-96 rounded-full bg-[#c9a227]/5 blur-3xl" />
-        <div className="absolute -right-32 bottom-0 h-96 w-96 rounded-full bg-zinc-100 blur-3xl" />
-      </div>
+    return (
+      <section id="categories" className="relative overflow-hidden bg-white py-20 sm:py-28">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute -left-32 top-0 h-96 w-96 rounded-full bg-[#c9a227]/5 blur-3xl" />
+          <div className="absolute -right-32 bottom-0 h-96 w-96 rounded-full bg-zinc-100 blur-3xl" />
+        </div>
 
-      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-end">
-          <div className="max-w-xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[#c9a227]">
-              Collections
-            </p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl lg:text-[2.75rem]">
-              Shop by Category
-            </h2>
-            <p className="mt-4 text-base leading-relaxed text-zinc-500">
-              Curated collections sourced from China&apos;s leading manufacturing hubs — delivered
-              to your door in Tanzania.
-            </p>
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-end">
+            <div className="max-w-xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[#c9a227]">
+                Collections
+              </p>
+              <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl lg:text-[2.75rem]">
+                Shop by Category
+              </h2>
+              <p className="mt-4 text-base leading-relaxed text-zinc-500">
+                Curated collections sourced from China&apos;s leading manufacturing hubs — delivered
+                to your door in Tanzania.
+              </p>
+            </div>
+            <Link
+              href="/categories"
+              className="inline-flex shrink-0 items-center gap-2 rounded-full border border-zinc-200 bg-white px-5 py-2.5 text-sm font-semibold text-zinc-900 shadow-sm transition hover:border-[#c9a227]/40 hover:text-[#8b6914]"
+            >
+              View all
+              <ArrowRightIcon className="h-4 w-4" />
+            </Link>
           </div>
-          <Link
-            href="/categories"
-            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-zinc-200 bg-white px-5 py-2.5 text-sm font-semibold text-zinc-900 shadow-sm transition hover:border-[#c9a227]/40 hover:text-[#8b6914]"
-          >
-            View all
-            <ArrowRightIcon className="h-4 w-4" />
-          </Link>
-        </div>
 
-        <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {featuredCategories.map((category) => (
-            <PremiumCategoryCard
-              key={category.slug}
-              category={category}
-              productCount={catalog.filter((product) => product.categorySlug === category.slug).length}
-            />
-          ))}
+          {featuredCategories.length === 0 ? (
+            <div className="mt-14 rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 py-16 text-center text-sm text-zinc-500">
+              No categories found.
+            </div>
+          ) : (
+            <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {featuredCategories.map((category) => (
+                <PremiumCategoryCard
+                  key={category.slug}
+                  category={category}
+                  productCount={categoryCounts[category.slug] ?? 0}
+                />
+              ))}
+            </div>
+          )}
         </div>
-      </div>
-    </section>
-  );
+      </section>
+    );
+  } catch (error) {
+    const message =
+      error instanceof CatalogApiError
+        ? error.message
+        : "Something went wrong while loading categories.";
+
+    return (
+      <section id="categories" className="bg-white py-20 sm:py-28">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <CatalogErrorState title="Categories unavailable" message={message} />
+        </div>
+      </section>
+    );
+  }
 }

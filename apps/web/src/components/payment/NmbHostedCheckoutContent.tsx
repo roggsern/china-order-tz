@@ -63,7 +63,7 @@ export function NmbHostedCheckoutContent({ paymentId }: NmbHostedCheckoutContent
     async function startHostedCheckout() {
       try {
         if (!getCustomerApiToken()) {
-          throw new NmbPaymentSessionError("You must be signed in to pay with NMB.");
+          throw new NmbPaymentSessionError("Please sign in to continue with payment.");
         }
 
         saveNmbCheckoutContext({

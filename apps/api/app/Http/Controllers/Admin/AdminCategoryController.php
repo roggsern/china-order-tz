@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Actions\AdminCategories\CreateCategoryAction;
 use App\Actions\AdminCategories\DeleteCategoryAction;
 use App\Actions\AdminCategories\GetAdminCategoriesAction;
+use App\Actions\AdminCategories\RestoreCategoryAction;
 use App\Actions\AdminCategories\ShowCategoryAction;
 use App\Actions\AdminCategories\UpdateCategoryAction;
 use App\Http\Controllers\Controller;
@@ -57,6 +58,15 @@ class AdminCategoryController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Category deleted successfully',
+        ]);
+    }
+
+    public function restore(string $id, RestoreCategoryAction $action): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'message' => 'Category restored successfully.',
+            'data' => new CategoryResource($action->handle($id)),
         ]);
     }
 }

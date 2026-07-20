@@ -6,6 +6,7 @@ use App\Enums\AttributeType;
 use App\Models\Concerns\HasUuidPrimaryKey;
 use Database\Factories\ProductAttributeFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Model;
@@ -19,6 +20,8 @@ class ProductAttribute extends Model
         'name',
         'slug',
         'type',
+        'unit',
+        'validation',
         'is_filterable',
         'sort_order',
     ];
@@ -27,6 +30,7 @@ class ProductAttribute extends Model
     {
         return [
             'type' => AttributeType::class,
+            'validation' => 'array',
             'is_filterable' => 'boolean',
             'sort_order' => 'integer',
         ];
@@ -34,6 +38,19 @@ class ProductAttribute extends Model
 
     public function values(): HasMany
     {
-        return $this->hasMany(ProductAttributeValue::class);
+        return $this->hasMany(ProductAttributeValue::class)->orderBy('sort_order');
+    }
+
+    public function productTypes(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            ProductType::class,
+            'product_type_attributes',
+            'product_attribute_id',
+            'product_type_id'
+        )
+            ->using(ProductTypeAttribute::class)
+            ->withPivot(['id', 'sort_order', 'is_required', 'participates_in_configuration'])
+            ->withTimestamps();
     }
 }

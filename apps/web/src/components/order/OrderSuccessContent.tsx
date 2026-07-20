@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useEffect, useMemo, type ReactNode } from "react";
 import { useCart } from "@/lib/cart/context";
 import { clearCartIfOrderPaid, lockCartForOrder } from "@/lib/checkout/completion";
-import { PAYMENT_METHOD_LABELS } from "@/lib/payment/constants";
-import { PAYMENT_STATUS } from "@/lib/types/payment";
+import { PAYMENT_METHOD_LABELS, BANK_TRANSFER_INSTRUCTIONS } from "@/lib/payment/constants";
+import { PAYMENT_METHOD_CODES, PAYMENT_STATUS } from "@/lib/types/payment";
 import type { Order } from "@/lib/types/order";
 import { formatPrice } from "@/lib/catalog/utils";
 import { formatOrderDeliveryEstimate } from "@/lib/order/delivery-estimate";
@@ -14,13 +14,18 @@ import {
   isOrderPaymentPending,
 } from "@/lib/order/placement";
 import { useOrderSnapshot } from "@/lib/order/use-order-by-id";
+import { buildCustomerTrackingDisplayTimeline } from "@/lib/order/tracking-display";
 import { getMethodByCode } from "@/lib/shipping/engine";
 import { OrderSummaryTotals } from "@/components/cart/OrderSummaryTotals";
 import { PaymentStatusBadge } from "@/components/payment/PaymentStatusBadge";
-import { CopyOrderId } from "./CopyOrderId";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { CopyOrderNumber } from "./CopyOrderNumber";
+import { OrderConfidenceBanner } from "./OrderConfidenceBanner";
 import { OrderStatusBadge } from "./OrderStatusBadge";
 import { OrderSuccessItemsList } from "./OrderSuccessItemsList";
+import { OrderTrackingStepper } from "./OrderTrackingStepper";
+import { TrackingWhatHappensNext } from "./TrackingWhatHappensNext";
 import { ShippingBreakdownList } from "@/components/shipping/ShippingQuantityBreakdown";
 
 interface OrderSuccessContentProps {
@@ -76,18 +81,23 @@ function ConfirmationHeader({ order }: { order: Order }) {
   }
 
   return (
-    <header className="text-center">
+    <header className="relative overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-[#c9a227]/10 px-6 py-10 text-center shadow-[0_8px_40px_rgba(16,185,129,0.08)] sm:px-10">
       <div
-        className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-600 shadow-inner"
+        className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-emerald-200/30 blur-3xl"
+        aria-hidden
+      />
+      <div
+        className="relative mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-3xl text-emerald-600 shadow-inner"
         aria-hidden
       >
-        ✓
+        🎉
       </div>
-      <h1 className="mt-5 text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
+      <h1 className="relative mt-5 text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
         Order Confirmed
       </h1>
-      <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-        Thank you — payment was successful and we&apos;ll keep you updated on delivery.
+      <p className="relative mx-auto mt-3 max-w-md text-sm leading-relaxed text-zinc-500 sm:text-base">
+        Thank you for your order. Payment was successful — we&apos;ll keep you updated every step of
+        the way.
       </p>
     </header>
   );
@@ -120,44 +130,54 @@ export function OrderSuccessContent({ orderId }: OrderSuccessContentProps) {
     return formatOrderDeliveryEstimate(order);
   }, [order]);
 
+  const displayTimeline = useMemo(() => {
+    if (!order) return [];
+    return buildCustomerTrackingDisplayTimeline(order, null);
+  }, [order]);
+
   const trackOrderHref = `/track/${orderId}`;
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6" aria-busy="true">
-        <div className="mx-auto h-16 w-16 animate-pulse rounded-full bg-zinc-100" />
-        <div className="mx-auto mt-6 h-8 w-48 animate-pulse rounded-lg bg-zinc-100" />
-        <div className="mt-10 h-[28rem] animate-pulse rounded-3xl bg-zinc-50" />
+      <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6" aria-busy="true">
+        <Skeleton className="mx-auto h-40 w-full" rounded="3xl" />
+        <Skeleton className="mt-8 h-[28rem] w-full" rounded="3xl" />
       </div>
     );
   }
 
   if (!order) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6">
-        <h1 className="text-2xl font-bold text-zinc-900">Order not found</h1>
-        <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-          We couldn&apos;t find order {orderId}.
-        </p>
-        <Link
-          href="/"
-          className="mt-6 inline-flex text-sm font-semibold text-[#8b6914] hover:text-[#c9a227]"
-        >
-          Return to home
-        </Link>
+      <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
+        <EmptyState
+          icon="📦"
+          title="Order not found"
+          description={`We couldn't find confirmation for ${orderId}.`}
+          primaryAction={{ label: "View My Orders", href: "/orders" }}
+          secondaryAction={{ label: "Return home", href: "/" }}
+        />
       </div>
     );
   }
 
   const customerName = `${order.customer.firstName} ${order.customer.lastName}`.trim();
   const isFailed = isOrderPaymentFailed(order);
+  const isPending = isOrderPaymentPending(order);
+  const paymentLabel =
+    (order.paymentMethod && PAYMENT_METHOD_LABELS[order.paymentMethod]) ||
+    order.paymentMethod ||
+    "—";
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
       <ConfirmationHeader order={order} />
 
+      {!isFailed ? (
+        <OrderConfidenceBanner className="mt-8 animate-fade-in" />
+      ) : null}
+
       <article
-        className="mt-10 space-y-10 rounded-3xl border border-zinc-200/80 bg-white p-6 shadow-[0_4px_24px_rgba(0,0,0,0.06)] sm:p-8"
+        className="mt-8 space-y-8 rounded-3xl border border-zinc-200/80 bg-white p-6 shadow-[0_4px_24px_rgba(0,0,0,0.06)] animate-fade-in sm:p-8"
         aria-labelledby="order-confirmation-heading"
       >
         <h2 id="order-confirmation-heading" className="sr-only">
@@ -165,40 +185,48 @@ export function OrderSuccessContent({ orderId }: OrderSuccessContentProps) {
         </h2>
 
         <section
-          aria-labelledby="order-number-heading"
-          className="flex flex-col gap-6 border-b border-zinc-100 pb-8 sm:flex-row sm:items-start sm:justify-between"
+          aria-labelledby="order-meta-heading"
+          className="grid gap-5 border-b border-zinc-100 pb-8 sm:grid-cols-2"
         >
-          <div className="space-y-5">
-            <div className="space-y-2">
-              <SectionHeading id="order-number-heading">Order Number</SectionHeading>
-              <CopyOrderNumber orderNumber={order.orderNumber} />
-            </div>
-            <div className="space-y-2">
-              <SectionHeading id="order-id-heading">Order ID</SectionHeading>
-              <CopyOrderId orderId={order.id} />
-            </div>
+          <div className="space-y-2 sm:col-span-2">
+            <SectionHeading id="order-meta-heading">Order Number</SectionHeading>
+            <CopyOrderNumber orderNumber={order.orderNumber} />
           </div>
-          <div className="sm:text-right">
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <OrderStatusBadge status={order.status} />
-              <PaymentStatusBadge status={order.paymentStatus} size="sm" />
-            </div>
+
+          <div className="space-y-2">
+            <SectionHeading id="payment-ref-heading">Payment Reference</SectionHeading>
+            <p className="font-mono text-sm font-semibold text-zinc-900">
+              {order.paymentStatus === PAYMENT_STATUS.PAID && order.paymentReference
+                ? order.paymentReference
+                : isPending
+                  ? "Pending confirmation"
+                  : "—"}
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <SectionHeading id="delivery-estimate-heading">Estimated Delivery</SectionHeading>
+            <p className="text-sm font-bold text-zinc-900">{deliveryEstimate}</p>
+            <p className="text-xs text-zinc-500">
+              Based on your selected shipping method{shippingMethods.length > 1 ? "s" : ""}.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2 sm:col-span-2">
+            <PaymentStatusBadge status={order.paymentStatus} />
+            <OrderStatusBadge status={order.status} />
           </div>
         </section>
 
-        <section
-          aria-labelledby="delivery-estimate-banner"
-          className="rounded-2xl border border-[#c9a227]/20 bg-gradient-to-br from-amber-50/80 to-white px-5 py-4"
-        >
-          <SectionHeading id="delivery-estimate-banner">Estimated Delivery</SectionHeading>
-          <p className="mt-2 text-lg font-bold text-zinc-900">{deliveryEstimate}</p>
-          <p className="mt-1 text-xs text-zinc-500">
-            Based on your selected shipping method{shippingMethods.length > 1 ? "s" : ""} at
-            checkout.
-          </p>
-        </section>
+        {!isFailed && displayTimeline.length > 0 ? (
+          <section aria-labelledby="progress-heading" className="space-y-5">
+            <SectionHeading id="progress-heading">Order Progress</SectionHeading>
+            <OrderTrackingStepper timeline={displayTimeline} tone="light" />
+            <TrackingWhatHappensNext timeline={displayTimeline} />
+          </section>
+        ) : null}
 
-        <section aria-labelledby="customer-heading" className="space-y-4">
+        <section aria-labelledby="customer-heading" className="space-y-4 border-t border-zinc-100 pt-8">
           <SectionHeading id="customer-heading">Customer</SectionHeading>
           <ul className="space-y-2 text-sm">
             <li className="font-semibold text-zinc-900">{customerName || "—"}</li>
@@ -215,7 +243,7 @@ export function OrderSuccessContent({ orderId }: OrderSuccessContentProps) {
           aria-labelledby="shipping-heading"
           className="space-y-5 border-t border-zinc-100 pt-8"
         >
-          <SectionHeading id="shipping-heading">Delivery</SectionHeading>
+          <SectionHeading id="shipping-heading">Shipping</SectionHeading>
 
           <dl className="grid gap-5 sm:grid-cols-2">
             <div className="space-y-2">
@@ -259,7 +287,7 @@ export function OrderSuccessContent({ orderId }: OrderSuccessContentProps) {
 
         <section aria-labelledby="items-heading" className="space-y-5 border-t border-zinc-100 pt-8">
           <div className="flex items-center justify-between gap-3">
-            <SectionHeading id="items-heading">Items</SectionHeading>
+            <SectionHeading id="items-heading">Order Summary</SectionHeading>
             <span className="text-xs font-medium text-zinc-500">
               {order.items.length} item{order.items.length === 1 ? "" : "s"}
             </span>
@@ -275,25 +303,60 @@ export function OrderSuccessContent({ orderId }: OrderSuccessContentProps) {
           ) : null}
         </section>
 
-        <section aria-labelledby="totals-heading" className="space-y-4 border-t border-zinc-100 pt-8">
-          <SectionHeading id="totals-heading">Payment Summary</SectionHeading>
+        <section aria-labelledby="payment-heading" className="space-y-4 border-t border-zinc-100 pt-8">
+          <SectionHeading id="payment-heading">Payment & Totals</SectionHeading>
+          <p className="text-sm text-zinc-600">
+            Method:{" "}
+            <span className="font-semibold text-zinc-900">{paymentLabel}</span>
+          </p>
           <OrderSummaryTotals totals={order.totals} hideZeroDiscount />
-          {order.paymentMethod ? (
-            <p className="text-sm text-zinc-600">
-              Method:{" "}
-              <span className="font-semibold text-zinc-900">
-                {PAYMENT_METHOD_LABELS[order.paymentMethod] ?? order.paymentMethod}
-              </span>
-              {order.paymentStatus === PAYMENT_STATUS.PAID && order.paymentReference ? (
-                <>
-                  {" "}
-                  · Ref{" "}
-                  <span className="font-mono text-xs">{order.paymentReference}</span>
-                </>
-              ) : null}
-            </p>
-          ) : null}
         </section>
+
+        {order.paymentMethod === PAYMENT_METHOD_CODES.BANK_TRANSFER ? (
+          <section
+            aria-labelledby="bank-transfer-heading"
+            className="rounded-2xl border border-amber-200 bg-amber-50/70 px-5 py-5"
+          >
+            <SectionHeading id="bank-transfer-heading">Bank Transfer Instructions</SectionHeading>
+            <p className="mt-2 text-sm text-zinc-700">
+              Complete your transfer using the details below. Your order stays pending until we
+              confirm payment. You can finish this later from your orders page.
+            </p>
+            <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="text-xs font-medium text-zinc-500">Bank</dt>
+                <dd className="font-semibold text-zinc-900">{BANK_TRANSFER_INSTRUCTIONS.bankName}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-medium text-zinc-500">Account name</dt>
+                <dd className="font-semibold text-zinc-900">
+                  {BANK_TRANSFER_INSTRUCTIONS.accountName}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs font-medium text-zinc-500">Account number</dt>
+                <dd className="font-mono font-semibold text-zinc-900">
+                  {BANK_TRANSFER_INSTRUCTIONS.accountNumber}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs font-medium text-zinc-500">Branch</dt>
+                <dd className="font-semibold text-zinc-900">{BANK_TRANSFER_INSTRUCTIONS.branch}</dd>
+              </div>
+              <div className="sm:col-span-2">
+                <dt className="text-xs font-medium text-zinc-500">Amount</dt>
+                <dd className="font-semibold text-zinc-900">{formatPrice(order.grandTotal)}</dd>
+              </div>
+              <div className="sm:col-span-2">
+                <dt className="text-xs font-medium text-zinc-500">Reference</dt>
+                <dd className="font-mono font-semibold text-zinc-900">{order.orderNumber}</dd>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {BANK_TRANSFER_INSTRUCTIONS.referenceHint}
+                </p>
+              </div>
+            </dl>
+          </section>
+        ) : null}
 
         {isFailed ? (
           <div
@@ -305,18 +368,18 @@ export function OrderSuccessContent({ orderId }: OrderSuccessContentProps) {
           </div>
         ) : null}
 
-        <div className="flex flex-col gap-3 border-t border-zinc-100 pt-8 sm:flex-row">
+        <div className="flex flex-col gap-3 border-t border-zinc-100 pt-8 sm:flex-row sm:flex-wrap">
           {isFailed ? (
             <>
               <Link
                 href="/checkout/payment"
-                className="inline-flex flex-1 items-center justify-center rounded-xl bg-gradient-to-r from-[#c9a227] to-[#e8c547] px-5 py-3.5 text-sm font-bold text-zinc-900 shadow-lg shadow-[#c9a227]/25 transition hover:from-[#b8921f] hover:to-[#d4b83d]"
+                className="inline-flex flex-1 items-center justify-center rounded-xl bg-gradient-to-r from-[#c9a227] to-[#e8c547] px-5 py-3.5 text-sm font-bold text-zinc-900 shadow-lg shadow-[#c9a227]/25 transition hover:from-[#b8921f] hover:to-[#d4b83d] sm:min-w-[160px]"
               >
                 Retry Payment
               </Link>
               <Link
                 href={trackOrderHref}
-                className="inline-flex flex-1 items-center justify-center rounded-xl border border-zinc-200 bg-white px-5 py-3.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                className="inline-flex flex-1 items-center justify-center rounded-xl border border-zinc-200 bg-white px-5 py-3.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 sm:min-w-[140px]"
               >
                 View Order Status
               </Link>
@@ -324,17 +387,31 @@ export function OrderSuccessContent({ orderId }: OrderSuccessContentProps) {
           ) : (
             <>
               <Link
-                href="/"
-                className="inline-flex flex-1 items-center justify-center rounded-xl bg-gradient-to-r from-[#c9a227] to-[#e8c547] px-5 py-3.5 text-sm font-bold text-zinc-900 shadow-lg shadow-[#c9a227]/25 transition hover:from-[#b8921f] hover:to-[#d4b83d]"
+                href={trackOrderHref}
+                className="inline-flex flex-1 items-center justify-center rounded-xl bg-gradient-to-r from-[#c9a227] to-[#e8c547] px-5 py-3.5 text-sm font-bold text-zinc-900 shadow-lg shadow-[#c9a227]/25 transition hover:from-[#b8921f] hover:to-[#d4b83d] sm:min-w-[140px]"
+              >
+                Track Order
+              </Link>
+              <Link
+                href="/products"
+                className="inline-flex flex-1 items-center justify-center rounded-xl border border-zinc-200 bg-white px-5 py-3.5 text-sm font-semibold text-zinc-800 transition hover:border-[#c9a227]/35 hover:bg-zinc-50 sm:min-w-[140px]"
               >
                 Continue Shopping
               </Link>
               <Link
-                href={trackOrderHref}
-                className="inline-flex flex-1 items-center justify-center rounded-xl border border-zinc-200 bg-white px-5 py-3.5 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                href="/orders"
+                className="inline-flex flex-1 items-center justify-center rounded-xl border border-zinc-200 bg-white px-5 py-3.5 text-sm font-semibold text-zinc-800 transition hover:border-[#c9a227]/35 hover:bg-zinc-50 sm:min-w-[140px]"
               >
-                Track Order
+                View Orders
               </Link>
+              <button
+                type="button"
+                disabled
+                title="Invoice download will be available soon"
+                className="inline-flex flex-1 cursor-not-allowed items-center justify-center rounded-xl border border-zinc-100 bg-zinc-50 px-5 py-3.5 text-sm font-semibold text-zinc-400 sm:min-w-[140px]"
+              >
+                Invoice
+              </button>
             </>
           )}
         </div>

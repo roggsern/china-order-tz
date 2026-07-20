@@ -5,7 +5,6 @@ namespace Database\Factories;
 use App\Models\Admin;
 use App\Models\Role;
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 /**
@@ -13,6 +12,10 @@ use Illuminate\Support\Str;
  */
 class AdminFactory extends Factory
 {
+    /**
+     * The current password being used by the factory.
+     * Plain string — Admin model casts password => hashed.
+     */
     protected static ?string $password;
 
     public function definition(): array
@@ -23,7 +26,7 @@ class AdminFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'phone' => fake()->numerify('07########'),
             'email_verified_at' => now(),
-            'password' => static::$password ??= Hash::make('password'),
+            'password' => static::$password ??= 'password',
             'is_super_admin' => false,
             'is_active' => true,
             'remember_token' => Str::random(10),

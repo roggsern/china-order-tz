@@ -9,16 +9,21 @@ use App\Actions\AdminProducts\GetAdminProductsAction;
 use App\Actions\AdminProducts\GetInventoryMovementsAction;
 use App\Actions\AdminProducts\GetProductImagesAction;
 use App\Actions\AdminProducts\GetTrashedProductsAction;
+use App\Actions\AdminProducts\QuoteProductPriceAction;
 use App\Actions\AdminProducts\RestoreProductAction;
 use App\Actions\AdminProducts\ShowProductAction;
+use App\Actions\AdminProducts\SyncProductPriceTiersAction;
 use App\Actions\AdminProducts\UpdateProductAction;
 use App\Actions\AdminProducts\UpdateProductStockAction;
 use App\Actions\AdminProducts\UploadProductImageAction;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\QuoteProductPriceRequest;
 use App\Http\Requests\Admin\StoreProductImageRequest;
 use App\Http\Requests\Admin\StoreProductRequest;
+use App\Http\Requests\Admin\SyncProductPriceTiersRequest;
 use App\Http\Requests\Admin\UpdateProductRequest;
 use App\Http\Requests\Admin\UpdateProductStockRequest;
+use App\Http\Resources\ConfigurationPriceTierResource;
 use App\Http\Resources\InventoryMovementResource;
 use App\Http\Resources\ProductResource;
 use App\Models\Product;
@@ -146,5 +151,29 @@ class AdminProductController extends Controller
     ): AnonymousResourceCollection {
         return InventoryMovementResource::collection($action->handle($product))
             ->additional(['success' => true]);
+    }
+
+    public function quote(
+        QuoteProductPriceRequest $request,
+        Product $product,
+        QuoteProductPriceAction $action,
+    ): JsonResponse {
+        return response()->json([
+            'success' => true,
+            'data' => $action->handle($request, $product)->toArray(),
+        ]);
+    }
+
+    public function syncPriceTiers(
+        SyncProductPriceTiersRequest $request,
+        Product $product,
+        SyncProductPriceTiersAction $action,
+    ): JsonResponse {
+        return response()->json([
+            'success' => true,
+            'data' => ConfigurationPriceTierResource::collection(
+                collect($action->handle($request, $product))
+            ),
+        ]);
     }
 }

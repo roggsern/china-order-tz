@@ -34,6 +34,7 @@ import { DELIVERIES_UPDATED_EVENT } from "@/lib/delivery/delivery-labels";
 import { DELIVERY_STATUS } from "@/lib/delivery/types";
 import { paymentService } from "@/lib/payment/PaymentService";
 import { updateOrderById } from "@/lib/payment/order-storage";
+import { isAdminLocalOrderAuthorityEnabled } from "@/lib/config/env";
 
 type AdminOrdersContextValue = {
   orders: Order[];
@@ -52,6 +53,8 @@ type AdminOrdersContextValue = {
   updateOrderStatus: (orderId: string, status: OrderStatus) => void;
   bulkUpdateOrderStatus: (orderIds: string[], status: BulkOrderStatus) => Promise<void>;
   isBulkUpdating: boolean;
+  /** When false, UI must not mutate top-level order status locally. */
+  localOrderAuthorityEnabled: boolean;
   getOrder: (orderNumber: string) => Order | undefined;
   getOrderById: (orderId: string) => Order | undefined;
 };
@@ -243,16 +246,34 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const markPaymentReceived = useCallback((orderId: string) => {
+    if (!isAdminLocalOrderAuthorityEnabled()) {
+      return;
+    }
     paymentService.updatePaymentStatus(orderId, "paid");
   }, []);
 
   const markOrderProcessing = useCallback((orderId: string) => {
+    if (!isAdminLocalOrderAuthorityEnabled()) {
+      return;
+    }
     const order = paymentService.getOrderById(orderId);
     if (!order) return;
     paymentService.updateOrderStatus(order.orderNumber, ORDER_STATUS.PROCESSING);
   }, []);
 
   const markOrderShipped = useCallback(async (orderId: string) => {
+    if (!isAdminLocalOrderAuthorityEnabled()) {
+      // Production: delivery advance only — order lifecycle syncs via Laravel.
+      try {
+        await advanceDelivery(orderId, DELIVERY_STATUS.SHIPPED);
+      } catch {
+        // Specialist engine owns errors.
+      }
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent(DELIVERIES_UPDATED_EVENT));
+      }
+      return;
+    }
     const order = paymentService.getOrderById(orderId);
     if (!order) return;
     paymentService.updateOrderStatus(order.orderNumber, ORDER_STATUS.SHIPPED);
@@ -267,6 +288,17 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const markOrderDelivered = useCallback(async (orderId: string) => {
+    if (!isAdminLocalOrderAuthorityEnabled()) {
+      try {
+        await advanceDelivery(orderId, DELIVERY_STATUS.DELIVERED);
+      } catch {
+        // Specialist engine owns errors.
+      }
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent(DELIVERIES_UPDATED_EVENT));
+      }
+      return;
+    }
     const order = paymentService.getOrderById(orderId);
     if (!order) return;
     paymentService.updateOrderStatus(order.orderNumber, ORDER_STATUS.DELIVERED);
@@ -288,6 +320,9 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const updateOrderStatus = useCallback((orderId: string, status: OrderStatus) => {
+    if (!isAdminLocalOrderAuthorityEnabled()) {
+      return;
+    }
     const order = paymentService.getOrderById(orderId);
     if (!order) return;
     paymentService.updateOrderStatus(order.orderNumber, status);
@@ -295,6 +330,11 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
 
   const bulkUpdateOrderStatus = useCallback(
     async (orderIds: string[], status: BulkOrderStatus) => {
+      if (!isAdminLocalOrderAuthorityEnabled()) {
+        throw new Error(
+          "Local admin status updates are disabled. Use Laravel fulfillment, warehouse, or shipment queues.",
+        );
+      }
       if (orderIds.length === 0 || isBulkUpdating) {
         return;
       }
@@ -374,6 +414,7 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
       updateOrderStatus,
       bulkUpdateOrderStatus,
       isBulkUpdating,
+      localOrderAuthorityEnabled: isAdminLocalOrderAuthorityEnabled(),
       getOrder,
       getOrderById,
     }),

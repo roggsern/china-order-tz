@@ -11,11 +11,13 @@ class OrderNumberGenerator
     {
         $prefix = (string) config('orders.number_prefix', 'COTZ');
         $padding = max(1, (int) config('orders.number_sequence_padding', 6));
-        $year = now()->format('Y');
+        $date = now()->format('Ymd');
 
-        return DB::transaction(function () use ($prefix, $padding, $year): string {
+        return DB::transaction(function () use ($prefix, $padding, $date): string {
+            $pattern = "{$prefix}-{$date}-%";
+
             $latestOrderNumber = Order::query()
-                ->where('order_number', 'like', "{$prefix}-{$year}-%")
+                ->where('order_number', 'like', $pattern)
                 ->lockForUpdate()
                 ->orderByDesc('order_number')
                 ->value('order_number');
@@ -30,7 +32,7 @@ class OrderNumberGenerator
             return sprintf(
                 '%s-%s-%s',
                 $prefix,
-                $year,
+                $date,
                 str_pad((string) $nextSequence, $padding, '0', STR_PAD_LEFT),
             );
         });

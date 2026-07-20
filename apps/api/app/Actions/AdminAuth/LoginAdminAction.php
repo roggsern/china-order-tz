@@ -2,6 +2,7 @@
 
 namespace App\Actions\AdminAuth;
 
+use App\Events\Audit\AdminLogin;
 use App\Http\Requests\Admin\LoginRequest;
 use App\Models\Admin;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -45,6 +46,8 @@ class LoginAdminAction
         $token = $admin->createToken('admin-api')->plainTextToken;
 
         Auth::guard('admin')->logout();
+
+        event(AdminLogin::fromAdmin($admin, $request->ip(), $request->userAgent()));
 
         return [
             'admin' => $admin->load('role'),

@@ -4,24 +4,24 @@ import { PAYMENT_STATUS } from "@/lib/types/payment";
 
 const TIMELINE_STAGES = [
   {
-    id: "created",
-    title: "Order Created",
-    description: "Your order has been created successfully.",
-  },
-  {
-    id: "payment_pending",
-    title: "Pending Payment",
-    description: "Awaiting payment confirmation.",
+    id: "placed",
+    title: "Order placed",
+    description: "We received your order successfully.",
   },
   {
     id: "payment_received",
-    title: "Payment Received",
+    title: "Payment received",
     description: "Payment has been confirmed.",
   },
   {
     id: "processing",
     title: "Processing",
-    description: "We prepare your items for shipment.",
+    description: "We are preparing your items.",
+  },
+  {
+    id: "packed",
+    title: "Packed",
+    description: "Your items are packed and ready to ship.",
   },
   {
     id: "shipped",
@@ -41,7 +41,7 @@ function resolveTimelineProgress(order: Order): {
 } {
   if (order.status === ORDER_STATUS.CANCELLED) {
     if (order.paymentStatus === PAYMENT_STATUS.PAID) {
-      return { completedThrough: 2, currentIndex: null };
+      return { completedThrough: 1, currentIndex: null };
     }
     return { completedThrough: 0, currentIndex: null };
   }
@@ -49,24 +49,29 @@ function resolveTimelineProgress(order: Order): {
   if (order.status === ORDER_STATUS.DELIVERED) {
     return { completedThrough: 5, currentIndex: null };
   }
+
   if (order.status === ORDER_STATUS.IN_TRANSIT || order.status === ORDER_STATUS.SHIPPED) {
     return { completedThrough: 3, currentIndex: 4 };
   }
-  if (order.status === ORDER_STATUS.PACKED || order.status === ORDER_STATUS.PROCESSING) {
+
+  if (order.status === ORDER_STATUS.PACKED) {
     return { completedThrough: 2, currentIndex: 3 };
   }
+
+  if (order.status === ORDER_STATUS.PROCESSING) {
+    return { completedThrough: 1, currentIndex: 2 };
+  }
+
   if (order.status === ORDER_STATUS.CONFIRMED || order.paymentStatus === PAYMENT_STATUS.PAID) {
     return { completedThrough: 1, currentIndex: 2 };
   }
 
   if (
     order.paymentStatus === PAYMENT_STATUS.PENDING_PAYMENT ||
-    order.status === ORDER_STATUS.PENDING_PAYMENT
+    order.status === ORDER_STATUS.PENDING_PAYMENT ||
+    order.status === ORDER_STATUS.PENDING ||
+    order.paymentStatus === PAYMENT_STATUS.PENDING
   ) {
-    return { completedThrough: 0, currentIndex: 1 };
-  }
-
-  if (order.status === ORDER_STATUS.PENDING || order.paymentStatus === PAYMENT_STATUS.PENDING) {
     return { completedThrough: 0, currentIndex: 1 };
   }
 
@@ -89,11 +94,6 @@ export function syncTimelineWithOrder(order: Order): OrderTimelineEvent[] {
     let timestamp: string | null = null;
     if (state === "completed" || state === "current") {
       if (index === 0) {
-        timestamp = order.createdAt;
-      } else if (
-        index === 1 &&
-        (order.status === ORDER_STATUS.PENDING || order.status === ORDER_STATUS.PENDING_PAYMENT)
-      ) {
         timestamp = order.createdAt;
       } else if (index <= completedThrough || index === currentIndex) {
         timestamp = order.updatedAt;
@@ -144,8 +144,11 @@ export function buildInitialOrderTimeline(createdAt: string): OrderTimelineEvent
     grandTotal: 0,
     totals: {
       productTotal: 0,
+      originalProductTotal: 0,
+      moqDiscount: 0,
       shippingTotal: 0,
       discount: 0,
+      savings: 0,
       grandTotal: 0,
       itemCount: 0,
       uniqueItemCount: 0,

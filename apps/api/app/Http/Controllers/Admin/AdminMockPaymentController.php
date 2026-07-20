@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\OrderResource;
 use App\Http\Resources\PaymentResource;
 use App\Models\Payment;
+use App\Support\Production\ProductionSafety;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -18,6 +19,8 @@ class AdminMockPaymentController extends Controller
         Request $request,
         ProcessMockPaymentAction $action,
     ): JsonResponse {
+        ProductionSafety::assertNonProductionTooling('Mock payment');
+
         $validated = $request->validate([
             'result' => ['required', 'string', Rule::in(['success', 'failed'])],
         ]);

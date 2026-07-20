@@ -133,10 +133,13 @@ export const ORDER_STATUS_LABELS: Record<string, string> = {
   confirmed: "Confirmed",
   processing: "Processing",
   packed: "Packed",
-  shipped: "Shipped",
-  in_transit: "In Transit",
+  shipped: "Shipping",
+  in_transit: "Shipping",
   delivered: "Delivered",
+  completed: "Completed",
   cancelled: "Cancelled",
+  refunded: "Refunded",
+  paid: "Paid",
 };
 
 /** Client polling interval while waiting for M-Pesa STK confirmation (ms). */
@@ -147,3 +150,12 @@ export const PAYMENT_STK_COMPLETE_MS = 2_500;
 
 /** Brief pause on success screen before redirect to order success (ms). */
 export const PAYMENT_SUCCESS_REDIRECT_MS = 2_500;
+
+/** Manual bank transfer instructions shown after checkout (customer pays later). */
+export const BANK_TRANSFER_INSTRUCTIONS = {
+  bankName: "NMB Bank",
+  accountName: "CHINA ORDER TZ",
+  accountNumber: "0123456789",
+  branch: "Dar es Salaam",
+  referenceHint: "Use your order number as the transfer reference.",
+} as const;

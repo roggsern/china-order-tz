@@ -36,7 +36,7 @@ export function ProceedToCheckoutButton({
       fullWidth
       className={className || "mt-6"}
     >
-      Proceed to checkout
+      Proceed To Checkout
     </Button>
   );
 }

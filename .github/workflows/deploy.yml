@@ -1,44 +1,109 @@
 name: Deploy Next.js to VPS
 
+# Production web deploy (PM2 on DigitalOcean VPS).
+# MANUAL ONLY — does not run on push/tag. Requires workflow_dispatch after CI is green.
+# Laravel API, MySQL, Nginx, queue, and scheduler are NOT deployed here.
+# See docs/RELEASE.md and docs/PRODUCTION_OWNERSHIP.md.
+
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref to deploy (branch, tag, or SHA). Empty = origin/main tip.'
+        required: false
+        default: ''
+      confirm:
+        description: 'Type deploy to confirm a production web deploy'
+        required: true
+        default: ''
+
+concurrency:
+  group: deploy-web-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
   deploy:
+    name: Deploy web to VPS
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    if: ${{ github.event.inputs.confirm == 'deploy' }}
 
     steps:
+      - name: Verify deploy secrets
+        run: |
+          missing=0
+          [ -z "${{ secrets.HOST }}" ] && echo "::error::Missing secret HOST" && missing=1
+          [ -z "${{ secrets.USERNAME }}" ] && echo "::error::Missing secret USERNAME" && missing=1
+          [ -z "${{ secrets.SSH_KEY }}" ] && echo "::error::Missing secret SSH_KEY" && missing=1
+          exit $missing
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_KEY }}
-
+          command_timeout: 15m
           script: |
-            set -e
+            set -euo pipefail
 
-            echo "🚀 Starting deployment..."
+            REPO_DIR="/root/china-order-tz"
+            APP_NAME="china-order-tz"
+            DEPLOY_REF="${{ github.event.inputs.ref }}"
 
-            cd /root/china-order-tz
+            echo "==> Starting web deployment (manual workflow_dispatch)"
+            echo "GitHub SHA (workflow): ${{ github.sha }}"
+            echo "Actor: ${{ github.actor }}"
+            echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
-            echo "📥 Pulling latest code..."
-            git pull origin main
+            cd "$REPO_DIR"
 
-            echo "🧹 Cleaning old build..."
-            rm -rf node_modules apps/web/.next
+            PREV_SHA="$(git rev-parse HEAD)"
+            echo "PREV_SHA=${PREV_SHA}"
+            echo "${PREV_SHA}" > /tmp/china-order-tz-web.prev_sha
 
-            echo "📦 Installing dependencies (optimized)..."
+            echo "==> Fetching origin"
+            git fetch origin --tags --prune
+
+            if [ -n "${DEPLOY_REF}" ]; then
+              echo "==> Checking out ${DEPLOY_REF}"
+              git checkout --force "${DEPLOY_REF}"
+              git reset --hard "${DEPLOY_REF}"
+            else
+              echo "==> Pulling origin/main"
+              git checkout main
+              git pull --ff-only origin main
+            fi
+
+            NEW_SHA="$(git rev-parse HEAD)"
+            echo "NEW_SHA=${NEW_SHA}"
+
+            echo "==> Cleaning Next.js build output"
+            rm -rf apps/web/.next
+
+            echo "==> Installing dependencies"
             export NODE_OPTIONS="--max-old-space-size=512"
-            npm install --no-audit --no-fund
+            if [ -f package-lock.json ]; then
+              npm ci --no-audit --no-fund
+            else
+              npm install --no-audit --no-fund
+            fi
 
-            echo "🏗 Building Next.js..."
+            echo "==> Building Next.js (apps/web)"
             npm run build --workspace=apps/web
 
-            echo "♻ Restarting PM2..."
-            pm2 reload china-order-tz || pm2 start npm --name china-order-tz -- run start:web --workspace=apps/web
+            echo "==> Reloading PM2 (${APP_NAME})"
+            if pm2 describe "${APP_NAME}" >/dev/null 2>&1; then
+              pm2 reload ecosystem.config.js --only "${APP_NAME}" --update-env
+            else
+              pm2 start ecosystem.config.js --only "${APP_NAME}"
+            fi
             pm2 save
 
-            echo "✅ Deployment SUCCESS"
+            echo "==> Deployment SUCCESS"
+            echo "Rollback: Actions → Deploy Next.js to VPS → confirm=deploy, ref=${PREV_SHA}"
+            echo "Or see docs/RELEASE.md"

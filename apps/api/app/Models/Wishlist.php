@@ -6,6 +6,7 @@ use App\Models\Concerns\HasUuidPrimaryKey;
 use Database\Factories\WishlistFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Model;
 
@@ -16,8 +17,7 @@ class Wishlist extends Model
 
     protected $fillable = [
         'user_id',
-        'product_id',
-        'product_variant_id',
+        'name',
     ];
 
     public function user(): BelongsTo
@@ -25,13 +25,8 @@ class Wishlist extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function product(): BelongsTo
+    public function items(): HasMany
     {
-        return $this->belongsTo(Product::class);
-    }
-
-    public function variant(): BelongsTo
-    {
-        return $this->belongsTo(ProductVariant::class, 'product_variant_id');
+        return $this->hasMany(WishlistItem::class);
     }
 }

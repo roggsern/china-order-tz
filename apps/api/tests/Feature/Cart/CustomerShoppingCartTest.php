@@ -7,7 +7,10 @@ use App\Models\Admin;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\User;
+use App\Models\VariantInventory;
+use Database\Factories\Support\CatalogCartFixture;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -19,18 +22,22 @@ class CustomerShoppingCartTest extends TestCase
     public function test_customer_views_cart(): void
     {
         $user = User::factory()->create();
-        $product = Product::factory()->create(['price' => 25000]);
+        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::purchasable(25000);
 
         $cart = Cart::factory()->create([
             'user_id' => $user->id,
             'status' => CartStatus::Active,
+            'currency' => 'TZS',
         ]);
 
         CartItem::factory()->create([
             'cart_id' => $cart->id,
             'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
             'quantity' => 2,
             'unit_price' => 25000,
+            'price_snapshot' => 25000,
+            'currency' => 'TZS',
         ]);
 
         Sanctum::actingAs($user);
@@ -39,61 +46,68 @@ class CustomerShoppingCartTest extends TestCase
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.currency', 'TZS')
+            ->assertJsonPath('data.item_count', 2)
             ->assertJsonPath('data.subtotal', '50000.00')
             ->assertJsonPath('data.total', '50000.00')
-            ->assertJsonPath('data.items.0.product_id', $product->id);
+            ->assertJsonPath('data.items.0.product_variant_id', $variant->id);
     }
 
-    public function test_customer_adds_item_to_cart(): void
+    public function test_customer_adds_item_to_cart_using_variant_price_and_inventory(): void
     {
         $user = User::factory()->create();
-        $product = Product::factory()->create(['price' => 15000]);
+        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::purchasable(15000, 20);
 
         Sanctum::actingAs($user);
 
         $this->postJson('/api/v1/cart/items', [
-            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
             'quantity' => 1,
         ])->assertCreated()
             ->assertJsonPath('success', true)
             ->assertJsonCount(1, 'data.items')
             ->assertJsonPath('data.items.0.quantity', 1)
             ->assertJsonPath('data.items.0.unit_price', '15000.00')
+            ->assertJsonPath('data.items.0.price_snapshot', '15000.00')
+            ->assertJsonPath('data.items.0.product_variant_id', $variant->id)
             ->assertJsonPath('data.items.0.subtotal', '15000.00');
 
         $this->assertDatabaseHas('cart_items', [
             'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
             'quantity' => 1,
+            'price_snapshot' => 15000,
         ]);
     }
 
-    public function test_duplicate_product_increments_quantity(): void
+    public function test_duplicate_variant_increments_quantity(): void
     {
         $user = User::factory()->create();
-        $product = Product::factory()->create(['price' => 10000]);
+        ['variant' => $variant] = CatalogCartFixture::purchasable(10000, 50);
 
         Sanctum::actingAs($user);
 
         $this->postJson('/api/v1/cart/items', [
-            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
             'quantity' => 1,
         ])->assertCreated();
 
         $this->postJson('/api/v1/cart/items', [
-            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
             'quantity' => 2,
         ])->assertCreated()
             ->assertJsonCount(1, 'data.items')
             ->assertJsonPath('data.items.0.quantity', 3)
-            ->assertJsonPath('data.subtotal', '30000.00');
+            ->assertJsonPath('data.subtotal', '30000.00')
+            ->assertJsonPath('data.item_count', 3);
 
         $this->assertSame(1, CartItem::query()->count());
     }
 
-    public function test_customer_updates_item_quantity(): void
+    public function test_customer_updates_item_quantity_with_put(): void
     {
         $user = User::factory()->create();
-        $product = Product::factory()->create(['price' => 12000]);
+        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::purchasable(12000, 40);
 
         $cart = Cart::factory()->create([
             'user_id' => $user->id,
@@ -103,13 +117,15 @@ class CustomerShoppingCartTest extends TestCase
         $item = CartItem::factory()->create([
             'cart_id' => $cart->id,
             'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
             'quantity' => 1,
             'unit_price' => 12000,
+            'price_snapshot' => 12000,
         ]);
 
         Sanctum::actingAs($user);
 
-        $this->patchJson("/api/v1/cart/items/{$item->id}", [
+        $this->putJson("/api/v1/cart/items/{$item->id}", [
             'quantity' => 4,
         ])->assertOk()
             ->assertJsonPath('data.items.0.quantity', 4)
@@ -119,7 +135,7 @@ class CustomerShoppingCartTest extends TestCase
     public function test_customer_removes_item_from_cart(): void
     {
         $user = User::factory()->create();
-        $product = Product::factory()->create();
+        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::purchasable();
 
         $cart = Cart::factory()->create([
             'user_id' => $user->id,
@@ -129,35 +145,44 @@ class CustomerShoppingCartTest extends TestCase
         $item = CartItem::factory()->create([
             'cart_id' => $cart->id,
             'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
         ]);
 
         Sanctum::actingAs($user);
 
         $this->deleteJson("/api/v1/cart/items/{$item->id}")
             ->assertOk()
-            ->assertJsonCount(0, 'data.items');
+            ->assertJsonCount(0, 'data.items')
+            ->assertJsonPath('data.is_empty', true);
 
-        $this->assertSoftDeleted('cart_items', ['id' => $item->id]);
+        $this->assertDatabaseMissing('cart_items', ['id' => $item->id]);
     }
 
     public function test_customer_clears_cart(): void
     {
         $user = User::factory()->create();
-        $product = Product::factory()->create();
+        ['product' => $productA, 'variant' => $variantA] = CatalogCartFixture::purchasable();
+        ['product' => $productB, 'variant' => $variantB] = CatalogCartFixture::purchasable(18000);
 
         $cart = Cart::factory()->create([
             'user_id' => $user->id,
             'status' => CartStatus::Active,
         ]);
 
-        CartItem::factory()->count(2)->create([
+        CartItem::factory()->create([
             'cart_id' => $cart->id,
-            'product_id' => $product->id,
+            'product_id' => $productA->id,
+            'product_variant_id' => $variantA->id,
+        ]);
+        CartItem::factory()->create([
+            'cart_id' => $cart->id,
+            'product_id' => $productB->id,
+            'product_variant_id' => $variantB->id,
         ]);
 
         Sanctum::actingAs($user);
 
-        $this->deleteJson('/api/v1/cart')
+        $this->deleteJson('/api/v1/cart/clear')
             ->assertOk()
             ->assertJsonCount(0, 'data.items')
             ->assertJsonPath('data.subtotal', '0.00');
@@ -165,35 +190,38 @@ class CustomerShoppingCartTest extends TestCase
         $this->assertSame(0, CartItem::query()->where('cart_id', $cart->id)->count());
     }
 
-    public function test_buy_now_preparation(): void
+    public function test_buy_now_preparation_requires_variant(): void
     {
         $user = User::factory()->create();
-        $product = Product::factory()->create(['price' => 45000]);
+        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::purchasable(45000, 20);
 
         $activeCart = Cart::factory()->create([
             'user_id' => $user->id,
             'status' => CartStatus::Active,
         ]);
 
+        ['product' => $otherProduct, 'variant' => $otherVariant] = CatalogCartFixture::purchasable(1000);
         CartItem::factory()->create([
             'cart_id' => $activeCart->id,
-            'product_id' => Product::factory()->create()->id,
+            'product_id' => $otherProduct->id,
+            'product_variant_id' => $otherVariant->id,
             'quantity' => 1,
         ]);
 
         Sanctum::actingAs($user);
 
         $this->postJson('/api/v1/cart/buy-now', [
-            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
             'quantity' => 2,
         ])->assertCreated()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.checkout_type', 'buy_now')
             ->assertJsonPath('data.ready_for_checkout', true)
-            ->assertJsonPath('data.item_count', 1)
+            ->assertJsonPath('data.item_count', 2)
             ->assertJsonPath('data.subtotal', '90000.00')
             ->assertJsonPath('data.cart.status', CartStatus::CheckoutSession->value)
             ->assertJsonPath('data.cart.items.0.product_id', $product->id)
+            ->assertJsonPath('data.cart.items.0.product_variant_id', $variant->id)
             ->assertJsonPath('data.cart.items.0.quantity', 2);
 
         $this->assertSame(1, Cart::query()->where('user_id', $user->id)->where('status', CartStatus::Active)->count());
@@ -201,10 +229,10 @@ class CustomerShoppingCartTest extends TestCase
         $this->assertSame(1, CartItem::query()->where('cart_id', $activeCart->id)->count());
     }
 
-    public function test_cannot_add_inactive_product(): void
+    public function test_cannot_add_without_variant(): void
     {
         $user = User::factory()->create();
-        $product = Product::factory()->inactive()->create();
+        $product = Product::factory()->create(['is_active' => true]);
 
         Sanctum::actingAs($user);
 
@@ -212,33 +240,72 @@ class CustomerShoppingCartTest extends TestCase
             'product_id' => $product->id,
             'quantity' => 1,
         ])->assertUnprocessable()
-            ->assertJsonValidationErrors(['product_id']);
+            ->assertJsonValidationErrors(['product_variant_id']);
     }
 
-    public function test_cannot_add_deleted_product(): void
+    public function test_cannot_add_when_no_retail_price(): void
     {
         $user = User::factory()->create();
-        $product = Product::factory()->create();
-        $product->delete();
+        $product = Product::factory()->create(['is_active' => true, 'is_demo' => false]);
+        $variant = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'is_active' => true,
+        ]);
+        VariantInventory::query()->create([
+            'product_variant_id' => $variant->id,
+            'warehouse_code' => 'MAIN',
+            'on_hand' => 10,
+            'reserved' => 0,
+            'is_active' => true,
+        ]);
 
         Sanctum::actingAs($user);
 
         $this->postJson('/api/v1/cart/items', [
-            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
             'quantity' => 1,
+        ])->assertUnprocessable();
+    }
+
+    public function test_cannot_add_more_than_available_inventory(): void
+    {
+        $user = User::factory()->create();
+        ['variant' => $variant] = CatalogCartFixture::purchasable(10000, 2);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/v1/cart/items', [
+            'product_variant_id' => $variant->id,
+            'quantity' => 5,
         ])->assertUnprocessable()
-            ->assertJsonValidationErrors(['product_id']);
+            ->assertJsonValidationErrors(['quantity']);
+    }
+
+    public function test_cannot_add_inactive_variant(): void
+    {
+        $user = User::factory()->create();
+        ['variant' => $variant] = CatalogCartFixture::purchasable();
+        $variant->update(['is_active' => false]);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/v1/cart/items', [
+            'product_variant_id' => $variant->id,
+            'quantity' => 1,
+        ])->assertUnprocessable();
     }
 
     public function test_guest_rejected(): void
     {
+        ['variant' => $variant] = CatalogCartFixture::purchasable();
+
         $this->getJson('/api/v1/cart')->assertUnauthorized();
         $this->postJson('/api/v1/cart/items', [
-            'product_id' => Product::factory()->create()->id,
+            'product_variant_id' => $variant->id,
             'quantity' => 1,
         ])->assertUnauthorized();
         $this->postJson('/api/v1/cart/buy-now', [
-            'product_id' => Product::factory()->create()->id,
+            'product_variant_id' => $variant->id,
             'quantity' => 1,
         ])->assertUnauthorized();
     }
@@ -246,14 +313,11 @@ class CustomerShoppingCartTest extends TestCase
     public function test_admin_rejected(): void
     {
         Sanctum::actingAs(Admin::factory()->create());
+        ['variant' => $variant] = CatalogCartFixture::purchasable();
 
         $this->getJson('/api/v1/cart')->assertUnauthorized();
         $this->postJson('/api/v1/cart/items', [
-            'product_id' => Product::factory()->create()->id,
-            'quantity' => 1,
-        ])->assertUnauthorized();
-        $this->postJson('/api/v1/cart/buy-now', [
-            'product_id' => Product::factory()->create()->id,
+            'product_variant_id' => $variant->id,
             'quantity' => 1,
         ])->assertUnauthorized();
     }
@@ -262,7 +326,7 @@ class CustomerShoppingCartTest extends TestCase
     {
         $owner = User::factory()->create();
         $otherUser = User::factory()->create();
-        $product = Product::factory()->create();
+        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::purchasable();
 
         $cart = Cart::factory()->create([
             'user_id' => $owner->id,
@@ -272,14 +336,26 @@ class CustomerShoppingCartTest extends TestCase
         $item = CartItem::factory()->create([
             'cart_id' => $cart->id,
             'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
         ]);
 
         Sanctum::actingAs($otherUser);
 
-        $this->patchJson("/api/v1/cart/items/{$item->id}", [
+        $this->putJson("/api/v1/cart/items/{$item->id}", [
             'quantity' => 5,
         ])->assertNotFound();
 
         $this->deleteJson("/api/v1/cart/items/{$item->id}")->assertNotFound();
+    }
+
+    public function test_user_has_active_cart_relationship(): void
+    {
+        $user = User::factory()->create();
+        $cart = Cart::factory()->create([
+            'user_id' => $user->id,
+            'status' => CartStatus::Active,
+        ]);
+
+        $this->assertTrue($user->activeCart()->whereKey($cart->id)->exists());
     }
 }

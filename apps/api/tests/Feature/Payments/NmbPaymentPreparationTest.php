@@ -56,7 +56,7 @@ class NmbPaymentPreparationTest extends TestCase
         $response->assertUnprocessable();
     }
 
-    public function test_customer_can_initiate_nmb_payment(): void
+    public function test_customer_legacy_initiate_is_retired(): void
     {
         $user = User::factory()->create();
         Sanctum::actingAs($user);
@@ -66,20 +66,10 @@ class NmbPaymentPreparationTest extends TestCase
             'reference' => 'PAY-2026-000010',
         ]);
 
-        $response = $this->postJson("/api/v1/payments/{$payment->id}/initiate");
-
-        $response->assertOk()
-            ->assertJsonPath('success', true)
-            ->assertJsonPath('data.status', PaymentStatus::Initiated->value)
-            ->assertJsonPath('data.gateway_session_id', 'SESSION000010')
-            ->assertJsonPath('data.checkout_url', null);
-
-        $payment->refresh();
-        $this->assertSame(PaymentStatus::Initiated, $payment->status);
-        $this->assertSame('SESSION000010', $payment->gateway_session_id);
-        $this->assertSame('indicator-010', $payment->success_indicator);
-        $this->assertNull($payment->checkout_url);
-        $this->assertNotNull($payment->initiated_at);
+        $this->postJson("/api/v1/payments/{$payment->id}/initiate")
+            ->assertStatus(410)
+            ->assertJsonPath('deprecated', true)
+            ->assertJsonPath('replacement', '/api/v1/payments/start/{order}');
     }
 
     public function test_admin_nmb_callback_simulation_is_not_implemented_yet(): void

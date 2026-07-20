@@ -2,23 +2,23 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Payments\InitiatePaymentAction;
-use App\Http\Resources\PaymentSessionResource;
 use App\Models\Payment;
-use App\Models\User;
 use Illuminate\Http\JsonResponse;
 
+/**
+ * Legacy Payment-model initiate endpoint.
+ * Production payments use POST /payments/start/{order} (Payment Orchestrator).
+ */
 class PaymentController extends Controller
 {
-    public function initiate(Payment $payment, InitiatePaymentAction $action): JsonResponse
+    public function initiate(Payment $payment): JsonResponse
     {
-        /** @var User $user */
-        $user = auth()->user();
-
         return response()->json([
-            'success' => true,
-            'message' => 'Payment session created successfully.',
-            'data' => new PaymentSessionResource($action->handle($payment, $user)),
-        ]);
+            'success' => false,
+            'message' => 'This payment endpoint is retired. Start payment with POST /api/v1/payments/start/{order}.',
+            'deprecated' => true,
+            'replacement' => '/api/v1/payments/start/{order}',
+            'payment_id' => $payment->id,
+        ], 410);
     }
 }

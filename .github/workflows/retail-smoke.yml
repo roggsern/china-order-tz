@@ -1,0 +1,75 @@
+name: Retail Smoke Gate
+
+# TASK 040B — required CI gate for Retail Core.
+# PRs that touch POS / Orders / Payments / Inventory / Profit / CRM / Analytics / Returns
+# must pass RetailSmokeLifecycleTest before merge.
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/app/Services/Pos/**'
+      - 'apps/api/app/Services/Analytics/**'
+      - 'apps/api/app/Services/CostProfit/**'
+      - 'apps/api/app/Services/Crm/**'
+      - 'apps/api/app/Services/Stores/**'
+      - 'apps/api/app/Services/Payments/**'
+      - 'apps/api/app/Services/Orders/**'
+      - 'apps/api/app/Services/Returns/**'
+      - 'apps/api/app/Http/Controllers/Admin/AdminPos*.php'
+      - 'apps/api/app/Http/Controllers/Admin/AdminAnalyticsController.php'
+      - 'apps/api/app/Models/Order*.php'
+      - 'apps/api/app/Models/Payment*.php'
+      - 'apps/api/app/Models/Pos*.php'
+      - 'apps/api/app/Models/Return*.php'
+      - 'apps/api/app/Models/Refund*.php'
+      - 'apps/api/app/Models/Profit*.php'
+      - 'apps/api/app/Models/VariantInventory.php'
+      - 'apps/api/database/migrations/**'
+      - 'apps/api/routes/api.php'
+      - 'apps/api/tests/Feature/Pos/**'
+      - 'apps/api/tests/Feature/Analytics/**'
+      - 'apps/api/phpunit.xml'
+      - 'apps/api/composer.json'
+      - 'apps/api/composer.lock'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/**'
+
+concurrency:
+  group: retail-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  retail-smoke:
+    name: RetailSmokeLifecycle gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/api
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, intl
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Retail smoke + POS/Analytics regression
+        run: php artisan test --filter="Pos|RetailAnalytics|RetailSmoke"

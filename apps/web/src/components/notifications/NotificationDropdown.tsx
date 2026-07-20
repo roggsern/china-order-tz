@@ -91,14 +91,24 @@ export function NotificationDropdown({
 
             <ul className="max-h-[min(24rem,60vh)] overflow-y-auto overscroll-contain">
               {isLoading && notifications.length === 0 ? (
-                <li className="px-4 py-8 text-center text-sm text-zinc-500">Loading…</li>
+                <li className="space-y-3 px-4 py-5" aria-hidden>
+                  {[1, 2, 3].map((key) => (
+                    <div key={key} className="animate-pulse space-y-2 rounded-xl bg-zinc-900/60 p-3">
+                      <div className="h-3 w-2/3 rounded bg-zinc-800" />
+                      <div className="h-2.5 w-full rounded bg-zinc-800" />
+                    </div>
+                  ))}
+                </li>
               ) : null}
 
               {!isLoading && notifications.length === 0 ? (
                 <li className="px-4 py-10 text-center">
-                  <p className="text-sm font-medium text-zinc-300">No notifications yet</p>
-                  <p className="mt-1 text-xs text-zinc-500">
-                    Payment and delivery updates will appear here.
+                  <span className="text-3xl" aria-hidden>
+                    🔔
+                  </span>
+                  <p className="mt-3 text-sm font-bold text-zinc-100">You&apos;re all caught up</p>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                    We&apos;ll notify you when something important happens.
                   </p>
                 </li>
               ) : null}

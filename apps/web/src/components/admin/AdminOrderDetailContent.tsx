@@ -12,6 +12,8 @@ import { resolveAdminOrderSourceBadge } from "@/lib/admin/order-source-badge";
 import { useAdminOrders } from "@/components/admin/AdminOrdersProvider";
 import { AdminDeliveryPanel } from "@/components/admin/AdminDeliveryPanel";
 import { AdminOrderCustomerCard } from "@/components/admin/AdminOrderCustomerCard";
+import { AdminOrderFulfillmentCard } from "@/components/admin/AdminOrderFulfillmentCard";
+import { AdminOrderShipmentCard } from "@/components/admin/AdminOrderShipmentCard";
 import { AdminOrderFulfillmentTimeline } from "@/components/admin/AdminOrderFulfillmentTimeline";
 import { AdminOrderItemsList } from "@/components/admin/AdminOrderItemsList";
 import { AdminOrderQuickActions } from "@/components/admin/AdminOrderQuickActions";
@@ -224,6 +226,9 @@ export function AdminOrderDetailContent({ orderId }: AdminOrderDetailContentProp
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+          <AdminOrderFulfillmentCard orderId={order.id} orderStatus={order.status} />
+          <AdminOrderShipmentCard orderId={order.id} />
+
           <section className="admin-card p-4 sm:p-5">
             <h2 className="text-sm font-semibold text-zinc-900">Quick actions</h2>
             <div className="mt-3">

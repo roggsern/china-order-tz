@@ -3,9 +3,10 @@
 namespace Tests;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Tests\Support\InteractsWithCheckoutShipping;
 
-abstract class TestCase extends BaseTestCase
+abstract class TestCase extends ApplicationTestCase
 {
+    use InteractsWithCheckoutShipping;
     use RefreshDatabase;
 }

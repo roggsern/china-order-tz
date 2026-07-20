@@ -1,18 +1,22 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import type { Product, ProductImage } from "@/lib/types/catalog";
-import { getProductGalleryImages } from "@/lib/catalog/product-images";
+import { getProductGalleryImagesForColor } from "@/lib/catalog/product-images";
 import { CloseIcon } from "@/components/home/icons";
 import { ProductImageDisplay } from "../ProductImageDisplay";
 
 interface ProductGalleryMobileProps {
-  product: Pick<Product, "images" | "image" | "name" | "emoji" | "gradient">;
+  product: Pick<Product, "images" | "image" | "name" | "emoji" | "gradient" | "primary_image">;
+  selectedColorSlug?: string | null;
 }
 
-export function ProductGalleryMobile({ product }: ProductGalleryMobileProps) {
-  const images = getProductGalleryImages(product);
+export function ProductGalleryMobile({
+  product,
+  selectedColorSlug = null,
+}: ProductGalleryMobileProps) {
+  const images = getProductGalleryImagesForColor(product, selectedColorSlug);
   const reduceMotion = useReducedMotion();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -40,13 +44,24 @@ export function ProductGalleryMobile({ product }: ProductGalleryMobileProps) {
     setActiveIndex(index);
   };
 
+  // When color-filtered slides change, snap back to the first matching image.
+  useEffect(() => {
+    setActiveIndex(0);
+    scrollRef.current?.scrollTo({ left: 0, behavior: "auto" });
+  }, [selectedColorSlug, images.length]);
+
   if (images.length === 0) return null;
 
   const activeImage = images[activeIndex] ?? images[0];
 
   return (
     <>
-      <div className="relative bg-zinc-50">
+      <div className="relative overflow-hidden bg-gradient-to-b from-zinc-50 to-white">
+        {selectedColorSlug ? (
+          <span className="absolute left-3 top-3 z-10 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold capitalize text-zinc-700 shadow-sm backdrop-blur-sm">
+            {selectedColorSlug.replace(/-/g, " ")} view
+          </span>
+        ) : null}
         <div
           ref={scrollRef}
           onScroll={syncIndexFromScroll}
@@ -78,7 +93,11 @@ export function ProductGalleryMobile({ product }: ProductGalleryMobileProps) {
         </div>
 
         {images.length > 1 && (
-          <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
+          <>
+            <span className="absolute bottom-3 right-3 rounded-full bg-black/55 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+              {activeIndex + 1} / {images.length}
+            </span>
+            <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
             {images.map((image, index) => (
               <motion.span
                 key={image.id}
@@ -90,7 +109,8 @@ export function ProductGalleryMobile({ product }: ProductGalleryMobileProps) {
                 transition={{ type: "spring", stiffness: 400, damping: 28 }}
               />
             ))}
-          </div>
+            </div>
+          </>
         )}
       </div>
 

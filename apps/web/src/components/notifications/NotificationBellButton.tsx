@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { BellIcon } from "@/components/home/icons";
 import { NotificationDropdown } from "@/components/notifications/NotificationDropdown";
+import { AuthInvitationCard } from "@/components/auth/AuthInvitationCard";
 import { useCustomerSession } from "@/lib/customer/use-customer-session";
 import { useNotifications } from "@/lib/notifications/use-notifications";
 
@@ -25,7 +27,9 @@ export function NotificationBellButton({
   labelClassName = "",
 }: NotificationBellButtonProps) {
   const { session, isLoggedIn, isReady } = useCustomerSession();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const userId = isLoggedIn ? session?.email ?? null : null;
 
@@ -33,19 +37,21 @@ export function NotificationBellButton({
     useNotifications(userId);
 
   useEffect(() => {
-    if (!open) {
+    if (!open && !showInvite) {
       return;
     }
 
     const onPointerDown = (event: MouseEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) {
         setOpen(false);
+        setShowInvite(false);
       }
     };
 
     const onEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setOpen(false);
+        setShowInvite(false);
       }
     };
 
@@ -56,10 +62,39 @@ export function NotificationBellButton({
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("keydown", onEscape);
     };
-  }, [open]);
+  }, [open, showInvite]);
 
-  if (!isReady || !isLoggedIn || !userId) {
+  if (!isReady) {
     return null;
+  }
+
+  if (!isLoggedIn || !userId) {
+    return (
+      <div ref={rootRef} className="relative">
+        <button
+          type="button"
+          onClick={() => setShowInvite((value) => !value)}
+          className={className}
+          aria-label="Notifications — sign in required"
+          aria-expanded={showInvite}
+        >
+          <span className="relative shrink-0">
+            <BellIcon className={iconClassName} />
+          </span>
+          {showLabel ? <span className={labelClassName}>Alerts</span> : null}
+        </button>
+
+        {showInvite ? (
+          <div className="absolute right-0 z-50 mt-3 w-[min(22rem,calc(100vw-2rem))] animate-fade-in">
+            <AuthInvitationCard
+              context="notifications"
+              returnUrl={pathname || "/account"}
+              compact
+            />
+          </div>
+        ) : null}
+      </div>
+    );
   }
 
   return (
