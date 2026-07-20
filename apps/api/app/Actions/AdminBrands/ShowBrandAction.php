@@ -8,6 +8,6 @@ class ShowBrandAction
 {
     public function handle(Brand $brand): Brand
     {
-        return $brand;
+        return $brand->load(['categories'])->loadCount('products');
     }
 }

@@ -13,6 +13,7 @@ class SupplierResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
+            'code' => $this->code,
             'slug' => $this->slug,
             'contact_person' => $this->contact_person,
             'email' => $this->email,
@@ -20,7 +21,12 @@ class SupplierResource extends JsonResource
             'address' => $this->address,
             'city' => $this->city,
             'country' => $this->country,
+            'payment_terms' => $this->payment_terms,
+            'notes' => $this->notes,
             'is_active' => $this->is_active,
+            'supplier_products_count' => $this->whenCounted('supplierProducts'),
+            'purchase_orders_count' => $this->whenCounted('purchaseOrders'),
+            'supplier_products' => SupplierProductResource::collection($this->whenLoaded('supplierProducts')),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

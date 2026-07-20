@@ -1,19 +1,34 @@
+import { EmptyState } from "@/components/ui/EmptyState";
 import type { Product } from "@/lib/types/catalog";
 import { ProductCard } from "./ProductCard";
 
 interface ProductGridProps {
   products: Product[];
   emptyMessage?: string;
+  emptyTitle?: string;
+  searchQuery?: string;
 }
 
-export function ProductGrid({ products, emptyMessage = "No products found." }: ProductGridProps) {
+export function ProductGrid({
+  products,
+  emptyMessage = "Try different keywords or browse categories.",
+  emptyTitle = "No matching products found",
+  searchQuery,
+}: ProductGridProps) {
   if (products.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 py-16 text-center">
-        <span className="text-4xl">📦</span>
-        <p className="mt-4 text-base font-medium text-zinc-600">{emptyMessage}</p>
-        <p className="mt-1 text-sm text-zinc-400">Try adjusting your filters or search query.</p>
-      </div>
+      <EmptyState
+        tone="search"
+        icon="🔍"
+        title={emptyTitle}
+        description={
+          searchQuery?.trim()
+            ? `No products match “${searchQuery.trim()}”. ${emptyMessage}`
+            : emptyMessage
+        }
+        primaryAction={{ label: "Browse Products", href: "/products" }}
+        secondaryAction={{ label: "Browse categories", href: "/categories" }}
+      />
     );
   }
 

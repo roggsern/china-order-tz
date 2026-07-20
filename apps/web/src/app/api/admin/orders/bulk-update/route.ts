@@ -1,8 +1,20 @@
 import { NextResponse } from "next/server";
 import { isBulkOrderStatus } from "@/lib/admin/bulk-order-status";
 import { publishBulkOrderStatusUpdate } from "@/lib/admin/server/order-event-hub";
+import { isAdminLocalOrderAuthorityEnabled } from "@/lib/config/env";
 
 export async function POST(request: Request) {
+  if (!isAdminLocalOrderAuthorityEnabled()) {
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          "Bulk local status updates are disabled. Advance orders via Laravel fulfillment, warehouse, or shipment engines.",
+      },
+      { status: 403 },
+    );
+  }
+
   let body: { orderIds?: unknown; status?: unknown };
 
   try {

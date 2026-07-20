@@ -8,28 +8,35 @@ interface OrderStatusBadgeProps {
   size?: "sm" | "md";
 }
 
+/** Premium delivery / fulfilment status pills */
 const STATUS_STYLES: Record<string, string> = {
-  pending: "bg-amber-50 text-amber-800 ring-amber-600/20",
-  pending_payment: "bg-amber-50 text-amber-800 ring-amber-600/20",
-  confirmed: "bg-sky-50 text-sky-700 ring-sky-600/20",
-  processing: "bg-violet-50 text-violet-700 ring-violet-600/20",
-  packed: "bg-indigo-50 text-indigo-700 ring-indigo-600/20",
-  shipped: "bg-blue-50 text-blue-700 ring-blue-600/20",
-  in_transit: "bg-cyan-50 text-cyan-800 ring-cyan-600/20",
-  delivered: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
-  cancelled: "bg-zinc-100 text-zinc-600 ring-zinc-300/50",
+  pending: "bg-amber-50 text-amber-800 ring-amber-600/25",
+  pending_payment: "bg-amber-50 text-amber-800 ring-amber-600/25",
+  confirmed: "bg-blue-50 text-blue-800 ring-blue-600/20",
+  processing: "bg-blue-50 text-blue-800 ring-blue-600/25",
+  packed: "bg-indigo-50 text-indigo-800 ring-indigo-600/20",
+  shipped: "bg-purple-50 text-purple-800 ring-purple-600/25",
+  in_transit: "bg-purple-50 text-purple-800 ring-purple-600/20",
+  delivered: "bg-green-50 text-green-800 ring-green-600/25",
+  completed: "bg-green-50 text-green-800 ring-green-600/25",
+  paid: "bg-green-50 text-green-800 ring-green-600/20",
+  cancelled: "bg-red-50 text-red-700 ring-red-600/25",
+  refunded: "bg-red-50 text-red-700 ring-red-600/20",
 };
 
 const STATUS_DOTS: Record<string, string> = {
   pending: "bg-amber-500",
   pending_payment: "bg-amber-500",
-  confirmed: "bg-sky-500",
-  processing: "bg-violet-500",
+  confirmed: "bg-blue-500",
+  processing: "bg-blue-500",
   packed: "bg-indigo-500",
-  shipped: "bg-blue-500",
-  in_transit: "bg-cyan-500",
-  delivered: "bg-emerald-500",
-  cancelled: "bg-zinc-400",
+  shipped: "bg-purple-500",
+  in_transit: "bg-purple-500",
+  delivered: "bg-green-500",
+  completed: "bg-green-500",
+  paid: "bg-green-500",
+  cancelled: "bg-red-500",
+  refunded: "bg-red-500",
 };
 
 export function OrderStatusBadge({ status, size = "md" }: OrderStatusBadgeProps) {
@@ -38,9 +45,14 @@ export function OrderStatusBadge({ status, size = "md" }: OrderStatusBadgeProps)
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-md font-semibold ring-1 ${sizeClasses} ${STATUS_STYLES[status]}`}
+      className={`inline-flex items-center gap-1.5 rounded-full font-semibold ring-1 ${sizeClasses} ${
+        STATUS_STYLES[status] ?? "bg-zinc-50 text-zinc-700 ring-zinc-300/40"
+      }`}
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOTS[status]}`} aria-hidden />
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${STATUS_DOTS[status] ?? "bg-zinc-400"}`}
+        aria-hidden
+      />
       {label}
     </span>
   );

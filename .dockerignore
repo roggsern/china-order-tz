@@ -13,6 +13,7 @@
 **/storage/framework/sessions/*
 **/storage/framework/views/*
 **/bootstrap/cache/*
+**/public/storage
 **/*.md
 !README.md
 **/coverage

@@ -1,2 +1,4 @@
 *
 !.gitignore
+!demo-products/
+!demo-products/**

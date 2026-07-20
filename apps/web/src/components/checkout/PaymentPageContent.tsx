@@ -17,24 +17,32 @@ import type { PaymentMethodCode } from "@/lib/types/payment";
 import { PAYMENT_METHOD_CODES, PAYMENT_STATUS } from "@/lib/types/payment";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment/constants";
 import { paymentService } from "@/lib/payments/checkout-service";
+import { saveNmbCheckoutContext } from "@/lib/nmb";
 import {
-  consumeNmbPendingPaymentId,
-  saveNmbCheckoutContext,
-} from "@/lib/nmb";
+  CustomerPaymentApiError,
+  prepareOrderPayment,
+  toBackendPaymentMethod,
+} from "@/lib/api/customer-payments";
+import {
+  PaymentOrchestratorApiError,
+  startPaymentTransaction,
+} from "@/lib/api/customer-payment-orchestrator";
 import { getOrderById as getStoredOrderById } from "@/lib/payment/order-storage";
 import {
   getPaymentTransaction,
 } from "@/lib/payment/payment-session";
 import { redirectToPaymentProcessing } from "@/lib/payment/stk-flow";
-import { shouldRedirectToOrderSuccess } from "@/lib/order/placement";
+import { shouldRedirectToOrderSuccess, isAwaitingPaymentSelection } from "@/lib/order/placement";
 import { isGatewayPaymentMethod } from "@/lib/payment/payment-outcome";
 import { usePaymentTestMode } from "@/hooks/use-payment-test-mode";
 import { CheckoutSection } from "./CheckoutSection";
 import { CheckoutOrderSummary } from "./CheckoutOrderSummary";
 import { CheckoutStepIndicator } from "./CheckoutStepIndicator";
+import { CheckoutMobileStickyBar } from "./CheckoutMobileStickyBar";
 import { SimplifiedPaymentMethodSelector } from "@/components/payment/SimplifiedPaymentMethodSelector";
 import { TestModeBanner } from "@/components/payment/TestModeBanner";
 import { SimulatePaymentButton } from "@/components/payment/SimulatePaymentButton";
+import { CheckoutPageSkeleton } from "@/components/ui/PageSkeletons";
 
 function redirectToOrderSuccess(router: ReturnType<typeof useRouter>, orderId: string): void {
   clearCheckoutDraft();
@@ -81,12 +89,17 @@ export function PaymentPageContent() {
     if (existingOrderId) {
       const existing = getStoredOrderById(existingOrderId);
       if (existing) {
-        if (shouldRedirectToOrderSuccess(existing)) {
+        const waitingForPayment =
+          savedDraft.awaitingPayment === true || isAwaitingPaymentSelection(existing);
+
+        // Never skip the payment method step after Laravel order confirm.
+        if (!waitingForPayment && shouldRedirectToOrderSuccess(existing)) {
           finishOrder(existing, clearPurchasedItems, router);
           return;
         }
 
         if (
+          !waitingForPayment &&
           isGatewayPaymentMethod(existing.paymentMethod) &&
           existing.paymentStatus === PAYMENT_STATUS.PENDING
         ) {
@@ -99,8 +112,11 @@ export function PaymentPageContent() {
           }
         }
 
-        lockCartForOrder(existing.id, clearPurchasedItems);
-        setFailedOrder(existing);
+        // Only surface retry UI for real payment failures — not orders awaiting method selection.
+        if (existing.paymentStatus === PAYMENT_STATUS.FAILED) {
+          lockCartForOrder(existing.id, clearPurchasedItems);
+          setFailedOrder(existing);
+        }
       }
     }
 
@@ -126,7 +142,12 @@ export function PaymentPageContent() {
     const existingOrderId = getOrderIdForDraft(draft.draftId);
     if (existingOrderId) {
       const existing = getStoredOrderById(existingOrderId);
-      if (existing && shouldRedirectToOrderSuccess(existing)) {
+      if (
+        existing &&
+        !draft.awaitingPayment &&
+        !isAwaitingPaymentSelection(existing) &&
+        shouldRedirectToOrderSuccess(existing)
+      ) {
         finishOrder(existing, clearPurchasedItems, router);
         return;
       }
@@ -136,7 +157,12 @@ export function PaymentPageContent() {
       const lockedOrderId = getOrderIdForDraft(draft.draftId);
       if (lockedOrderId) {
         const lockedOrder = getStoredOrderById(lockedOrderId);
-        if (lockedOrder && shouldRedirectToOrderSuccess(lockedOrder)) {
+        if (
+          lockedOrder &&
+          !draft.awaitingPayment &&
+          !isAwaitingPaymentSelection(lockedOrder) &&
+          shouldRedirectToOrderSuccess(lockedOrder)
+        ) {
           finishOrder(lockedOrder, clearPurchasedItems, router);
         }
       }
@@ -165,33 +191,52 @@ export function PaymentPageContent() {
 
       lockCartForOrder(order.id, clearPurchasedItems);
 
-      if (paymentMethod === PAYMENT_METHOD_CODES.NMB) {
-        const paymentId = consumeNmbPendingPaymentId();
+      const backendOrderId = draft.backendOrder?.id ?? order.id;
+      const backendMethod = toBackendPaymentMethod(paymentMethod);
 
-        if (!paymentId) {
-          releaseDraftSubmissionLock(draft.draftId);
-          paymentLockRef.current = false;
-          setIsProcessingPayment(false);
-          setSubmitError(
-            "NMB card payment requires a prepared payment session. Sign in and complete checkout through the store before paying with NMB.",
-          );
+      if (paymentMethod === PAYMENT_METHOD_CODES.NMB) {
+        const transaction = await startPaymentTransaction(backendOrderId, "nmb");
+        saveNmbCheckoutContext({
+          paymentId: transaction.id,
+          localOrderId: order.id,
+          orderId: backendOrderId,
+        });
+        clearCheckoutDraft();
+
+        if (transaction.checkout_url) {
+          window.location.assign(transaction.checkout_url);
           return;
         }
 
-        saveNmbCheckoutContext({
-          paymentId,
-          localOrderId: order.id,
-        });
-        clearCheckoutDraft();
-        router.push(`/checkout/payment/nmb/${paymentId}`);
+        router.push(`/payments/${encodeURIComponent(transaction.id)}`);
         return;
       }
 
       if (isGatewayPaymentMethod(paymentMethod)) {
+        if (backendMethod) {
+          try {
+            await prepareOrderPayment(backendOrderId, backendMethod);
+          } catch {
+            // Local STK/Selcom can proceed even if Laravel payment row is unavailable.
+          }
+        }
+
         const { transactionId } = await paymentService.beginStkPaymentProcessing(order);
         clearCheckoutDraft();
         redirectToPaymentProcessing(router, order.id, transactionId);
         return;
+      }
+
+      if (paymentMethod === PAYMENT_METHOD_CODES.BANK_TRANSFER && backendMethod) {
+        await prepareOrderPayment(backendOrderId, backendMethod);
+      }
+
+      if (paymentMethod === PAYMENT_METHOD_CODES.COD && backendMethod) {
+        try {
+          await prepareOrderPayment(backendOrderId, backendMethod);
+        } catch {
+          // COD can still finalize locally as payable on delivery.
+        }
       }
 
       finishOrder(order, clearPurchasedItems, router);
@@ -209,7 +254,11 @@ export function PaymentPageContent() {
       }
 
       const message =
-        error instanceof Error ? error.message : "We couldn't place your order. Please try again.";
+        error instanceof CustomerPaymentApiError || error instanceof PaymentOrchestratorApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : "We couldn't place your order. Please try again.";
       setSubmitError(message);
       setIsProcessingPayment(false);
     }
@@ -228,7 +277,12 @@ export function PaymentPageContent() {
     const existingOrderId = getOrderIdForDraft(draft.draftId);
     if (existingOrderId) {
       const existing = getStoredOrderById(existingOrderId);
-      if (existing && shouldRedirectToOrderSuccess(existing)) {
+      if (
+        existing &&
+        !draft.awaitingPayment &&
+        !isAwaitingPaymentSelection(existing) &&
+        shouldRedirectToOrderSuccess(existing)
+      ) {
         finishOrder(existing, clearPurchasedItems, router);
         return;
       }
@@ -292,15 +346,7 @@ export function PaymentPageContent() {
   };
 
   if (!isReady || !draft) {
-    return (
-      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="h-8 w-56 animate-pulse rounded-lg bg-zinc-100" />
-        <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_400px]">
-          <div className="h-96 animate-pulse rounded-3xl bg-zinc-50" />
-          <div className="h-80 animate-pulse rounded-3xl bg-zinc-50" />
-        </div>
-      </div>
-    );
+    return <CheckoutPageSkeleton />;
   }
 
   const submitLabel = (() => {
@@ -377,7 +423,7 @@ export function PaymentPageContent() {
         </div>
       ) : null}
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start">
+      <div className="mt-8 grid gap-8 pb-28 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start lg:pb-0">
         <fieldset disabled={isProcessingPayment} className="space-y-6 border-0 p-0">
           <CheckoutSection
             title="Payment Method"
@@ -421,6 +467,7 @@ export function PaymentPageContent() {
         <CheckoutOrderSummary
           items={draft.items}
           totals={draft.totals}
+          shippingMethod={draft.shippingMethod}
           onSubmit={handleSubmit}
           isSubmitting={isProcessingPayment || isSimulating}
           submitDisabled={isProcessingPayment || isSimulating}
@@ -432,12 +479,21 @@ export function PaymentPageContent() {
                 : "Processing — please do not refresh or click again"
               : failedOrder
                 ? "Retry payment — your order is already saved"
-                : "Payment step — shipping already confirmed"
+                : "Review products, shipping, and total — then place your order"
           }
           backHref="/checkout"
           backLabel="← Back to checkout"
         />
       </div>
+
+      <CheckoutMobileStickyBar
+        totals={draft.totals}
+        onSubmit={handleSubmit}
+        isSubmitting={isProcessingPayment || isSimulating}
+        submitDisabled={isProcessingPayment || isSimulating || !paymentMethod}
+        submitLabel={submitLabel}
+        itemCount={draft.items.length}
+      />
     </div>
   );
 }

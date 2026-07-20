@@ -40,8 +40,8 @@ const TYPE_TO_METHOD: Record<ProductShippingOptionConfig["type"], ShippingMethod
   local: "local_delivery",
 };
 
-function rawDeliveryDays(value: unknown): string {
-  return normalizeDeliveryDays(value) ?? "—";
+function rawDeliveryDays(value: unknown, methodCode: ShippingMethodCode): string {
+  return normalizeDeliveryDays(value) ?? getDefaultFlatShippingDeliveryDays(methodCode);
 }
 
 function positivePrice(value: unknown): number | null {
@@ -116,7 +116,7 @@ export function resolveProductShippingOptions(
     ? input.shippingOptions
         .map((option) => {
           if (option.type === "local") {
-            return buildLocalNegotiatedOption(rawDeliveryDays(option.deliveryDays));
+            return buildLocalNegotiatedOption(rawDeliveryDays(option.deliveryDays, "local_delivery"));
           }
 
           const unitCost = positivePrice(option.price);
@@ -132,7 +132,7 @@ export function resolveProductShippingOptions(
             name: meta.name,
             icon: meta.icon,
             unitCost,
-            deliveryDays: rawDeliveryDays(option.deliveryDays),
+            deliveryDays: rawDeliveryDays(option.deliveryDays, methodCode),
           } satisfies ResolvedShippingOption;
         })
         .filter(Boolean) as ResolvedShippingOption[]
@@ -143,7 +143,7 @@ export function resolveProductShippingOptions(
   }
 
   if (isLocalProduct(input.origin)) {
-    const deliveryDays = rawDeliveryDays(input.airDeliveryDays);
+    const deliveryDays = rawDeliveryDays(input.airDeliveryDays, "local_delivery");
     return [buildLocalNegotiatedOption(deliveryDays !== "—" ? deliveryDays : undefined)];
   }
 
@@ -159,7 +159,7 @@ export function resolveProductShippingOptions(
       name: meta.name,
       icon: meta.icon,
       unitCost: airCost,
-      deliveryDays: rawDeliveryDays(input.airDeliveryDays),
+      deliveryDays: rawDeliveryDays(input.airDeliveryDays, "air_freight"),
     });
   }
 
@@ -173,7 +173,7 @@ export function resolveProductShippingOptions(
       name: meta.name,
       icon: meta.icon,
       unitCost: seaCost,
-      deliveryDays: rawDeliveryDays(input.seaDeliveryDays),
+      deliveryDays: rawDeliveryDays(input.seaDeliveryDays, "sea_freight"),
     });
   }
 

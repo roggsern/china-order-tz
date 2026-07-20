@@ -2,14 +2,30 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { saveCustomerApiToken } from "@/lib/api/customer-auth";
+import { CustomerLoginError, loginCustomer } from "@/lib/api/customer-login";
+import { toFriendlyAuthMessage } from "@/lib/auth/friendly-auth-messages";
+import { resolvePostAuthRedirect, withPreservedReturnUrl } from "@/lib/auth/return-url";
+import { queueCustomerToast } from "@/lib/customer/customer-toast";
+import { resolveCustomerDisplayName } from "@/lib/customer/display-name";
 import { saveCustomerSession } from "@/lib/customer/session";
+import {
+  AUTH_INPUT_CLASS,
+  AUTH_LABEL_CLASS,
+  AUTH_PRIMARY_BUTTON_CLASS,
+  AUTH_SECONDARY_LINK_CLASS,
+} from "@/components/auth/auth-styles";
+import { AuthLoadingSpinner } from "@/components/auth/AuthLoadingSpinner";
 
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnUrl = searchParams.get("returnUrl");
   const [error, setError] = useState<string | undefined>();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(undefined);
 
@@ -22,16 +38,39 @@ export function LoginForm() {
       return;
     }
 
-    saveCustomerSession({ email });
-    window.dispatchEvent(new Event("customer-session-updated"));
-    router.push("/orders");
+    setIsSubmitting(true);
+
+    try {
+      const result = await loginCustomer({ email, password });
+
+      saveCustomerApiToken(result.token);
+      saveCustomerSession({
+        email: result.user.email,
+        name: result.user.name,
+      });
+      queueCustomerToast(
+        `👋 Welcome back, ${resolveCustomerDisplayName(result.user.name, result.user.email)}!`,
+      );
+      window.dispatchEvent(new Event("customer-session-updated"));
+      // Cart lives in localStorage — login does not clear it.
+      router.push(resolvePostAuthRedirect(returnUrl));
+    } catch (loginError) {
+      if (loginError instanceof CustomerLoginError) {
+        setError(toFriendlyAuthMessage(loginError.message, "Unable to sign in. Please try again."));
+      } else if (loginError instanceof Error) {
+        setError(toFriendlyAuthMessage(loginError.message, "Unable to sign in. Please try again."));
+      } else {
+        setError("Unable to sign in. Please try again.");
+      }
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <>
-      <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
+      <form className="space-y-5" onSubmit={handleSubmit} noValidate>
         <div>
-          <label htmlFor="email" className="block text-sm font-medium text-zinc-300">
+          <label htmlFor="email" className={AUTH_LABEL_CLASS}>
             Email
           </label>
           <input
@@ -40,43 +79,63 @@ export function LoginForm() {
             type="email"
             autoComplete="email"
             required
-            className="mt-1.5 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-white placeholder:text-zinc-500 outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+            disabled={isSubmitting}
+            className={AUTH_INPUT_CLASS}
             placeholder="you@example.com"
           />
         </div>
 
         <div>
-          <label htmlFor="password" className="block text-sm font-medium text-zinc-300">
-            Password
-          </label>
+          <div className="flex items-center justify-between gap-3">
+            <label htmlFor="password" className={AUTH_LABEL_CLASS}>
+              Password
+            </label>
+            <Link
+              href={withPreservedReturnUrl("/forgot-password", returnUrl)}
+              className="text-xs font-medium text-zinc-400 transition hover:text-[#e8c547]"
+            >
+              Forgot password?
+            </Link>
+          </div>
           <input
             id="password"
             name="password"
             type="password"
             autoComplete="current-password"
             required
-            className="mt-1.5 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-white placeholder:text-zinc-500 outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+            disabled={isSubmitting}
+            className={AUTH_INPUT_CLASS}
             placeholder="••••••••"
           />
         </div>
 
         {error ? (
-          <p role="alert" className="rounded-xl border border-red-500/30 bg-red-950/50 px-4 py-3 text-sm text-red-300">
+          <p
+            role="alert"
+            className="rounded-2xl border border-amber-500/25 bg-amber-950/40 px-4 py-3 text-sm text-amber-100"
+          >
             {error}
           </p>
         ) : null}
 
-        <button
-          type="submit"
-          className="w-full rounded-xl bg-[#c9a227] py-3 text-sm font-bold uppercase tracking-wide text-zinc-900 shadow-lg shadow-[#c9a227]/20 transition hover:bg-[#e8c547]"
-        >
-          Sign in
+        <button type="submit" disabled={isSubmitting} className={AUTH_PRIMARY_BUTTON_CLASS}>
+          {isSubmitting ? (
+            <>
+              <AuthLoadingSpinner />
+              Signing in…
+            </>
+          ) : (
+            "Sign in"
+          )}
         </button>
       </form>
 
       <p className="mt-6 text-center text-sm text-zinc-500">
         Don&apos;t have an account?{" "}
-        <Link href="#" className="font-medium text-[#e8c547] hover:text-[#c9a227]">
+        <Link
+          href={withPreservedReturnUrl("/register", returnUrl)}
+          className={AUTH_SECONDARY_LINK_CLASS}
+        >
           Create account
         </Link>
       </p>

@@ -1,7 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type MutableRefObject } from "react";
 import type { ProductImage } from "@/lib/types/catalog";
+import {
+  AdminCatalogApiError,
+  deleteAdminProductImage,
+  setAdminProductImagePrimary,
+  uploadAdminProductImage,
+} from "@/lib/api/admin-catalog";
 import { resolveImageUrl } from "@/lib/catalog/product-images";
 import { CloseIcon, UploadIcon } from "@/components/home/icons";
 
@@ -10,31 +16,13 @@ interface ImageUploaderProps {
   thumbnailImageId: number | null;
   onChange: (images: ProductImage[]) => void;
   onThumbnailChange: (id: number | null) => void;
+  /** When set, uploads go straight to Laravel for this product. */
+  catalogProductId?: string | null;
+  /** Holds File objects for images not yet persisted (create flow). */
+  pendingFilesRef?: MutableRefObject<Map<number, File>>;
   productName?: string;
   gradient?: string;
   emoji?: string;
-}
-
-async function uploadProductImage(file: File): Promise<string> {
-  const formData = new FormData();
-  formData.append("file", file);
-
-  const response = await fetch("/api/uploads", {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(payload?.error ?? "Image upload failed");
-  }
-
-  const payload = (await response.json()) as { url?: string };
-  if (!payload.url?.trim()) {
-    throw new Error("Upload did not return a valid image path");
-  }
-
-  return payload.url.trim();
 }
 
 export function ImageUploader({
@@ -42,11 +30,15 @@ export function ImageUploader({
   thumbnailImageId,
   onChange,
   onThumbnailChange,
+  catalogProductId = null,
+  pendingFilesRef,
   productName = "Product",
   gradient = "from-zinc-500 to-zinc-700",
   emoji = "📦",
 }: ImageUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const localPendingRef = useRef<Map<number, File>>(new Map());
+  const pendingFiles = pendingFilesRef ?? localPendingRef;
   const [dragOver, setDragOver] = useState(false);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [uploadingCount, setUploadingCount] = useState(0);
@@ -56,8 +48,14 @@ export function ImageUploader({
     if (!files?.length) return;
 
     setUploadError(null);
-    const imageFiles = Array.from(files).filter((file) => file.type.startsWith("image/"));
-    if (!imageFiles.length) return;
+    const imageFiles = Array.from(files).filter((file) =>
+      ["image/jpeg", "image/png", "image/webp", "image/jpg"].includes(file.type),
+    );
+
+    if (!imageFiles.length) {
+      setUploadError("Only JPG, PNG, and WEBP images are supported.");
+      return;
+    }
 
     let nextId = Math.max(0, ...images.map((image) => image.id), 0);
     const uploadedImages: ProductImage[] = [];
@@ -66,17 +64,41 @@ export function ImageUploader({
 
     for (const file of imageFiles) {
       try {
-        const url = await uploadProductImage(file);
         nextId += 1;
-        uploadedImages.push({
-          id: nextId,
-          emoji,
-          gradient,
-          alt: `${productName} image ${images.length + uploadedImages.length + 1}`,
-          url,
-        });
+        const localId = nextId;
+
+        if (catalogProductId) {
+          const uploaded = await uploadAdminProductImage(catalogProductId, file);
+          uploadedImages.push({
+            id: localId,
+            catalogImageId: uploaded.id,
+            emoji,
+            gradient,
+            alt: `${productName} image ${images.length + uploadedImages.length + 1}`,
+            url: uploaded.url,
+            path: uploaded.path,
+          });
+
+          if (thumbnailImageId == null && images.length === 0 && uploadedImages.length === 1) {
+            await setAdminProductImagePrimary(uploaded.id);
+          }
+        } else {
+          const objectUrl = URL.createObjectURL(file);
+          pendingFiles.current.set(localId, file);
+          uploadedImages.push({
+            id: localId,
+            emoji,
+            gradient,
+            alt: `${productName} image ${images.length + uploadedImages.length + 1}`,
+            url: objectUrl,
+          });
+        }
       } catch (error) {
-        setUploadError(error instanceof Error ? error.message : "Image upload failed");
+        setUploadError(
+          error instanceof AdminCatalogApiError || error instanceof Error
+            ? error.message
+            : "Image upload failed",
+        );
       } finally {
         setUploadingCount((count) => Math.max(0, count - 1));
       }
@@ -91,12 +113,54 @@ export function ImageUploader({
     }
   };
 
-  const removeImage = (id: number) => {
-    const next = images.filter((image) => image.id !== id);
-    onChange(next);
+  const removeImage = async (id: number) => {
+    const target = images.find((image) => image.id === id);
+    setUploadError(null);
 
-    if (thumbnailImageId === id) {
-      onThumbnailChange(next[0]?.id ?? null);
+    try {
+      if (target?.catalogImageId) {
+        await deleteAdminProductImage(target.catalogImageId);
+      } else {
+        const pending = pendingFiles.current.get(id);
+        if (pending && target?.url?.startsWith("blob:")) {
+          URL.revokeObjectURL(target.url);
+        }
+        pendingFiles.current.delete(id);
+      }
+
+      const next = images.filter((image) => image.id !== id);
+      onChange(next);
+
+      if (thumbnailImageId === id) {
+        onThumbnailChange(next[0]?.id ?? null);
+        if (next[0]?.catalogImageId) {
+          await setAdminProductImagePrimary(next[0].catalogImageId);
+        }
+      }
+    } catch (error) {
+      setUploadError(
+        error instanceof AdminCatalogApiError || error instanceof Error
+          ? error.message
+          : "Unable to remove image",
+      );
+    }
+  };
+
+  const handleSetThumbnail = async (id: number) => {
+    onThumbnailChange(id);
+    const target = images.find((image) => image.id === id);
+    if (!target?.catalogImageId) {
+      return;
+    }
+
+    try {
+      await setAdminProductImagePrimary(target.catalogImageId);
+    } catch (error) {
+      setUploadError(
+        error instanceof AdminCatalogApiError || error instanceof Error
+          ? error.message
+          : "Unable to set thumbnail",
+      );
     }
   };
 
@@ -131,11 +195,15 @@ export function ImageUploader({
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {images.map((image, index) => {
             const isThumbnail = (thumbnailImageId ?? images[0]?.id) === image.id;
-            const previewUrl = image.url ? resolveImageUrl(image.url) : undefined;
+            const previewUrl = image.url
+              ? resolveImageUrl(image.url)
+              : image.path
+                ? resolveImageUrl(image.path)
+                : undefined;
 
             return (
               <div
-                key={image.id}
+                key={image.catalogImageId ?? image.id}
                 draggable
                 onDragStart={() => setDraggingId(image.id)}
                 onDragOver={(event) => event.preventDefault()}
@@ -162,7 +230,9 @@ export function ImageUploader({
                 <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-gradient-to-t from-zinc-900/80 to-transparent p-2 pt-8">
                   <button
                     type="button"
-                    onClick={() => onThumbnailChange(image.id)}
+                    onClick={() => {
+                      void handleSetThumbnail(image.id);
+                    }}
                     className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition ${
                       isThumbnail
                         ? "bg-[#c9a227] text-zinc-900"
@@ -176,7 +246,9 @@ export function ImageUploader({
 
                 <button
                   type="button"
-                  onClick={() => removeImage(image.id)}
+                  onClick={() => {
+                    void removeImage(image.id);
+                  }}
                   className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-md bg-white/90 text-zinc-600 opacity-0 shadow-sm transition hover:bg-white hover:text-red-600 group-hover:opacity-100"
                   aria-label={`Remove image ${index + 1}`}
                 >
@@ -207,12 +279,12 @@ export function ImageUploader({
           {uploadingCount > 0 ? `Uploading ${uploadingCount} image(s)…` : "Drop images here or click to upload"}
         </p>
         <p className="mt-1 text-xs text-zinc-500">
-          Drag tiles to reorder · Select thumbnail · PNG, JPG, WEBP
+          Drag tiles to reorder · Select thumbnail · JPG, PNG, WEBP (max 2MB)
         </p>
         <input
           ref={inputRef}
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp"
           multiple
           className="hidden"
           onChange={(event) => {

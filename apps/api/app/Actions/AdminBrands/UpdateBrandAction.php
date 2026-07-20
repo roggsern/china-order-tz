@@ -18,15 +18,26 @@ class UpdateBrandAction
             $data['slug'] = $this->generateUniqueSlug($validated['name'], $brand->id);
         }
 
+        foreach (['description', 'logo', 'banner', 'website', 'country', 'is_featured', 'sort_order', 'is_active'] as $field) {
+            if (array_key_exists($field, $validated)) {
+                $data[$field] = $validated[$field];
+            }
+        }
+
         $brand->update($data);
 
-        return $brand->fresh();
+        if (array_key_exists('category_ids', $validated)) {
+            $brand->categories()->sync($validated['category_ids'] ?? []);
+        }
+
+        return $brand->fresh(['categories'])->loadCount('products');
     }
 
     private function generateUniqueSlug(string $name, string $ignoreBrandId): string
     {
         $slug = Str::slug($name);
-        $original = $slug;
+        $original = $slug !== '' ? $slug : 'brand';
+        $slug = $original;
         $counter = 1;
 
         while (

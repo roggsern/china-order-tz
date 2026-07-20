@@ -28,15 +28,20 @@ export type AdminOrderListSummary = {
 
 export const ORDER_STATUS = {
   PENDING: "pending",
-  /** @deprecated Use PENDING — kept for legacy stored orders */
   PENDING_PAYMENT: "pending_payment",
+  PAID: "paid",
   CONFIRMED: "confirmed",
   PROCESSING: "processing",
+  /** Specialist warehouse label — not a Laravel OrderStatus value */
   PACKED: "packed",
   SHIPPED: "shipped",
+  /** Specialist shipment label — not a Laravel OrderStatus value */
   IN_TRANSIT: "in_transit",
   DELIVERED: "delivered",
+  COMPLETED: "completed",
   CANCELLED: "cancelled",
+  REFUND_PENDING: "refund_pending",
+  REFUNDED: "refunded",
 } as const;
 
 export type OrderStatus = (typeof ORDER_STATUS)[keyof typeof ORDER_STATUS];
@@ -69,6 +74,12 @@ export type ItemShippingBreakdown = {
   totalCost: number;
 };
 
+export type OrderConfigurationAttribute = {
+  name: string;
+  value: string;
+  slug?: string | null;
+};
+
 export type OrderLineItem = {
   id: string;
   productId: number;
@@ -78,6 +89,8 @@ export type OrderLineItem = {
   price: number;
   /** @deprecated Use price — kept for existing UI */
   unitPrice: number;
+  /** Pre-MOQ comparison unit price for savings display (frontend only). */
+  compareAtUnitPrice?: number;
   quantity: number;
   origin?: ProductOrigin;
   brand?: string;
@@ -86,6 +99,9 @@ export type OrderLineItem = {
   /** Selected size at checkout — frozen from cart; null when not applicable. */
   selectedSize: string | null;
   variant?: OrderItemVariant;
+  configurationLabel?: string;
+  configurationSku?: string;
+  selectedAttributes?: OrderConfigurationAttribute[];
   shipping: OrderItemShipping;
   /** Flat fields for legacy components */
   shippingMethod: ShippingMethodCode;
@@ -173,8 +189,11 @@ export function getOrderTotals(order: Order): CartTotals {
     itemCount,
     uniqueItemCount: order.items.length,
     productTotal: order.subtotal,
+    originalProductTotal: order.subtotal,
+    moqDiscount: 0,
     shippingTotal: order.shippingTotal,
     discount: 0,
+    savings: 0,
     grandTotal: order.grandTotal,
   };
 }
@@ -229,14 +248,26 @@ export function normalizeOrder(raw: Partial<Order> & Pick<Order, "orderNumber">)
   const grandTotal =
     raw.grandTotal ?? raw.totals?.grandTotal ?? Math.max(0, subtotal + shippingTotal - discount);
 
-  const totals: CartTotals = raw.totals ?? {
-    itemCount,
-    uniqueItemCount: items.length,
-    productTotal: subtotal,
-    shippingTotal,
-    discount,
-    grandTotal,
-  };
+  const totals: CartTotals = raw.totals
+    ? {
+        ...raw.totals,
+        savings: raw.totals.savings ?? 0,
+        moqDiscount: raw.totals.moqDiscount ?? 0,
+        originalProductTotal:
+          raw.totals.originalProductTotal ??
+          raw.totals.productTotal + (raw.totals.moqDiscount ?? 0),
+      }
+    : {
+        itemCount,
+        uniqueItemCount: items.length,
+        productTotal: subtotal,
+        originalProductTotal: subtotal,
+        moqDiscount: 0,
+        shippingTotal,
+        discount,
+        savings: 0,
+        grandTotal,
+      };
 
   return {
     id: raw.id ?? raw.orderNumber,

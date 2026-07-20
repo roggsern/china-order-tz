@@ -4,13 +4,12 @@ import { useMemo } from "react";
 import { getCartItemShippingOptions, getShippingTotal } from "@/lib/cart/shipping";
 import type { ShippingMethodCode } from "@/lib/shipping/types";
 import type { ShippingItemInput } from "@/lib/shipping/smart-engine";
-import { formatDeliveryEstimate } from "@/lib/catalog/utils";
+import { formatDeliveryWindow } from "@/lib/catalog/utils";
 import { useCartActions } from "@/lib/cart/context";
 import { LocalDeliveryCard } from "@/components/shipping/ShippingMethodCards";
 import {
   ShippingMethodCard,
   ShippingMethodCardGrid,
-  ShippingMethodSectionLabel,
 } from "@/components/shipping/ShippingMethodCard";
 
 const SHIPPING_LABEL_TO_METHOD: Record<string, ShippingMethodCode> = {
@@ -79,7 +78,7 @@ function CartItemShippingSelectorInner({
 
           const isAir = option.label === "Air Freight";
           const isSea = option.label === "Sea Freight";
-          const title = isAir ? "Air ✈" : isSea ? "Sea 🚢" : option.name;
+          const title = isAir ? "Air Freight" : isSea ? "Sea Freight" : option.name;
 
           return {
             key: option.label,
@@ -88,7 +87,7 @@ function CartItemShippingSelectorInner({
             title,
             price: getShippingTotal(itemContext, lineQuantity, methodCode),
             unitPrice: getShippingTotal(itemContext, 1, methodCode),
-            deliveryLabel: formatDeliveryEstimate(option.deliveryDays),
+            deliveryLabel: `Estimated delivery: ${formatDeliveryWindow(option.deliveryDays)}`,
           };
         })
         .filter(Boolean) as Array<{
@@ -108,8 +107,10 @@ function CartItemShippingSelectorInner({
   }
 
   return (
-    <div className="mt-5 space-y-3">
-      <ShippingMethodSectionLabel />
+    <div className="mt-4 space-y-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">
+        Change shipping method
+      </p>
       <ShippingMethodCardGrid>
         {pricedOptions.map((option) => (
           <ShippingMethodCard

@@ -6,7 +6,16 @@ export type Category = {
   icon: string;
 };
 
-export type ProductStatus = "active" | "draft" | "hidden";
+export type ProductStatus = "draft" | "active" | "out_of_stock" | "archived" | "hidden";
+
+/** Wholesale / MOQ quantity price tier (admin + API). */
+export type ProductPriceTierDraft = {
+  id?: string;
+  minQuantity: number;
+  tierType: "fixed_unit" | "percent_off";
+  unitPrice: number | null;
+  discountPercent: number | null;
+};
 
 export type ProductOrigin = "china" | "tz";
 
@@ -15,10 +24,13 @@ export type ProductType = "china" | "local";
 
 export type ProductBadgeType =
   | "NEW"
+  | "HOT"
   | "BEST SELLER"
   | "TRENDING"
+  | "FEATURED"
   | "PREMIUM"
   | "BEST PRICE"
+  | "LIMITED OFFER"
   | "VERIFIED"
   | "LIMITED STOCK";
 
@@ -31,10 +43,14 @@ export type TrustBadgeType =
 
 export type ProductImage = {
   id: number;
+  /** Laravel product_images.id (UUID). */
+  catalogImageId?: string;
   emoji: string;
   gradient: string;
   alt: string;
   url?: string;
+  /** Raw storage path from API payloads (e.g. demo-products/phone.jpg). */
+  path?: string;
 };
 
 export type ProductSpecification = {
@@ -82,6 +98,68 @@ export type ProductVariants = {
   storage?: string[];
 };
 
+/** Metadata-driven sellable configuration row (Admin Configuration Grid). */
+export type ProductConfigurationDraft = {
+  /** Existing configuration id when editing. */
+  id?: string;
+  attributeValueIds: string[];
+  /** Display label built from attribute values. */
+  label: string;
+  sku: string;
+  stock: number;
+  /** Null / undefined = use product base price. */
+  price: number | null;
+  barcode: string;
+  /** Per-configuration wholesale / MOQ tiers. */
+  priceTiers?: ProductPriceTierDraft[];
+};
+
+export type ProductFormSchemaAttributeValue = {
+  id: string;
+  value: string;
+  slug: string;
+  color_code?: string | null;
+  sort_order?: number;
+};
+
+export type ProductFormSchemaAttribute = {
+  id: string;
+  name: string;
+  slug: string;
+  type: string;
+  unit?: string | null;
+  is_required: boolean;
+  participates_in_configuration: boolean;
+  sort_order: number;
+  values: ProductFormSchemaAttributeValue[];
+};
+
+export type ProductFormSchema = {
+  product_type: {
+    id: string;
+    name: string;
+    slug: string;
+    description?: string | null;
+    sku_pattern?: string | null;
+  } | null;
+  attributes: ProductFormSchemaAttribute[];
+  dependencies: Array<{
+    id: string;
+    source_attribute_id: string;
+    target_attribute_id: string;
+    rules: Array<{
+      id: string;
+      source_attribute_value_id: string;
+      target_attribute_value_id: string;
+    }>;
+  }>;
+  capabilities: {
+    has_configurations: boolean;
+    allows_price_override: boolean;
+    allows_moq_pricing: boolean;
+  };
+};
+
 export type ProductVariantChoice = {
   size?: string;
   color?: string;
@@ -90,6 +168,14 @@ export type ProductVariantChoice = {
 
 export type Product = {
   id: number;
+  /** UUID from the Customer API — required for server cart sync. */
+  catalogProductId?: string;
+  /** Laravel category UUID (admin API). */
+  categoryId?: string;
+  /** Parent category UUID when categoryId is a subcategory (admin cascade). */
+  parentCategoryId?: string;
+  /** Laravel brand UUID (admin API). */
+  brandId?: string;
   slug: string;
   name: string;
   description: string;
@@ -115,7 +201,9 @@ export type Product = {
   sku?: string;
 } & ProductShippingFields & {
   discountPercent?: number;
-  /** Legacy single-image field; prefer `images[0]`. */
+  /** Primary catalog image from the Customer API (`primary_image`). */
+  primary_image?: ProductImage;
+  /** Legacy single-image field; prefer `primary_image` or `images[0]`. */
   image?: string;
   images: ProductImage[];
   thumbnailImageId?: number;
@@ -127,9 +215,15 @@ export type Product = {
   trending?: boolean;
   newArrival?: boolean;
   status: ProductStatus;
+  /** Marks seed/demo catalog rows — excluded from storefront and analytics when true. */
+  isDemo?: boolean;
+  /** Product-level wholesale / MOQ tiers (when no configurations). */
+  priceTiers?: ProductPriceTierDraft[];
   createdAt?: string;
-  /** Optional variant options — simple string lists only. */
+  /** Optional legacy variant option lists. */
   variants?: ProductVariants;
+  /** Sellable configurations loaded from Laravel (admin). */
+  configurations?: ProductConfigurationDraft[];
 };
 
 export type ProductFormData = {
@@ -148,15 +242,29 @@ export type ProductFormData = {
   emoji: string;
   type: ProductType;
   origin: ProductOrigin;
+  /** Laravel category UUID — required for create/update against the API. */
+  categoryId: string;
+  /** Parent (root) category UUID for cascade UI; leaf is stored in categoryId. */
+  parentCategoryId: string;
+  /** Laravel brand UUID — optional on the API. */
+  brandId: string;
   brandSlug: string;
   brand: string;
   categorySlug: string;
   subcategorySlug: string;
   stock: number;
   sku: string;
+  /** When true, admin may set a custom SKU; otherwise API auto-generates. */
+  skuOverride: boolean;
   weightKg: number | null;
   airCost: number;
   seaCost: number;
+  /** When false, Air is not offered (China products). */
+  airAvailable: boolean;
+  /** When false, Sea is not offered (China products). */
+  seaAvailable: boolean;
+  airNotes: string;
+  seaNotes: string;
   airDeliveryDays: string;
   seaDeliveryDays: string;
   features: string;
@@ -165,9 +273,16 @@ export type ProductFormData = {
   trending: boolean;
   newArrival: boolean;
   status: ProductStatus;
+  isDemo: boolean;
+  /** Enable product-level wholesale tiers (simple products) or edit per-config tiers. */
+  wholesaleEnabled: boolean;
+  priceTiers: ProductPriceTierDraft[];
   images: ProductImage[];
   thumbnailImageId: number | null;
+  /** Legacy string-list variants (UI-only; not persisted). Prefer configurations. */
   variants: ProductVariants;
+  /** Metadata-driven sellable configurations. */
+  configurations: ProductConfigurationDraft[];
 };
 
 export type SortOption = "featured" | "price-asc" | "price-desc" | "rating" | "newest";
@@ -191,6 +306,7 @@ export function pickProductShippingContext(
     origin: product.origin,
     weightKg: product.weightKg,
     categorySlug: product.categorySlug,
+    shippingOptions: product.shippingOptions,
     airCost: product.airCost,
     seaCost: product.seaCost,
     airDeliveryDays: product.airDeliveryDays,

@@ -29,6 +29,7 @@ export function mapCartLineToOrderItem(item: CartLineItem): OrderLineItem {
     name: item.name,
     price: item.unitPrice,
     unitPrice: item.unitPrice,
+    compareAtUnitPrice: item.compareAtUnitPrice,
     quantity,
     origin: item.origin,
     brand: item.brand,
@@ -40,6 +41,9 @@ export function mapCartLineToOrderItem(item: CartLineItem): OrderLineItem {
       color: item.variant?.color,
       storage: item.variant?.storage,
     },
+    configurationLabel: item.configurationLabel,
+    configurationSku: item.configurationSku,
+    selectedAttributes: item.selectedAttributes,
     shipping: {
       method: item.shippingMethod,
       unitCost,

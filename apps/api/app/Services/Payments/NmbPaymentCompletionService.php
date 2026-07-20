@@ -8,11 +8,29 @@ use App\Enums\PaymentStatus;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Payments\Gateways\Nmb\NmbPaymentCompletionResult;
+use App\Services\CostProfit\ProfitEngine;
+use App\Services\Fulfillment\FulfillmentEngine;
+use App\Services\Orders\Lifecycle\OrderLifecycleContext;
+use App\Services\Orders\Lifecycle\OrderLifecycleEngine;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * Legacy Payment-model NMB completion.
+ * Kept for residual Payment rows; always starts Fulfillment (+ warehouse) like the orchestrator path.
+ * New customer payments must use PaymentOrchestrator / PaymentTransactionCompletionService.
+ *
+ * LOCKED MODULE NOTE (Lifecycle Closure #2): order paid transition now goes through OrderLifecycleEngine.
+ */
 class NmbPaymentCompletionService
 {
+    public function __construct(
+        private readonly ProfitEngine $profitEngine,
+        private readonly FulfillmentEngine $fulfillmentEngine,
+        private readonly OrderLifecycleEngine $lifecycle,
+    ) {}
+
     public function complete(Payment $payment): NmbPaymentCompletionResult
     {
         $this->validatePaymentMethod($payment);
@@ -31,6 +49,8 @@ class NmbPaymentCompletionService
                 ->firstOrFail();
 
             if ($this->isAlreadyCompleted($lockedPayment)) {
+                $this->startFulfillment($order);
+
                 return new NmbPaymentCompletionResult(
                     completed: true,
                     alreadyCompleted: true,
@@ -43,6 +63,18 @@ class NmbPaymentCompletionService
             $this->validateCanComplete($lockedPayment, $order);
             $this->markCompleted($lockedPayment, $order);
 
+            $paidOrder = $order->fresh() ?? $order;
+            try {
+                $this->profitEngine->calculateForOrder($paidOrder);
+            } catch (\Throwable $e) {
+                Log::warning('profit.calculate_after_nmb_payment_failed', [
+                    'order_id' => $paidOrder->id,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+
+            $this->startFulfillment($paidOrder);
+
             return new NmbPaymentCompletionResult(
                 completed: true,
                 alreadyCompleted: false,
@@ -51,6 +83,18 @@ class NmbPaymentCompletionService
                 orderId: $order->id,
             );
         });
+    }
+
+    private function startFulfillment(Order $order): void
+    {
+        try {
+            $this->fulfillmentEngine->createForOrder($order->fresh() ?? $order);
+        } catch (\Throwable $e) {
+            Log::warning('fulfillment.create_after_legacy_nmb_payment_failed', [
+                'order_id' => $order->id,
+                'message' => $e->getMessage(),
+            ]);
+        }
     }
 
     private function validatePaymentMethod(Payment $payment): void
@@ -79,7 +123,7 @@ class NmbPaymentCompletionService
             $this->throwValidationError("Payment cannot be completed while status is {$payment->status->value}.");
         }
 
-        if ($order->status !== OrderStatus::Pending) {
+        if (! in_array($order->status, [OrderStatus::Pending, OrderStatus::PendingPayment], true)) {
             $this->throwValidationError("Order cannot be completed while status is {$order->status->value}.");
         }
 
@@ -121,10 +165,14 @@ class NmbPaymentCompletionService
             ]),
         ]);
 
-        $order->update([
-            'status' => OrderStatus::Paid,
-            'paid_at' => $completedAt,
-        ]);
+        $this->lifecycle->markPaid(
+            $order,
+            OrderLifecycleContext::payment(
+                'Legacy NMB payment verified',
+                'nmb-payment:'.$payment->id,
+                ['payment_id' => $payment->id],
+            ),
+        );
     }
 
     private function throwValidationError(string $message): never

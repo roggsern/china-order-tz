@@ -13,7 +13,7 @@ export function AdminLoginContent() {
   const [error, setError] = useState<string | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(undefined);
 
@@ -30,9 +30,17 @@ export function AdminLoginContent() {
 
     setIsSubmitting(true);
 
-    const ok = signIn(trimmedEmail, password);
-    if (!ok) {
-      setError("Invalid email or password. Please check your credentials and try again.");
+    try {
+      const result = await signIn(trimmedEmail, password);
+      if (!result.ok) {
+        setError(
+          result.message ||
+            "Invalid email or password. Please check your credentials and try again.",
+        );
+      }
+    } catch {
+      setError("Unable to reach the authentication server. Please try again.");
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -114,8 +122,10 @@ export function AdminLoginContent() {
           </form>
 
           <p className="mt-6 rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-center text-xs text-zinc-500">
-            Default local credentials:{" "}
+            Local Laravel admin:{" "}
             <span className="font-mono text-zinc-400">{DEFAULT_ADMIN_EMAIL}</span>
+            {" / "}
+            <span className="font-mono text-zinc-400">password</span>
           </p>
         </div>
 

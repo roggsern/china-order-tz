@@ -1,21 +1,4 @@
-/** Popular and trending search terms — static suggestions when query is empty or partial match. */
-export const TRENDING_SEARCHES = [
-  "Wireless earbuds",
-  "Women's dresses",
-  "Smart watch",
-  "Kitchen appliances",
-  "Building tiles",
-  "Kids toys",
-] as const;
-
-export const POPULAR_SEARCHES = [
-  "iPhone accessories",
-  "Office furniture",
-  "Skincare",
-  "Men's shoes",
-  "LED lights",
-  "Baby stroller",
-] as const;
+/** Search UX limits — no hardcoded trending/popular product suggestion lists. */
 
 export const SEARCH_DEBOUNCE_MS = 300;
 

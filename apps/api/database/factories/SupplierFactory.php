@@ -16,16 +16,20 @@ class SupplierFactory extends Factory
     public function definition(): array
     {
         $name = fake()->unique()->company();
+        $slug = Str::slug($name);
 
         return [
             'name' => $name,
-            'slug' => Str::slug($name),
+            'code' => Str::upper(Str::slug($name, '_')).'_'.Str::upper(Str::random(4)),
+            'slug' => $slug,
             'contact_person' => fake()->name(),
             'email' => fake()->companyEmail(),
             'phone' => fake()->numerify('07########'),
             'address' => fake()->streetAddress(),
             'city' => fake()->city(),
             'country' => 'Tanzania',
+            'payment_terms' => fake()->optional()->randomElement(['Net 30', 'Net 15', 'COD']),
+            'notes' => fake()->optional()->sentence(),
             'is_active' => true,
         ];
     }

@@ -10,7 +10,7 @@ interface AdminHeaderProps {
 
 export function AdminHeader({ title = "Admin Dashboard" }: AdminHeaderProps) {
   const { signOut, session } = useAdminAuth();
-  const displayEmail = session?.email ?? "admin@china.com";
+  const displayEmail = session?.email ?? "admin@chinaordertz.com";
 
   return (
     <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-4 border-b border-zinc-800 bg-zinc-950 px-4 sm:px-6">
@@ -39,7 +39,9 @@ export function AdminHeader({ title = "Admin Dashboard" }: AdminHeaderProps) {
         </div>
         <button
           type="button"
-          onClick={signOut}
+          onClick={() => {
+            void signOut();
+          }}
           className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-semibold text-zinc-300 transition hover:border-[#c9a227]/40 hover:text-[#c9a227]"
         >
           Sign out

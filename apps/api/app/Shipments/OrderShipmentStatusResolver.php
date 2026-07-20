@@ -22,13 +22,17 @@ class OrderShipmentStatusResolver
     private function deriveFromOrderStatus(OrderStatus $orderStatus): ShipmentStatus
     {
         return match ($orderStatus) {
-            OrderStatus::Pending => ShipmentStatus::OrderReceived,
+            OrderStatus::Pending,
+            OrderStatus::PendingPayment => ShipmentStatus::OrderReceived,
             OrderStatus::Paid => ShipmentStatus::PaymentConfirmed,
             OrderStatus::Confirmed => ShipmentStatus::SupplierProcessing,
             OrderStatus::Processing => ShipmentStatus::ArrivedChinaWarehouse,
             OrderStatus::Shipped => ShipmentStatus::OutForDelivery,
-            OrderStatus::Delivered => ShipmentStatus::Delivered,
-            OrderStatus::Cancelled, OrderStatus::Refunded => ShipmentStatus::OrderReceived,
+            OrderStatus::Delivered,
+            OrderStatus::Completed => ShipmentStatus::Delivered,
+            OrderStatus::Cancelled,
+            OrderStatus::RefundPending,
+            OrderStatus::Refunded => ShipmentStatus::OrderReceived,
         };
     }
 }

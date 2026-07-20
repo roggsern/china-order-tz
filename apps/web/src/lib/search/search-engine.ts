@@ -1,15 +1,10 @@
-import { categories, getCategoryBySlug } from "@/lib/catalog/categories";
-import { buyFromTzBrandMenu, formatBrandDisplayName } from "@/lib/catalog/brands";
+import type { Category, Product, ProductOrigin } from "@/lib/types/catalog";
 import { resolveProductType } from "@/lib/catalog/product-type";
-import type { Product } from "@/lib/types/catalog";
-import type { ProductOrigin } from "@/lib/types/catalog";
 import {
   MAX_CATEGORY_RESULTS,
   MAX_PRODUCT_RESULTS,
   MAX_TERM_RESULTS,
-  POPULAR_SEARCHES,
   SEARCH_CACHE_MAX_ENTRIES,
-  TRENDING_SEARCHES,
 } from "@/lib/search/constants";
 import {
   allTokensMatchFields,
@@ -34,6 +29,10 @@ export type SmartSearchOptions = {
   origin?: ProductOrigin;
   limit?: number;
   activeOnly?: boolean;
+  /** Live API categories — never seed data. */
+  liveCategories?: Category[];
+  /** Live API brands mapped as Category-shaped rows. */
+  liveBrands?: Category[];
 };
 
 type ProductMatchResult = {
@@ -51,10 +50,21 @@ const RELEVANCE = {
   FUZZY: 40,
 } as const;
 
+const EMPTY_RESULTS: SearchResults = {
+  products: [],
+  groups: [],
+  categories: [],
+  terms: [],
+};
+
 const searchCache = new Map<string, SearchResults>();
 
-function buildCacheKey(query: string, origin?: ProductOrigin): string {
-  return `${origin ?? "all"}::${query}`;
+function buildCacheKey(
+  query: string,
+  origin?: ProductOrigin,
+  productIds?: string,
+): string {
+  return `${origin ?? "all"}::${query}::${productIds ?? ""}`;
 }
 
 export function clearSearchQueryCache(): void {
@@ -103,7 +113,9 @@ function classifyProductMatch(product: Product, query: string): ProductMatchResu
 
   const labels = resolveProductSearchLabels(product);
   const name = normalizeSearchableText(product.name);
-  const category = normalizeSearchableText(labels.categoryLabel);
+  const category = normalizeSearchableText(
+    labels.categoryLabel || product.brand || product.categorySlug || "",
+  );
   const subcategory = normalizeSearchableText(labels.subcategoryLabel);
   const tokens = tokenizeSearchQuery(normalizedQuery);
   const fields = [name, category, subcategory];
@@ -173,34 +185,6 @@ function buildProductGroups(matches: ProductMatchResult[]): SearchProductGroup[]
     }));
 }
 
-/** Ranked product search — exact name, category, subcategory, then partial/fuzzy. */
-export function smartSearchProducts(
-  catalog: Product[],
-  query: string,
-  options: SmartSearchOptions = {},
-): Product[] {
-  const normalizedQuery = normalizeSearchInput(query);
-  const { origin, limit, activeOnly = true } = options;
-
-  if (!normalizedQuery) {
-    return limit ? catalog.slice(0, limit) : [...catalog];
-  }
-
-  let pool = catalog;
-  if (activeOnly) {
-    pool = pool.filter((product) => product.status === "active");
-  }
-  pool = applyOriginFilter(pool, origin);
-
-  const ranked = pool
-    .map((product) => classifyProductMatch(product, normalizedQuery))
-    .filter((entry): entry is ProductMatchResult => entry !== null)
-    .sort(sortMatches)
-    .map((entry) => entry.product);
-
-  return limit ? ranked.slice(0, limit) : ranked;
-}
-
 function categoryMatchesQuery(categoryName: string, categorySlug: string, query: string): boolean {
   const tokens = tokenizeSearchQuery(query);
   if (tokens.length === 0) {
@@ -213,50 +197,65 @@ function categoryMatchesQuery(categoryName: string, categorySlug: string, query:
   return allTokensMatchFields(tokens, [name, slug]);
 }
 
-function matchSearchTerms(
+/** Build autocomplete terms from live product / category / brand labels only. */
+function buildLiveTermSuggestions(
   query: string,
-  pool: readonly string[],
+  products: Product[],
+  categories: Category[],
+  brands: Category[],
   origin?: ProductOrigin,
 ): SearchTermSuggestion[] {
   const normalizedQuery = normalizeSearchInput(query);
+  if (!normalizedQuery) {
+    return [];
+  }
 
-  const terms = !normalizedQuery
-    ? pool.slice(0, MAX_TERM_RESULTS)
-    : pool.filter((term) => {
-        const tokens = tokenizeSearchQuery(normalizedQuery);
-        const label = normalizeSearchableText(term);
-        return allTokensMatchFields(tokens, [label]);
-      });
+  const seen = new Set<string>();
+  const terms: SearchTermSuggestion[] = [];
 
-  return terms.slice(0, MAX_TERM_RESULTS).map((label) => ({
-    type: "term" as const,
-    label,
-    href: buildProductSearchHref(label, origin),
-  }));
+  const pushLabel = (label: string) => {
+    const trimmed = label.trim();
+    if (!trimmed) return;
+    const key = normalizeSearchableText(trimmed);
+    if (!key || seen.has(key)) return;
+    if (!categoryMatchesQuery(trimmed, key, normalizedQuery)) return;
+    seen.add(key);
+    terms.push({
+      type: "term",
+      label: trimmed,
+      href: buildProductSearchHref(trimmed, origin),
+    });
+  };
+
+  for (const product of products) {
+    pushLabel(product.name);
+    if (product.brand) pushLabel(product.brand);
+    if (terms.length >= MAX_TERM_RESULTS) break;
+  }
+
+  for (const category of [...categories, ...brands]) {
+    if (terms.length >= MAX_TERM_RESULTS) break;
+    pushLabel(category.name);
+  }
+
+  return terms.slice(0, MAX_TERM_RESULTS);
 }
 
 function computeSearchResults(
   catalog: Product[],
   query: string,
-  origin?: ProductOrigin,
+  options: SmartSearchOptions = {},
 ): SearchResults {
   const normalizedQuery = normalizeSearchInput(query);
+  const { origin, liveCategories = [], liveBrands = [] } = options;
 
   if (!normalizedQuery) {
-    return {
-      products: [],
-      groups: [],
-      categories: [],
-      terms: [
-        ...matchSearchTerms("", TRENDING_SEARCHES, origin),
-        ...matchSearchTerms("", POPULAR_SEARCHES, origin).filter(
-          (term) => !TRENDING_SEARCHES.some((entry) => entry === term.label),
-        ),
-      ].slice(0, MAX_TERM_RESULTS * 2),
-    };
+    return EMPTY_RESULTS;
   }
 
-  let pool = catalog.filter((product) => product.status === "active");
+  let pool = catalog.filter((product) =>
+    options.activeOnly === false ? true : product.status === "active",
+  );
   pool = applyOriginFilter(pool, origin);
 
   const matches = pool
@@ -264,74 +263,93 @@ function computeSearchResults(
     .filter((entry): entry is ProductMatchResult => entry !== null)
     .sort(sortMatches);
 
-  const products = matches.slice(0, MAX_PRODUCT_RESULTS).map((entry) => entry.product);
-  const groups = buildProductGroups(matches.slice(0, MAX_PRODUCT_RESULTS));
+  const limited = matches.slice(0, options.limit ?? MAX_PRODUCT_RESULTS);
+  const products = limited.map((entry) => entry.product);
+  const groups = buildProductGroups(limited);
 
   const matchedCategories =
     origin === "tz"
       ? []
-      : categories
-          .filter((category) => categoryMatchesQuery(category.name, category.slug, normalizedQuery))
+      : liveCategories
+          .filter((category) =>
+            categoryMatchesQuery(category.name, category.slug, normalizedQuery),
+          )
           .slice(0, MAX_CATEGORY_RESULTS);
 
-  const matchedLocalBrands =
+  const matchedBrands =
     origin === "china"
       ? []
-      : buyFromTzBrandMenu
-          .filter((brand) =>
-            categoryMatchesQuery(formatBrandDisplayName(brand.name), brand.slug, normalizedQuery),
-          )
-          .slice(0, MAX_CATEGORY_RESULTS)
-          .map((brand) => {
-            const existing = getCategoryBySlug(brand.slug);
-            if (existing) {
-              return existing;
-            }
+      : liveBrands
+          .filter((brand) => categoryMatchesQuery(brand.name, brand.slug, normalizedQuery))
+          .slice(0, MAX_CATEGORY_RESULTS);
 
-            return {
-              slug: brand.slug,
-              name: formatBrandDisplayName(brand.name),
-              description: `${formatBrandDisplayName(brand.name)} — Buy from Dar`,
-              gradient: "from-amber-400 via-orange-500 to-rose-500",
-              icon: brand.icon,
-            };
-          });
-
-  const terms = [
-    ...matchSearchTerms(normalizedQuery, TRENDING_SEARCHES, origin),
-    ...matchSearchTerms(normalizedQuery, POPULAR_SEARCHES, origin),
-  ].filter(
-    (term, index, array) => array.findIndex((entry) => entry.label === term.label) === index,
+  const terms = buildLiveTermSuggestions(
+    normalizedQuery,
+    products,
+    liveCategories,
+    liveBrands,
+    origin,
   );
 
   return {
     products,
     groups,
-    categories: [...matchedCategories, ...matchedLocalBrands].slice(0, MAX_CATEGORY_RESULTS),
-    terms: terms.slice(0, MAX_TERM_RESULTS),
+    categories: [...matchedCategories, ...matchedBrands].slice(0, MAX_CATEGORY_RESULTS),
+    terms,
   };
 }
 
-/** Client-side search against a cached product catalog — no per-keystroke API calls. */
+/** Ranked product search against a provided live product list (no seed injection). */
+export function smartSearchProducts(
+  catalog: Product[],
+  query: string,
+  options: SmartSearchOptions = {},
+): Product[] {
+  const normalizedQuery = normalizeSearchInput(query);
+  const { origin, limit, activeOnly = true } = options;
+
+  if (!normalizedQuery) {
+    let pool = catalog;
+    if (activeOnly) {
+      pool = pool.filter((product) => product.status === "active");
+    }
+    pool = applyOriginFilter(pool, origin);
+    return limit ? pool.slice(0, limit) : [...pool];
+  }
+
+  return searchCatalog(catalog, normalizedQuery, {
+    ...options,
+    limit: limit ?? catalog.length,
+  }).products;
+}
+
+/**
+ * Rank / group products already returned from the live catalog API.
+ * Does not invent products, popular terms, or seed categories.
+ */
 export function searchCatalog(
   catalog: Product[],
   query: string,
-  options: Pick<SmartSearchOptions, "origin"> = {},
+  options: SmartSearchOptions = {},
 ): SearchResults {
   const normalizedQuery = normalizeSearchInput(query);
   const { origin } = options;
 
   if (!normalizedQuery) {
-    return computeSearchResults(catalog, normalizedQuery, origin);
+    return EMPTY_RESULTS;
   }
 
-  const cacheKey = buildCacheKey(normalizedQuery, origin);
+  const productIds = catalog
+    .map((product) => product.id)
+    .sort()
+    .join(",");
+  const cacheKey = buildCacheKey(normalizedQuery, origin, productIds);
   const cached = searchCache.get(cacheKey);
   if (cached) {
     return cached;
   }
 
-  const result = computeSearchResults(catalog, normalizedQuery, origin);
+  const result = computeSearchResults(catalog, normalizedQuery, options);
 
   if (searchCache.size >= SEARCH_CACHE_MAX_ENTRIES) {
     const oldestKey = searchCache.keys().next().value;
@@ -344,14 +362,13 @@ export function searchCatalog(
   return result;
 }
 
-export function getCategoryForProduct(product: Product) {
-  return getCategoryBySlug(product.categorySlug);
-}
-
-/** Verify a product belongs to the requested marketplace scope (for filter isolation tests). */
+/** Verify a product belongs to the requested marketplace scope. */
 export function productMatchesOriginFilter(product: Product, origin?: ProductOrigin): boolean {
   if (!origin) {
     return true;
   }
-  return product.origin === origin && resolveProductType(product) === (origin === "tz" ? "local" : "china");
+  return (
+    product.origin === origin &&
+    resolveProductType(product) === (origin === "tz" ? "local" : "china")
+  );
 }

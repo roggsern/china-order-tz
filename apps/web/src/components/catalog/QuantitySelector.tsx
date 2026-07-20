@@ -23,21 +23,18 @@ export function QuantitySelector({
   const isMobile = variant === "mobile";
 
   return (
-    <div className={`flex items-center ${isMobile ? "justify-between" : "gap-3"}`}>
-      <span
-        className={
-          isMobile
-            ? "text-sm font-semibold text-zinc-900"
-            : "text-sm font-medium text-zinc-700"
-        }
-      >
-        Quantity
-      </span>
+    <div className={`flex items-center ${isMobile ? "justify-between" : "justify-between gap-3"}`}>
+      <div>
+        <span className="text-sm font-semibold text-zinc-900">Quantity</span>
+        {!isMobile ? (
+          <p className="text-xs text-zinc-400">Use + / − to adjust</p>
+        ) : null}
+      </div>
       <div
-        className={`flex items-center ${
+        className={`inline-flex items-center overflow-hidden ${
           isMobile
             ? "rounded-2xl border border-zinc-200 bg-white shadow-sm"
-            : "rounded-xl border border-zinc-200 bg-zinc-50"
+            : "rounded-2xl border border-zinc-200 bg-zinc-50"
         }`}
       >
         <button
@@ -45,7 +42,7 @@ export function QuantitySelector({
           onClick={decrease}
           disabled={quantity <= min}
           className={`flex items-center justify-center text-zinc-700 transition active:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 ${
-            isMobile ? "h-11 w-11 rounded-l-2xl" : "h-10 w-10 rounded-l-xl hover:bg-zinc-100"
+            isMobile ? "h-11 w-11" : "h-11 w-11 hover:bg-zinc-100"
           }`}
           aria-label="Decrease quantity"
         >
@@ -53,8 +50,9 @@ export function QuantitySelector({
         </button>
         <span
           className={`flex items-center justify-center border-x border-zinc-200 font-bold tabular-nums text-zinc-900 ${
-            isMobile ? "h-11 min-w-[3rem] text-base" : "h-10 w-12 text-sm font-semibold"
+            isMobile ? "h-11 min-w-[3.25rem] text-base" : "h-11 min-w-[3.25rem] text-sm"
           }`}
+          aria-live="polite"
         >
           {quantity}
         </span>
@@ -63,7 +61,7 @@ export function QuantitySelector({
           onClick={increase}
           disabled={quantity >= max}
           className={`flex items-center justify-center text-zinc-700 transition active:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 ${
-            isMobile ? "h-11 w-11 rounded-r-2xl" : "h-10 w-10 rounded-r-xl hover:bg-zinc-100"
+            isMobile ? "h-11 w-11" : "h-11 w-11 hover:bg-zinc-100"
           }`}
           aria-label="Increase quantity"
         >

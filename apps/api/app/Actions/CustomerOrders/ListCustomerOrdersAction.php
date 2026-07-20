@@ -18,13 +18,17 @@ class ListCustomerOrdersAction
         if ($filter === 'active') {
             $query->whereIn('status', [
                 OrderStatus::Pending,
+                OrderStatus::PendingPayment,
                 OrderStatus::Paid,
                 OrderStatus::Confirmed,
                 OrderStatus::Processing,
                 OrderStatus::Shipped,
             ]);
         } elseif ($filter === 'completed') {
-            $query->where('status', OrderStatus::Delivered);
+            $query->whereIn('status', [
+                OrderStatus::Delivered,
+                OrderStatus::Completed,
+            ]);
         }
 
         return $query->latest()->paginate($perPage);

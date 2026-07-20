@@ -19,38 +19,38 @@ export function PriceDisplay({
   const isPremium = variant === "premium";
 
   const priceClasses = {
-    sm: isPremium ? "text-base font-bold sm:text-lg" : "text-lg font-bold",
-    md: isPremium ? "text-lg font-bold sm:text-xl" : "text-xl font-bold",
-    lg: "text-3xl font-bold",
+    sm: isPremium ? "text-lg font-extrabold tracking-tight sm:text-xl" : "text-lg font-bold",
+    md: isPremium ? "text-xl font-extrabold tracking-tight sm:text-2xl" : "text-xl font-bold",
+    lg: "text-3xl font-extrabold tracking-tight",
   };
 
   const oldPriceClasses = {
-    sm: "text-xs sm:text-sm",
-    md: "text-sm sm:text-base",
-    lg: "text-lg",
+    sm: "text-[11px] sm:text-xs",
+    md: "text-xs sm:text-sm",
+    lg: "text-base",
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
       <span
         className={`${priceClasses[size]} ${isPremium ? "text-zinc-900" : "text-red-600"}`}
       >
         {formatPrice(price)}
       </span>
       {oldPrice > price && (
-        <span className={`${oldPriceClasses[size]} text-zinc-400 line-through`}>
+        <span className={`${oldPriceClasses[size]} font-medium text-zinc-400 line-through decoration-zinc-300`}>
           {formatPrice(oldPrice)}
         </span>
       )}
       {showDiscount && discount > 0 && (
         <span
-          className={`rounded-full px-2 py-0.5 text-[10px] font-bold sm:text-xs ${
+          className={`rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide sm:text-[11px] ${
             isPremium
-              ? "bg-[#c9a227] text-zinc-900"
+              ? "bg-[#c9a227]/15 text-[#8b6914] ring-1 ring-[#c9a227]/25"
               : "bg-red-600/10 text-red-600"
           }`}
         >
-          -{discount}%
+          Save {discount}%
         </span>
       )}
     </div>

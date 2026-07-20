@@ -95,7 +95,7 @@ export const footerLinks = {
   about: [
     { label: "Our Story", href: "/#about" },
     { label: "Why Choose Us", href: "/#about" },
-    { label: "Order From China", href: "/#order-from-china" },
+    { label: "Order from China", href: "/#order-from-china" },
   ],
   contact: [
     { label: "hello@chinaordertz.com", href: "mailto:hello@chinaordertz.com" },
@@ -103,14 +103,17 @@ export const footerLinks = {
     { label: "Dar es Salaam, Tanzania", href: "/#contact" },
   ],
   quickLinks: [
-    { label: "Track Order", href: "/track" },
-    { label: "All Categories", href: "/categories" },
+    { label: "My Orders", href: "/orders" },
+    { label: "Order from China", href: "/products?origin=china" },
+    { label: "Buy from TZ", href: "/buy-from-tz" },
     { label: "Featured Products", href: "/#products" },
-    { label: "Shop All", href: "/products" },
-    { label: "Login", href: "/login" },
+    { label: "Sign In", href: "/login" },
   ],
-  buyFromTz: buyFromTzBrands.map((brand) => ({
-    label: brand.label,
-    href: `/products?brand=${brand.slug}`,
-  })),
-} as const;
+  buyFromTz: [
+    { label: "All stores", href: "/buy-from-tz" },
+    ...buyFromTzBrands.map((brand) => ({
+      label: brand.label,
+      href: `/buy-from-tz/${brand.slug}`,
+    })),
+  ],
+};

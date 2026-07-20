@@ -48,8 +48,8 @@ export const TRACKING_STEPS: TrackingStepDefinition[] = [
   },
   {
     status: ORDER_TRACKING_STATUS.PROCESSING,
-    label: "Processing",
-    description: "We are preparing your items.",
+    label: "Purchasing",
+    description: "Your supplier is preparing your order.",
     icon: "⚙️",
   },
   {
@@ -61,19 +61,19 @@ export const TRACKING_STEPS: TrackingStepDefinition[] = [
   {
     status: ORDER_TRACKING_STATUS.SHIPPED,
     label: "Shipped",
-    description: "Your order has left our warehouse.",
+    description: "Your order is on its way from China.",
     icon: "🚚",
   },
   {
     status: ORDER_TRACKING_STATUS.IN_TRANSIT,
-    label: "In Transit",
-    description: "On the way to your delivery address.",
+    label: "Arrived Tanzania",
+    description: "Your shipment has arrived in Tanzania.",
     icon: "✈️",
   },
   {
     status: ORDER_TRACKING_STATUS.DELIVERED,
     label: "Delivered",
-    description: "Delivered to your address.",
+    description: "Delivered to your address. Enjoy!",
     icon: "✅",
   },
 ];

@@ -5,22 +5,10 @@ import type {
 } from "@/lib/payments/types";
 import { assertMpesaLiveConfig, canUseLiveMpesa, getMpesaConfig } from "@/lib/payments/config";
 
+import { toPaymentGatewayPhone } from "@/lib/phone";
+
 export function normalizeMpesaPhone(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-
-  if (digits.startsWith("255") && digits.length === 12) {
-    return digits;
-  }
-
-  if (digits.startsWith("0") && digits.length === 10) {
-    return `255${digits.slice(1)}`;
-  }
-
-  if (digits.length === 9 && digits.startsWith("7")) {
-    return `255${digits}`;
-  }
-
-  return digits;
+  return toPaymentGatewayPhone(phone);
 }
 
 function buildPassword(shortcode: string, passkey: string, timestamp: string): string {

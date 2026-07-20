@@ -1,0 +1,12 @@
+phone.jpg: Unsplash — smartphone product photo
+laptop.jpg: Unsplash — laptop on desk
+shoes.jpg: Unsplash — sneakers
+bag.jpg: Unsplash — handbag
+dress.jpg: Unsplash — dress
+watch.jpg: Unsplash — wristwatch
+perfume.jpg: Unsplash — perfume bottle
+chair.jpg: Unsplash — chair
+table.jpg: Unsplash — table
+headphones.jpg: Unsplash — headphones
+
+Source: https://unsplash.com/license

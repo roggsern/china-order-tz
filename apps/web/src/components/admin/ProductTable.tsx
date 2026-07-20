@@ -21,8 +21,10 @@ import { useDebouncedValue } from "@/hooks/use-debounced-value";
 interface ProductTableProps {
   products: Product[];
   isHydrated?: boolean;
-  onDelete: (id: number) => void;
-  onBulkDelete: (ids: number[]) => void;
+  error?: string | null;
+  onRetry?: () => void;
+  onDelete: (id: number) => void | Promise<void>;
+  onBulkDelete: (ids: number[]) => void | Promise<void>;
   initialCategory?: string;
   initialBrand?: string;
   initialSearch?: string;
@@ -40,6 +42,8 @@ function originLabel(origin: ProductOrigin) {
 export function ProductTable({
   products,
   isHydrated = true,
+  error = null,
+  onRetry,
   onDelete,
   onBulkDelete,
   initialCategory,
@@ -119,7 +123,7 @@ export function ProductTable({
 
   const handleConfirmDelete = () => {
     if (deleteTarget) {
-      onDelete(deleteTarget.id);
+      void onDelete(deleteTarget.id);
       setDeleteTarget(null);
       setSelectedIds((prev) => {
         const next = new Set(prev);
@@ -130,7 +134,7 @@ export function ProductTable({
   };
 
   const handleConfirmBulkDelete = () => {
-    onBulkDelete(bulkDeleteIds);
+    void onBulkDelete(bulkDeleteIds);
     setBulkDeleteIds([]);
     setSelectedIds(new Set());
   };
@@ -139,6 +143,24 @@ export function ProductTable({
     return (
       <div className="admin-card flex items-center justify-center py-16 text-sm text-zinc-500">
         Loading products…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="admin-card flex flex-col items-center py-16 text-center">
+        <p className="text-sm font-medium text-zinc-700">Unable to load products</p>
+        <p className="mt-1 max-w-md text-xs text-zinc-500">{error}</p>
+        {onRetry ? (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-5 inline-flex rounded-lg bg-[#c9a227] px-4 py-2 text-sm font-semibold text-zinc-900 transition hover:bg-[#e8c547]"
+          >
+            Try again
+          </button>
+        ) : null}
       </div>
     );
   }

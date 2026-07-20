@@ -15,6 +15,8 @@ class ShipmentStatusHistory extends Model
         'admin_id',
         'previous_status',
         'new_status',
+        'source',
+        'idempotency_key',
     ];
 
     public function order(): BelongsTo

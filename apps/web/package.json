@@ -11,11 +11,16 @@
     "ws:server": "tsx ws/admin-orders-ws-server.ts",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "test:storefront": "tsx --test src/lib/storefront/navigation-policy.test.ts src/lib/storefront/resolve-storefront-navigation.test.ts",
+    "test:homepage": "tsx --test src/lib/content/homepage/*.test.ts",
+    "test:unit": "tsx --test src/lib/storefront/navigation-policy.test.ts src/lib/storefront/resolve-storefront-navigation.test.ts src/lib/content/homepage/*.test.ts",
+
     "extract-branding": "node scripts/extract-branding.mjs",
     "generate-icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
     "framer-motion": "^12.41.0",
+    "libphonenumber-js": "^1.13.8",
     "next": "15.5.19",
     "react": "19.1.0",
     "react-dom": "19.1.0"

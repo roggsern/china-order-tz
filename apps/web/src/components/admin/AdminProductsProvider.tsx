@@ -1,135 +1,203 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 import type { Product, ProductFormData } from "@/lib/types/catalog";
-import { productService } from "@/lib/services/product-service.client";
 import {
-  enrichProductForAdmin,
-  formDataToProduct,
-  productToFormData,
-} from "@/lib/admin/product-utils";
-import {
-  getStoredProducts,
-  isProductsStorageInitialized,
-  markProductsStorageInitialized,
-  saveStoredProducts,
-} from "@/lib/admin/product-storage";
-import { SEED_PRODUCTS } from "@/lib/catalog/seed-products";
+  AdminCatalogApiError,
+  createAdminProduct,
+  deleteAdminProduct,
+  fetchAdminProducts,
+  persistProductImages,
+  setAdminProductImagePrimary,
+  updateAdminProduct,
+} from "@/lib/api/admin-catalog";
+import { productToFormData } from "@/lib/admin/product-utils";
+import { useAdminAuth } from "@/components/admin/AdminAuthProvider";
 
 type AdminProductsContextValue = {
   products: Product[];
   isHydrated: boolean;
-  addProduct: (data: ProductFormData) => void;
-  updateProduct: (id: number, data: ProductFormData) => void;
-  deleteProduct: (id: number) => void;
-  deleteProducts: (ids: number[]) => void;
+  isLoading: boolean;
+  error: string | null;
+  refetch: () => Promise<void>;
+  addProduct: (
+    data: ProductFormData,
+    options?: { pendingFiles?: Map<number, File> },
+  ) => Promise<Product>;
+  updateProduct: (
+    id: number,
+    data: ProductFormData,
+    options?: { pendingFiles?: Map<number, File> },
+  ) => Promise<Product>;
+  deleteProduct: (id: number) => Promise<void>;
+  deleteProducts: (ids: number[]) => Promise<void>;
   getProduct: (id: number) => Product | undefined;
 };
 
 const AdminProductsContext = createContext<AdminProductsContextValue | null>(null);
 
-const enrichedSeedProducts = SEED_PRODUCTS.map(enrichProductForAdmin);
-
-function persistProducts(products: Product[]) {
-  productService.saveAll(products);
-}
-
 export function AdminProductsProvider({ children }: { children: ReactNode }) {
-  const [products, setProducts] = useState<Product[]>(enrichedSeedProducts);
+  const { isAuthenticated, isReady } = useAdminAuth();
+  const [products, setProducts] = useState<Product[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
-  const initializedRef = useRef(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadProducts = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const { products: nextProducts } = await fetchAdminProducts();
+      setProducts(nextProducts);
+      setIsHydrated(true);
+    } catch (err) {
+      const message =
+        err instanceof AdminCatalogApiError
+          ? err.message
+          : "Unable to load products from the API.";
+      setError(message);
+      setProducts([]);
+      setIsHydrated(true);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (initializedRef.current) {
+    if (!isReady) {
       return;
     }
-    initializedRef.current = true;
 
-    let cancelled = false;
-
-    async function hydrateProducts() {
-      if (isProductsStorageInitialized()) {
-        const stored = getStoredProducts().map(enrichProductForAdmin);
-        if (!cancelled) {
-          setProducts(stored);
-          setIsHydrated(true);
-        }
-        return;
-      }
-
-      try {
-        const response = await fetch("/api/products", { cache: "no-store" });
-        if (response.ok) {
-          const serverProducts = (await response.json()) as Product[];
-          if (Array.isArray(serverProducts) && serverProducts.length > 0) {
-            saveStoredProducts(serverProducts);
-            markProductsStorageInitialized();
-            if (!cancelled) {
-              setProducts(serverProducts.map(enrichProductForAdmin));
-              setIsHydrated(true);
-            }
-            return;
-          }
-        }
-      } catch {
-        // Fall back to seed catalog below.
-      }
-
-      const seeded = productService.initialize(enrichedSeedProducts);
-      const nextProducts = seeded.map(enrichProductForAdmin);
-      if (!cancelled) {
-        setProducts(nextProducts);
-        setIsHydrated(true);
-      }
-      void productService.syncToServer(seeded);
+    if (!isAuthenticated) {
+      setProducts([]);
+      setError(null);
+      setIsHydrated(false);
+      setIsLoading(false);
+      return;
     }
 
-    void hydrateProducts();
+    void loadProducts();
+  }, [isAuthenticated, isReady, loadProducts]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const addProduct = useCallback(
+    async (data: ProductFormData, options?: { pendingFiles?: Map<number, File> }) => {
+      const created = await createAdminProduct(data);
+      const catalogProductId = created.catalogProductId;
 
-  const addProduct = useCallback((data: ProductFormData) => {
-    setProducts((prev) => {
-      const nextId = Math.max(0, ...prev.map((product) => product.id)) + 1;
-      const next = [...prev, formDataToProduct(data, nextId)];
-      persistProducts(next);
-      return next;
-    });
-  }, []);
+      if (catalogProductId && options?.pendingFiles?.size) {
+        const images = await persistProductImages({
+          catalogProductId,
+          images: data.images,
+          thumbnailImageId: data.thumbnailImageId,
+          pendingFiles: options.pendingFiles,
+        });
+        created.images = images;
+        created.primary_image = images[0];
+        created.image = images[0]?.url ?? images[0]?.path;
+      }
 
-  const updateProduct = useCallback((id: number, data: ProductFormData) => {
-    setProducts((prev) => {
-      const existing = prev.find((product) => product.id === id);
-      const next = prev.map((product) =>
-        product.id === id
-          ? formDataToProduct(data, id, existing?.createdAt)
-          : product,
+      setProducts((prev) => [created, ...prev]);
+      setError(null);
+      return created;
+    },
+    [],
+  );
+
+  const updateProduct = useCallback(
+    async (
+      id: number,
+      data: ProductFormData,
+      options?: { pendingFiles?: Map<number, File> },
+    ) => {
+      const existing = products.find((product) => product.id === id);
+      const catalogProductId = existing?.catalogProductId;
+
+      if (!catalogProductId) {
+        throw new AdminCatalogApiError("Product is missing a backend id.", 422);
+      }
+
+      let updated = await updateAdminProduct(catalogProductId, data);
+
+      if (options?.pendingFiles?.size) {
+        const images = await persistProductImages({
+          catalogProductId,
+          images: data.images,
+          thumbnailImageId: data.thumbnailImageId,
+          pendingFiles: options.pendingFiles,
+        });
+        updated = {
+          ...updated,
+          images,
+          primary_image: images[0],
+          image: images[0]?.url ?? images[0]?.path,
+          thumbnailImageId: images[0]?.id,
+        };
+      } else {
+        const preferred =
+          data.images.find((image) => image.id === data.thumbnailImageId) ?? data.images[0];
+        if (preferred?.catalogImageId) {
+          await setAdminProductImagePrimary(preferred.catalogImageId);
+        }
+        if (data.images.length) {
+          updated = {
+            ...updated,
+            images: data.images,
+            primary_image: preferred ?? data.images[0],
+            image: preferred?.url ?? preferred?.path ?? data.images[0]?.url,
+            thumbnailImageId: preferred?.id ?? data.images[0]?.id,
+          };
+        }
+      }
+
+      setProducts((prev) =>
+        prev.map((product) => (product.id === id ? { ...updated, id: product.id } : product)),
       );
-      persistProducts(next);
-      return next;
-    });
-  }, []);
+      setError(null);
+      return updated;
+    },
+    [products],
+  );
 
-  const deleteProduct = useCallback((id: number) => {
-    setProducts((prev) => {
-      const next = prev.filter((product) => product.id !== id);
-      persistProducts(next);
-      return next;
-    });
-  }, []);
+  const deleteProduct = useCallback(
+    async (id: number) => {
+      const target = products.find((product) => product.id === id);
+      const catalogId = target?.catalogProductId;
 
-  const deleteProducts = useCallback((ids: number[]) => {
-    if (!ids.length) return;
-    setProducts((prev) => {
+      if (!catalogId) {
+        throw new AdminCatalogApiError("Product is missing a backend id.", 422);
+      }
+
+      await deleteAdminProduct(catalogId);
+      setProducts((prev) => prev.filter((product) => product.id !== id));
+      setError(null);
+    },
+    [products],
+  );
+
+  const deleteProducts = useCallback(
+    async (ids: number[]) => {
+      if (!ids.length) return;
+
       const idSet = new Set(ids);
-      const next = prev.filter((product) => !idSet.has(product.id));
-      persistProducts(next);
-      return next;
-    });
-  }, []);
+      const targets = products.filter((product) => idSet.has(product.id));
+      const catalogIds = targets
+        .map((product) => product.catalogProductId)
+        .filter((catalogId): catalogId is string => Boolean(catalogId));
+
+      await Promise.all(catalogIds.map((catalogId) => deleteAdminProduct(catalogId)));
+      setProducts((prev) => prev.filter((product) => !idSet.has(product.id)));
+      setError(null);
+    },
+    [products],
+  );
 
   const getProduct = useCallback(
     (id: number) => products.find((product) => product.id === id),
@@ -140,7 +208,10 @@ export function AdminProductsProvider({ children }: { children: ReactNode }) {
     <AdminProductsContext.Provider
       value={{
         products,
-        isHydrated,
+        isHydrated: isAuthenticated ? isHydrated && !isLoading : false,
+        isLoading,
+        error,
+        refetch: loadProducts,
         addProduct,
         updateProduct,
         deleteProduct,

@@ -2,6 +2,8 @@
 
 namespace Database\Factories;
 
+use App\Enums\NotificationChannel;
+use App\Enums\NotificationDeliveryStatus;
 use App\Enums\NotificationType;
 use App\Models\Notification;
 use App\Models\User;
@@ -16,12 +18,20 @@ class NotificationFactory extends Factory
 
     public function definition(): array
     {
+        $type = fake()->randomElement(NotificationType::cases());
+
         return [
             'user_id' => User::factory(),
-            'type' => fake()->randomElement(NotificationType::cases()),
+            'type' => $type,
+            'event_type' => $type->value,
+            'template_key' => null,
             'title' => fake()->sentence(4),
             'message' => fake()->paragraph(),
+            'channel' => NotificationChannel::InApp,
+            'status' => NotificationDeliveryStatus::Sent,
+            'provider' => 'in_app',
             'data' => ['source' => 'system'],
+            'sent_at' => now(),
             'read_at' => fake()->optional(0.3)->dateTime(),
         ];
     }
@@ -30,6 +40,7 @@ class NotificationFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'read_at' => null,
+            'status' => NotificationDeliveryStatus::Sent,
         ]);
     }
 }

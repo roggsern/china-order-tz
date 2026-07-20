@@ -20,4 +20,14 @@ class BuyNowRequest extends FormRequest
     {
         return $this->cartProductRules();
     }
+
+    protected function prepareForValidation(): void
+    {
+        $this->prepareCartProductValidation();
+    }
+
+    public function withValidator($validator): void
+    {
+        $this->withCartVariantValidator($validator);
+    }
 }

@@ -39,6 +39,23 @@ class CustomerOrderDetailsTest extends TestCase
             ->assertJsonPath('data.order_number', $order->order_number);
     }
 
+    public function test_authenticated_customer_can_view_own_order_by_order_number(): void
+    {
+        $user = User::factory()->create();
+        $order = Order::factory()->create([
+            'user_id' => $user->id,
+            'order_number' => 'COT-000099',
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->getJson("/api/v1/orders/{$order->order_number}")
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.id', $order->id)
+            ->assertJsonPath('data.order_number', 'COT-000099');
+    }
+
     public function test_customer_cannot_view_another_customers_order(): void
     {
         $user = User::factory()->create();

@@ -22,7 +22,7 @@ export async function initiateNmbPaymentSession(
   const authToken = token ?? getCustomerApiToken();
 
   if (!authToken) {
-    throw new NmbPaymentSessionError("You must be signed in to pay with NMB.");
+    throw new NmbPaymentSessionError("Please sign in to continue with payment.");
   }
 
   const response = await fetch("/api/payments/nmb/initiate", {

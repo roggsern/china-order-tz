@@ -2,19 +2,24 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\CustomerOrders\CancelCustomerOrderAction;
 use App\Actions\CustomerOrders\ConfirmCheckoutAction;
 use App\Actions\CustomerOrders\ListCustomerOrdersAction;
 use App\Actions\CustomerOrders\PrepareOrderPaymentAction;
 use App\Actions\CustomerOrders\ShowCustomerOrderAction;
 use App\Actions\CustomerOrders\ShowOrderPaymentAction;
 use App\Actions\CustomerOrders\ShowShipmentTrackingAction;
+use App\Actions\Orders\CreateOrderFromCheckoutAction;
+use App\Http\Requests\CustomerOrders\ConfirmCheckoutRequest;
 use App\Http\Requests\CustomerOrders\IndexCustomerOrdersRequest;
 use App\Http\Requests\Orders\PrepareOrderPaymentRequest;
 use App\Http\Resources\CustomerOrderDetailResource;
 use App\Http\Resources\CustomerOrderResource;
 use App\Http\Resources\OrderConfirmationResource;
+use App\Http\Resources\OrderEngineResource;
 use App\Http\Resources\PaymentPreparationResource;
 use App\Http\Resources\ShipmentTrackingResource;
+use App\Models\CheckoutSession;
 use App\Models\Order;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -38,15 +43,31 @@ class CustomerOrderController extends Controller
         )->additional(['success' => true]);
     }
 
-    public function confirm(ConfirmCheckoutAction $action): JsonResponse
-    {
+    public function confirm(
+        ConfirmCheckoutRequest $request,
+        ConfirmCheckoutAction $action,
+    ): JsonResponse {
         /** @var User $user */
         $user = auth()->user();
 
         return response()->json([
             'success' => true,
             'message' => 'Order created successfully.',
-            'data' => new OrderConfirmationResource($action->handle($user)),
+            'data' => new OrderConfirmationResource($action->handle($user, $request->validated())),
+        ], 201);
+    }
+
+    public function fromCheckout(
+        CheckoutSession $checkoutSession,
+        CreateOrderFromCheckoutAction $action,
+    ): JsonResponse {
+        /** @var User $user */
+        $user = auth()->user();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Order created from checkout session.',
+            'data' => new OrderEngineResource($action->handle($user, $checkoutSession)),
         ], 201);
     }
 
@@ -84,6 +105,20 @@ class CustomerOrderController extends Controller
         return response()->json([
             'success' => true,
             'data' => new CustomerOrderDetailResource($action->handle($order, $user)),
+        ]);
+    }
+
+    public function cancel(Order $order, CancelCustomerOrderAction $action): JsonResponse
+    {
+        /** @var User $user */
+        $user = auth()->user();
+
+        $reason = request()->input('reason');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Order cancellation recorded.',
+            'data' => new CustomerOrderDetailResource($action->handle($user, $order, is_string($reason) ? $reason : null)),
         ]);
     }
 

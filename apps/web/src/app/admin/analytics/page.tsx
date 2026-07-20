@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { AdminAnalyticsDashboard } from "@/components/admin/AdminAnalyticsDashboard";
+import { RetailIntelligenceDashboard } from "@/components/admin/analytics/RetailIntelligenceDashboard";
 
 export const metadata: Metadata = {
-  title: "Analytics — Admin — CHINA ORDER TZ",
-  description: "Real-time ecommerce analytics and business intelligence.",
+  title: "Retail Analytics — Admin — CHINA ORDER TZ",
+  description: "Enterprise retail intelligence — sales, profit, inventory, returns, sessions.",
 };
 
 export default function AdminAnalyticsPage() {
-  return <AdminAnalyticsDashboard />;
+  return <RetailIntelligenceDashboard />;
 }

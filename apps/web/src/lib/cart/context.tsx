@@ -17,6 +17,10 @@ export type CartContextValue = {
   isHydrated: boolean;
   addToCart: (input: AddToCartInput) => void;
   updateQuantity: (itemId: string, quantity: number) => void;
+  updateLinePricing: (
+    itemId: string,
+    pricing: { unitPrice: number; compareAtUnitPrice?: number },
+  ) => void;
   updateShippingMethod: (itemId: string, methodCode: ShippingMethodCode) => void;
   removeItem: (itemId: string) => void;
   saveForLater: (itemId: string) => void;
@@ -31,6 +35,7 @@ export type CartActionsValue = Pick<
   CartContextValue,
   | "addToCart"
   | "updateQuantity"
+  | "updateLinePricing"
   | "updateShippingMethod"
   | "removeItem"
   | "saveForLater"

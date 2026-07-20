@@ -22,8 +22,17 @@ class BrandFactory extends Factory
             'slug' => Str::slug($name),
             'description' => fake()->paragraph(),
             'logo' => null,
+            'banner' => null,
             'website' => fake()->url(),
+            'country' => fake()->countryCode(),
+            'is_featured' => false,
+            'sort_order' => 0,
             'is_active' => true,
         ];
+    }
+
+    public function featured(): static
+    {
+        return $this->state(fn () => ['is_featured' => true]);
     }
 }

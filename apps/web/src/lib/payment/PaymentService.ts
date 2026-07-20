@@ -38,6 +38,7 @@ import {
   applyOrderStatusHistoryPatch,
   createInitialStatusHistory,
 } from "@/lib/order/status-history";
+import { isAdminLocalOrderAuthorityEnabled } from "@/lib/config/env";
 
 function applyOrderUpdate(
   order: Order,
@@ -222,6 +223,20 @@ export class PaymentService {
         if (existing) {
           if (existing.paymentStatus === PAYMENT_STATUS.FAILED) {
             return this.retryFailedOrderPayment(existing, input);
+          }
+          if (
+            (existing.paymentStatus === PAYMENT_STATUS.PENDING ||
+              existing.paymentStatus === PAYMENT_STATUS.PENDING_PAYMENT) &&
+            input.paymentMethod &&
+            existing.paymentMethod !== input.paymentMethod
+          ) {
+            const updated = applyOrderUpdate(existing, { paymentMethod: input.paymentMethod });
+            saveOrder(updated);
+            if (isGatewayPaymentMethod(input.paymentMethod)) {
+              return this.hydrateOrder(updated);
+            }
+            const finalized = finalizeNonMpesaOrder(updated, input.paymentMethod);
+            return this.hydrateOrder(finalized);
           }
           return this.hydrateOrder(existing);
         }
@@ -571,6 +586,11 @@ export class PaymentService {
   }
 
   updateOrderStatus(orderNumber: string, status: OrderStatus): Order | null {
+    // Production: Laravel OrderLifecycleEngine is the only status authority.
+    if (!isAdminLocalOrderAuthorityEnabled()) {
+      return null;
+    }
+
     return updateOrder(orderNumber, (order) => {
       const patch: Partial<Order> = { status };
 

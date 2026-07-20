@@ -1,22 +1,23 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Product, ProductFormData, ProductStatus, ProductType } from "@/lib/types/catalog";
 import {
-  buyFromTzBrands,
-  getBrandBySlug,
-  getBrandSubcategories,
-  getDefaultBuyFromDarBrand,
-} from "@/lib/catalog/brands";
+  fetchAdminBrands,
+  fetchAdminCategories,
+  type AdminBrand,
+  type AdminCategory,
+  AdminCatalogApiError,
+} from "@/lib/api/admin-catalog";
 import { validateProductForm } from "@/lib/admin/product-utils";
-import { categories, getSubcategories } from "@/lib/catalog/categories";
-import { isLocalProductType, productTypeToOrigin } from "@/lib/catalog/product-type";
+import { productTypeToOrigin } from "@/lib/catalog/product-type";
 import { slugify } from "@/lib/catalog/utils";
 import { productToFormData } from "@/components/admin/AdminProductsProvider";
 import { ImageUploader } from "@/components/admin/ImageUploader";
-import { ProductVariantSection } from "@/components/admin/ProductVariantSection";
+import { ProductConfigurationGrid } from "@/components/admin/ProductConfigurationGrid";
 import { ProductImageDisplay } from "@/components/catalog/ProductImageDisplay";
+import { WholesalePricingEditor } from "@/components/admin/WholesalePricingEditor";
 import { getProductPrimaryImage } from "@/lib/catalog/product-images";
 import { RichTextEditor } from "@/components/admin/RichTextEditor";
 import { ToggleSwitch } from "@/components/admin/ToggleSwitch";
@@ -25,8 +26,11 @@ import { TrashIcon } from "@/components/home/icons";
 interface ProductFormProps {
   initialData?: Product;
   isEditMode: boolean;
-  onSubmit: (data: ProductFormData) => void;
-  onDeleteProduct?: () => void;
+  onSubmit: (
+    data: ProductFormData,
+    options?: { pendingFiles?: Map<number, File> },
+  ) => void | Promise<void>;
+  onDeleteProduct?: () => void | Promise<void>;
 }
 
 const defaultFormData: ProductFormData = {
@@ -38,33 +42,45 @@ const defaultFormData: ProductFormData = {
   price: 0,
   oldPrice: 0,
   discountPercent: 0,
-  rating: 4.5,
+  rating: 0,
   reviews: 0,
-  badge: "New",
+  badge: "",
   gradient: "from-zinc-500 to-zinc-700",
   emoji: "📦",
   type: "china",
   origin: "china",
+  categoryId: "",
+  parentCategoryId: "",
+  brandId: "",
   brandSlug: "",
   brand: "",
-  categorySlug: categories[0]?.slug ?? "",
+  categorySlug: "",
   subcategorySlug: "",
   stock: 0,
   sku: "",
+  skuOverride: false,
   weightKg: null,
   airCost: 18000,
   seaCost: 9500,
-  airDeliveryDays: "7",
-  seaDeliveryDays: "21",
+  airAvailable: true,
+  seaAvailable: true,
+  airNotes: "",
+  seaNotes: "",
+  airDeliveryDays: "",
+  seaDeliveryDays: "",
   features: "",
   featured: false,
   bestSeller: false,
   trending: false,
   newArrival: false,
   status: "active",
+  isDemo: false,
+  wholesaleEnabled: false,
+  priceTiers: [],
   images: [],
   thumbnailImageId: null,
   variants: {},
+  configurations: [],
 };
 
 function FieldError({ message }: { message?: string }) {
@@ -80,111 +96,335 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
   const [isSaveLoading, setIsSaveLoading] = useState(false);
   const [autoSlug, setAutoSlug] = useState(!isEditMode);
   const [errors, setErrors] = useState<ReturnType<typeof validateProductForm>>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [rootCategories, setRootCategories] = useState<AdminCategory[]>([]);
+  const [subcategories, setSubcategories] = useState<AdminCategory[]>([]);
+  const [brands, setBrands] = useState<AdminBrand[]>([]);
+  const [optionsError, setOptionsError] = useState<string | null>(null);
+  const [optionsLoading, setOptionsLoading] = useState(true);
+  const pendingFilesRef = useRef<Map<number, File>>(new Map());
 
-  const isLocalMode = isLocalProductType(form.type);
+  const catalogOrigin = form.origin === "tz" ? "tz" : "china";
 
-  const chinaSubcategoryOptions = useMemo(
-    () =>
-      getSubcategories(form.categorySlug).map((item) => ({
-        label: item,
-        value: slugify(item),
-      })),
-    [form.categorySlug],
-  );
+  useEffect(() => {
+    let cancelled = false;
 
-  const localSubcategoryOptions = useMemo(
-    () => getBrandSubcategories(form.brandSlug),
-    [form.brandSlug],
-  );
+    async function loadRootCategories() {
+      setOptionsLoading(true);
+      setOptionsError(null);
 
-  const applyProductType = (type: ProductType, prev: ProductFormData): ProductFormData => {
-    const origin = productTypeToOrigin(type);
+      try {
+        const nextRoots = await fetchAdminCategories({
+          origin: catalogOrigin,
+          rootsOnly: true,
+        });
 
-    if (type === "local") {
-      const brand = getBrandBySlug(prev.brandSlug) ?? getDefaultBuyFromDarBrand();
-      const subcategories = getBrandSubcategories(brand.slug);
-      const subcategorySlug =
-        subcategories.find((item) => item.slug === prev.subcategorySlug)?.slug ??
-        subcategories[0]?.slug ??
-        "";
+        if (cancelled) return;
 
-      return {
-        ...prev,
-        type,
-        origin,
-        brandSlug: brand.slug,
-        brand: buyFromTzBrands.find((item) => item.slug === brand.slug)?.label ?? brand.name,
-        categorySlug: brand.slug,
-        subcategorySlug,
-        seaCost: 0,
-        seaDeliveryDays: "",
-      };
+        setRootCategories(nextRoots);
+
+        setForm((prev) => {
+          const parentStillValid = nextRoots.some((item) => item.id === prev.parentCategoryId);
+          if (parentStillValid) {
+            return prev;
+          }
+
+          // Edit mode: leaf may be a root or a child — resolve parent from payload.
+          if (prev.parentCategoryId && nextRoots.some((item) => item.id === prev.parentCategoryId)) {
+            return prev;
+          }
+
+          if (prev.categoryId && nextRoots.some((item) => item.id === prev.categoryId)) {
+            return {
+              ...prev,
+              parentCategoryId: prev.categoryId,
+              categorySlug: nextRoots.find((item) => item.id === prev.categoryId)?.slug ?? prev.categorySlug,
+            };
+          }
+
+          return {
+            ...prev,
+            parentCategoryId: "",
+            categoryId: "",
+            categorySlug: "",
+            subcategorySlug: "",
+            brandId: "",
+            brandSlug: "",
+            brand: "",
+            configurations: [],
+          };
+        });
+      } catch (err) {
+        if (!cancelled) {
+          setOptionsError(
+            err instanceof AdminCatalogApiError
+              ? err.message
+              : "Unable to load categories.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setOptionsLoading(false);
+        }
+      }
     }
 
-    const categorySlug = categories.some((item) => item.slug === prev.categorySlug)
-      ? prev.categorySlug
-      : categories[0]?.slug ?? "";
+    void loadRootCategories();
 
-    return {
-      ...prev,
-      type,
-      origin,
-      brandSlug: "",
-      brand: "",
-      categorySlug,
-      subcategorySlug: categories.some((item) => item.slug === prev.categorySlug)
-        ? prev.subcategorySlug
-        : "",
-      seaCost: prev.seaCost || 9500,
-      seaDeliveryDays: prev.seaDeliveryDays || "21",
+    return () => {
+      cancelled = true;
     };
-  };
+  }, [catalogOrigin]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const parentId = form.parentCategoryId;
+
+    if (!parentId) {
+      setSubcategories([]);
+      return;
+    }
+
+    async function loadSubcategories() {
+      try {
+        const children = await fetchAdminCategories({ parentId });
+        if (cancelled) return;
+        setSubcategories(children);
+
+        setForm((prev) => {
+          if (!prev.categoryId) {
+            return prev;
+          }
+
+          const leafIsParent = prev.categoryId === parentId;
+          const leafIsChild = children.some((item) => item.id === prev.categoryId);
+
+          if (leafIsParent || leafIsChild) {
+            return prev;
+          }
+
+          // Incoming edit: categoryId is leaf with parentCategoryId from API.
+          if (prev.parentCategoryId === parentId) {
+            return prev;
+          }
+
+          return {
+            ...prev,
+            categoryId: "",
+            subcategorySlug: "",
+            brandId: "",
+            brandSlug: "",
+            brand: "",
+            configurations: [],
+          };
+        });
+      } catch {
+        if (!cancelled) {
+          setSubcategories([]);
+        }
+      }
+    }
+
+    void loadSubcategories();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [form.parentCategoryId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const leafId = form.categoryId || form.parentCategoryId;
+
+    async function loadBrands() {
+      try {
+        const nextBrands = await fetchAdminBrands(
+          leafId ? { categoryId: leafId } : {},
+        );
+        if (cancelled) return;
+        setBrands(nextBrands);
+
+        setForm((prev) => {
+          if (!prev.brandId) return prev;
+          if (nextBrands.some((item) => item.id === prev.brandId)) return prev;
+          return {
+            ...prev,
+            brandId: "",
+            brandSlug: "",
+            brand: "",
+          };
+        });
+      } catch {
+        if (!cancelled) {
+          setBrands([]);
+        }
+      }
+    }
+
+    void loadBrands();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [form.categoryId, form.parentCategoryId]);
+
+  // Resolve parentCategoryId when editing a leaf subcategory.
+  useEffect(() => {
+    if (!isEditMode || form.parentCategoryId || !form.categoryId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function resolveParent() {
+      try {
+        const all = await fetchAdminCategories({ origin: catalogOrigin });
+        if (cancelled) return;
+        const leaf = all.find((item) => item.id === form.categoryId);
+        if (!leaf) return;
+
+        if (!leaf.parentId) {
+          setForm((prev) => ({
+            ...prev,
+            parentCategoryId: leaf.id,
+            categorySlug: leaf.slug,
+          }));
+          return;
+        }
+
+        setForm((prev) => ({
+          ...prev,
+          parentCategoryId: leaf.parentId ?? "",
+          subcategorySlug: leaf.slug,
+          categorySlug: all.find((item) => item.id === leaf.parentId)?.slug ?? prev.categorySlug,
+        }));
+      } catch {
+        // Parent resolution is best-effort for edit mode.
+      }
+    }
+
+    void resolveParent();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isEditMode, form.categoryId, form.parentCategoryId, catalogOrigin]);
 
   const updateField = <K extends keyof ProductFormData>(key: K, value: ProductFormData[K]) => {
     setForm((prev) => {
-      let next = { ...prev, [key]: value };
+      const next = { ...prev, [key]: value };
 
       if (key === "name" && autoSlug) {
         next.slug = slugify(String(value));
       }
 
       if (key === "type") {
-        next = applyProductType(value as ProductType, prev);
-      }
-
-      if (key === "brandSlug" && isLocalProductType(next.type)) {
-        const brand = getBrandBySlug(String(value));
-        if (brand) {
-          next.brand = buyFromTzBrands.find((item) => item.slug === brand.slug)?.label ?? brand.name;
-          next.categorySlug = brand.slug;
-        }
-        const subcategories = getBrandSubcategories(String(value));
-        next.subcategorySlug =
-          subcategories.find((item) => item.slug === prev.subcategorySlug)?.slug ??
-          subcategories[0]?.slug ??
-          "";
-      }
-
-      if (key === "categorySlug" && next.type === "china") {
+        const type = value as ProductType;
+        next.type = type;
+        next.origin = productTypeToOrigin(type);
+        next.parentCategoryId = "";
+        next.categoryId = "";
+        next.categorySlug = "";
         next.subcategorySlug = "";
+        next.brandId = "";
+        next.brandSlug = "";
+        next.brand = "";
+        next.configurations = [];
+        if (type === "local") {
+          next.seaCost = 0;
+          next.seaDeliveryDays = "";
+          next.airAvailable = false;
+          next.seaAvailable = false;
+          next.airNotes = "";
+          next.seaNotes = "";
+        } else if (!next.airCost) {
+          next.airCost = 18000;
+          next.seaCost = 9500;
+          next.airAvailable = true;
+          next.seaAvailable = true;
+        }
+      }
+
+      if (key === "parentCategoryId") {
+        const category = rootCategories.find((item) => item.id === value);
+        next.categorySlug = category?.slug ?? "";
+        next.categoryId = "";
+        next.subcategorySlug = "";
+        next.brandId = "";
+        next.brandSlug = "";
+        next.brand = "";
+        next.configurations = [];
+      }
+
+      if (key === "categoryId") {
+        const subcategory = subcategories.find((item) => item.id === value);
+        if (value && subcategory) {
+          next.subcategorySlug = subcategory.slug;
+          next.categoryId = subcategory.id;
+        } else if (!value && next.parentCategoryId) {
+          // No subcategory chosen — persist parent as leaf when branch is empty.
+          next.categoryId = next.parentCategoryId;
+          next.subcategorySlug = "";
+        }
+        next.brandId = "";
+        next.brandSlug = "";
+        next.brand = "";
+        next.configurations = [];
+      }
+
+      if (key === "brandId") {
+        const brand = brands.find((item) => item.id === value);
+        next.brandSlug = brand?.slug ?? "";
+        next.brand = brand?.name ?? "";
+      }
+
+      if (key === "skuOverride" && value === false) {
+        next.sku = "";
       }
 
       return next;
     });
 
     setErrors((prev) => ({ ...prev, [key]: undefined }));
+    setSubmitError(null);
   };
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    const validationErrors = validateProductForm(form);
+
+    const payload: ProductFormData = {
+      ...form,
+      // Persist leaf: subcategory if chosen, otherwise parent category.
+      categoryId:
+        form.categoryId ||
+        form.parentCategoryId ||
+        "",
+      sku: form.skuOverride ? form.sku : "",
+    };
+
+    const validationErrors = validateProductForm(payload);
     setErrors(validationErrors);
+    setSubmitError(null);
 
     if (Object.keys(validationErrors).length > 0) return;
 
     setIsSaveLoading(true);
-    onSubmit(form);
-    setTimeout(() => router.push("/admin/products"), 900);
+
+    try {
+      await onSubmit(payload, { pendingFiles: pendingFilesRef.current });
+      pendingFilesRef.current.clear();
+      router.push("/admin/products");
+    } catch (err) {
+      setSubmitError(
+        err instanceof AdminCatalogApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Unable to save product.",
+      );
+    } finally {
+      setIsSaveLoading(false);
+    }
   };
 
   const thumbnail = getProductPrimaryImage({
@@ -195,13 +435,27 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
     image: form.images.find((image) => image.id === form.thumbnailImageId)?.url ?? form.images[0]?.url,
   });
 
+  const catalogSelectionValid =
+    Boolean(form.parentCategoryId) &&
+    rootCategories.length > 0 &&
+    (subcategories.length === 0 ||
+      (Boolean(form.categoryId) && form.categoryId !== form.parentCategoryId)) &&
+    !optionsLoading &&
+    !optionsError;
+
   return (
-    <form onSubmit={handleSubmit}>
-      {isSaveLoading && (
-        <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
-          Product {isEditMode ? "updated" : "created"} successfully.
+    <form onSubmit={(event) => void handleSubmit(event)}>
+      {submitError ? (
+        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {submitError}
         </div>
-      )}
+      ) : null}
+
+      {optionsError ? (
+        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {optionsError}
+        </div>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <div className="space-y-6">
@@ -225,7 +479,7 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
 
               <div>
                 <label className="admin-label" htmlFor="slug">
-                  Slug (auto-generated)
+                  Slug (optional — auto from name)
                 </label>
                 <input
                   id="slug"
@@ -256,7 +510,7 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
 
               <div>
                 <label className="admin-label" htmlFor="fullDescription">
-                  Full description (rich text)
+                  Full description
                 </label>
                 <div className="mt-1.5">
                   <RichTextEditor
@@ -269,18 +523,18 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
           </section>
 
           <section className="admin-card p-5">
-            <h2 className="text-sm font-semibold text-zinc-900">Marketplace</h2>
+            <h2 className="text-sm font-semibold text-zinc-900">Catalog classification</h2>
             <p className="mt-1 text-xs text-zinc-500">
-              Choose how this product is sold — form fields adapt to the selected mode.
+              Commerce channel → Category → Subcategory → Brand. Taxonomy is database-driven.
             </p>
 
             <div className="mt-4">
-              <span className="admin-label">Product type *</span>
-              <div className="mt-2 flex flex-wrap gap-2" role="tablist" aria-label="Product type">
+              <span className="admin-label">Commerce Channel *</span>
+              <div className="mt-2 flex flex-wrap gap-2" role="tablist" aria-label="Commerce channel">
                 {(
                   [
-                    { id: "china" as const, label: "China Order" },
-                    { id: "local" as const, label: "Buy from Dar" },
+                    { id: "china" as const, label: "Order From China" },
+                    { id: "local" as const, label: "Buy From TZ" },
                   ] as const
                 ).map((option) => {
                   const isActive = form.type === option.id;
@@ -305,100 +559,96 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
               <FieldError message={errors.type} />
             </div>
 
-            <div
-              key={form.type}
-              className="mt-5 grid gap-4 transition-all duration-200 sm:grid-cols-2"
-            >
-              {isLocalMode ? (
-                <>
-                  <div className="sm:col-span-2">
-                    <label className="admin-label" htmlFor="localBrand">
-                      Brand *
-                    </label>
-                    <select
-                      id="localBrand"
-                      value={form.brandSlug}
-                      onChange={(event) => updateField("brandSlug", event.target.value)}
-                      className="admin-input mt-1.5"
-                    >
-                      {buyFromTzBrands.map((brand) => (
-                        <option key={brand.slug} value={brand.slug}>
-                          {brand.label}
-                        </option>
-                      ))}
-                    </select>
-                    <FieldError message={errors.brandSlug} />
-                  </div>
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="admin-label" htmlFor="parentCategoryId">
+                  Category *
+                </label>
+                <select
+                  id="parentCategoryId"
+                  value={form.parentCategoryId}
+                  onChange={(event) => updateField("parentCategoryId", event.target.value)}
+                  className="admin-input mt-1.5"
+                  disabled={optionsLoading || rootCategories.length === 0}
+                >
+                  <option value="">
+                    {optionsLoading
+                      ? "Loading…"
+                      : rootCategories.length === 0
+                        ? "No categories configured."
+                        : "Select category"}
+                  </option>
+                  {rootCategories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+                <FieldError message={errors.categorySlug} />
+              </div>
 
-                  <div className="sm:col-span-2">
-                    <label className="admin-label" htmlFor="localSubcategory">
-                      Subcategory *
-                    </label>
-                    <select
-                      id="localSubcategory"
-                      value={form.subcategorySlug}
-                      onChange={(event) => updateField("subcategorySlug", event.target.value)}
-                      className="admin-input mt-1.5"
-                      disabled={localSubcategoryOptions.length === 0}
-                    >
-                      <option value="">Select subcategory</option>
-                      {localSubcategoryOptions.map((item) => (
-                        <option key={item.slug} value={item.slug}>
-                          {item.name}
-                        </option>
-                      ))}
-                    </select>
-                    <FieldError message={errors.subcategorySlug} />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <label className="admin-label" htmlFor="category">
-                      Category *
-                    </label>
-                    <select
-                      id="category"
-                      value={form.categorySlug}
-                      onChange={(event) => updateField("categorySlug", event.target.value)}
-                      className="admin-input mt-1.5"
-                    >
-                      {categories.map((category) => (
-                        <option key={category.slug} value={category.slug}>
-                          {category.name}
-                        </option>
-                      ))}
-                    </select>
-                    <FieldError message={errors.categorySlug} />
-                  </div>
+              <div>
+                <label className="admin-label" htmlFor="categoryId">
+                  Subcategory
+                </label>
+                <select
+                  id="categoryId"
+                  value={
+                    form.categoryId && form.categoryId !== form.parentCategoryId
+                      ? form.categoryId
+                      : ""
+                  }
+                  onChange={(event) => updateField("categoryId", event.target.value)}
+                  className="admin-input mt-1.5"
+                  disabled={!form.parentCategoryId || optionsLoading}
+                >
+                  <option value="">
+                    {!form.parentCategoryId
+                      ? "Select a category first"
+                      : subcategories.length === 0
+                        ? "No subcategories configured."
+                        : "Select subcategory"}
+                  </option>
+                  {subcategories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                  <div>
-                    <label className="admin-label" htmlFor="subcategory">
-                      Subcategory
-                    </label>
-                    <select
-                      id="subcategory"
-                      value={form.subcategorySlug}
-                      onChange={(event) => updateField("subcategorySlug", event.target.value)}
-                      className="admin-input mt-1.5"
-                    >
-                      <option value="">Select subcategory</option>
-                      {chinaSubcategoryOptions.map((item) => (
-                        <option key={item.value} value={item.value}>
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </>
-              )}
+              <div className="sm:col-span-2">
+                <label className="admin-label" htmlFor="brandId">
+                  Brand
+                </label>
+                <select
+                  id="brandId"
+                  value={form.brandId}
+                  onChange={(event) => updateField("brandId", event.target.value)}
+                  className="admin-input mt-1.5"
+                  disabled={optionsLoading || brands.length === 0}
+                >
+                  <option value="">
+                    {brands.length === 0 ? "No brands configured." : "No brand"}
+                  </option>
+                  {brands.map((brand) => (
+                    <option key={brand.id} value={brand.id}>
+                      {brand.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-zinc-500">
+                  When brand↔category links exist, this list is filtered to linked brands.
+                </p>
+                <FieldError message={errors.brandSlug} />
+              </div>
             </div>
           </section>
 
           <section className="admin-card p-5">
             <h2 className="text-sm font-semibold text-zinc-900">Media</h2>
             <p className="mt-1 text-xs text-zinc-500">
-              Upload multiple images, drag to reorder, and choose a thumbnail.
+              Images are stored on the Laravel public disk and shown on the storefront.
             </p>
             <div className="mt-4">
               <ImageUploader
@@ -406,6 +656,8 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
                 thumbnailImageId={form.thumbnailImageId}
                 onChange={(images) => updateField("images", images)}
                 onThumbnailChange={(id) => updateField("thumbnailImageId", id)}
+                catalogProductId={initialData?.catalogProductId ?? null}
+                pendingFilesRef={pendingFilesRef}
                 productName={form.name}
                 gradient={form.gradient}
                 emoji={form.emoji}
@@ -418,7 +670,7 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="admin-label" htmlFor="price">
-                  Price (TZS) *
+                  Base price (TZS) *
                 </label>
                 <input
                   id="price"
@@ -432,7 +684,7 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
               </div>
               <div>
                 <label className="admin-label" htmlFor="oldPrice">
-                  Old price (TZS)
+                  Compare-at price (TZS)
                 </label>
                 <input
                   id="oldPrice"
@@ -444,138 +696,23 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
                   placeholder="Optional"
                 />
               </div>
-              <div>
-                <label className="admin-label" htmlFor="discountPercent">
-                  Discount %
-                </label>
-                <input
-                  id="discountPercent"
-                  type="number"
-                  min={0}
-                  max={99}
-                  value={form.discountPercent || ""}
-                  onChange={(event) => updateField("discountPercent", Number(event.target.value))}
-                  className="admin-input mt-1.5"
-                  placeholder="0"
-                />
-              </div>
             </div>
           </section>
 
-          <ProductVariantSection
-            variants={form.variants}
-            onChange={(variants) => updateField("variants", variants)}
-          />
-
-          {form.type === "china" && (
-            <section className="admin-card p-5">
-              <h2 className="text-sm font-semibold text-zinc-900">China shipping</h2>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="admin-label" htmlFor="airCost">
-                    Air cost (TZS) *
-                  </label>
-                  <input
-                    id="airCost"
-                    type="number"
-                    min={0}
-                    value={form.airCost || ""}
-                    onChange={(event) => updateField("airCost", Number(event.target.value))}
-                    className="admin-input mt-1.5"
-                  />
-                  <FieldError message={errors.airCost} />
-                </div>
-                <div>
-                  <label className="admin-label" htmlFor="seaCost">
-                    Sea cost (TZS) *
-                  </label>
-                  <input
-                    id="seaCost"
-                    type="number"
-                    min={0}
-                    value={form.seaCost || ""}
-                    onChange={(event) => updateField("seaCost", Number(event.target.value))}
-                    className="admin-input mt-1.5"
-                  />
-                  <FieldError message={errors.seaCost} />
-                </div>
-                <div>
-                  <label className="admin-label" htmlFor="airDeliveryDays">
-                    Air delivery days *
-                  </label>
-                  <input
-                    id="airDeliveryDays"
-                    type="text"
-                    placeholder='e.g. 5-7'
-                    value={form.airDeliveryDays}
-                    onChange={(event) => updateField("airDeliveryDays", event.target.value)}
-                    className="admin-input mt-1.5"
-                  />
-                  <FieldError message={errors.airDeliveryDays} />
-                </div>
-                <div>
-                  <label className="admin-label" htmlFor="seaDeliveryDays">
-                    Sea delivery days *
-                  </label>
-                  <input
-                    id="seaDeliveryDays"
-                    type="text"
-                    placeholder='e.g. 35-45'
-                    value={form.seaDeliveryDays}
-                    onChange={(event) => updateField("seaDeliveryDays", event.target.value)}
-                    className="admin-input mt-1.5"
-                  />
-                  <FieldError message={errors.seaDeliveryDays} />
-                </div>
-              </div>
-            </section>
-          )}
-
-          {form.type === "local" && (
-            <section className="admin-card p-5">
-              <h2 className="text-sm font-semibold text-zinc-900">Local delivery</h2>
-              <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">
-                Delivery price is not shown at checkout — customers see &quot;To be negotiated before
-                delivery&quot;.
-              </p>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <label className="admin-label" htmlFor="airDeliveryDays">
-                    Estimated delivery days
-                  </label>
-                  <input
-                    id="airDeliveryDays"
-                    type="text"
-                    placeholder="e.g. 1-5"
-                    value={form.airDeliveryDays}
-                    onChange={(event) => updateField("airDeliveryDays", event.target.value)}
-                    className="admin-input mt-1.5"
-                  />
-                  <FieldError message={errors.airDeliveryDays} />
-                </div>
-              </div>
-            </section>
-          )}
-
           <section className="admin-card p-5">
-            <h2 className="text-sm font-semibold text-zinc-900">Inventory</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-3">
-              <div>
-                <label className="admin-label" htmlFor="stock">
-                  Stock quantity
-                </label>
-                <input
-                  id="stock"
-                  type="number"
-                  min={0}
-                  value={form.stock || ""}
-                  onChange={(event) => updateField("stock", Number(event.target.value))}
-                  className="admin-input mt-1.5"
-                />
-              </div>
+            <h2 className="text-sm font-semibold text-zinc-900">Base SKU &amp; shipping identity</h2>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="admin-label" htmlFor="sku">
-                  SKU
+                  Base SKU
+                </label>
+                <label className="mt-2 flex items-center gap-2 text-xs text-zinc-600">
+                  <input
+                    type="checkbox"
+                    checked={form.skuOverride}
+                    onChange={(event) => updateField("skuOverride", event.target.checked)}
+                  />
+                  Override auto-generated SKU
                 </label>
                 <input
                   id="sku"
@@ -583,12 +720,20 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
                   value={form.sku}
                   onChange={(event) => updateField("sku", event.target.value)}
                   className="admin-input mt-1.5"
-                  placeholder="SKU-00001"
+                  placeholder={form.skuOverride ? "Enter custom SKU" : "Auto-generated on save"}
+                  disabled={!form.skuOverride}
+                  required={form.skuOverride}
                 />
+                <p className="mt-1 text-xs text-zinc-500">
+                  {form.skuOverride
+                    ? "Custom SKU will be saved as entered."
+                    : "A unique SKU is generated from origin and category on save. Configuration SKUs still use this base + Product Type pattern."}
+                </p>
+                <FieldError message={errors.sku} />
               </div>
               <div>
                 <label className="admin-label" htmlFor="weightKg">
-                  Weight (kg, optional)
+                  Weight (kg)
                 </label>
                 <input
                   id="weightKg"
@@ -604,25 +749,187 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
               </div>
             </div>
           </section>
+
+          <ProductConfigurationGrid
+            categoryId={form.categoryId || form.parentCategoryId}
+            baseSku={form.sku}
+            basePrice={form.price}
+            configurations={form.configurations}
+            onChange={(configurations) => updateField("configurations", configurations)}
+            simpleStock={form.stock}
+            onSimpleStockChange={(stock) => updateField("stock", stock)}
+          />
+          <FieldError message={errors.configurations} />
+
+          {form.type === "china" && (
+            <section className="admin-card p-5">
+              <h2 className="text-sm font-semibold text-zinc-900">Manage Shipping Options</h2>
+              <p className="mt-1 text-xs text-zinc-500">
+                Enter prices manually. The system never calculates shipping costs. Leave a mode
+                unavailable to hide it from customers. Customer Agent ignores these prices.
+              </p>
+
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <div className="rounded-xl border border-zinc-200 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-zinc-900">Air Freight</p>
+                    <label className="flex items-center gap-2 text-xs text-zinc-600">
+                      <input
+                        type="checkbox"
+                        checked={form.airAvailable}
+                        onChange={(event) =>
+                          updateField("airAvailable", event.target.checked)
+                        }
+                      />
+                      Available
+                    </label>
+                  </div>
+                  <div className="mt-3">
+                    <label className="admin-label" htmlFor="airCost">
+                      Price (TZS)
+                    </label>
+                    <input
+                      id="airCost"
+                      type="number"
+                      min={0}
+                      disabled={!form.airAvailable}
+                      value={form.airAvailable ? form.airCost || "" : ""}
+                      onChange={(event) =>
+                        updateField("airCost", Number(event.target.value))
+                      }
+                      className="admin-input mt-1.5"
+                    />
+                    <FieldError message={errors.airCost} />
+                  </div>
+                  <div className="mt-3">
+                    <label className="admin-label" htmlFor="airNotes">
+                      Notes
+                    </label>
+                    <input
+                      id="airNotes"
+                      type="text"
+                      disabled={!form.airAvailable}
+                      value={form.airNotes}
+                      onChange={(event) => updateField("airNotes", event.target.value)}
+                      className="admin-input mt-1.5"
+                      placeholder="Optional"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-zinc-200 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-zinc-900">Sea Freight</p>
+                    <label className="flex items-center gap-2 text-xs text-zinc-600">
+                      <input
+                        type="checkbox"
+                        checked={form.seaAvailable}
+                        onChange={(event) =>
+                          updateField("seaAvailable", event.target.checked)
+                        }
+                      />
+                      Available
+                    </label>
+                  </div>
+                  <div className="mt-3">
+                    <label className="admin-label" htmlFor="seaCost">
+                      Price (TZS)
+                    </label>
+                    <input
+                      id="seaCost"
+                      type="number"
+                      min={0}
+                      disabled={!form.seaAvailable}
+                      value={form.seaAvailable ? form.seaCost || "" : ""}
+                      onChange={(event) =>
+                        updateField("seaCost", Number(event.target.value))
+                      }
+                      className="admin-input mt-1.5"
+                    />
+                    <FieldError message={errors.seaCost} />
+                  </div>
+                  <div className="mt-3">
+                    <label className="admin-label" htmlFor="seaNotes">
+                      Notes
+                    </label>
+                    <input
+                      id="seaNotes"
+                      type="text"
+                      disabled={!form.seaAvailable}
+                      value={form.seaNotes}
+                      onChange={(event) => updateField("seaNotes", event.target.value)}
+                      className="admin-input mt-1.5"
+                      placeholder="Optional"
+                    />
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {form.configurations.length === 0 ? (
+            <section className="admin-card p-5">
+              <h2 className="text-sm font-semibold text-zinc-900">Inventory</h2>
+              <p className="mt-1 text-xs text-zinc-500">
+                Used when the Product Type has no configurations, or before you generate any.
+              </p>
+              <div className="mt-4 max-w-xs">
+                <label className="admin-label" htmlFor="stock">
+                  Stock quantity *
+                </label>
+                <input
+                  id="stock"
+                  type="number"
+                  min={0}
+                  value={form.stock}
+                  onChange={(event) => updateField("stock", Number(event.target.value))}
+                  className="admin-input mt-1.5"
+                />
+                <FieldError message={errors.stock} />
+              </div>
+            </section>
+          ) : null}
+
+          {form.configurations.length === 0 ? (
+            <WholesalePricingEditor
+              enabled={form.wholesaleEnabled}
+              onEnabledChange={(enabled) => updateField("wholesaleEnabled", enabled)}
+              tiers={form.priceTiers}
+              onChange={(tiers) => updateField("priceTiers", tiers)}
+              basePrice={form.price}
+            />
+          ) : null}
         </div>
 
         <div className="space-y-6">
           <section className="admin-card p-5">
-            <h2 className="text-sm font-semibold text-zinc-900">Status</h2>
+            <h2 className="text-sm font-semibold text-zinc-900">Product Status</h2>
             <div className="mt-4">
               <label className="admin-label" htmlFor="status">
-                Product status
+                Lifecycle
               </label>
               <select
                 id="status"
-                value={form.status}
+                value={
+                  form.status === "hidden"
+                    ? "archived"
+                    : form.status === "draft" ||
+                        form.status === "out_of_stock" ||
+                        form.status === "archived"
+                      ? form.status
+                      : "active"
+                }
                 onChange={(event) => updateField("status", event.target.value as ProductStatus)}
                 className="admin-input mt-1.5"
               >
-                <option value="active">Active</option>
                 <option value="draft">Draft</option>
-                <option value="hidden">Hidden</option>
+                <option value="active">Active</option>
+                <option value="out_of_stock">Out of Stock</option>
+                <option value="archived">Archived</option>
               </select>
+              <p className="mt-1 text-[11px] text-zinc-500">
+                Only Active products are purchasable on the storefront. Out of Stock remains listed.
+              </p>
             </div>
           </section>
 
@@ -632,28 +939,14 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
               checked={form.featured}
               onChange={(checked) => updateField("featured", checked)}
               label="Featured product"
-              description="Show in featured sections."
+              description="Persists as is_featured on the product."
             />
             <ToggleSwitch
-              id="bestSeller"
-              checked={form.bestSeller}
-              onChange={(checked) => updateField("bestSeller", checked)}
-              label="Best seller"
-              description="Highlight as a top-selling item."
-            />
-            <ToggleSwitch
-              id="trending"
-              checked={form.trending}
-              onChange={(checked) => updateField("trending", checked)}
-              label="Trending"
-              description="Mark as currently trending."
-            />
-            <ToggleSwitch
-              id="newArrival"
-              checked={form.newArrival}
-              onChange={(checked) => updateField("newArrival", checked)}
-              label="New arrival"
-              description="Show as a newly added product."
+              id="isDemo"
+              checked={form.isDemo}
+              onChange={(checked) => updateField("isDemo", checked)}
+              label="Demo / test product"
+              description="Excluded from storefront catalog and admin revenue analytics."
             />
           </section>
 
@@ -688,7 +981,9 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
           {onDeleteProduct ? (
             <button
               type="button"
-              onClick={onDeleteProduct}
+              onClick={() => {
+                void onDeleteProduct();
+              }}
               disabled={isSaveLoading}
               className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:opacity-50"
             >
@@ -708,7 +1003,12 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
             </button>
             <button
               type="submit"
-              disabled={isSaveLoading}
+              disabled={
+                isSaveLoading ||
+                optionsLoading ||
+                Boolean(optionsError) ||
+                !catalogSelectionValid
+              }
               className="rounded-lg bg-[#c9a227] px-5 py-2 text-sm font-semibold text-zinc-900 transition hover:bg-[#e8c547] disabled:opacity-50"
             >
               {isSaveLoading ? "Saving…" : isEditMode ? "Save changes" : "Save product"}

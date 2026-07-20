@@ -5,7 +5,7 @@ import { formatDeliveryEstimate, formatPrice } from "@/lib/catalog/utils";
 import { getOriginLabel } from "@/lib/catalog/delivery";
 import { getMethodByCode } from "@/lib/shipping/engine";
 import { ProductImageDisplay } from "@/components/catalog/ProductImageDisplay";
-import { VariantLabel } from "@/components/catalog/VariantLabel";
+import { OrderItemConfiguration } from "./OrderItemConfiguration";
 import { ShippingQuantityBreakdown } from "@/components/shipping/ShippingQuantityBreakdown";
 
 interface OrderSuccessItemsListProps {
@@ -30,7 +30,7 @@ export function OrderSuccessItemsList({ items }: OrderSuccessItemsListProps) {
         return (
           <li
             key={item.id}
-            className="rounded-2xl border border-zinc-100 bg-zinc-50/60 p-4 sm:p-5"
+            className="rounded-2xl border border-zinc-100 bg-zinc-50/60 p-4 shadow-sm transition hover:border-[#c9a227]/20 sm:p-5"
           >
             <div className="flex gap-4">
               <div className="shrink-0 overflow-hidden rounded-xl border border-zinc-100 bg-white shadow-sm">
@@ -49,7 +49,7 @@ export function OrderSuccessItemsList({ items }: OrderSuccessItemsListProps) {
                     <p className="line-clamp-2 text-sm font-semibold leading-snug text-zinc-900 sm:text-base">
                       {item.name}
                     </p>
-                    <VariantLabel variant={item.variant} className="mt-1" />
+                    <OrderItemConfiguration item={item} className="mt-1" />
                     <p className="mt-1.5 text-xs text-zinc-500">
                       {origin.flag} {origin.label} · Qty {item.quantity}
                     </p>
@@ -65,7 +65,7 @@ export function OrderSuccessItemsList({ items }: OrderSuccessItemsListProps) {
                   </div>
                 </div>
 
-                {method && (
+                {method ? (
                   <div className="mt-4 flex flex-col gap-1 border-t border-zinc-200/80 pt-3">
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-600 sm:text-sm">
                       <span className="inline-flex items-center gap-1.5 font-medium text-zinc-800">
@@ -84,7 +84,7 @@ export function OrderSuccessItemsList({ items }: OrderSuccessItemsListProps) {
                       totalCost={shippingCost}
                     />
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
           </li>

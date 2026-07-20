@@ -20,6 +20,16 @@ const statusStyles: Record<ProductStatus, { label: string; className: string; do
     className: "bg-zinc-100 text-zinc-600 ring-1 ring-zinc-300/50",
     dot: "bg-zinc-400",
   },
+  out_of_stock: {
+    label: "Out of stock",
+    className: "bg-orange-50 text-orange-700 ring-1 ring-orange-600/20",
+    dot: "bg-orange-500",
+  },
+  archived: {
+    label: "Archived",
+    className: "bg-zinc-100 text-zinc-500 ring-1 ring-zinc-300/50",
+    dot: "bg-zinc-400",
+  },
 };
 
 export function StatusBadge({ status }: StatusBadgeProps) {

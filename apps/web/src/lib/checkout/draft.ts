@@ -13,6 +13,16 @@ export type CheckoutDraft = {
   totals: CartTotals;
   shippingMethod?: ShippingMethodCode | null;
   itemShippingBreakdown?: ItemShippingBreakdown[];
+  /** Set when the order was confirmed on the Laravel backend. */
+  backendOrder?: {
+    id: string;
+    orderNumber: string;
+  };
+  /**
+   * True after Laravel order confirm until payment method is submitted.
+   * Payment page must stay visible while this is set.
+   */
+  awaitingPayment?: boolean;
   savedAt: string;
 };
 

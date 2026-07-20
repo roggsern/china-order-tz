@@ -30,6 +30,20 @@ export function formatDays(value: string | number | null | undefined): string {
   return `${text} Days`;
 }
 
+/** Delivery window for product detail cards e.g. "7–10 Days". */
+export function formatDeliveryWindow(value: string | number | null | undefined): string {
+  if (value == null) return "—";
+
+  const text = (typeof value === "number" ? String(value) : value).trim();
+  if (!text || text === "—") return "—";
+
+  const base = text.replace(/\s*days?\s*$/i, "").trim();
+  if (!base) return "—";
+
+  const normalized = base.replace(/\s*-\s*/g, "–");
+  return `${normalized} Days`;
+}
+
 /** Human-readable delivery window e.g. "35–45 days" without duplicated suffix. */
 export function formatDeliveryEstimate(value: string | number | null | undefined): string {
   if (value == null) return "—";

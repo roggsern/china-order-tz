@@ -3,11 +3,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { useCart } from "@/lib/cart/context";
 import { calculateCartTotals } from "@/lib/cart/utils";
 import { deepCopyCart, mapCartToOrderItems, buildShippingSnapshotFromCart } from "@/lib/checkout/cart-snapshot";
 import { saveCheckoutDraft, getCheckoutDraft } from "@/lib/checkout/draft";
+import { getCustomerApiToken } from "@/lib/api/customer-auth";
+import {
+  CustomerCheckoutApiError,
+  mapBackendSummaryToTotals,
+  runBackendCheckoutFlow,
+} from "@/lib/api/customer-checkout";
+import { saveLocalOrderFromBackendConfirmation } from "@/lib/checkout/backend-order";
 import {
   getCheckoutWizardState,
   saveCheckoutWizardState,
@@ -26,23 +33,31 @@ import {
   normalizeCheckoutForm,
   splitFullName,
   validateCheckoutStep1,
-  validateCheckoutStep2,
 } from "@/lib/checkout/validation";
-import { validateCartAgainstCatalog } from "@/lib/cart/validation";
+import {
+  type CheckoutShippingChoice,
+  validateShippingChoice,
+} from "@/lib/checkout/shipping-choice";
+import { validateCartAgainstCatalog, summarizeCartValidationFailures } from "@/lib/cart/validation";
+import { fetchClientCatalogProducts } from "@/lib/catalog/client-catalog";
 import { productService } from "@/lib/services/product-service.client";
 import { CheckoutSection } from "./CheckoutSection";
 import { CheckoutStepIndicator } from "./CheckoutStepIndicator";
-import { CheckoutWizardProgress } from "./CheckoutWizardProgress";
 import { CheckoutCustomerStep } from "./CheckoutCustomerStep";
 import { CheckoutShippingStep } from "./CheckoutShippingStep";
-import { CheckoutSummaryStep } from "./CheckoutSummaryStep";
-import { Button } from "@/components/ui/Button";
-
-type WizardStep = 1 | 2 | 3;
+import { CheckoutSidebarSummary } from "./CheckoutSidebarSummary";
+import { CheckoutMobileStickyBar } from "./CheckoutMobileStickyBar";
+import { CheckoutEmptyState } from "./CheckoutEmptyState";
+import { CheckoutOrchestratorPanel } from "./CheckoutOrchestratorPanel";
+import { AuthInvitationCard } from "@/components/auth/AuthInvitationCard";
+import {
+  isAuthRequiredMessage,
+  toFriendlyAuthMessage,
+} from "@/lib/auth/friendly-auth-messages";
+import { CheckoutPageSkeleton } from "@/components/ui/PageSkeletons";
 
 function getFullNameFromForm(form: CheckoutFormData): string {
-  const combined = `${form.customer.firstName} ${form.customer.lastName}`.trim();
-  return combined;
+  return `${form.customer.firstName} ${form.customer.lastName}`.trim();
 }
 
 export function CheckoutPageContent() {
@@ -50,15 +65,16 @@ export function CheckoutPageContent() {
   const reduceMotion = useReducedMotion();
   const { items, savedForLater, discount, totals, isHydrated, updateShippingMethod } = useCart();
 
-  const [step, setStep] = useState<WizardStep>(1);
   const [form, setForm] = useState<CheckoutFormData>(EMPTY_CHECKOUT_FORM);
   const [fullName, setFullName] = useState("");
+  const [shippingChoice, setShippingChoice] = useState<CheckoutShippingChoice | null>(null);
   const [selectedShippingMethod, setSelectedShippingMethod] = useState<ShippingMethodCode | null>(
     null,
   );
   const [errors, setErrors] = useState<CheckoutFormErrors>({});
   const [shippingError, setShippingError] = useState<string | undefined>();
   const [submitError, setSubmitError] = useState<string | undefined>();
+  const [needsAuth, setNeedsAuth] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [wizardLoaded, setWizardLoaded] = useState(false);
 
@@ -67,6 +83,17 @@ export function CheckoutPageContent() {
 
   const hasChinaItems = useMemo(() => items.some((item) => item.origin === "china"), [items]);
 
+  const checkoutCartSignature = useMemo(
+    () =>
+      items
+        .map(
+          (item) =>
+            `${item.configurationId ?? item.id}:${item.quantity}:${item.unitPrice}`,
+        )
+        .join("|"),
+    [items],
+  );
+
   useEffect(() => {
     if (!isHydrated || wizardLoaded) return;
 
@@ -74,9 +101,9 @@ export function CheckoutPageContent() {
     const savedDraft = getCheckoutDraft();
 
     if (savedWizard) {
-      setStep(savedWizard.step);
       setForm(savedWizard.form);
       setFullName(getFullNameFromForm(savedWizard.form));
+      setShippingChoice(savedWizard.shippingChoice ?? null);
       setSelectedShippingMethod(savedWizard.selectedShippingMethod);
     } else if (savedDraft) {
       setForm({
@@ -84,11 +111,13 @@ export function CheckoutPageContent() {
         shippingAddress: savedDraft.shippingAddress,
         orderNotes: savedDraft.orderNotes,
       });
-      setFullName(getFullNameFromForm({
-        customer: savedDraft.customer,
-        shippingAddress: savedDraft.shippingAddress,
-        orderNotes: savedDraft.orderNotes,
-      }));
+      setFullName(
+        getFullNameFromForm({
+          customer: savedDraft.customer,
+          shippingAddress: savedDraft.shippingAddress,
+          orderNotes: savedDraft.orderNotes,
+        }),
+      );
       setSelectedShippingMethod(savedDraft.shippingMethod ?? null);
     }
 
@@ -99,39 +128,37 @@ export function CheckoutPageContent() {
     if (!isHydrated || !wizardLoaded) return;
 
     saveCheckoutWizardState({
-      step,
+      step: 1,
       form,
+      shippingChoice,
       selectedShippingMethod,
     });
-  }, [step, form, selectedShippingMethod, isHydrated, wizardLoaded]);
+  }, [form, shippingChoice, selectedShippingMethod, isHydrated, wizardLoaded]);
 
   useEffect(() => {
-    if (!isHydrated || isSubmitting || submitInFlightRef.current) return;
-
-    if (items.length === 0) {
-      router.replace("/cart");
+    if (hasChinaItems) return;
+    if (shippingChoice === "self_pickup" || shippingChoice === "negotiated_delivery") return;
+    if (shippingChoice === "company_shipping" || shippingChoice === "customer_agent") {
+      setShippingChoice(null);
+      setSelectedShippingMethod(null);
     }
-  }, [isHydrated, isSubmitting, items.length, router]);
+  }, [hasChinaItems, shippingChoice]);
 
-  useEffect(() => {
-    if (!hasChinaItems && selectedShippingMethod !== "local_delivery") {
-      setSelectedShippingMethod("local_delivery");
-    }
-  }, [hasChinaItems, selectedShippingMethod]);
+  const applyShippingChoice = useCallback(
+    (choice: CheckoutShippingChoice) => {
+      setShippingChoice(choice);
+      setShippingError(undefined);
 
-  const persistWizard = useCallback(
-    (nextStep: WizardStep, nextForm: CheckoutFormData, nextMethod: ShippingMethodCode | null) => {
-      saveCheckoutWizardState({
-        step: nextStep,
-        form: nextForm,
-        selectedShippingMethod: nextMethod,
-      });
+      if (choice !== "company_shipping") {
+        setSelectedShippingMethod(null);
+      }
     },
     [],
   );
 
   const applyShippingMethod = useCallback(
     (method: ShippingMethodCode) => {
+      setShippingChoice("company_shipping");
       setSelectedShippingMethod(method);
       setShippingError(undefined);
 
@@ -191,52 +218,6 @@ export function CheckoutPageContent() {
     [],
   );
 
-  const handleNextFromStep1 = () => {
-    const merged = buildFormWithFullName(fullName, form);
-    const normalized = normalizeCheckoutForm(merged);
-    setForm(normalized);
-    setFullName(getFullNameFromForm(normalized));
-
-    const nextErrors = validateCheckoutStep1(normalized);
-    setErrors(nextErrors);
-
-    if (hasCheckoutErrors(nextErrors)) {
-      scrollToFirstError();
-      return;
-    }
-
-    const nextStep: WizardStep = 2;
-    setStep(nextStep);
-    persistWizard(nextStep, normalized, selectedShippingMethod);
-  };
-
-  const handleNextFromStep2 = () => {
-    const methodError = validateCheckoutStep2(hasChinaItems, selectedShippingMethod);
-    if (methodError) {
-      setShippingError(methodError);
-      scrollToFirstError();
-      return;
-    }
-
-    if (hasChinaItems && selectedShippingMethod) {
-      applyShippingMethod(selectedShippingMethod);
-    }
-
-    const nextStep: WizardStep = 3;
-    setStep(nextStep);
-    persistWizard(nextStep, form, selectedShippingMethod);
-  };
-
-  const handleBack = () => {
-    setSubmitError(undefined);
-    setShippingError(undefined);
-    const nextStep = (step - 1) as WizardStep;
-    if (nextStep >= 1) {
-      setStep(nextStep);
-      persistWizard(nextStep, form, selectedShippingMethod);
-    }
-  };
-
   const handleContinueToPayment = async () => {
     if (submitInFlightRef.current || isSubmitting) return;
 
@@ -245,15 +226,21 @@ export function CheckoutPageContent() {
     setForm(normalized);
 
     const stepErrors = validateCheckoutStep1(normalized);
-    const methodError = validateCheckoutStep2(hasChinaItems, selectedShippingMethod);
+    const methodError = validateShippingChoice(
+      hasChinaItems,
+      shippingChoice,
+      selectedShippingMethod,
+    );
 
     if (hasCheckoutErrors(stepErrors) || methodError) {
       setErrors(stepErrors);
       setShippingError(methodError);
-      if (hasCheckoutErrors(stepErrors)) setStep(1);
-      else if (methodError) setStep(2);
       scrollToFirstError();
       return;
+    }
+
+    if (shippingChoice === "company_shipping" && selectedShippingMethod) {
+      applyShippingMethod(selectedShippingMethod);
     }
 
     const cartBeforeOrder = deepCopyCart({ items, savedForLater, discount });
@@ -266,12 +253,26 @@ export function CheckoutPageContent() {
     submitInFlightRef.current = true;
     setIsSubmitting(true);
     setSubmitError(undefined);
+    setNeedsAuth(false);
 
     try {
-      const catalog = await productService.list();
+      let catalog: Awaited<ReturnType<typeof fetchClientCatalogProducts>>;
+
+      try {
+        catalog = await fetchClientCatalogProducts();
+      } catch (catalogError) {
+        console.warn(
+          "[checkout-validation] Live catalog unavailable, falling back to local product service.",
+          catalogError,
+        );
+        catalog = await productService.list();
+      }
+
       const validatedCart = validateCartAgainstCatalog(cartBeforeOrder, catalog);
 
       if (validatedCart.items.length === 0) {
+        const failures = summarizeCartValidationFailures(cartBeforeOrder, catalog);
+        console.error("[checkout-validation] All cart items rejected during validation.", failures);
         setSubmitError("Some items in your cart are no longer available. Please review your cart.");
         submitInFlightRef.current = false;
         setIsSubmitting(false);
@@ -285,6 +286,46 @@ export function CheckoutPageContent() {
       submitSnapshotRef.current = { items: itemsForOrder, totals: totalsForOrder };
 
       const existingDraft = getCheckoutDraft();
+      const draftId = existingDraft?.draftId ?? crypto.randomUUID();
+      const apiToken = getCustomerApiToken();
+
+      if (!apiToken) {
+        setNeedsAuth(true);
+        setSubmitError(undefined);
+        submitInFlightRef.current = false;
+        setIsSubmitting(false);
+        requestAnimationFrame(() => {
+          document
+            .querySelector('[data-auth-invite="checkout"]')
+            ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+        return;
+      }
+
+      const confirmation = await runBackendCheckoutFlow({
+        customer: normalized.customer,
+        shippingAddress: normalized.shippingAddress,
+        cart: validatedCart,
+        token: apiToken,
+        shippingChoice: shippingChoice!,
+        shippingMethod:
+          shippingChoice === "company_shipping" ? selectedShippingMethod : null,
+      });
+
+      const backendTotals = mapBackendSummaryToTotals(confirmation.summary, validatedCart.items);
+
+      saveLocalOrderFromBackendConfirmation({
+        confirmation,
+        draftId,
+        customer: normalized.customer,
+        shippingAddress: normalized.shippingAddress,
+        orderNotes: normalized.orderNotes,
+        items: itemsForOrder,
+        totals: backendTotals,
+        cartSnapshot: validatedCart,
+        shippingMethod: shippingSnapshot.shippingMethod,
+        itemShippingBreakdown: shippingSnapshot.itemShippingBreakdown,
+      });
 
       saveCheckoutDraft({
         customer: normalized.customer,
@@ -292,47 +333,49 @@ export function CheckoutPageContent() {
         orderNotes: normalized.orderNotes,
         cartSnapshot: validatedCart,
         items: itemsForOrder,
-        totals: totalsForOrder,
+        totals: backendTotals,
         shippingMethod: shippingSnapshot.shippingMethod,
         itemShippingBreakdown: shippingSnapshot.itemShippingBreakdown,
-        draftId: existingDraft?.draftId,
+        draftId,
+        backendOrder: {
+          id: confirmation.order.id,
+          orderNumber: confirmation.order.order_number,
+        },
+        awaitingPayment: true,
       });
 
       clearCheckoutWizardState();
       router.push("/checkout/payment");
-    } catch {
+    } catch (error) {
       submitInFlightRef.current = false;
-      setSubmitError("We couldn't continue to payment. Please try again.");
+      if (error instanceof CustomerCheckoutApiError) {
+        if (isAuthRequiredMessage(error.message) || error.statusCode === 401) {
+          setNeedsAuth(true);
+          setSubmitError(undefined);
+        } else {
+          setSubmitError(toFriendlyAuthMessage(error.message, error.message));
+        }
+      } else {
+        setSubmitError("We couldn't continue to payment. Please try again.");
+      }
       setIsSubmitting(false);
     }
   };
 
-  if (!isHydrated || !wizardLoaded || (items.length === 0 && !isSubmitting && !submitInFlightRef.current)) {
-    return (
-      <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6">
-        <div className="h-8 w-56 animate-pulse rounded-lg bg-zinc-100" />
-        <div className="mt-8 h-96 animate-pulse rounded-3xl bg-zinc-50" />
-      </div>
-    );
+  if (!isHydrated || !wizardLoaded) {
+    return <CheckoutPageSkeleton />;
   }
 
-  const stepTitles: Record<WizardStep, { title: string; description: string }> = {
-    1: {
-      title: "Customer Information",
-      description: "Tell us who you are and where to deliver your order.",
-    },
-    2: {
-      title: "Shipping Method",
-      description: "Choose the delivery speed that works best for you.",
-    },
-    3: {
-      title: "Order Summary",
-      description: "Review your items and totals before payment.",
-    },
-  };
+  if (items.length === 0 && !isSubmitting && !submitInFlightRef.current) {
+    return <CheckoutEmptyState />;
+  }
+
+  const sectionMotion = reduceMotion
+    ? {}
+    : { initial: { opacity: 0, y: 12 }, animate: { opacity: 1, y: 0 } };
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-10 lg:max-w-3xl lg:px-8">
+    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:pb-10">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#c9a227]">
@@ -341,6 +384,9 @@ export function CheckoutPageContent() {
           <h1 className="mt-1.5 text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
             Checkout
           </h1>
+          <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-500">
+            Confirm delivery, choose shipping, then continue to payment.
+          </p>
         </div>
         {!isSubmitting ? (
           <Link
@@ -353,104 +399,118 @@ export function CheckoutPageContent() {
       </div>
 
       <CheckoutStepIndicator current="checkout" />
-      <CheckoutWizardProgress currentStep={step} />
 
-      <fieldset disabled={isSubmitting} className="mt-8 border-0 p-0">
-        <CheckoutSection
-          title={stepTitles[step].title}
-          description={stepTitles[step].description}
-        >
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={step}
-              initial={reduceMotion ? false : { opacity: 0, x: 16 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={reduceMotion ? undefined : { opacity: 0, x: -16 }}
-              transition={{ duration: 0.25, ease: "easeOut" }}
+      <div className="mt-8 grid gap-8 pb-28 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start lg:pb-0">
+        <fieldset disabled={isSubmitting} className="space-y-6 border-0 p-0">
+          <motion.div transition={{ duration: 0.28, ease: "easeOut" }} {...sectionMotion}>
+            <CheckoutSection
+              title="Delivery Address"
+              description="Where should we deliver your order?"
             >
-              {step === 1 && (
-                <CheckoutCustomerStep
-                  form={form}
-                  errors={errors}
-                  fullName={fullName}
-                  onFullNameChange={setFullName}
-                  onCustomerChange={(customer) => setForm((prev) => ({ ...prev, customer }))}
-                  onAddressChange={(shippingAddress) =>
-                    setForm((prev) => ({ ...prev, shippingAddress }))
-                  }
-                  onClearError={clearFieldError}
-                />
-              )}
+              <CheckoutCustomerStep
+                form={form}
+                errors={errors}
+                fullName={fullName}
+                onFullNameChange={setFullName}
+                onCustomerChange={(customer) => setForm((prev) => ({ ...prev, customer }))}
+                onAddressChange={(shippingAddress) =>
+                  setForm((prev) => ({ ...prev, shippingAddress }))
+                }
+                onClearError={clearFieldError}
+              />
+            </CheckoutSection>
+          </motion.div>
 
-              {step === 2 && (
-                <CheckoutShippingStep
-                  items={items}
-                  selectedMethod={selectedShippingMethod}
-                  onSelect={applyShippingMethod}
-                  error={shippingError}
-                />
-              )}
-
-              {step === 3 && (
-                <CheckoutSummaryStep
-                  items={items}
-                  totals={totals}
-                  form={form}
-                  fullName={fullName || getFullNameFromForm(form)}
-                />
-              )}
-            </motion.div>
-          </AnimatePresence>
-        </CheckoutSection>
-
-        {submitError ? (
-          <p
-            role="alert"
-            className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          <motion.div
+            transition={{ duration: 0.28, ease: "easeOut", delay: reduceMotion ? 0 : 0.05 }}
+            {...sectionMotion}
           >
-            {submitError}
-          </p>
-        ) : null}
-
-        <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
-          {step > 1 ? (
-            <Button type="button" variant="secondary" size="lg" onClick={handleBack}>
-              Back
-            </Button>
-          ) : (
-            <Link
-              href="/cart"
-              className="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50"
+            <CheckoutSection
+              title="Shipping Method"
+              description="Choose shipping before payment. Totals include company freight only when you select CHINA ORDER TZ shipping."
             >
-              Back to cart
-            </Link>
-          )}
+              <CheckoutShippingStep
+                items={items}
+                shippingChoice={shippingChoice}
+                selectedMethod={selectedShippingMethod}
+                onSelectChoice={applyShippingChoice}
+                onSelectMethod={applyShippingMethod}
+                error={shippingError}
+              />
+            </CheckoutSection>
+          </motion.div>
 
-          {step === 1 && (
-            <Button type="button" variant="primary" size="lg" onClick={handleNextFromStep1}>
-              Next: Shipping
-            </Button>
-          )}
-
-          {step === 2 && (
-            <Button type="button" variant="primary" size="lg" onClick={handleNextFromStep2}>
-              Next: Summary
-            </Button>
-          )}
-
-          {step === 3 && (
-            <Button
-              type="button"
-              variant="primary"
-              size="lg"
-              onClick={handleContinueToPayment}
-              disabled={isSubmitting}
+          <motion.div
+            transition={{ duration: 0.28, ease: "easeOut", delay: reduceMotion ? 0 : 0.1 }}
+            {...sectionMotion}
+          >
+            <CheckoutSection
+              title="Payment Method"
+              description="You'll choose how to pay on the next step — M-Pesa, NMB, Selcom, bank transfer, or cash on delivery."
             >
-              {isSubmitting ? "Saving…" : "Continue to Payment"}
-            </Button>
-          )}
+              <div className="rounded-2xl border border-dashed border-[#c9a227]/35 bg-[#c9a227]/5 px-4 py-5">
+                <p className="text-sm font-semibold text-zinc-900">Payment comes next</p>
+                <p className="mt-1 text-sm leading-relaxed text-zinc-600">
+                  After you confirm this order, you&apos;ll select a secure payment method. Your
+                  cart and shipping details stay saved.
+                </p>
+              </div>
+            </CheckoutSection>
+          </motion.div>
+
+          {needsAuth ? (
+            <div data-auth-invite="checkout">
+              <AuthInvitationCard context="checkout" returnUrl="/checkout" />
+            </div>
+          ) : null}
+
+          {submitError ? (
+            <p
+              role="alert"
+              className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+            >
+              {submitError}
+            </p>
+          ) : null}
+
+          <Link
+            href="/cart"
+            className="inline-flex text-sm font-semibold text-[#8b6914] transition hover:text-[#c9a227]"
+          >
+            ← Back to cart
+          </Link>
+        </fieldset>
+
+        <div className="space-y-4 lg:sticky lg:top-24">
+          <CheckoutOrchestratorPanel
+            cartSignature={checkoutCartSignature}
+            enabled={items.length > 0 && !isSubmitting}
+          />
+          <CheckoutSidebarSummary
+            items={items}
+            totals={totals}
+            shippingMethod={
+              shippingChoice === "company_shipping" ? selectedShippingMethod : null
+            }
+            onSubmit={handleContinueToPayment}
+            isSubmitting={isSubmitting}
+            submitDisabled={!shippingChoice || (shippingChoice === "company_shipping" && !selectedShippingMethod)}
+            submitLabel="Continue to Payment"
+            submitHint="Secure checkout — shipping must be selected before payment"
+            mode="cart"
+            className="lg:static"
+          />
         </div>
-      </fieldset>
+      </div>
+
+      <CheckoutMobileStickyBar
+        totals={totals}
+        onSubmit={handleContinueToPayment}
+        isSubmitting={isSubmitting}
+        submitDisabled={!shippingChoice || (shippingChoice === "company_shipping" && !selectedShippingMethod)}
+        submitLabel="Continue to Payment"
+        itemCount={items.length}
+      />
     </div>
   );
 }

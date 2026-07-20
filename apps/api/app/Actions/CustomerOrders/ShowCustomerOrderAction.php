@@ -17,6 +17,7 @@ class ShowCustomerOrderAction
             'items',
             'items.product.supplier',
             'payments',
+            'deliveryOption',
         ]);
     }
 }

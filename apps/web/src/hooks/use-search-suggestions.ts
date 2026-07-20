@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { SEARCH_DEBOUNCE_MS } from "@/lib/search/constants";
-import { getRecentSearches } from "@/lib/search/recent-searches";
 import { clearSearchQueryCache, searchCatalog } from "@/lib/search/search-engine";
+import {
+  fetchLiveSearchCatalog,
+  filterProductsByOrigin,
+} from "@/lib/search/catalog-source";
+import { getRecentSearches } from "@/lib/search/recent-searches";
 import type { SearchResults } from "@/lib/search/types";
-import type { Product } from "@/lib/types/catalog";
-import { productService } from "@/lib/services/product-service.client";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import type { SearchMarketplaceScope } from "@/components/search/SearchMarketplaceScope";
 import { scopeToOrigin } from "@/components/search/SearchMarketplaceScope";
@@ -18,40 +20,20 @@ const EMPTY_RESULTS: SearchResults = {
   terms: [],
 };
 
+/**
+ * Live search suggestions — products/categories/brands from Customer API only.
+ * Never loads seed products, mock catalogs, or hardcoded trending/popular terms.
+ */
 export function useSearchSuggestions(
   query: string,
   enabled = true,
   scope: SearchMarketplaceScope = "all",
 ) {
-  const [catalog, setCatalog] = useState<Product[]>([]);
-  const [isCatalogLoading, setIsCatalogLoading] = useState(false);
-  const [catalogReady, setCatalogReady] = useState(false);
+  const [results, setResults] = useState<SearchResults>(EMPTY_RESULTS);
+  const [isLoading, setIsLoading] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS);
   const origin = scopeToOrigin(scope);
-
-  useEffect(() => {
-    if (!enabled) {
-      return;
-    }
-
-    let cancelled = false;
-    setIsCatalogLoading(true);
-
-    void productService.list().then((products) => {
-      if (cancelled) {
-        return;
-      }
-      clearSearchQueryCache();
-      setCatalog(products);
-      setCatalogReady(true);
-      setIsCatalogLoading(false);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [enabled]);
 
   useEffect(() => {
     if (!enabled) {
@@ -65,22 +47,63 @@ export function useSearchSuggestions(
     return () => window.removeEventListener("recent-searches-updated", refreshRecent);
   }, [enabled]);
 
-  const results = useMemo(() => {
-    if (!catalogReady) {
-      return EMPTY_RESULTS;
+  useEffect(() => {
+    if (!enabled) {
+      return;
     }
-    return searchCatalog(catalog, debouncedQuery, { origin });
-  }, [catalog, catalogReady, debouncedQuery, origin]);
+
+    const trimmed = debouncedQuery.trim();
+
+    if (!trimmed) {
+      clearSearchQueryCache();
+      setResults(EMPTY_RESULTS);
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoading(true);
+
+    void (async () => {
+      try {
+        const live = await fetchLiveSearchCatalog(trimmed, { includeTaxonomy: true });
+        if (cancelled) return;
+
+        const products = filterProductsByOrigin(live.products, origin);
+        clearSearchQueryCache();
+        setResults(
+          searchCatalog(products, trimmed, {
+            origin,
+            liveCategories: live.categories,
+            liveBrands: live.brands,
+            activeOnly: true,
+          }),
+        );
+      } catch {
+        if (cancelled) return;
+        // API failure → empty results (never seed/demo fallback)
+        clearSearchQueryCache();
+        setResults(EMPTY_RESULTS);
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedQuery, enabled, origin]);
 
   const isSearching = enabled && query.trim().length > 0 && debouncedQuery !== query;
-  const isLoading = isCatalogLoading && !catalogReady;
 
   return {
     results,
     recentSearches,
-    isLoading,
+    isLoading: isLoading && !isSearching,
     isSearching,
-    catalogReady,
+    catalogReady: true,
     debouncedQuery,
     origin,
   };

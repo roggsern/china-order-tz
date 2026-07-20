@@ -17,21 +17,27 @@ class SupplierSeeder extends Seeder
         ];
 
         foreach ($suppliers as $supplier) {
+            $slug = Str::slug($supplier['name']);
             Supplier::query()->updateOrCreate(
-                ['slug' => Str::slug($supplier['name'])],
+                ['slug' => $slug],
                 [
                     'name' => $supplier['name'],
+                    'code' => Str::upper(Str::slug($supplier['name'], '_')),
                     'contact_person' => $supplier['contact_person'],
-                    'email' => Str::slug($supplier['name']).'@supplier.cn',
+                    'email' => $slug.'@supplier.cn',
                     'phone' => '+86'.fake()->numerify('###########'),
                     'address' => fake()->streetAddress(),
                     'city' => $supplier['city'],
                     'country' => 'China',
+                    'payment_terms' => 'Net 30',
                     'is_active' => true,
                 ]
             );
         }
 
-        Supplier::factory(2)->create();
+        // Extra demo suppliers once only — avoid growth on every boot seed.
+        if (Supplier::query()->count() <= count($suppliers)) {
+            Supplier::factory(2)->create();
+        }
     }
 }

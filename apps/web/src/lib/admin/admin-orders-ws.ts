@@ -1,6 +1,7 @@
 import type { Order } from "@/lib/types/order";
 import { normalizeOrder } from "@/lib/types/order";
 import { paymentService } from "@/lib/payment/PaymentService";
+import { isAdminLocalOrderAuthorityEnabled } from "@/lib/config/env";
 import {
   ADMIN_ORDERS_WS_INITIAL_RECONNECT_MS,
   ADMIN_ORDERS_WS_MAX_RECONNECT_MS,
@@ -282,18 +283,29 @@ export function mergeOrderLists(serverOrders: Order[], localOrders: Order[]): Or
 }
 
 export async function fetchInitialAdminOrders(): Promise<Order[]> {
-  const localOrders = typeof window !== "undefined" ? paymentService.listOrders() : [];
+  const localAuthority = isAdminLocalOrderAuthorityEnabled();
+  const localOrders =
+    localAuthority && typeof window !== "undefined" ? paymentService.listOrders() : [];
 
   try {
     const response = await fetch("/api/admin/orders", { cache: "no-store" });
     if (!response.ok) {
-      return localOrders;
+      return localAuthority ? localOrders : [];
     }
 
-    const payload = (await response.json()) as { orders?: Order[] };
-    return mergeOrderLists(payload.orders ?? [], localOrders);
+    const payload = (await response.json()) as {
+      orders?: Order[];
+      authority?: string;
+    };
+    const serverOrders = payload.orders ?? [];
+
+    if (payload.authority === "laravel" || !localAuthority) {
+      return serverOrders.map((order) => normalizeOrder(order));
+    }
+
+    return mergeOrderLists(serverOrders, localOrders);
   } catch {
-    return localOrders;
+    return localAuthority ? localOrders : [];
   }
 }
 

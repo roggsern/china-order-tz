@@ -22,8 +22,8 @@ type AdminAuthContextValue = {
   isAuthenticated: boolean;
   isReady: boolean;
   session: AdminSession | null;
-  signIn: (email: string, password: string) => boolean;
-  signOut: () => void;
+  signIn: (email: string, password: string) => Promise<{ ok: boolean; message?: string }>;
+  signOut: () => Promise<void>;
 };
 
 const AdminAuthContext = createContext<AdminAuthContextValue | null>(null);
@@ -68,21 +68,21 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   }, [isAuthenticated, isLoginPage, isReady, router]);
 
   const signIn = useCallback(
-    (email: string, password: string) => {
-      const ok = authenticateAdmin(email, password);
-      if (ok) {
-        const nextSession = getAdminSession();
-        setSession(nextSession);
+    async (email: string, password: string) => {
+      const result = await authenticateAdmin(email, password);
+      if (result.ok) {
+        setSession(result.session);
         setIsAuthenticated(true);
         router.replace("/admin");
+        return { ok: true as const };
       }
-      return ok;
+      return { ok: false as const, message: result.message };
     },
     [router],
   );
 
-  const signOut = useCallback(() => {
-    signOutAdmin();
+  const signOut = useCallback(async () => {
+    await signOutAdmin();
     setSession(null);
     setIsAuthenticated(false);
     router.replace("/admin/login");

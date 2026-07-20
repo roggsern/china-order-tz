@@ -95,6 +95,10 @@ class NmbPaymentCompletionTest extends TestCase
         $this->assertNotNull($order->paid_at);
         $this->assertNotNull($payment->metadata['nmb_completion']['completed_at'] ?? null);
         $this->assertSame('verification', $payment->metadata['nmb_completion']['source'] ?? null);
+        $this->assertDatabaseHas('fulfillments', ['order_id' => $order->id]);
+        $this->assertDatabaseHas('warehouse_jobs', [
+            'fulfillment_id' => \App\Models\Fulfillment::query()->where('order_id', $order->id)->value('id'),
+        ]);
     }
 
     public function test_verification_triggers_completion_when_enabled(): void

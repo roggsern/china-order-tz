@@ -18,6 +18,7 @@ class IndexAdminOrdersRequest extends FormRequest
     {
         return [
             'page' => ['sometimes', 'integer', 'min:1'],
+            'status' => ['sometimes', 'nullable', 'string', 'max:64'],
         ];
     }
 }

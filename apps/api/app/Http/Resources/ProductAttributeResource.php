@@ -15,6 +15,8 @@ class ProductAttributeResource extends JsonResource
             'name' => $this->name,
             'slug' => $this->slug,
             'type' => $this->type,
+            'unit' => $this->unit,
+            'validation' => $this->validation,
             'is_filterable' => $this->is_filterable,
             'sort_order' => $this->sort_order,
             'values' => ProductAttributeValueResource::collection($this->whenLoaded('values')),

@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Models\Product;
 use App\Models\ProductImage;
+use Database\Support\DemoProductImageLibrary;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -17,7 +18,7 @@ class ProductImageFactory extends Factory
     {
         return [
             'product_id' => Product::factory(),
-            'path' => 'products/'.fake()->uuid().'.jpg',
+            'path' => DemoProductImageLibrary::randomPath(),
             'alt_text' => fake()->sentence(3),
             'sort_order' => fake()->numberBetween(0, 10),
             'is_primary' => false,

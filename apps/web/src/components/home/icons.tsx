@@ -284,6 +284,18 @@ export function GridIcon({ className }: IconProps) {
   );
 }
 
+export function StoreIcon({ className }: IconProps) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-9 0H4.875A2.625 2.625 0 012.25 18.375V9.75a2.25 2.25 0 011.59-2.152l7.5-2.25a2.25 2.25 0 011.32 0l7.5 2.25A2.25 2.25 0 0121.75 9.75v8.625A2.625 2.625 0 0119.125 21H15M9 21v-4.875c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21"
+      />
+    </svg>
+  );
+}
+
 export function PackageIcon({ className }: IconProps) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>

@@ -21,20 +21,27 @@ use App\Models\ShippingAddress;
 use App\Models\User;
 use App\Models\Wishlist;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
 
 class EcommerceSeeder extends Seeder
 {
+    /**
+     * Canonical local development customer credentials.
+     * Plain password — User model casts `password` => `hashed` (bcrypt once).
+     */
+    public const DEFAULT_EMAIL = 'customer@chinaordertz.com';
+
+    public const DEFAULT_PASSWORD = 'password';
+
     public function run(): void
     {
         $customerRole = Role::query()->where('slug', 'customer')->firstOrFail();
 
         $demoUser = User::query()->updateOrCreate(
-            ['email' => 'customer@chinaordertz.com'],
+            ['email' => self::DEFAULT_EMAIL],
             [
                 'name' => 'Demo Customer',
-                'phone' => '0787654321',
-                'password' => Hash::make('password'),
+                'phone' => '+255787654321',
+                'password' => self::DEFAULT_PASSWORD,
                 'is_active' => true,
                 'email_verified_at' => now(),
             ]
@@ -42,9 +49,49 @@ class EcommerceSeeder extends Seeder
 
         $demoUser->roles()->syncWithoutDetaching([$customerRole->id]);
 
-        User::factory(10)->create()->each(function (User $user) use ($customerRole) {
-            $user->roles()->attach($customerRole->id);
-        });
+        Coupon::query()->updateOrCreate(
+            ['code' => 'WELCOME10'],
+            [
+                'type' => CouponType::Percentage,
+                'value' => 10,
+                'min_order_amount' => 50000,
+                'max_uses' => 1000,
+                'used_count' => 0,
+                'starts_at' => now()->subWeek(),
+                'expires_at' => now()->addYear(),
+                'is_active' => true,
+            ]
+        );
+
+        // Factory demo graph is one-shot — re-running on boot must not duplicate rows.
+        if (Order::query()->where('user_id', $demoUser->id)->exists()) {
+            $this->command?->info('EcommerceSeeder skipped demo graph: already seeded for demo customer.');
+
+            return;
+        }
+
+        $products = Product::query()
+            ->where('is_demo', true)
+            ->inRandomOrder()
+            ->limit(5)
+            ->get();
+
+        if ($products->isEmpty()) {
+            $products = Product::query()->inRandomOrder()->limit(5)->get();
+        }
+
+        if ($products->isEmpty()) {
+            $this->command?->warn('EcommerceSeeder skipped demo graph: no products available.');
+
+            return;
+        }
+
+        // Extra demo customers only when catalog exists; skip if already populated.
+        if (User::query()->where('email', '!=', self::DEFAULT_EMAIL)->count() < 10) {
+            User::factory(10)->create()->each(function (User $user) use ($customerRole) {
+                $user->roles()->syncWithoutDetaching([$customerRole->id]);
+            });
+        }
 
         ShippingAddress::factory()->default()->create(['user_id' => $demoUser->id]);
         ShippingAddress::factory(2)->create(['user_id' => $demoUser->id]);
@@ -55,11 +102,13 @@ class EcommerceSeeder extends Seeder
             'phone' => $demoUser->phone,
         ]);
 
-        $products = Product::query()->inRandomOrder()->limit(5)->get();
+        $wishlist = Wishlist::factory()->create([
+            'user_id' => $demoUser->id,
+            'name' => 'Default',
+        ]);
 
         foreach ($products->take(3) as $product) {
-            Wishlist::factory()->create([
-                'user_id' => $demoUser->id,
+            $wishlist->items()->create([
                 'product_id' => $product->id,
             ]);
         }
@@ -74,19 +123,7 @@ class EcommerceSeeder extends Seeder
             ]);
         }
 
-        $welcomeCoupon = Coupon::query()->updateOrCreate(
-            ['code' => 'WELCOME10'],
-            [
-                'type' => CouponType::Percentage,
-                'value' => 10,
-                'min_order_amount' => 50000,
-                'max_uses' => 1000,
-                'used_count' => 0,
-                'starts_at' => now()->subWeek(),
-                'expires_at' => now()->addYear(),
-                'is_active' => true,
-            ]
-        );
+        $welcomeCoupon = Coupon::query()->where('code', 'WELCOME10')->firstOrFail();
 
         Coupon::factory(5)->create();
 
@@ -94,6 +131,7 @@ class EcommerceSeeder extends Seeder
             'user_id' => $demoUser->id,
             'coupon_id' => $welcomeCoupon->id,
             'status' => OrderStatus::Confirmed,
+            'is_demo' => true,
         ]);
 
         foreach ($products->take(2) as $product) {

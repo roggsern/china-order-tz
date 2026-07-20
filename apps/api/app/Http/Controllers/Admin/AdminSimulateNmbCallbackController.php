@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\SimulateNmbCallbackRequest;
 use App\Http\Resources\OrderResource;
 use App\Http\Resources\PaymentResource;
 use App\Models\Payment;
+use App\Support\Production\ProductionSafety;
 use Illuminate\Http\JsonResponse;
 
 class AdminSimulateNmbCallbackController extends Controller
@@ -17,6 +18,8 @@ class AdminSimulateNmbCallbackController extends Controller
         Payment $payment,
         SimulateNmbCallbackAction $action,
     ): JsonResponse {
+        ProductionSafety::assertNonProductionTooling('NMB callback simulation');
+
         $result = $action->handle($payment, $request->validated('result'));
 
         if ($result['failed']) {

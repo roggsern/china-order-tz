@@ -6,6 +6,13 @@
   --gold: #c9a227;
   --gold-light: #e8c547;
   --gold-dark: #8b6914;
+
+  /* Storefront typography tokens (pair with lib/storefront/typography.ts) */
+  --sf-font: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  --sf-nav-size: 13px;
+  --sf-nav-weight: 500;
+  --sf-body-size: 0.875rem;
+  --sf-heading-weight: 700;
 }
 
 @theme inline {
@@ -303,13 +310,45 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Premium skeleton shimmer */
+@keyframes premium-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    #f4f4f5 0%,
+    #fafafa 20%,
+    #e4e4e7 40%,
+    #fafafa 60%,
+    #f4f4f5 100%
+  );
+  background-size: 200% 100%;
+  animation: premium-shimmer 1.6s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hero-fade-up,
   .hero-float,
   .hero-orb,
   .hero-spin-slow,
   .hero-orbit,
-  .animate-fade-in {
+  .animate-fade-in,
+  .skeleton-shimmer {
     animation: none;
+  }
+
+  .skeleton-shimmer {
+    background: #f4f4f5;
+  }
+
+  .split-hero-panel {
+    transition: none;
   }
 }

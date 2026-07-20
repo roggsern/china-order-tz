@@ -54,4 +54,20 @@ return [
     'reference_prefix' => env('PAYMENT_REFERENCE_PREFIX', 'PAY'),
     'reference_sequence_padding' => (int) env('PAYMENT_REFERENCE_SEQUENCE_PADDING', 6),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Payment Orchestrator
+    |--------------------------------------------------------------------------
+    |
+    | Provider-agnostic transaction layer. Default provider is NMB; additional
+    | adapters (Selcom, Stripe, M-Pesa, etc.) register via DI.
+    |
+    */
+
+    'orchestrator' => [
+        'default_provider' => env('PAYMENT_ORCHESTRATOR_DEFAULT_PROVIDER', 'nmb'),
+        'merchant_reference_prefix' => env('PAYMENT_ORCHESTRATOR_MERCHANT_PREFIX', 'COTZ-PAY'),
+        'merchant_reference_padding' => (int) env('PAYMENT_ORCHESTRATOR_MERCHANT_PADDING', 6),
+    ],
+
 ];

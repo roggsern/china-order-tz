@@ -7,6 +7,10 @@ import {
   clearNmbCheckoutContext,
   readNmbCheckoutContext,
 } from "@/lib/nmb/checkout-context";
+import { updateOrderById } from "@/lib/payment/order-storage";
+import { ORDER_STATUS } from "@/lib/types/order";
+import { PAYMENT_METHOD_CODES, PAYMENT_STATUS } from "@/lib/types/payment";
+import { syncTimelineWithOrder } from "@/lib/payment/timeline";
 
 type ReturnStatus = "success" | "pending" | "failed";
 
@@ -25,7 +29,27 @@ function resolveReturnStatus(resultIndicator: string | null): ReturnStatus {
     return context.resultIndicator === resultIndicator ? "success" : "failed";
   }
 
-  return "pending";
+  // Hosted checkout returned a resultIndicator — treat as submitted success pending webhook.
+  return "success";
+}
+
+function markLocalOrderPaid(localOrderId: string | null): void {
+  if (!localOrderId) {
+    return;
+  }
+
+  updateOrderById(localOrderId, (existing) => {
+    const paid = {
+      ...existing,
+      paymentMethod: existing.paymentMethod ?? PAYMENT_METHOD_CODES.NMB,
+      paymentStatus: PAYMENT_STATUS.PAID,
+      status: ORDER_STATUS.CONFIRMED,
+      updatedAt: new Date().toISOString(),
+    };
+
+    paid.timeline = syncTimelineWithOrder(paid);
+    return paid;
+  });
 }
 
 export function NmbPaymentReturnContent() {
@@ -51,8 +75,13 @@ export function NmbPaymentReturnContent() {
   }, [localOrderId, orderId]);
 
   useEffect(() => {
-    setStatus(resolveReturnStatus(resultIndicator));
-  }, [resultIndicator]);
+    const next = resolveReturnStatus(resultIndicator);
+    setStatus(next);
+
+    if (next === "success") {
+      markLocalOrderPaid(localOrderId);
+    }
+  }, [resultIndicator, localOrderId]);
 
   useEffect(() => {
     if (status !== "success") {
@@ -75,6 +104,19 @@ export function NmbPaymentReturnContent() {
           <p className="mt-3 text-sm leading-6 text-zinc-600">
             Your NMB payment was submitted successfully. Redirecting you now…
           </p>
+        </>
+      ) : status === "failed" ? (
+        <>
+          <h1 className="text-xl font-semibold text-zinc-900">Payment failed</h1>
+          <p className="mt-3 text-sm leading-6 text-zinc-600">
+            Your NMB payment could not be confirmed. You can return to checkout and try again.
+          </p>
+          <Link
+            href="/checkout/payment"
+            className="mt-6 inline-flex rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white"
+          >
+            Retry payment
+          </Link>
         </>
       ) : (
         <>

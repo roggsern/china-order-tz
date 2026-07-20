@@ -1,58 +1,54 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { getProducts as fetchProducts } from "@/lib/api/products";
+import { mapApiProductCardToCatalogProduct } from "@/lib/catalog/map-api-product";
 import type { Product } from "@/lib/types/catalog";
-import { PRODUCTS_UPDATED_EVENT } from "@/lib/admin/product-storage";
-import { SEED_PRODUCTS } from "@/lib/catalog/seed-products";
-import { productService } from "@/lib/services/product-service.client";
 
-async function loadActiveProducts(refresh = false): Promise<Product[]> {
-  const catalog = await productService.list(refresh ? { refresh: true } : undefined);
-  return catalog.filter((product) => product.status === "active");
-}
+type CatalogProductsState = {
+  products: Product[];
+  isLoading: boolean;
+  error: string | null;
+};
 
-export function useCatalogProducts(): Product[] {
-  const [products, setProducts] = useState<Product[]>(SEED_PRODUCTS);
-  const initializedRef = useRef(false);
+export function useCatalogProducts(): CatalogProductsState {
+  const [state, setState] = useState<CatalogProductsState>({
+    products: [],
+    isLoading: true,
+    error: null,
+  });
 
   useEffect(() => {
-    if (initializedRef.current) {
-      return;
-    }
-    initializedRef.current = true;
-
     let active = true;
 
-    void loadActiveProducts().then((catalog) => {
-      if (active) {
-        setProducts(catalog);
-      }
-    });
-
-    const refresh = () => {
-      void loadActiveProducts(true).then((catalog) => {
-        if (active) {
-          setProducts(catalog);
+    void fetchProducts({ per_page: 48, page: 1 })
+      .then((result) => {
+        if (!active) {
+          return;
         }
+
+        setState({
+          products: result.products.map(mapApiProductCardToCatalogProduct),
+          isLoading: false,
+          error: null,
+        });
+      })
+      .catch((error: unknown) => {
+        if (!active) {
+          return;
+        }
+
+        setState({
+          products: [],
+          isLoading: false,
+          error: error instanceof Error ? error.message : "Unable to load products.",
+        });
       });
-    };
 
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === "china-order-tz-admin-products") {
-        refresh();
-      }
-    };
-
-    const onProductsUpdated = () => refresh();
-
-    window.addEventListener("storage", onStorage);
-    window.addEventListener(PRODUCTS_UPDATED_EVENT, onProductsUpdated);
     return () => {
       active = false;
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener(PRODUCTS_UPDATED_EVENT, onProductsUpdated);
     };
   }, []);
 
-  return products;
+  return state;
 }

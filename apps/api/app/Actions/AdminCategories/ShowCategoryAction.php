@@ -8,6 +8,6 @@ class ShowCategoryAction
 {
     public function handle(Category $category): Category
     {
-        return $category;
+        return $category->loadMissing(['department', 'productType', 'parent', 'children']);
     }
 }

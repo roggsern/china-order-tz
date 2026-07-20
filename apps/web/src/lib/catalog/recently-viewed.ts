@@ -25,7 +25,7 @@ export function toRecentlyViewedProduct(product: Product): RecentlyViewedProduct
     rating: product.rating,
     emoji: product.emoji,
     gradient: product.gradient,
-    image: product.images[0],
+    image: product.primary_image ?? product.images[0],
   };
 }
 

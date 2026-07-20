@@ -11,6 +11,35 @@ services:
     environment:
       APP_ENV: production
       APP_DEBUG: "false"
+      LOG_LEVEL: ${LOG_LEVEL:-warning}
+      SESSION_SECURE_COOKIE: ${SESSION_SECURE_COOKIE:-true}
+      NMB_WEBHOOK_REQUIRE_SIGNATURE: ${NMB_WEBHOOK_REQUIRE_SIGNATURE:-true}
+      PAYMENT_DEFAULT_GATEWAY: ${PAYMENT_DEFAULT_GATEWAY:-nmb}
+
+  # Required when NMB_PROCESS_CALLBACKS_ASYNC=true (default).
+  queue:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      target: production
+    restart: always
+    working_dir: /var/www/html
+    command: ["php", "artisan", "queue:work", "database", "--sleep=1", "--tries=3", "--max-time=3600"]
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: ${MYSQL_DATABASE:-china_order_tz}
+      DB_USERNAME: ${MYSQL_USER:-china_order}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-secret}
+      QUEUE_CONNECTION: database
+    depends_on:
+      - api
+      - mysql
+    networks:
+      - china-order-tz
 
   nginx:
     restart: always
@@ -23,5 +52,6 @@ services:
     restart: always
     environment:
       NODE_ENV: production
+      API_INTERNAL_URL: ${API_INTERNAL_URL:-http://nginx}
     ports:
       - "${WEB_PORT:-3000}:3000"

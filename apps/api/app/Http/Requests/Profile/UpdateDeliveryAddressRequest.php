@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Profile;
 
+use App\Rules\E164PhoneNumber;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateDeliveryAddressRequest extends FormRequest
@@ -18,7 +19,7 @@ class UpdateDeliveryAddressRequest extends FormRequest
     {
         return [
             'recipient_name' => ['required', 'string', 'max:255'],
-            'phone' => ['required', 'string', 'max:20', 'regex:/^07\d{8}$/'],
+            'phone' => ['required', 'string', 'max:20', new E164PhoneNumber()],
             'country' => ['required', 'string', 'max:100'],
             'region' => ['required', 'string', 'max:100'],
             'city' => ['required', 'string', 'max:100'],

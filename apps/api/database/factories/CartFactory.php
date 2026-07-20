@@ -21,6 +21,7 @@ class CartFactory extends Factory
             'user_id' => User::factory(),
             'session_id' => null,
             'status' => CartStatus::Active,
+            'currency' => 'TZS',
         ];
     }
 

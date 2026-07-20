@@ -23,8 +23,8 @@ export default function EditProductPage({ params }: EditProductPageProps) {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const handleSaveProduct = useCallback(
-    (data: ProductFormData) => {
-      updateProduct(productId, data);
+    async (data: ProductFormData, options?: { pendingFiles?: Map<number, File> }) => {
+      await updateProduct(productId, data, options);
     },
     [productId, updateProduct],
   );
@@ -33,8 +33,8 @@ export default function EditProductPage({ params }: EditProductPageProps) {
     setIsDeleteModalOpen(true);
   }, []);
 
-  const handleConfirmDeleteProduct = useCallback(() => {
-    deleteProduct(productId);
+  const handleConfirmDeleteProduct = useCallback(async () => {
+    await deleteProduct(productId);
     setIsDeleteModalOpen(false);
     router.push("/admin/products");
   }, [deleteProduct, productId, router]);
