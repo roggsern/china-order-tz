@@ -24,7 +24,8 @@ china-order-tz/
 │   ├── nginx/               # Nginx reverse proxy for the API
 │   ├── node/                # Next.js Docker image
 │   └── php/                 # Laravel PHP-FPM Docker image
-├── .github/workflows/       # CI and Docker build pipelines
+├── .github/workflows/       # CI, retail smoke, VPS web deploy
+├── docs/RELEASE.md          # Branching, SemVer, deploy & rollback
 ├── docker-compose.yml       # Local development stack
 ├── docker-compose.prod.yml  # Production overrides
 ├── Makefile                 # Common development commands
@@ -130,20 +131,41 @@ See `.env.example` files in each location for the full list.
 
 ## CI/CD
 
-GitHub Actions workflows:
+GitHub Actions workflows under `.github/workflows/` — see [docs/RELEASE.md](docs/RELEASE.md) and [docs/PRODUCTION_OWNERSHIP.md](docs/PRODUCTION_OWNERSHIP.md):
 
-- **CI** (`.github/workflows/ci.yml`) — lints and builds the frontend, runs Laravel tests against MySQL, and checks Prettier formatting on every push/PR to `main` and `develop`.
-- **Docker Build** (`.github/workflows/docker-build.yml`) — validates API and Web Docker images build successfully.
+- **CI** (`ci.yml`) — Laravel full test suite + Next.js lint/typecheck/build on PRs and `main`.
+- **Retail smoke** (`retail-smoke.yml`) — path-filtered POS/retail Laravel gate.
+- **Deploy** (`deploy.yml`) — **manual only** (`workflow_dispatch`, type `deploy` to confirm). Deploys Next.js to the DigitalOcean VPS via SSH + PM2. Does **not** run on push. **API/queue/migrations are not deployed by this workflow.**
 
-## Production
+**Production frontend authority:** DigitalOcean VPS + PM2. **Vercel** is preview/legacy only.
 
-Build and run with production overrides:
+Release tags: SemVer `vX.Y.Z` / `vX.Y.Z-rcN` on `main`. Rollback: manual dispatch with previous tag/SHA.
+
+## Production (RC1)
+
+Build and run with production overrides (includes API + **queue worker**):
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
-Set `APP_ENV=production`, `APP_DEBUG=false`, and strong database credentials before deploying.
+### Required before go-live
+
+| Setting | Production value |
+| ------- | ---------------- |
+| `APP_ENV` | `production` |
+| `APP_DEBUG` | `false` |
+| `LOG_LEVEL` | `warning` or `error` |
+| `SESSION_SECURE_COOKIE` | `true` (HTTPS) |
+| `PAYMENT_DEFAULT_GATEWAY` | `nmb` (not `mock`) |
+| `NMB_WEBHOOK_REQUIRE_SIGNATURE` | `true` + `NMB_WEBHOOK_SECRET` |
+| DB / admin passwords | Rotate defaults from `.env.example` |
+
+Mock payment and NMB simulate endpoints are **blocked in production**.
+
+Health: `GET /api/v1/health` reports database readiness (503 when degraded).
+
+Queue: when `NMB_PROCESS_CALLBACKS_ASYNC=true`, the Compose `queue` service must be running (`php artisan queue:work`).
 
 ## API Conventions
 
@@ -153,14 +175,15 @@ Set `APP_ENV=production`, `APP_DEBUG=false`, and strong database credentials bef
 
 ## What's Included
 
-This repository contains **project scaffolding only** — no ecommerce features (catalog, cart, checkout, auth, etc.) have been implemented yet. The foundation includes:
+Locked launch closures (do not redesign):
 
-- Monorepo layout with separate frontend and API apps
-- Dockerized local development environment
-- ESLint (frontend) and Laravel Pint (backend, via Composer)
-- Prettier formatting at the monorepo root
-- GitHub Actions CI pipelines
-- Minimal placeholder UI and API health endpoint
+1. Checkout & Payment
+2. Order Lifecycle
+3. China Workflow
+4. Customer Agent Workflow
+5. Tracking & Notifications
+
+Plus commerce catalog, warehouse, inventory, POS, CMS, admin/customer APIs, and Dockerized local development.
 
 ## License
 
