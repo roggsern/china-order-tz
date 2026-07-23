@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Services\Inventory\StockResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -11,11 +12,12 @@ class CartItemResource extends JsonResource
     public function toArray(Request $request): array
     {
         $available = null;
+        $resolver = app(StockResolver::class);
 
-        if ($this->relationLoaded('variant') && $this->variant?->relationLoaded('inventories')) {
-            $main = $this->variant->inventories->firstWhere('warehouse_code', 'MAIN')
-                ?? $this->variant->inventories->first();
-            $available = $main?->available();
+        if (filled($this->product_variant_id) && $this->relationLoaded('variant') && $this->variant !== null) {
+            $product = $this->relationLoaded('product') ? $this->product : null;
+            $stock = $resolver->resolveVariantProduct($this->variant, null, $product);
+            $available = $stock->resolved ? $stock->quantityAvailable : null;
         }
 
         return [
@@ -28,8 +30,8 @@ class CartItemResource extends JsonResource
             'currency' => $this->currency ?? 'TZS',
             'available_stock' => $available,
             'subtotal' => $this->subtotal(),
-            'product' => new ProductResource($this->whenLoaded('product')),
-            'variant' => new ProductVariantResource($this->whenLoaded('variant')),
+            'product' => new CustomerCartProductResource($this->whenLoaded('product')),
+            'variant' => new CustomerProductVariantResource($this->whenLoaded('variant')),
         ];
     }
 }

@@ -49,6 +49,11 @@ class LoadProductFormSchema
 
         $type = $product->productType;
 
+        // Inactive / soft-deleted snapshots are invalid — fall through to category walk.
+        if ($type !== null && ! $type->is_active) {
+            $type = null;
+        }
+
         if ($type === null && $product->category !== null) {
             $type = $this->resolveTypeFromCategory->handle($product->category);
         }

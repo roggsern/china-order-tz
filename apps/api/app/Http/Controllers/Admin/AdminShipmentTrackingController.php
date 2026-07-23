@@ -9,12 +9,15 @@ use App\Http\Resources\ShipmentTrackingEventResource;
 use App\Models\Admin;
 use App\Models\Shipment;
 use App\Services\Tracking\TrackingEngine;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 
 class AdminShipmentTrackingController extends Controller
 {
     public function index(Shipment $shipment, TrackingEngine $engine): JsonResponse
     {
+        $this->authorize(AdminPermissions::ORDERS_VIEW);
+
         $payload = $engine->buildTrackingPayload($shipment);
 
         return response()->json([

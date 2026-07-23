@@ -192,9 +192,7 @@ function resolveSelectedAttributes(item: ServerCartItem) {
 }
 
 export function mapServerCartItems(cart: ServerCart): CartLineItem[] {
-  return (cart.items ?? [])
-    .filter((item) => Boolean(item.product_variant_id))
-    .map((item) => {
+  return (cart.items ?? []).map((item) => {
       const unitPrice = parseMoney(item.price_snapshot ?? item.unit_price);
       const attributes = resolveSelectedAttributes(item);
       const label =
@@ -249,13 +247,15 @@ export async function fetchServerCart(token?: string | null): Promise<ServerCart
 export async function addServerCartItem(
   input: {
     productId: string;
-    productVariantId: string;
+    productVariantId?: string | null;
     quantity: number;
     currency?: string;
     shippingMethod?: "air" | "sea";
   },
   token?: string | null,
 ): Promise<ServerCart> {
+  const variantId = input.productVariantId?.trim() || null;
+
   return cartApiFetch<ServerCart>(
     "/api/cart/items",
     {
@@ -263,8 +263,12 @@ export async function addServerCartItem(
       headers: getAuthHeaders(token),
       body: JSON.stringify({
         product_id: input.productId,
-        product_variant_id: input.productVariantId,
-        configuration_id: input.productVariantId,
+        ...(variantId
+          ? {
+              product_variant_id: variantId,
+              configuration_id: variantId,
+            }
+          : {}),
         quantity: input.quantity,
         ...(input.currency ? { currency: input.currency } : {}),
         ...(input.shippingMethod ? { shipping_method: input.shippingMethod } : {}),

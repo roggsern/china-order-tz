@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             DemoProductImageSeeder::class,
             RoleSeeder::class,
+            AdminPermissionSeeder::class,
             AdminSeeder::class,
             StoreSeeder::class,
             TzStoreCategorySeeder::class,

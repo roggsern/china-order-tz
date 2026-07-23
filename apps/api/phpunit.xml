@@ -40,5 +40,7 @@
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
         <env name="PAYMENT_NMB_ENABLED" value="true"/>
+        <env name="OPS_BYPASS_SCHEDULER_HEALTH" value="true" force="true"/>
+        <env name="MONITORING_BYPASS_QUEUE_WORKER_HEALTH" value="true" force="true"/>
     </php>
 </phpunit>

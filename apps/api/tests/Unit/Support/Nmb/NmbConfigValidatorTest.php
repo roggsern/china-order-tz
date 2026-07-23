@@ -69,4 +69,27 @@ class NmbConfigValidatorTest extends TestCase
 
         $this->assertContains('NMB webhook signature verification is required but NMB_WEBHOOK_SECRET is not configured.', $errors);
     }
+
+    public function test_production_environment_requires_webhook_secret(): void
+    {
+        $this->app['env'] = 'production';
+        config([
+            'app.env' => 'production',
+            'services.nmb.enabled' => true,
+            'services.nmb.environment' => 'production',
+            'services.nmb.base_url' => 'https://api.nmb.bank.tz',
+            'services.nmb.merchant_id' => 'MERCHANT',
+            'services.nmb.password' => 'secret',
+            'services.nmb.return_url' => 'https://app.test/return',
+            'services.nmb.merchant_name' => 'China Order TZ',
+            'services.nmb.merchant_url' => 'https://chinaorder.test',
+            'services.nmb.webhook.secret' => null,
+        ]);
+
+        $errors = app(NmbConfigValidator::class)->validate();
+
+        $this->assertTrue(collect($errors)->contains(
+            fn (string $error) => str_contains($error, 'NMB_WEBHOOK_SECRET'),
+        ));
+    }
 }

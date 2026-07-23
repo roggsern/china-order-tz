@@ -2,22 +2,35 @@
 
 namespace App\Services\Cart;
 
+use App\Enums\PurchasabilityPath;
 use App\Enums\ShippingMethod;
-use App\Enums\VariantPriceType;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Services\Inventory\StockResolver;
+use App\Services\Pricing\CommercePricingResolver;
+use App\Services\Pricing\DTOs\CommercePricingContext;
+use App\Services\ProductPurchasability\ProductPurchasabilityPolicy;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Cart Engine purchasable resolution.
- * Price: VariantPrice (retail). Stock: VariantInventory (MAIN).
+ * Cart Engine purchasable resolution (ADR 053 / ADR 054 / ADR 055).
+ *
+ * Unit price: CommercePricingResolver (Catalog → Quote).
+ * Stock: StockResolver (Catalog Stock read).
+ * Lifecycle / shipping / purchasability unchanged.
  */
 class ResolveCartPurchasable
 {
+    public function __construct(
+        private readonly ProductPurchasabilityPolicy $purchasabilityPolicy,
+        private readonly CommercePricingResolver $commercePricingResolver,
+        private readonly StockResolver $stockResolver,
+    ) {}
+
     /**
      * @return array{
      *     product: Product,
-     *     variant: ProductVariant,
+     *     variant: ProductVariant|null,
      *     unit_price: string,
      *     currency: string,
      *     shipping_method: ShippingMethod|null,
@@ -39,14 +52,38 @@ class ResolveCartPurchasable
 
         $currency = strtoupper($currency);
 
-        if (! filled($variantId)) {
-            throw ValidationException::withMessages([
-                'product_variant_id' => ['A product variant is required.'],
-            ]);
+        if (filled($variantId)) {
+            return $this->resolveVariantLine($productId, (string) $variantId, $quantity, $currency, $shippingMethod);
         }
 
+        if (filled($productId)) {
+            return $this->resolveSimpleLine((string) $productId, $quantity, $currency, $shippingMethod);
+        }
+
+        throw ValidationException::withMessages([
+            'product_id' => ['A product or product variant is required.'],
+        ]);
+    }
+
+    /**
+     * @return array{
+     *     product: Product,
+     *     variant: ProductVariant,
+     *     unit_price: string,
+     *     currency: string,
+     *     shipping_method: ShippingMethod|null,
+     *     shipping_price: string|null
+     * }
+     */
+    private function resolveVariantLine(
+        ?string $productId,
+        string $variantId,
+        int $quantity,
+        string $currency,
+        ?string $shippingMethod,
+    ): array {
         $variant = ProductVariant::query()
-            ->with(['product.supplier', 'prices', 'inventories'])
+            ->with(['product.commerceChannel', 'product.inventory', 'prices', 'inventories', 'inventory'])
             ->find($variantId);
 
         if ($variant === null) {
@@ -75,40 +112,38 @@ class ResolveCartPurchasable
             ]);
         }
 
-        if ($product->is_demo || ! $product->isPurchasable()) {
+        $this->assertProductLifecycleEligible($product);
+
+        // Variant selection is rejected only when the product is already a valid Simple sell path.
+        if (
+            $this->purchasabilityPolicy->resolvePath($product) === PurchasabilityPath::Simple
+            && $this->purchasabilityPolicy->isPurchasable($product)
+        ) {
             throw ValidationException::withMessages([
-                'product_id' => ['Product is not available.'],
+                'product_variant_id' => ['This product is sold as a simple product and does not accept a variant selection.'],
             ]);
         }
 
-        $retail = $variant->prices
-            ->first(function ($price) use ($currency) {
-                $type = $price->price_type instanceof VariantPriceType
-                    ? $price->price_type
-                    : VariantPriceType::tryFrom((string) $price->price_type);
+        $priced = $this->commercePricingResolver->resolveCommerceUnitPrice(
+            $product,
+            $variant,
+            new CommercePricingContext(
+                currency: $currency,
+                quantity: $quantity,
+                allowLegacyVariantFallback: true,
+            ),
+        );
 
-                return $type === VariantPriceType::Retail
-                    && strtoupper((string) $price->currency) === $currency
-                    && $price->isCurrentlyActive();
-            });
-
-        if ($retail === null) {
-            $retail = $variant->retailPrice($currency);
-        }
-
-        if ($retail === null) {
+        if (! $priced->resolved || (float) $priced->unitPrice <= 0) {
             throw ValidationException::withMessages([
                 'product_variant_id' => ['No active retail price found for this variant.'],
             ]);
         }
 
-        $inventory = $variant->inventories
-            ->first(fn ($row) => $row->warehouse_code === 'MAIN' && $row->is_active)
-            ?? $variant->mainInventory();
+        $stock = $this->stockResolver->resolveVariantProduct($variant, null, $product);
+        $available = $stock->quantityAvailable;
 
-        $available = $inventory?->available() ?? 0;
-
-        if ($available < $quantity) {
+        if (! $stock->resolved || $available < $quantity) {
             throw ValidationException::withMessages([
                 'quantity' => [
                     $available < 1
@@ -126,11 +161,107 @@ class ResolveCartPurchasable
         return [
             'product' => $product,
             'variant' => $variant,
-            'unit_price' => number_format((float) $retail->amount, 2, '.', ''),
+            'unit_price' => $priced->unitPrice,
             'currency' => $currency,
             'shipping_method' => $resolvedShippingMethod,
             'shipping_price' => $resolvedShippingPrice,
         ];
+    }
+
+    /**
+     * @return array{
+     *     product: Product,
+     *     variant: null,
+     *     unit_price: string,
+     *     currency: string,
+     *     shipping_method: ShippingMethod|null,
+     *     shipping_price: string|null
+     * }
+     */
+    private function resolveSimpleLine(
+        string $productId,
+        int $quantity,
+        string $currency,
+        ?string $shippingMethod,
+    ): array {
+        $product = Product::query()
+            ->with(['commerceChannel', 'inventory', 'variants.prices', 'variants.inventories'])
+            ->find($productId);
+
+        if ($product === null) {
+            throw ValidationException::withMessages([
+                'product_id' => ['Product not found.'],
+            ]);
+        }
+
+        $this->assertProductPurchasable($product);
+
+        if ($this->purchasabilityPolicy->resolvePath($product) !== PurchasabilityPath::Simple) {
+            throw ValidationException::withMessages([
+                'product_variant_id' => ['A product variant is required for this product.'],
+            ]);
+        }
+
+        $priced = $this->commercePricingResolver->resolveCommerceUnitPrice(
+            $product,
+            null,
+            new CommercePricingContext(
+                currency: $currency,
+                quantity: $quantity,
+                allowLegacyVariantFallback: true,
+            ),
+        );
+
+        if (! $priced->resolved || (float) $priced->unitPrice <= 0) {
+            throw ValidationException::withMessages([
+                'product_id' => ['No valid base price found for this product.'],
+            ]);
+        }
+
+        $stock = $this->stockResolver->resolveSimpleProduct($product);
+        $available = $stock->quantityAvailable;
+
+        if (! $stock->resolved || $available < $quantity) {
+            throw ValidationException::withMessages([
+                'quantity' => [
+                    $available < 1
+                        ? 'Selected product is out of stock.'
+                        : "Only {$available} unit(s) available for this product.",
+                ],
+            ]);
+        }
+
+        [$resolvedShippingMethod, $resolvedShippingPrice] = $this->optionalShipping(
+            $product,
+            $shippingMethod,
+        );
+
+        return [
+            'product' => $product,
+            'variant' => null,
+            'unit_price' => $priced->unitPrice,
+            'currency' => $currency,
+            'shipping_method' => $resolvedShippingMethod,
+            'shipping_price' => $resolvedShippingPrice,
+        ];
+    }
+
+    private function assertProductPurchasable(Product $product): void
+    {
+        if (! $this->purchasabilityPolicy->isPurchasable($product)) {
+            throw ValidationException::withMessages([
+                'product_id' => ['Product is not available.'],
+            ]);
+        }
+    }
+
+    private function assertProductLifecycleEligible(Product $product): void
+    {
+        if (! $this->purchasabilityPolicy->isLifecycleEligible($product)) {
+            throw ValidationException::withMessages([
+                'product_id' => ['Product is not available.'],
+            ]);
+        }
     }
 
     /**

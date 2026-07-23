@@ -14,6 +14,7 @@ use App\Models\ReceivingRecord;
 use App\Models\VariantInventory;
 use App\Services\Inventory\InventoryControlEngine;
 use App\Services\Stores\ActiveStoreContext;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -28,6 +29,8 @@ class AdminInventoryController extends Controller
 
     public function dashboard(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::INVENTORY_VIEW);
+
         /** @var Admin $admin */
         $admin = $request->user();
         $storeIds = $this->scopedStoreIds($admin, $request->query('store_id'));
@@ -40,6 +43,8 @@ class AdminInventoryController extends Controller
 
     public function stockLevels(Request $request): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::INVENTORY_VIEW);
+
         /** @var Admin $admin */
         $admin = $request->user();
         $storeIds = $this->scopedStoreIds($admin, $request->query('store_id'));
@@ -66,6 +71,8 @@ class AdminInventoryController extends Controller
 
     public function movements(Request $request): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::INVENTORY_VIEW);
+
         /** @var Admin $admin */
         $admin = $request->user();
         $storeIds = $this->scopedStoreIds($admin, $request->query('store_id'));
@@ -88,6 +95,8 @@ class AdminInventoryController extends Controller
 
     public function receiving(Request $request): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::INVENTORY_VIEW);
+
         /** @var Admin $admin */
         $admin = $request->user();
         $storeIds = $this->scopedStoreIds($admin, $request->query('store_id'));
@@ -106,6 +115,8 @@ class AdminInventoryController extends Controller
 
     public function adjust(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::INVENTORY_ADJUST);
+
         /** @var Admin $admin */
         $admin = $request->user();
         $data = $request->validate([
@@ -135,6 +146,8 @@ class AdminInventoryController extends Controller
 
     public function createCount(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::INVENTORY_ADJUST);
+
         /** @var Admin $admin */
         $admin = $request->user();
         $data = $request->validate([
@@ -157,6 +170,8 @@ class AdminInventoryController extends Controller
 
     public function showCount(InventoryCountSession $count): JsonResponse
     {
+        $this->authorize(AdminPermissions::INVENTORY_VIEW);
+
         /** @var Admin $admin */
         $admin = request()->user();
         $this->stores->assertCanAccess($admin, $count->store);
@@ -171,6 +186,8 @@ class AdminInventoryController extends Controller
 
     public function recordCount(InventoryCountSession $count, Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::INVENTORY_ADJUST);
+
         /** @var Admin $admin */
         $admin = $request->user();
         $this->stores->assertCanAccess($admin, $count->store);
@@ -192,6 +209,8 @@ class AdminInventoryController extends Controller
 
     public function submitCount(InventoryCountSession $count): JsonResponse
     {
+        $this->authorize(AdminPermissions::INVENTORY_ADJUST);
+
         /** @var Admin $admin */
         $admin = request()->user();
         $this->stores->assertCanAccess($admin, $count->store);
@@ -204,6 +223,8 @@ class AdminInventoryController extends Controller
 
     public function approveCount(InventoryCountSession $count, Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::INVENTORY_ADJUST);
+
         /** @var Admin $admin */
         $admin = $request->user();
         $this->stores->assertCanAccess($admin, $count->store);
@@ -223,6 +244,8 @@ class AdminInventoryController extends Controller
 
     public function counts(Request $request): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::INVENTORY_VIEW);
+
         /** @var Admin $admin */
         $admin = $request->user();
         $storeIds = $this->scopedStoreIds($admin, $request->query('store_id'));
@@ -237,6 +260,8 @@ class AdminInventoryController extends Controller
 
     public function valuation(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::INVENTORY_VIEW);
+
         /** @var Admin $admin */
         $admin = $request->user();
         $storeIds = $this->scopedStoreIds($admin, $request->query('store_id'));
@@ -249,6 +274,8 @@ class AdminInventoryController extends Controller
 
     public function lowStock(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::INVENTORY_VIEW);
+
         /** @var Admin $admin */
         $admin = $request->user();
         $storeIds = $this->scopedStoreIds($admin, $request->query('store_id'));

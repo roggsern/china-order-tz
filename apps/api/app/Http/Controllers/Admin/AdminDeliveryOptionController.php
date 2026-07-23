@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\DeliveryOptionResource;
 use App\Models\DeliveryOption;
 use App\Models\Order;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -19,6 +20,8 @@ class AdminDeliveryOptionController extends Controller
 {
     public function confirmNegotiated(Order $order): JsonResponse
     {
+        $this->authorize(AdminPermissions::ORDERS_SHIP);
+
         $order->loadMissing('deliveryOption');
 
         $option = $order->deliveryOption;

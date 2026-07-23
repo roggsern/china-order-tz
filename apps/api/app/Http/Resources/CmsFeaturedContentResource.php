@@ -62,7 +62,7 @@ class CmsFeaturedContentResource extends JsonResource
         return array_map(function (array $row) {
             $entity = $row['entity'];
             $data = match (true) {
-                $entity instanceof Product => (new ProductResource($entity))->resolve(),
+                $entity instanceof Product => (new CustomerProductCardResource($entity))->resolve(),
                 $entity instanceof Store => [
                     'id' => $entity->id,
                     'code' => $entity->code,

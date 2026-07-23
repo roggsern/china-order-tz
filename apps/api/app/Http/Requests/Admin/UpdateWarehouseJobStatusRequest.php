@@ -3,6 +3,8 @@
 namespace App\Http\Requests\Admin;
 
 use App\Enums\WarehouseJobStatus;
+use App\Models\Admin;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -10,7 +12,16 @@ class UpdateWarehouseJobStatusRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        $user = $this->user();
+        if (! $user instanceof Admin) {
+            return false;
+        }
+        $status = (string) $this->input('status');
+        $permission = $status === WarehouseJobStatus::ReadyToShip->value
+            ? AdminPermissions::WAREHOUSE_JOBS_COMPLETE
+            : AdminPermissions::WAREHOUSE_JOBS_UPDATE;
+
+        return $user->hasAdminPermission($permission);
     }
 
     /**

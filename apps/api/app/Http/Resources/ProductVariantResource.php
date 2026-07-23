@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Services\Inventory\CatalogStockPresenter;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -10,6 +11,10 @@ class ProductVariantResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $presenter = app(CatalogStockPresenter::class);
+        $product = $this->relationLoaded('product') ? $this->product : null;
+        $includeInventory = $this->relationLoaded('inventory') || $this->relationLoaded('inventories');
+
         return [
             'id' => $this->id,
             'sku' => $this->sku,
@@ -24,7 +29,10 @@ class ProductVariantResource extends JsonResource
                 fn () => $this->effectivePrice()
             ),
             'attribute_values' => ProductAttributeValueResource::collection($this->whenLoaded('attributeValues')),
-            'inventory' => new InventoryResource($this->whenLoaded('inventory')),
+            'inventory' => $this->when(
+                $includeInventory,
+                fn () => $presenter->variantInventoryContract($this->resource, $product),
+            ),
             'price_tiers' => ConfigurationPriceTierResource::collection($this->whenLoaded('priceTiers')),
         ];
     }

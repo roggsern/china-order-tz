@@ -2,6 +2,7 @@
 
 namespace App\Actions\AdminCategories;
 
+use App\Enums\CatalogOrigin;
 use App\Http\Requests\Admin\StoreCategoryRequest;
 use App\Models\Category;
 use Illuminate\Support\Str;
@@ -11,14 +12,14 @@ class CreateCategoryAction
     public function handle(StoreCategoryRequest $request): Category
     {
         $validated = $request->validated();
-        $parent = isset($validated['parent_id'])
-            ? Category::query()->find($validated['parent_id'])
-            : null;
 
-        $origin = $validated['origin'] ?? null;
-        if ($origin === null && $parent !== null) {
-            $origin = $parent->resolvedOrigin()?->value;
-        }
+        $origin = $validated['origin'] instanceof CatalogOrigin
+            ? $validated['origin']->value
+            : (string) $validated['origin'];
+
+        $storeId = $origin === CatalogOrigin::China->value
+            ? null
+            : ($validated['store_id'] ?? null);
 
         $slugSource = isset($validated['slug']) && is_string($validated['slug']) && trim($validated['slug']) !== ''
             ? $validated['slug']
@@ -26,7 +27,7 @@ class CreateCategoryAction
 
         return Category::create([
             'department_id' => $validated['department_id'],
-            'store_id' => $validated['store_id'] ?? null,
+            'store_id' => $storeId,
             'name' => $validated['name'],
             'slug' => $this->generateUniqueSlug($slugSource),
             'parent_id' => $validated['parent_id'] ?? null,

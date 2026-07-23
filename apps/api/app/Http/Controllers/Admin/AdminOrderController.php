@@ -10,9 +10,11 @@ use App\Actions\AdminOrders\GetAdminOrdersAction;
 use App\Actions\AdminOrders\PayOrderAction;
 use App\Actions\AdminOrders\ShowOrderAction;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\CancelOrderRequest;
 use App\Http\Requests\Admin\CompleteCancellationRefundRequest;
 use App\Http\Requests\Admin\FailCancellationRefundRequest;
 use App\Http\Requests\Admin\IndexAdminOrdersRequest;
+use App\Http\Requests\Admin\PayOrderRequest;
 use App\Http\Requests\Admin\ShowOrderRequest;
 use App\Http\Requests\Admin\StoreOrderRequest;
 use App\Http\Resources\OrderResource;
@@ -50,7 +52,7 @@ class AdminOrderController extends Controller
         ]);
     }
 
-    public function pay(Order $order, PayOrderAction $action): JsonResponse
+    public function pay(PayOrderRequest $request, Order $order, PayOrderAction $action): JsonResponse
     {
         return response()->json([
             'success' => true,
@@ -59,7 +61,7 @@ class AdminOrderController extends Controller
         ]);
     }
 
-    public function cancel(Order $order, CancelOrderAction $action): JsonResponse
+    public function cancel(CancelOrderRequest $request, Order $order, CancelOrderAction $action): JsonResponse
     {
         return response()->json([
             'success' => true,

@@ -13,6 +13,7 @@ use App\Http\Requests\Admin\UpdateProductMediaRequest;
 use App\Http\Resources\ProductMediaResource;
 use App\Models\Product;
 use App\Models\ProductMedia;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -20,6 +21,8 @@ class AdminProductMediaController extends Controller
 {
     public function index(Product $product, GetProductMediaAction $action): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::CATALOG_VIEW);
+
         return ProductMediaResource::collection($action->handle($product))
             ->additional(['success' => true]);
     }
@@ -52,6 +55,8 @@ class AdminProductMediaController extends Controller
         ProductMedia $media,
         DeleteProductMediaAction $action,
     ): JsonResponse {
+        $this->authorize(AdminPermissions::CATALOG_UPDATE);
+
         $action->handle($product, $media);
 
         return response()->json([
@@ -65,6 +70,8 @@ class AdminProductMediaController extends Controller
         ProductMedia $media,
         SetPrimaryProductMediaAction $action,
     ): JsonResponse {
+        $this->authorize(AdminPermissions::CATALOG_UPDATE);
+
         return response()->json([
             'success' => true,
             'data' => new ProductMediaResource($action->handle($product, $media)),

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\PosReturnResource;
 use App\Models\Admin;
 use App\Models\Order;
+use App\Models\PosSession;
 use App\Models\ReturnReason;
 use App\Models\ReturnRequest;
 use App\Services\Pos\PosReturnService;
@@ -23,6 +24,9 @@ class AdminPosReturnController extends Controller
 
     public function reasons(): JsonResponse
     {
+        // Type B — POS return helpers require cashier session capability.
+        $this->authorize('viewAny', PosSession::class);
+
         $rows = ReturnReason::query()
             ->where('is_active', true)
             ->orderBy('sort_order')
@@ -36,6 +40,7 @@ class AdminPosReturnController extends Controller
     {
         /** @var Admin $admin */
         $admin = $request->user();
+        $this->authorize('viewAny', PosSession::class);
         $filters = $request->validate([
             'q' => ['nullable', 'string', 'max:120'],
             'receipt_number' => ['nullable', 'string', 'max:64'],
@@ -75,6 +80,7 @@ class AdminPosReturnController extends Controller
     {
         /** @var Admin $admin */
         $admin = $request->user();
+        $this->authorize('viewAny', PosSession::class);
         $data = $this->returns->lookupOrder($admin, $order);
 
         return response()->json([
@@ -102,6 +108,7 @@ class AdminPosReturnController extends Controller
     {
         /** @var Admin $admin */
         $admin = $request->user();
+        $this->authorize('viewAny', PosSession::class);
 
         $data = $request->validate([
             'order_id' => ['required', 'uuid', 'exists:orders,id'],
@@ -133,6 +140,7 @@ class AdminPosReturnController extends Controller
     {
         /** @var Admin $admin */
         $admin = $request->user();
+        $this->authorize('viewAny', PosSession::class);
         $filters = $request->validate([
             'store_id' => ['nullable', 'uuid', 'exists:stores,id'],
             'from' => ['nullable', 'date'],
@@ -158,6 +166,7 @@ class AdminPosReturnController extends Controller
     {
         /** @var Admin $admin */
         $admin = $request->user();
+        $this->authorize('viewAny', PosSession::class);
         $row = $this->returns->show($admin, $returnRequest);
 
         return response()->json([
@@ -170,6 +179,7 @@ class AdminPosReturnController extends Controller
     {
         /** @var Admin $admin */
         $admin = $request->user();
+        $this->authorize('viewAny', PosSession::class);
         $this->returns->lookupOrder($admin, $order);
 
         $rows = ReturnRequest::query()
@@ -189,6 +199,7 @@ class AdminPosReturnController extends Controller
     {
         /** @var Admin $admin */
         $admin = $request->user();
+        $this->authorize('viewAny', PosSession::class);
         $filters = $request->validate([
             'store_id' => ['nullable', 'uuid', 'exists:stores,id'],
             'from' => ['nullable', 'date'],

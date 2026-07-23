@@ -4,17 +4,18 @@ namespace App\Policies;
 
 use App\Models\Admin;
 use App\Models\CmsHeroSlide;
+use App\Support\Admin\AdminPermissions;
 
 class CmsHeroSlidePolicy
 {
     public function viewAny(Admin $admin): bool
     {
-        return $this->canManageCms($admin);
+        return $this->canViewCms($admin);
     }
 
     public function view(Admin $admin, CmsHeroSlide $slide): bool
     {
-        return $this->canManageCms($admin);
+        return $this->canViewCms($admin);
     }
 
     public function create(Admin $admin): bool
@@ -29,7 +30,7 @@ class CmsHeroSlidePolicy
 
     public function publish(Admin $admin, CmsHeroSlide $slide): bool
     {
-        return $this->canManageCms($admin);
+        return $this->canPublishCms($admin);
     }
 
     public function archive(Admin $admin, CmsHeroSlide $slide): bool
@@ -47,18 +48,20 @@ class CmsHeroSlidePolicy
         return $this->canManageCms($admin);
     }
 
+    private function canViewCms(Admin $admin): bool
+    {
+        return $admin->hasAdminPermission(AdminPermissions::CMS_VIEW)
+            || $admin->hasAdminPermission(AdminPermissions::CMS_MANAGE);
+    }
+
     private function canManageCms(Admin $admin): bool
     {
-        if (! $admin->is_active) {
-            return false;
-        }
+        return $admin->hasAdminPermission(AdminPermissions::CMS_MANAGE);
+    }
 
-        if ($admin->is_super_admin) {
-            return true;
-        }
-
-        $slug = $admin->role?->slug;
-
-        return in_array($slug, ['administrator', 'manager'], true);
+    private function canPublishCms(Admin $admin): bool
+    {
+        return $admin->hasAdminPermission(AdminPermissions::CMS_PUBLISH)
+            || $admin->hasAdminPermission(AdminPermissions::CMS_MANAGE);
     }
 }

@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\OrderResource;
 use App\Http\Resources\PaymentResource;
 use App\Models\Payment;
+use App\Support\Admin\AdminPermissions;
 use App\Support\Production\ProductionSafety;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,6 +20,8 @@ class AdminMockPaymentController extends Controller
         Request $request,
         ProcessMockPaymentAction $action,
     ): JsonResponse {
+        $this->authorize(AdminPermissions::PAYMENTS_MANAGE_MANUAL);
+
         ProductionSafety::assertNonProductionTooling('Mock payment');
 
         $validated = $request->validate([

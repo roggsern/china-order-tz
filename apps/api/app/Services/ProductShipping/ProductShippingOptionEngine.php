@@ -426,9 +426,7 @@ class ProductShippingOptionEngine
     private function assertOwns(Product $product, ProductShippingOption $option): void
     {
         if ($option->product_id !== $product->id) {
-            throw ValidationException::withMessages([
-                'shipping_option' => ['Shipping option does not belong to this product.'],
-            ]);
+            abort(404);
         }
     }
 

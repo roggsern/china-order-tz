@@ -2,15 +2,20 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Concerns\AuthorizesAdminPermission;
+use App\Support\Admin\AdminPermissions;
 use App\Enums\ProductMediaType;
+use App\Support\Security\SafePublicUrl;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class StoreProductMediaRequest extends FormRequest
 {
-    public function authorize(): bool
+    use AuthorizesAdminPermission;
+
+    protected function requiredPermission(): string
     {
-        return true;
+        return AdminPermissions::CATALOG_UPDATE;
     }
 
     /**
@@ -27,15 +32,21 @@ class StoreProductMediaRequest extends FormRequest
             'sort_order' => ['sometimes', 'integer', 'min:0', 'max:999999'],
             'is_primary' => ['sometimes', 'boolean'],
             'is_active' => ['sometimes', 'boolean'],
-            'thumbnail_url' => ['sometimes', 'nullable', 'string', 'max:2048'],
+            'thumbnail_url' => ['sometimes', 'nullable', 'string', 'max:2048', SafePublicUrl::rule()],
         ];
 
         if ($type === ProductMediaType::Video) {
-            $rules['url'] = ['required', 'string', 'max:2048', 'url'];
+            $rules['url'] = ['required', 'string', 'max:2048', 'url:http,https'];
             $rules['file'] = ['prohibited'];
         } else {
-            $rules['file'] = ['required_without:url', 'nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'];
-            $rules['url'] = ['required_without:file', 'nullable', 'string', 'max:2048'];
+            $rules['file'] = ['required_without:url', 'nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120', 'dimensions:max_width=5000,max_height=5000'];
+            $rules['url'] = [
+                'required_without:file',
+                'nullable',
+                'string',
+                'max:2048',
+                SafePublicUrl::rule(),
+            ];
         }
 
         return $rules;

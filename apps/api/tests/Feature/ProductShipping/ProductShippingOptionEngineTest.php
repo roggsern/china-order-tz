@@ -153,10 +153,15 @@ class ProductShippingOptionEngineTest extends TestCase
         Sanctum::actingAs(Admin::factory()->create());
 
         $category = \App\Models\Category::factory()->create();
+        $cpt = \App\Models\CatalogProductType::factory()->create([
+            'subcategory_id' => $category->id,
+            'is_active' => true,
+        ]);
 
         $response = $this->postJson('/api/v1/admin/products', [
             'name' => 'Shipping Options Phone',
             'category_id' => $category->id,
+            'catalog_product_type_id' => $cpt->id,
             'price' => 200000,
             'status' => true,
             'stock_quantity' => 3,
@@ -196,7 +201,7 @@ class ProductShippingOptionEngineTest extends TestCase
 
         $this->putJson("/api/v1/admin/products/{$productB->id}/shipping-options/{$option->id}", [
             'price' => 1,
-        ])->assertStatus(422);
+        ])->assertNotFound();
 
         $this->getJson("/api/v1/admin/products/{$productB->id}/shipping-options/{$option->id}")
             ->assertNotFound();

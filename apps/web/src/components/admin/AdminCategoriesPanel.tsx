@@ -6,11 +6,15 @@ import {
   createAdminCategory,
   deleteAdminCategory,
   fetchAdminCategories,
+  fetchAdminConfigurationTemplates,
   fetchAdminDepartments,
+  fetchAdminStores,
   restoreAdminCategory,
   updateAdminCategory,
   type AdminCategory,
+  type AdminConfigurationTemplate,
   type AdminDepartment,
+  type AdminStoreOption,
 } from "@/lib/api/admin-catalog";
 
 type CategoryFormState = {
@@ -22,6 +26,9 @@ type CategoryFormState = {
   description: string;
   sortOrder: number;
   isActive: boolean;
+  origin: "china" | "tz";
+  storeId: string;
+  productTypeId: string;
 };
 
 const emptyForm = (departmentId = ""): CategoryFormState => ({
@@ -32,6 +39,9 @@ const emptyForm = (departmentId = ""): CategoryFormState => ({
   description: "",
   sortOrder: 0,
   isActive: true,
+  origin: "china",
+  storeId: "",
+  productTypeId: "",
 });
 
 const PAGE_SIZE = 15;
@@ -39,6 +49,14 @@ const PAGE_SIZE = 15;
 export function AdminCategoriesPanel() {
   const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [departments, setDepartments] = useState<AdminDepartment[]>([]);
+  const [stores, setStores] = useState<AdminStoreOption[]>([]);
+  const [storesError, setStoresError] = useState<string | null>(null);
+  const [storesLoading, setStoresLoading] = useState(false);
+  const [configurationTemplates, setConfigurationTemplates] = useState<
+    AdminConfigurationTemplate[]
+  >([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templatesError, setTemplatesError] = useState<string | null>(null);
   const [trashed, setTrashed] = useState<AdminCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,25 +72,52 @@ export function AdminCategoriesPanel() {
   const reload = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    setStoresLoading(true);
+    setStoresError(null);
+    setTemplatesLoading(true);
+    setTemplatesError(null);
     try {
-      const [nextCategories, deleted, nextDepartments] = await Promise.all([
-        fetchAdminCategories({ rootsOnly: true }),
-        fetchAdminCategories({ rootsOnly: true, trashed: true }),
-        fetchAdminDepartments(),
-      ]);
+      const [nextCategories, deleted, nextDepartments, nextStores, nextTemplates] =
+        await Promise.all([
+          fetchAdminCategories({ rootsOnly: true }),
+          fetchAdminCategories({ rootsOnly: true, trashed: true }),
+          fetchAdminDepartments(),
+          fetchAdminStores().catch((err: unknown) => {
+            setStoresError(
+              err instanceof AdminCatalogApiError
+                ? err.message
+                : "Unable to load stores from the API.",
+            );
+            return [] as AdminStoreOption[];
+          }),
+          fetchAdminConfigurationTemplates().catch((err: unknown) => {
+            setTemplatesError(
+              err instanceof AdminCatalogApiError
+                ? err.message
+                : "Unable to load Configuration Templates.",
+            );
+            return [] as AdminConfigurationTemplate[];
+          }),
+        ]);
       setCategories(nextCategories.filter((item) => !item.parentId));
       setTrashed(deleted.filter((item) => !item.parentId));
       setDepartments(nextDepartments);
+      setStores(nextStores);
+      setConfigurationTemplates(nextTemplates);
     } catch (err) {
       setCategories([]);
       setTrashed([]);
       setDepartments([]);
+      setStores([]);
+      setConfigurationTemplates([]);
       setError(
         err instanceof AdminCatalogApiError
           ? err.message
           : "Unable to load categories from the API.",
       );
     } finally {
+      setStoresLoading(false);
+      setTemplatesLoading(false);
       setIsLoading(false);
     }
   }, []);
@@ -138,6 +183,9 @@ export function AdminCategoriesPanel() {
       description: category.description ?? "",
       sortOrder: category.sortOrder ?? 0,
       isActive: category.isActive,
+      origin: category.origin === "tz" ? "tz" : "china",
+      storeId: category.storeId ?? "",
+      productTypeId: category.productTypeId ?? "",
     });
   };
 
@@ -173,12 +221,18 @@ export function AdminCategoriesPanel() {
       setActionError("Assign a department before changing status.");
       return;
     }
+    if (!category.origin) {
+      setActionError("Assign an origin (china or tz) before changing status.");
+      return;
+    }
     setActionError(null);
     try {
       await updateAdminCategory(category.id, {
         name: category.name,
         department_id: category.departmentId,
         slug: category.slug,
+        origin: category.origin,
+        store_id: category.origin === "china" ? null : category.storeId ?? null,
         image: category.image ?? null,
         description: category.description || null,
         sort_order: category.sortOrder ?? 0,
@@ -204,6 +258,12 @@ export function AdminCategoriesPanel() {
       return;
     }
 
+    const origin = form.origin === "tz" ? "tz" : "china";
+    if (origin === "tz" && !form.storeId.trim()) {
+      setActionError("Select a store for Tanzania categories.");
+      return;
+    }
+
     setSaving(true);
     setActionError(null);
 
@@ -211,6 +271,9 @@ export function AdminCategoriesPanel() {
       name: form.name.trim(),
       department_id: form.departmentId,
       slug: form.slug.trim() || null,
+      origin,
+      store_id: origin === "china" ? null : form.storeId.trim() || null,
+      product_type_id: form.productTypeId.trim() || null,
       image: form.image.trim() || null,
       description: form.description.trim() || null,
       sort_order: Number.isFinite(form.sortOrder) ? form.sortOrder : 0,
@@ -286,6 +349,113 @@ export function AdminCategoriesPanel() {
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="admin-label" htmlFor="category-origin">
+                Origin *
+              </label>
+              <select
+                id="category-origin"
+                className="admin-input mt-1.5"
+                value={form.origin}
+                onChange={(event) => {
+                  const origin = event.target.value === "tz" ? "tz" : "china";
+                  setForm({
+                    ...form,
+                    origin,
+                    storeId: origin === "china" ? "" : form.storeId,
+                  });
+                }}
+              >
+                <option value="china">China</option>
+                <option value="tz">Tanzania</option>
+              </select>
+            </div>
+            {form.origin === "tz" ? (
+              <div className="sm:col-span-2">
+                <label className="admin-label" htmlFor="category-store">
+                  Store *
+                </label>
+                <select
+                  id="category-store"
+                  className="admin-input mt-1.5"
+                  value={form.storeId}
+                  disabled={storesLoading}
+                  onChange={(event) => setForm({ ...form, storeId: event.target.value })}
+                >
+                  <option value="">
+                    {storesLoading
+                      ? "Loading stores…"
+                      : storesError
+                        ? "Unable to load stores"
+                        : stores.length === 0
+                          ? "No active stores available"
+                          : "Select store"}
+                  </option>
+                  {form.storeId &&
+                  !stores.some((store) => store.id === form.storeId) ? (
+                    <option value={form.storeId}>
+                      Saved store (inactive or unavailable)
+                    </option>
+                  ) : null}
+                  {stores.map((store) => (
+                    <option key={store.id} value={store.id}>
+                      {store.name}
+                      {store.code ? ` (${store.code})` : ""}
+                    </option>
+                  ))}
+                </select>
+                {storesError ? (
+                  <p className="mt-1 text-xs text-red-600">{storesError}</p>
+                ) : (
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Tanzania categories must belong to an active store.
+                  </p>
+                )}
+              </div>
+            ) : null}
+            <div className="sm:col-span-2">
+              <label className="admin-label" htmlFor="category-configuration-template">
+                Configuration Template
+              </label>
+              <select
+                id="category-configuration-template"
+                className="admin-input mt-1.5"
+                value={form.productTypeId}
+                disabled={templatesLoading}
+                onChange={(event) =>
+                  setForm({ ...form, productTypeId: event.target.value })
+                }
+              >
+                <option value="">
+                  {templatesLoading
+                    ? "Loading templates…"
+                    : templatesError
+                      ? "Unable to load templates"
+                      : configurationTemplates.length === 0
+                        ? "No active Configuration Templates"
+                        : "None (inherit from parent / none)"}
+                </option>
+                {form.productTypeId &&
+                !configurationTemplates.some((t) => t.id === form.productTypeId) ? (
+                  <option value={form.productTypeId}>
+                    Saved template (inactive or unavailable — clear or reassign)
+                  </option>
+                ) : null}
+                {configurationTemplates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name}
+                  </option>
+                ))}
+              </select>
+              {templatesError ? (
+                <p className="mt-1 text-xs text-red-600">{templatesError}</p>
+              ) : (
+                <p className="mt-1 text-xs text-zinc-500">
+                  Optional. Assigns the Configuration Template (SKU/schema engine) for
+                  this category. Distinct from Catalog Product Types.
+                </p>
+              )}
             </div>
             <div>
               <label className="admin-label" htmlFor="category-sort-order">

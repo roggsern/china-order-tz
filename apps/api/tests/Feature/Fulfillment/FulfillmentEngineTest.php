@@ -4,16 +4,24 @@ namespace Tests\Feature\Fulfillment;
 
 use App\Enums\FulfillmentStatus;
 use App\Enums\FulfillmentStrategy;
+use App\Enums\InventoryMovementType;
 use App\Enums\OrderStatus;
+use App\Enums\PaymentTransactionStatus;
 use App\Models\Admin;
 use App\Models\Fulfillment;
+use App\Models\InventoryStockMovement;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\PaymentTransaction;
 use App\Models\Product;
 use App\Models\User;
+use App\Models\VariantInventory;
 use App\Services\Fulfillment\FulfillmentEngine;
 use App\Services\Fulfillment\Strategies\ChinaFulfillmentStrategy;
 use App\Services\Fulfillment\Strategies\LocalFulfillmentStrategy;
+use App\Services\Payments\Orchestration\DTOs\PaymentProviderResult;
+use App\Services\Payments\Orchestration\PaymentTransactionCompletionService;
+use Database\Factories\Support\CatalogCartFixture;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -209,37 +217,84 @@ class FulfillmentEngineTest extends TestCase
 
     public function test_successful_payment_auto_creates_fulfillment(): void
     {
-        $order = $this->makePaidOrderWithProduct([
-            'fulfillment_source' => 'imported_from_china',
-        ]);
+        // ADR-055: payment completion commits inventory before fulfillment.
+        // Use stocked catalog fixture (same pattern as LaunchClosure checkout/payment).
+        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::purchasable(25000, 10);
+        $product->update(['fulfillment_source' => 'imported_from_china']);
 
-        // Simulate payment completion path without gateway HTTP.
-        $order->update([
+        $user = User::factory()->create();
+        $order = Order::factory()->create([
+            'user_id' => $user->id,
             'status' => OrderStatus::PendingPayment,
             'paid_at' => null,
+            'total' => 25000,
+            'currency' => 'TZS',
         ]);
 
-        $transaction = \App\Models\PaymentTransaction::factory()->processing()->create([
+        $orderItem = OrderItem::factory()->create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'product_name' => $product->name,
+            'sku' => $variant->sku ?? $product->sku,
+            'quantity' => 1,
+            'unit_price' => 25000,
+            'total_price' => 25000,
+            'line_total' => 25000,
+        ]);
+
+        $main = VariantInventory::query()
+            ->where('product_variant_id', $variant->id)
+            ->where('warehouse_code', 'MAIN')
+            ->firstOrFail();
+        $this->assertSame(10, (int) $main->on_hand);
+
+        $transaction = PaymentTransaction::factory()->processing()->create([
             'order_id' => $order->id,
             'amount' => $order->total,
             'currency' => 'TZS',
         ]);
 
-        $result = new \App\Services\Payments\Orchestration\DTOs\PaymentProviderResult(
+        $result = new PaymentProviderResult(
             ok: true,
-            status: \App\Enums\PaymentTransactionStatus::Successful,
+            status: PaymentTransactionStatus::Successful,
             providerReference: 'SESSION-FUL-1',
             externalTransactionId: 'TXN-FUL-1',
             message: 'Verified',
         );
 
-        app(\App\Services\Payments\Orchestration\PaymentTransactionCompletionService::class)
-            ->applyResult($transaction, $result);
+        $completion = app(PaymentTransactionCompletionService::class);
+        $completion->applyResult($transaction, $result);
 
         $order->refresh();
+        $transaction->refresh();
+        $main->refresh();
+
+        $this->assertSame(PaymentTransactionStatus::Successful, $transaction->status);
         $this->assertSame(OrderStatus::Paid, $order->status);
+        $this->assertNotNull($order->paid_at);
+        $this->assertSame(9, (int) $main->on_hand);
+        $this->assertSame(1, InventoryStockMovement::query()
+            ->where('variant_inventory_id', $main->id)
+            ->where('movement_type', InventoryMovementType::Sale->value)
+            ->where('reference_type', OrderItem::class)
+            ->where('reference_id', $orderItem->id)
+            ->count());
+
         $this->assertNotNull($order->fulfillment);
         $this->assertSame(FulfillmentStrategy::China, $order->fulfillment->strategy);
         $this->assertSame(FulfillmentStatus::Pending, $order->fulfillment->status);
+        $this->assertSame(1, Fulfillment::query()->where('order_id', $order->id)->count());
+
+        // Idempotent replay: no second commit or second fulfillment.
+        $completion->applyResult($transaction->fresh(), $result);
+
+        $this->assertSame(9, (int) $main->fresh()->on_hand);
+        $this->assertSame(1, InventoryStockMovement::query()
+            ->where('variant_inventory_id', $main->id)
+            ->where('movement_type', InventoryMovementType::Sale->value)
+            ->where('reference_id', $orderItem->id)
+            ->count());
+        $this->assertSame(1, Fulfillment::query()->where('order_id', $order->id)->count());
     }
 }

@@ -12,6 +12,7 @@ use App\Models\Admin;
 use App\Models\NotificationTemplate;
 use App\Services\Notifications\NotificationRenderer;
 use App\Services\Notifications\NotificationTemplateEngine;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -24,6 +25,8 @@ class AdminNotificationTemplateController extends Controller
 
     public function index(): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::NOTIFICATIONS_TEMPLATES_VIEW);
+
         $templates = NotificationTemplate::query()
             ->orderBy('channel')
             ->orderBy('key')
@@ -46,6 +49,8 @@ class AdminNotificationTemplateController extends Controller
 
     public function show(NotificationTemplate $template): JsonResponse
     {
+        $this->authorize(AdminPermissions::NOTIFICATIONS_TEMPLATES_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => new NotificationTemplateResource($template),

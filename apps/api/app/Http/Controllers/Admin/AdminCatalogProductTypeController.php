@@ -13,6 +13,7 @@ use App\Http\Requests\Admin\StoreCatalogProductTypeRequest;
 use App\Http\Requests\Admin\UpdateCatalogProductTypeRequest;
 use App\Http\Resources\CatalogProductTypeResource;
 use App\Models\CatalogProductType;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -20,6 +21,8 @@ class AdminCatalogProductTypeController extends Controller
 {
     public function index(GetAdminCatalogProductTypesAction $action): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::CONFIGURATION_VIEW);
+
         return CatalogProductTypeResource::collection($action->handle())
             ->additional(['success' => true]);
     }
@@ -38,6 +41,8 @@ class AdminCatalogProductTypeController extends Controller
         CatalogProductType $catalogProductType,
         ShowCatalogProductTypeAction $action,
     ): JsonResponse {
+        $this->authorize(AdminPermissions::CONFIGURATION_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => new CatalogProductTypeResource($action->handle($catalogProductType)),
@@ -59,6 +64,8 @@ class AdminCatalogProductTypeController extends Controller
         CatalogProductType $catalogProductType,
         DeleteCatalogProductTypeAction $action,
     ): JsonResponse {
+        $this->authorize(AdminPermissions::CONFIGURATION_MANAGE);
+
         $action->handle($catalogProductType);
 
         return response()->json([
@@ -69,6 +76,8 @@ class AdminCatalogProductTypeController extends Controller
 
     public function restore(string $id, RestoreCatalogProductTypeAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::CONFIGURATION_MANAGE);
+
         return response()->json([
             'success' => true,
             'message' => 'Product type restored successfully.',

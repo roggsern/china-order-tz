@@ -5,6 +5,7 @@ namespace App\Http\Requests\Admin\CMS;
 use App\Enums\CMS\CmsCommerceContext;
 use App\Enums\CMS\CmsStatus;
 use App\Models\CmsCampaign;
+use App\Support\Security\HtmlSanitizer;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -32,5 +33,14 @@ class StoreCmsCampaignRequest extends FormRequest
             'is_default' => ['sometimes', 'boolean'],
             'cms_homepage_layout_id' => ['nullable', 'uuid', 'exists:cms_homepage_layouts,id'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->exists('description') && is_string($this->input('description'))) {
+            $this->merge([
+                'description' => HtmlSanitizer::sanitize($this->input('description')),
+            ]);
+        }
     }
 }

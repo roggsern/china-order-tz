@@ -32,11 +32,20 @@ class ProductionHardeningTest extends TestCase
             ->assertJsonStructure([
                 'status',
                 'service',
-                'environment',
-                'debug',
-                'checks' => ['database', 'queue', 'cache'],
+                'checks' => ['database'],
                 'timestamp',
             ]);
+
+        if (app()->environment('production')) {
+            $response->assertJsonMissingPath('environment')
+                ->assertJsonMissingPath('debug');
+        } else {
+            $response->assertJsonStructure([
+                'environment',
+                'debug',
+                'checks' => ['database', 'queue', 'cache', 'storage', 'scheduler'],
+            ]);
+        }
     }
 
     public function test_mock_payment_blocked_in_production(): void

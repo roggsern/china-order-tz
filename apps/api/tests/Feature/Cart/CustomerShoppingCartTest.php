@@ -229,10 +229,10 @@ class CustomerShoppingCartTest extends TestCase
         $this->assertSame(1, CartItem::query()->where('cart_id', $activeCart->id)->count());
     }
 
-    public function test_cannot_add_without_variant(): void
+    public function test_variant_path_product_cannot_add_without_variant(): void
     {
         $user = User::factory()->create();
-        $product = Product::factory()->create(['is_active' => true]);
+        ['product' => $product] = CatalogCartFixture::purchasable(15000, 10);
 
         Sanctum::actingAs($user);
 
@@ -243,13 +243,55 @@ class CustomerShoppingCartTest extends TestCase
             ->assertJsonValidationErrors(['product_variant_id']);
     }
 
+    public function test_simple_path_product_can_add_without_variant(): void
+    {
+        $user = User::factory()->create();
+        $department = \App\Models\Department::factory()->create();
+        $leaf = \App\Models\Category::factory()->forDepartment($department)->create([
+            'parent_id' => null,
+            'is_active' => true,
+            'origin' => 'china',
+        ]);
+        $cpt = \App\Models\CatalogProductType::factory()->create([
+            'subcategory_id' => $leaf->id,
+            'is_active' => true,
+        ]);
+        $product = Product::factory()->create([
+            'category_id' => $leaf->id,
+            'catalog_product_type_id' => $cpt->id,
+            'price' => 12500,
+            'is_active' => true,
+            'lifecycle_status' => 'active',
+            'is_demo' => false,
+        ]);
+        \App\Models\Inventory::query()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => null,
+            'quantity' => 6,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/v1/cart/items', [
+            'product_id' => $product->id,
+            'quantity' => 1,
+        ])->assertCreated()
+            ->assertJsonPath('data.items.0.product_variant_id', null)
+            ->assertJsonPath('data.items.0.unit_price', '12500.00');
+    }
+
     public function test_cannot_add_when_no_retail_price(): void
     {
         $user = User::factory()->create();
-        $product = Product::factory()->create(['is_active' => true, 'is_demo' => false]);
+        $product = Product::factory()->create([
+            'is_active' => true,
+            'is_demo' => false,
+            'price' => 0,
+        ]);
         $variant = ProductVariant::factory()->create([
             'product_id' => $product->id,
             'is_active' => true,
+            'price' => null,
         ]);
         VariantInventory::query()->create([
             'product_variant_id' => $variant->id,

@@ -27,6 +27,8 @@ class GenerateConfigurationSku
             return $this->fallbackSku($baseSku, $sequence);
         }
 
+        SkuPatternRules::assertValid($pattern);
+
         $values = ProductAttributeValue::query()
             ->with('attribute')
             ->whereIn('id', array_values($selections))

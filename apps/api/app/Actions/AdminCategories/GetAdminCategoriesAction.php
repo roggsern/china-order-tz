@@ -21,7 +21,7 @@ class GetAdminCategoriesAction
         }
 
         $query = Category::query()
-            ->with(['department', 'productType', 'parent'])
+            ->with(['department', 'productType', 'parent', 'store'])
             ->withCount('products');
 
         if (request()->boolean('trashed')) {

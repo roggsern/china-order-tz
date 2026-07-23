@@ -4,46 +4,23 @@ namespace App\Services\Pricing;
 
 use App\Models\Product;
 use App\Models\ProductVariant;
-use App\Services\Pricing\Contracts\PriceStageInterface;
+use App\Services\Pricing\DTOs\CommercePricingContext;
 use App\Services\Pricing\DTOs\PriceBreakdown;
 use App\Services\Pricing\DTOs\PriceQuoteInput;
 use App\Services\Pricing\DTOs\PriceStageResult;
-use App\Services\Pricing\Stages\BasePriceStage;
-use App\Services\Pricing\Stages\ConfigurationOverrideStage;
-use App\Services\Pricing\Stages\CouponStage;
-use App\Services\Pricing\Stages\CustomerGroupStage;
-use App\Services\Pricing\Stages\PromotionStage;
-use App\Services\Pricing\Stages\QuantityTierStage;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Pricing Rules Engine.
+ * Pricing Rules Engine (quote pipeline) — ADR 054 / Phase 2A-2B-2.
  *
- * Fixed pipeline order (do not reorder without architecture approval):
- * Base → Configuration Override → MOQ/Qty Tier → Promotion → Coupon → Customer Group → Final
+ * Unit price is resolved solely by CommercePricingResolver (Quote = Cart).
+ * Public breakdown still exposes base → configuration → MOQ → reserved stages.
  */
 class ResolvePrice
 {
-    /** @var list<PriceStageInterface> */
-    private array $stages;
-
     public function __construct(
-        ?BasePriceStage $base = null,
-        ?ConfigurationOverrideStage $configurationOverride = null,
-        ?QuantityTierStage $quantityTier = null,
-        ?PromotionStage $promotion = null,
-        ?CouponStage $coupon = null,
-        ?CustomerGroupStage $customerGroup = null,
-    ) {
-        $this->stages = [
-            $base ?? new BasePriceStage,
-            $configurationOverride ?? new ConfigurationOverrideStage,
-            $quantityTier ?? new QuantityTierStage,
-            $promotion ?? new PromotionStage,
-            $coupon ?? new CouponStage,
-            $customerGroup ?? new CustomerGroupStage,
-        ];
-    }
+        private readonly CommercePricingResolver $commercePricingResolver,
+    ) {}
 
     public function handle(Product $product, PriceQuoteInput $input): PriceBreakdown
     {
@@ -55,31 +32,66 @@ class ResolvePrice
 
         $configuration = $this->resolveConfiguration($product, $input->configurationId);
 
-        $stages = [];
-        $unitPrice = '0.00';
+        $resolved = $this->commercePricingResolver->resolveCommerceUnitPrice(
+            $product,
+            $configuration,
+            new CommercePricingContext(
+                currency: 'TZS',
+                quantity: $input->quantity,
+                allowLegacyVariantFallback: true,
+                customerGroupId: $input->customerGroupId,
+            ),
+        );
 
-        foreach ($this->stages as $stage) {
-            $result = $stage->apply($product, $configuration, $input, $unitPrice);
-            $unitPrice = $result->unitPrice;
-            $stages[] = $result;
+        if (! $resolved->resolved) {
+            throw ValidationException::withMessages([
+                'configuration_id' => ['No resolvable unit price for this product configuration.'],
+            ]);
         }
 
+        /** @var list<PriceStageResult> $pipelineStages */
+        $pipelineStages = $resolved->meta['stage_results'] ?? [];
+
+        $stages = $pipelineStages;
+
+        // Reserved stages — still reported; pricing authority remains CommercePricingResolver.
+        $stages[] = new PriceStageResult(
+            stage: 'promotion',
+            label: 'Promotion',
+            unitPrice: $resolved->unitPrice,
+            applied: false,
+            note: 'Reserved — discounts apply via DiscountResolver at checkout',
+        );
+        $stages[] = new PriceStageResult(
+            stage: 'coupon',
+            label: 'Coupon',
+            unitPrice: $resolved->unitPrice,
+            applied: false,
+            note: 'Reserved — coupons apply via DiscountResolver at checkout',
+        );
+        $stages[] = new PriceStageResult(
+            stage: 'customer_group',
+            label: 'Customer Group',
+            unitPrice: $resolved->unitPrice,
+            applied: false,
+            note: 'Reserved customer pricing extension',
+        );
         $stages[] = new PriceStageResult(
             stage: 'final',
             label: 'Final Price',
-            unitPrice: $unitPrice,
+            unitPrice: $resolved->unitPrice,
             applied: true,
             note: 'Resolved unit price after all pricing stages',
         );
 
-        $lineTotal = number_format((float) $unitPrice * $input->quantity, 2, '.', '');
+        $lineTotal = number_format((float) $resolved->unitPrice * $input->quantity, 2, '.', '');
 
         return new PriceBreakdown(
             productId: $product->id,
             configurationId: $configuration?->id,
             quantity: $input->quantity,
-            currency: 'TZS',
-            unitPrice: $unitPrice,
+            currency: $resolved->currency,
+            unitPrice: $resolved->unitPrice,
             lineTotal: $lineTotal,
             stages: $stages,
         );

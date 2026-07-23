@@ -5,6 +5,7 @@ namespace App\Actions\AdminProductTypes;
 use App\Models\ProductType;
 use App\Services\ProductConfiguration\GenerateConfigurationSku;
 use App\Services\ProductConfiguration\GenerateValidConfigurations;
+use App\Services\ProductConfiguration\SkuPatternRules;
 
 class GenerateProductTypeConfigurationsAction
 {
@@ -23,6 +24,8 @@ class GenerateProductTypeConfigurationsAction
         string $baseSku = 'SKU',
         ?float $defaultPrice = null,
     ): array {
+        SkuPatternRules::assertValid($productType->sku_pattern);
+
         $combos = $this->generateValidConfigurations->handle(
             $productType,
             $selectedValueIdsByAttribute,

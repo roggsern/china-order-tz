@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\UpdateProductMediaRequest;
 use App\Models\Product;
 use App\Models\ProductMedia;
 use App\Support\ProductMediaUrl;
+use App\Support\Security\SecureImageUpload;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -19,9 +20,7 @@ class UpdateProductMediaAction
         ProductMedia $media,
     ): ProductMedia {
         if ($media->product_id !== $product->id) {
-            throw ValidationException::withMessages([
-                'media' => ['Media does not belong to this product.'],
-            ]);
+            abort(404);
         }
 
         $validated = $request->validated();
@@ -42,7 +41,7 @@ class UpdateProductMediaAction
             $type = $data['type'] ?? $media->type;
 
             if ($request->hasFile('file')) {
-                $path = Storage::disk('public')->putFile('product-media', $request->file('file'));
+                $path = SecureImageUpload::storePublic($request->file('file'), 'product-media');
                 $data['url'] = Storage::disk('public')->url($path);
                 $data['type'] = ProductMediaType::Image;
                 $data['thumbnail_url'] = $data['thumbnail_url'] ?? $data['url'];

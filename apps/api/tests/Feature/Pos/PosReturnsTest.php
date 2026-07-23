@@ -384,4 +384,42 @@ class PosReturnsTest extends TestCase
             ]],
         ])->assertStatus(422);
     }
+
+    public function test_pos_item_level_idempotency_prevents_double_restock(): void
+    {
+        $store = $this->stores->create(['code' => 'IDEM', 'name' => 'Idem']);
+        $cashier = $this->cashier($store);
+        $sku = $this->sellable($store->id, 20000, 6);
+        $this->openSession($cashier, $store);
+        $sale = $this->completeSale($sku, 2, ['amount_received' => 40000]);
+
+        $ret = $this->postJson('/api/v1/admin/pos/returns', [
+            'order_id' => $sale['order_id'],
+            'return_type' => 'refund',
+            'return_reason_id' => ReturnReason::query()->value('id'),
+            'refund_method' => 'CASH',
+            'items' => [[
+                'order_item_id' => $sale['order_item_id'],
+                'quantity' => 2,
+                'inventory_disposition' => InventoryDisposition::Sellable->value,
+            ]],
+        ])->assertCreated();
+
+        $this->assertSame(6, (int) $sku['inventory']->fresh()->on_hand);
+
+        $returnItemId = \App\Models\ReturnItem::query()
+            ->where('return_request_id', $ret->json('data.return.id'))
+            ->value('id');
+
+        app(\App\Services\Inventory\InventoryControlEngine::class)->recordReturn(
+            $sku['inventory']->fresh(),
+            2,
+            $cashier,
+            \App\Models\ReturnItem::class,
+            $returnItemId,
+            'return-restock:'.$returnItemId,
+        );
+
+        $this->assertSame(6, (int) $sku['inventory']->fresh()->on_hand);
+    }
 }

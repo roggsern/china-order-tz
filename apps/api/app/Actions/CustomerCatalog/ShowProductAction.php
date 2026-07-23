@@ -21,7 +21,7 @@ class ShowProductAction
             'shippingOptions' => fn ($query) => $query->available()->ordered(),
             'variants' => fn ($query) => $query
                 ->where('is_active', true)
-                ->with(['product', 'attributeValues.attribute', 'inventory']),
+                ->with(['product', 'attributeValues.attribute', 'inventories', 'inventory']),
         ]);
 
         $product->loadAvg(

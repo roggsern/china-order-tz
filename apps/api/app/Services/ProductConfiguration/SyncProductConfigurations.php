@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\ProductAttributeValue;
 use App\Models\ProductType;
 use App\Models\ProductVariant;
+use App\Services\Inventory\AdminInventoryApplicationService;
 use App\Services\Pricing\SyncConfigurationPriceTiers;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -20,6 +21,7 @@ class SyncProductConfigurations
         private readonly GenerateValidConfigurations $generateValidConfigurations,
         private readonly GenerateConfigurationSku $generateConfigurationSku,
         private readonly SyncConfigurationPriceTiers $syncConfigurationPriceTiers,
+        private readonly AdminInventoryApplicationService $adminInventory,
     ) {}
 
     /**
@@ -86,14 +88,12 @@ class SyncProductConfigurations
 
                 $variant->attributeValues()->sync($row['attribute_value_ids']);
 
-                Inventory::query()->updateOrCreate(
-                    [
-                        'product_id' => $product->id,
-                        'product_variant_id' => $variant->id,
-                    ],
-                    [
-                        'quantity' => max(0, (int) ($row['stock_quantity'] ?? 0)),
-                    ],
+                // Legacy simple-table compatibility for configuration variants (ADR-055 gate).
+                $this->adminInventory->setSimpleProductStock(
+                    product: $product,
+                    targetQuantity: max(0, (int) ($row['stock_quantity'] ?? 0)),
+                    reason: 'Admin configuration sync — set variant legacy stock',
+                    productVariantId: $variant->id,
                 );
 
                 if (array_key_exists('price_tiers', $row)) {

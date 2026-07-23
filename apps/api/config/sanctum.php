@@ -44,13 +44,29 @@ return [
     | Expiration Minutes
     |--------------------------------------------------------------------------
     |
-    | This value controls the number of minutes until an issued token will be
-    | considered expired. This will override any values set in the token's
-    | "expires_at" attribute, but first-party sessions are not affected.
+    | Global Sanctum expiration (minutes from token created_at). When null,
+    | per-token expires_at from SanctumTokenIssuer is authoritative.
+    | Prefer audience-specific admin/customer minutes below.
     |
     */
 
-    'expiration' => null,
+    'expiration' => env('SANCTUM_EXPIRATION_MINUTES') !== null && env('SANCTUM_EXPIRATION_MINUTES') !== ''
+        ? (int) env('SANCTUM_EXPIRATION_MINUTES')
+        : null,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Audience-specific PAT lifetimes (RC1-G4A)
+    |--------------------------------------------------------------------------
+    |
+    | Applied as personal_access_tokens.expires_at at issue time.
+    | Admin default: 8 hours. Customer default: 7 days.
+    |
+    */
+
+    'admin_expiration_minutes' => (int) env('SANCTUM_ADMIN_EXPIRATION_MINUTES', 480),
+
+    'customer_expiration_minutes' => (int) env('SANCTUM_CUSTOMER_EXPIRATION_MINUTES', 10080),
 
     /*
     |--------------------------------------------------------------------------

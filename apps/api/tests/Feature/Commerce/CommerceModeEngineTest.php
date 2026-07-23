@@ -39,6 +39,10 @@ class CommerceModeEngineTest extends TestCase
 
         $tz = CommerceChannel::query()->where('code', 'TZ_LOCAL')->firstOrFail();
         $category = Category::factory()->create();
+        $cpt = \App\Models\CatalogProductType::factory()->create([
+            'subcategory_id' => $category->id,
+            'is_active' => true,
+        ]);
         $store = \App\Models\Store::query()->create([
             'code' => 'TZUR',
             'name' => 'Tzur Local',
@@ -49,6 +53,7 @@ class CommerceModeEngineTest extends TestCase
         $response = $this->postJson('/api/v1/admin/products', [
             'name' => 'Local Kettle',
             'category_id' => $category->id,
+            'catalog_product_type_id' => $cpt->id,
             'commerce_channel_id' => $tz->id,
             'store_id' => $store->id,
             'price' => 15000,

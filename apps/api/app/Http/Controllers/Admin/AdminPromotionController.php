@@ -12,6 +12,7 @@ use App\Models\Admin;
 use App\Models\Promotion;
 use App\Services\Promotions\PromotionEngine;
 use App\Services\Promotions\PromotionUsageService;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -25,6 +26,8 @@ class AdminPromotionController extends Controller
 
     public function index(Request $request): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::PROMOTIONS_VIEW);
+
         $perPage = min(max((int) $request->query('per_page', 20), 1), 100);
 
         return PromotionResource::collection(
@@ -48,6 +51,8 @@ class AdminPromotionController extends Controller
 
     public function show(Promotion $promotion): JsonResponse
     {
+        $this->authorize(AdminPermissions::PROMOTIONS_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => new PromotionResource($this->promotions->show($promotion)),
@@ -88,6 +93,8 @@ class AdminPromotionController extends Controller
 
     public function usage(Promotion $promotion, Request $request): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::PROMOTIONS_VIEW);
+
         $perPage = min(max((int) $request->query('per_page', 20), 1), 100);
 
         return PromotionUsageResource::collection(

@@ -78,32 +78,40 @@ use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PaymentOrchestratorController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Webhooks\NmbWebhookController;
+use App\Support\Ops\OperationalHealth;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', function () {
-    $checks = [
-        'database' => false,
-        'queue' => config('queue.default'),
-        'cache' => config('cache.default'),
+    $includeDiagnostics = ! app()->environment('production');
+    $probe = OperationalHealth::probe($includeDiagnostics);
+    $criticalOnly = app()->environment('production')
+        && (bool) config('monitoring.health.critical_only', false);
+
+    $payload = [
+        'status' => $probe['status'],
+        'service' => 'CHINA ORDER TZ API',
+        'critical_ok' => (bool) ($probe['critical_ok'] ?? false),
+        'timestamp' => now()->toIso8601String(),
     ];
 
-    try {
-        \Illuminate\Support\Facades\DB::select('select 1');
-        $checks['database'] = true;
-    } catch (\Throwable) {
-        $checks['database'] = false;
+    // Uptime monitors: optional critical-only body in production.
+    if (! $criticalOnly) {
+        $payload['checks'] = $probe['checks'];
     }
 
-    $ok = $checks['database'] === true;
+    // RC1-G4B/G4C1 — withhold environment/debug/driver internals in production.
+    if ($includeDiagnostics) {
+        $payload['environment'] = app()->environment();
+        $payload['debug'] = (bool) config('app.debug');
+        if (isset($probe['details'])) {
+            $payload['details'] = $probe['details'];
+        }
+    }
 
-    return response()->json([
-        'status' => $ok ? 'ok' : 'degraded',
-        'service' => 'CHINA ORDER TZ API',
-        'environment' => app()->environment(),
-        'debug' => (bool) config('app.debug'),
-        'checks' => $checks,
-        'timestamp' => now()->toIso8601String(),
-    ], $ok ? 200 : 503);
+    // 503 only when critical probes fail (database/storage). Soft degradation stays 200.
+    $httpOk = ($probe['critical_ok'] ?? false) === true;
+
+    return response()->json($payload, $httpOk ? 200 : 503);
 });
 
 Route::post('/webhooks/nmb', [NmbWebhookController::class, 'receive'])
@@ -156,33 +164,50 @@ Route::middleware(['auth:sanctum', 'ensure.user', 'user.active'])->group(functio
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/dashboard', [DashboardController::class, 'show']);
     Route::get('/orders', [CustomerOrderController::class, 'index']);
-    Route::post('/orders/confirm', [CustomerOrderController::class, 'confirm']);
-    Route::post('/orders/from-checkout/{checkoutSession}', [CustomerOrderController::class, 'fromCheckout']);
-    Route::post('/orders/{order}/payments', [CustomerOrderController::class, 'storePayment']);
+    Route::post('/orders/confirm', [CustomerOrderController::class, 'confirm'])
+        ->middleware('throttle:checkout');
+    Route::post('/orders/from-checkout/{checkoutSession}', [CustomerOrderController::class, 'fromCheckout'])
+        ->middleware('throttle:checkout');
+    Route::post('/orders/{order}/payments', [CustomerOrderController::class, 'storePayment'])
+        ->middleware('throttle:payments');
     Route::get('/orders/{order}/payment', [CustomerOrderController::class, 'showPayment']);
     Route::get('/orders/{order}/delivery-option', [DeliveryOptionController::class, 'show']);
-    Route::post('/orders/{order}/delivery-option', [DeliveryOptionController::class, 'store']);
-    Route::patch('/orders/{order}/delivery-option', [DeliveryOptionController::class, 'update']);
+    Route::post('/orders/{order}/delivery-option', [DeliveryOptionController::class, 'store'])
+        ->middleware('throttle:checkout');
+    Route::patch('/orders/{order}/delivery-option', [DeliveryOptionController::class, 'update'])
+        ->middleware('throttle:checkout');
     Route::get('/orders/{order}', [CustomerOrderController::class, 'show']);
     Route::post('/orders/{order}/cancel', [CustomerOrderController::class, 'cancel']);
     Route::get('/orders/{order}/tracking', [CustomerOrderController::class, 'tracking']);
-    Route::post('/orders/{order}/returns', [CustomerReturnController::class, 'store']);
+    Route::post('/orders/{order}/returns', [CustomerReturnController::class, 'store'])
+        ->middleware('throttle:returns');
     Route::get('/returns', [CustomerReturnController::class, 'index']);
     Route::get('/returns/{returnRequest}', [CustomerReturnController::class, 'show']);
     Route::get('/cart', [CartController::class, 'show']);
-    Route::post('/cart/items', [CartController::class, 'store']);
-    Route::put('/cart/items/{item}', [CartController::class, 'update']);
-    Route::patch('/cart/items/{item}', [CartController::class, 'update']);
-    Route::delete('/cart/items/{item}', [CartController::class, 'destroyItem']);
-    Route::delete('/cart/clear', [CartController::class, 'destroy']);
-    Route::delete('/cart', [CartController::class, 'destroy']);
-    Route::post('/cart/buy-now', [CartController::class, 'buyNow']);
+    Route::post('/cart/items', [CartController::class, 'store'])
+        ->middleware('throttle:cart');
+    Route::put('/cart/items/{item}', [CartController::class, 'update'])
+        ->middleware('throttle:cart');
+    Route::patch('/cart/items/{item}', [CartController::class, 'update'])
+        ->middleware('throttle:cart');
+    Route::delete('/cart/items/{item}', [CartController::class, 'destroyItem'])
+        ->middleware('throttle:cart');
+    Route::delete('/cart/clear', [CartController::class, 'destroy'])
+        ->middleware('throttle:cart');
+    Route::delete('/cart', [CartController::class, 'destroy'])
+        ->middleware('throttle:cart');
+    Route::post('/cart/buy-now', [CartController::class, 'buyNow'])
+        ->middleware('throttle:cart');
     Route::get('/checkout', [CheckoutController::class, 'show']);
-    Route::post('/checkout/prepare', [CheckoutController::class, 'prepare']);
-    Route::post('/checkout/start', [CheckoutController::class, 'start']);
+    Route::post('/checkout/prepare', [CheckoutController::class, 'prepare'])
+        ->middleware('throttle:checkout');
+    Route::post('/checkout/start', [CheckoutController::class, 'start'])
+        ->middleware('throttle:checkout');
     Route::get('/checkout/{checkoutSession}', [CheckoutController::class, 'showSession']);
-    Route::post('/checkout/{checkoutSession}/refresh', [CheckoutController::class, 'refresh']);
-    Route::post('/checkout/{checkoutSession}/shipping-choice', [CheckoutController::class, 'applyShippingChoice']);
+    Route::post('/checkout/{checkoutSession}/refresh', [CheckoutController::class, 'refresh'])
+        ->middleware('throttle:checkout');
+    Route::post('/checkout/{checkoutSession}/shipping-choice', [CheckoutController::class, 'applyShippingChoice'])
+        ->middleware('throttle:checkout');
     Route::delete('/checkout/{checkoutSession}', [CheckoutController::class, 'destroySession']);
     Route::post('/promotions/validate', [PromotionController::class, 'validateCode']);
     Route::post('/promotions/apply', [PromotionController::class, 'apply']);
@@ -193,18 +218,23 @@ Route::middleware(['auth:sanctum', 'ensure.user', 'user.active'])->group(functio
     Route::get('/loyalty/redemptions', [CustomerLoyaltyController::class, 'redemptions']);
     Route::get('/growth/offers', [CustomerGrowthController::class, 'offers']);
     Route::get('/growth/history', [CustomerGrowthController::class, 'history']);
-    Route::post('/payments/start/{order}', [PaymentOrchestratorController::class, 'start']);
+    Route::post('/payments/start/{order}', [PaymentOrchestratorController::class, 'start'])
+        ->middleware('throttle:payments');
     Route::get('/payments/{paymentTransaction}', [PaymentOrchestratorController::class, 'show']);
-    Route::post('/payments/{paymentTransaction}/refresh', [PaymentOrchestratorController::class, 'refresh']);
-    Route::post('/payments/{payment}/initiate', [PaymentController::class, 'initiate']);
+    Route::post('/payments/{paymentTransaction}/refresh', [PaymentOrchestratorController::class, 'refresh'])
+        ->middleware('throttle:payments');
+    Route::post('/payments/{payment}/initiate', [PaymentController::class, 'initiate'])
+        ->middleware('throttle:payments');
     Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
     Route::get('/profile/address', [ProfileController::class, 'showAddress']);
-    Route::patch('/profile/address', [ProfileController::class, 'updateAddress']);
+    Route::patch('/profile/address', [ProfileController::class, 'updateAddress'])
+        ->middleware('throttle:customer-profile');
     Route::get('/profile', [ProfileController::class, 'show']);
-    Route::patch('/profile', [ProfileController::class, 'update']);
+    Route::patch('/profile', [ProfileController::class, 'update'])
+        ->middleware('throttle:customer-profile');
 });
 
 Route::middleware(['auth:sanctum', 'ensure.admin', 'admin.active'])->prefix('admin')->group(function () {
@@ -413,37 +443,54 @@ Route::middleware(['auth:sanctum', 'ensure.admin', 'admin.active'])->prefix('adm
     Route::post('/loyalty/rewards', [AdminLoyaltyController::class, 'storeReward']);
     Route::put('/loyalty/rewards/{reward}', [AdminLoyaltyController::class, 'updateReward']);
 
-    Route::get('/customers/summary', [AdminCustomerController::class, 'summary']);
-    Route::get('/customers', [AdminCustomerController::class, 'index']);
-    Route::get('/customers/{customer}', [AdminCustomerController::class, 'show']);
-    Route::patch('/customers/{customer}/status', [AdminCustomerController::class, 'updateStatus']);
-    Route::post('/customers/{customer}/metrics/rebuild', [AdminCustomerController::class, 'rebuildMetrics']);
-    Route::get('/customers/{customer}/orders', [AdminCustomerController::class, 'orders']);
-    Route::get('/customers/{customer}/payments', [AdminCustomerController::class, 'payments']);
-    Route::get('/customers/{customer}/shipments', [AdminCustomerController::class, 'shipments']);
-    Route::get('/customers/{customer}/returns', [AdminCustomerController::class, 'returns']);
-    Route::get('/customers/{customer}/addresses', [AdminCustomerController::class, 'addresses']);
-    Route::get('/customers/{customer}/timeline', [AdminCustomerController::class, 'timeline']);
-    Route::get('/customers/{customer}/notes', [AdminCustomerController::class, 'notes']);
-    Route::post('/customers/{customer}/tags', [AdminCustomerController::class, 'assignTag']);
-    Route::delete('/customers/{customer}/tags/{tag}', [AdminCustomerController::class, 'removeTag']);
-    Route::post('/customers/{customer}/notes', [AdminCustomerController::class, 'storeNote']);
-    Route::patch('/customers/{customer}/notes/{note}', [AdminCustomerController::class, 'updateNote']);
-    Route::delete('/customers/{customer}/notes/{note}', [AdminCustomerController::class, 'destroyNote']);
-    Route::get('/customer-tags', [AdminCustomerTagController::class, 'index']);
-    Route::post('/customer-tags', [AdminCustomerTagController::class, 'store']);
-    Route::patch('/customer-tags/{tag}', [AdminCustomerTagController::class, 'update']);
+    // RC1-G4B pattern: route middleware for CRM reads; FormRequest/controller authorize for writes.
+    Route::middleware('admin.permission:customers.view')->group(function () {
+        Route::get('/customers/summary', [AdminCustomerController::class, 'summary']);
+        Route::get('/customers', [AdminCustomerController::class, 'index']);
+        Route::get('/customers/{customer}', [AdminCustomerController::class, 'show']);
+        Route::get('/customers/{customer}/orders', [AdminCustomerController::class, 'orders']);
+        Route::get('/customers/{customer}/payments', [AdminCustomerController::class, 'payments']);
+        Route::get('/customers/{customer}/shipments', [AdminCustomerController::class, 'shipments']);
+        Route::get('/customers/{customer}/returns', [AdminCustomerController::class, 'returns']);
+        Route::get('/customers/{customer}/addresses', [AdminCustomerController::class, 'addresses']);
+        Route::get('/customers/{customer}/timeline', [AdminCustomerController::class, 'timeline']);
+        Route::get('/customers/{customer}/notes', [AdminCustomerController::class, 'notes']);
+        Route::get('/customer-tags', [AdminCustomerTagController::class, 'index']);
+    });
+    Route::patch('/customers/{customer}/status', [AdminCustomerController::class, 'updateStatus'])
+        ->middleware('throttle:admin-mutations');
+    Route::post('/customers/{customer}/metrics/rebuild', [AdminCustomerController::class, 'rebuildMetrics'])
+        ->middleware('throttle:admin-mutations');
+    Route::post('/customers/{customer}/tags', [AdminCustomerController::class, 'assignTag'])
+        ->middleware('throttle:admin-mutations');
+    Route::delete('/customers/{customer}/tags/{tag}', [AdminCustomerController::class, 'removeTag'])
+        ->middleware('throttle:admin-mutations');
+    Route::post('/customers/{customer}/notes', [AdminCustomerController::class, 'storeNote'])
+        ->middleware('throttle:admin-mutations');
+    Route::patch('/customers/{customer}/notes/{note}', [AdminCustomerController::class, 'updateNote'])
+        ->middleware('throttle:admin-mutations');
+    Route::delete('/customers/{customer}/notes/{note}', [AdminCustomerController::class, 'destroyNote'])
+        ->middleware('throttle:admin-mutations');
+    Route::post('/customer-tags', [AdminCustomerTagController::class, 'store'])
+        ->middleware('throttle:admin-mutations');
+    Route::patch('/customer-tags/{tag}', [AdminCustomerTagController::class, 'update'])
+        ->middleware('throttle:admin-mutations');
     Route::get('/products', [AdminProductController::class, 'index']);
     Route::get('/products/trash', [AdminProductController::class, 'trash']);
     Route::post('/products', [AdminProductController::class, 'store']);
     Route::get('/products/{product}', [AdminProductController::class, 'show']);
     Route::get('/products/{product}/images', [AdminProductController::class, 'indexImages']);
-    Route::post('/products/{product}/images', [AdminProductController::class, 'storeImage']);
+    Route::post('/products/{product}/images', [AdminProductController::class, 'storeImage'])
+        ->middleware('throttle:uploads');
     Route::get('/products/{product}/media', [AdminProductMediaController::class, 'index']);
-    Route::post('/products/{product}/media', [AdminProductMediaController::class, 'store']);
-    Route::put('/products/{product}/media/{media}', [AdminProductMediaController::class, 'update']);
-    Route::delete('/products/{product}/media/{media}', [AdminProductMediaController::class, 'destroy']);
-    Route::post('/products/{product}/media/{media}/primary', [AdminProductMediaController::class, 'setPrimary']);
+    Route::post('/products/{product}/media', [AdminProductMediaController::class, 'store'])
+        ->middleware('throttle:uploads');
+    Route::put('/products/{product}/media/{media}', [AdminProductMediaController::class, 'update'])
+        ->middleware('throttle:uploads');
+    Route::delete('/products/{product}/media/{media}', [AdminProductMediaController::class, 'destroy'])
+        ->middleware('throttle:admin-mutations');
+    Route::post('/products/{product}/media/{media}/primary', [AdminProductMediaController::class, 'setPrimary'])
+        ->middleware('throttle:admin-mutations');
     Route::get('/products/{product}/attributes', [AdminProductAttributeController::class, 'index']);
     Route::put('/products/{product}/attributes', [AdminProductAttributeController::class, 'sync']);
     Route::get('/products/{product}/variants', [AdminProductVariantController::class, 'index']);
@@ -505,7 +552,8 @@ Route::middleware(['auth:sanctum', 'ensure.admin', 'admin.active'])->prefix('adm
     Route::get('/brands/{brand}', [AdminBrandController::class, 'show']);
     Route::put('/brands/{brand}', [AdminBrandController::class, 'update']);
     Route::put('/brands/{brand}/categories', [AdminBrandController::class, 'syncCategories']);
-    Route::post('/brands/{brand}/assets', [AdminBrandController::class, 'uploadAsset']);
+    Route::post('/brands/{brand}/assets', [AdminBrandController::class, 'uploadAsset'])
+        ->middleware('throttle:uploads');
     Route::delete('/brands/{brand}', [AdminBrandController::class, 'destroy']);
     Route::post('/brands/{id}/restore', [AdminBrandController::class, 'restore']);
     Route::get('/departments', [AdminDepartmentController::class, 'index']);
@@ -573,7 +621,8 @@ Route::middleware(['auth:sanctum', 'ensure.admin', 'admin.active'])->prefix('adm
     Route::patch('/shipments/{shipment}/status', [AdminShipmentsController::class, 'updateStatus']);
     Route::get('/shipments/{shipment}/tracking', [AdminShipmentTrackingController::class, 'index']);
     Route::post('/shipments/{shipment}/tracking', [AdminShipmentTrackingController::class, 'store']);
-    Route::post('/orders/{order}/delivery-option/confirm-negotiated', [AdminDeliveryOptionController::class, 'confirmNegotiated']);
+    Route::post('/orders/{order}/delivery-option/confirm-negotiated', [AdminDeliveryOptionController::class, 'confirmNegotiated'])
+        ->middleware('throttle:admin-mutations');
     Route::get('/payments', [AdminPaymentController::class, 'index']);
     Route::post('/payments', [AdminPaymentController::class, 'store']);
     Route::post('/payments/{payment}/mock', [AdminMockPaymentController::class, 'process']);
@@ -581,6 +630,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin', 'admin.active'])->prefix('adm
     Route::get('/payments/{payment}', [AdminPaymentController::class, 'show']);
     Route::put('/payments/{payment}', [AdminPaymentController::class, 'update']);
     Route::delete('/payments/{payment}', [AdminPaymentController::class, 'destroy']);
-    Route::get('/me', [AdminAuthController::class, 'me']);
+    Route::get('/me', [AdminAuthController::class, 'me'])
+        ->middleware('throttle:admin-profile');
     Route::post('/logout', [AdminAuthController::class, 'logout']);
 });

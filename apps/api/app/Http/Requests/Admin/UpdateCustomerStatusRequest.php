@@ -3,14 +3,24 @@
 namespace App\Http\Requests\Admin;
 
 use App\Enums\CustomerLifecycleStatus;
+use App\Http\Requests\Concerns\AuthorizesAdminPermission;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class UpdateCustomerStatusRequest extends FormRequest
 {
-    public function authorize(): bool
+    use AuthorizesAdminPermission;
+
+    protected function requiredPermission(): string
     {
-        return true;
+        $status = $this->input('lifecycle_status');
+
+        if ($status === CustomerLifecycleStatus::Blocked->value) {
+            return AdminPermissions::CUSTOMERS_BLOCK;
+        }
+
+        return AdminPermissions::CUSTOMERS_UPDATE;
     }
 
     /**

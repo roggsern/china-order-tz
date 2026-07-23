@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpdateShipmentStatusRequest;
 use App\Models\Admin;
 use App\Models\Order;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 
 class AdminShipmentController extends Controller
@@ -17,6 +18,8 @@ class AdminShipmentController extends Controller
         Order $order,
         UpdateShipmentStatusAction $action,
     ): JsonResponse {
+        $this->authorize(AdminPermissions::ORDERS_SHIP);
+
         /** @var Admin $admin */
         $admin = auth()->user();
 

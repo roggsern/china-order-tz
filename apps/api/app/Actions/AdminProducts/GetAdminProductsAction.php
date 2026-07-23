@@ -51,6 +51,7 @@ class GetAdminProductsAction
                 'priceTiers',
                 'variants.attributeValues',
                 'variants.inventory',
+                'variants.inventories',
                 'variants.priceTiers',
             ]);
 

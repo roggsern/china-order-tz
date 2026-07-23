@@ -2,6 +2,7 @@
 
 use App\Payments\Providers\PaymentServiceProvider;
 use App\Providers\AppServiceProvider;
+use App\Providers\AdminRbacServiceProvider;
 use App\Providers\AuditServiceProvider;
 use App\Providers\CmsServiceProvider;
 use App\Providers\ChinaWorkflowServiceProvider;
@@ -29,6 +30,7 @@ use App\Providers\WarehouseServiceProvider;
 
 return [
     AppServiceProvider::class,
+    AdminRbacServiceProvider::class,
     PaymentServiceProvider::class,
     CommerceServiceProvider::class,
     ProcurementServiceProvider::class,

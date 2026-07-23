@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Models\Admin;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -9,7 +11,26 @@ class UpdateVariantInventoryRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        $user = $this->user();
+        if (! $user instanceof Admin) {
+            return false;
+        }
+
+        if ($this->filled('reserve')) {
+            return $user->hasAdminPermission(AdminPermissions::INVENTORY_RESERVE);
+        }
+
+        if ($this->filled('release')) {
+            return $user->hasAdminPermission(AdminPermissions::INVENTORY_RELEASE);
+        }
+
+        if ($this->exists('on_hand') || $this->exists('reserved')) {
+            return $user->hasAdminPermission(AdminPermissions::INVENTORY_ADJUST);
+        }
+
+        // Metadata (reorder_level, warehouse_code, is_active, …)
+        return $user->hasAdminPermission(AdminPermissions::INVENTORY_ADJUST)
+            || $user->hasAdminPermission(AdminPermissions::INVENTORY_VIEW);
     }
 
     /**
@@ -39,6 +60,7 @@ class UpdateVariantInventoryRequest extends FormRequest
             // Convenience mutations (optional).
             'reserve' => ['sometimes', 'integer', 'min:1'],
             'release' => ['sometimes', 'integer', 'min:1'],
+            'idempotency_key' => ['sometimes', 'nullable', 'string', 'max:191'],
         ];
     }
 

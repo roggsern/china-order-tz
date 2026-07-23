@@ -11,6 +11,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+/**
+ * Catalog Product Type — taxonomy leaf under a leaf category (ADR 052 / Phase 1D-B).
+ *
+ * Hierarchy: Department → Category hierarchy → Leaf Category → CatalogProductType → Product.
+ * Distinct from configuration-schema ProductType (Configuration Template).
+ */
 class CatalogProductType extends Model
 {
     /** @use HasFactory<CatalogProductTypeFactory> */
@@ -37,7 +43,7 @@ class CatalogProductType extends Model
     }
 
     /**
-     * Parent catalog node (subcategory, or category when used as leaf parent).
+     * Parent leaf category (root without children, or nested category without children).
      */
     public function subcategory(): BelongsTo
     {

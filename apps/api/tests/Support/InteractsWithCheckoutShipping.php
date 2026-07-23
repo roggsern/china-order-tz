@@ -4,6 +4,7 @@ namespace Tests\Support;
 
 use App\Enums\DeliveryType;
 use App\Enums\OrderStatus;
+use App\Models\DeliveryAddress;
 use App\Models\DeliveryOption;
 use App\Models\Order;
 use App\Models\User;
@@ -20,12 +21,37 @@ trait InteractsWithCheckoutShipping
      */
     protected function applyCheckoutShippingChoice(string $sessionId, array $overrides = []): void
     {
+        $this->ensureCustomerDeliveryAddress();
+
         $payload = array_merge([
             'shipping_choice' => 'customer_agent',
         ], $overrides);
 
         $this->postJson("/api/v1/checkout/{$sessionId}/shipping-choice", $payload)
             ->assertOk();
+    }
+
+    /**
+     * RC1-C1 — from-checkout / confirm require a delivery address.
+     */
+    protected function ensureCustomerDeliveryAddress(?User $user = null): void
+    {
+        $user = $user ?? auth()->user();
+        if (! $user instanceof User) {
+            return;
+        }
+
+        $user->unsetRelation('deliveryAddress');
+        $user->load('deliveryAddress');
+        if ($user->deliveryAddress !== null) {
+            return;
+        }
+
+        DeliveryAddress::factory()->create([
+            'user_id' => $user->id,
+        ]);
+        $user->unsetRelation('deliveryAddress');
+        $user->load('deliveryAddress');
     }
 
     /**
@@ -41,6 +67,8 @@ trait InteractsWithCheckoutShipping
      */
     protected function createOrderWithShippingChoice(array $shipping = []): array
     {
+        $this->ensureCustomerDeliveryAddress();
+
         $sessionId = $this->postJson('/api/v1/checkout/start')
             ->assertCreated()
             ->json('data.id');

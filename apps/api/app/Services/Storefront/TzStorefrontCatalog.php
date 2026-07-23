@@ -116,7 +116,7 @@ class TzStorefrontCatalog
                 'store:id,name,slug,code,theme_color,logo_path',
                 'variants' => fn ($query) => $query
                     ->where('is_active', true)
-                    ->with(['product', 'attributeValues.attribute', 'inventory']),
+                    ->with(['product', 'attributeValues.attribute', 'inventories', 'inventory']),
             ])
             ->first();
 
@@ -135,13 +135,14 @@ class TzStorefrontCatalog
             ->where('store_id', $store->id)
             ->whereHas('commerceChannel', fn (Builder $q) => $q->where('code', CommerceChannelCode::TzLocal->value))
             ->where(function (Builder $q) {
-                // Prefer inventory-aware visibility: sellable stock, or variants without stock rows yet.
+                // StockResolver-aligned visibility: active MAIN available > 0, or no inventory rows yet.
                 $q->whereHas('variants', function (Builder $vq) {
                     $vq->where('is_active', true)
                         ->where(function (Builder $inv) {
                             $inv->whereDoesntHave('inventories')
                                 ->orWhereHas('inventories', function (Builder $iq) {
-                                    $iq->where('is_active', true)
+                                    $iq->where('warehouse_code', 'MAIN')
+                                        ->where('is_active', true)
                                         ->whereRaw('(on_hand - reserved) > 0');
                                 });
                         });

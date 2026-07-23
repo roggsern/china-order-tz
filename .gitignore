@@ -163,6 +163,10 @@ apps/web/public/uploads/
 _audit_*.txt
 .tmp-*
 
+# Backup archives (never commit; live on app_backups volume / BACKUP_ROOT)
+/backups/
+apps/api/storage/backups/
+
 # IDE
 .idea/
 .vscode/

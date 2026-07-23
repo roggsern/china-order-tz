@@ -510,9 +510,9 @@ export function AdminAttributesPanel() {
 
       <div className="admin-card mb-4 overflow-hidden">
         <div className="border-b border-zinc-200 px-5 py-3">
-          <h2 className="text-sm font-semibold text-zinc-900">Product type mapping</h2>
+          <h2 className="text-sm font-semibold text-zinc-900">Catalog Product Type mapping</h2>
           <p className="mt-1 text-xs text-zinc-500">
-            Assign attributes to a catalog product type (e.g. PA System, Smartphone).
+            Assign attributes to a Catalog Product Type (e.g. PA System, Smartphone).
           </p>
         </div>
         <div className="space-y-3 p-5">
@@ -521,7 +521,7 @@ export function AdminAttributesPanel() {
             value={mappingTypeId}
             onChange={(event) => setMappingTypeId(event.target.value)}
           >
-            <option value="">Select product type</option>
+            <option value="">Select Catalog Product Type</option>
             {productTypes.map((type) => (
               <option key={type.id} value={type.id}>
                 {type.name}

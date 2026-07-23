@@ -7,6 +7,7 @@ use App\Enums\CMS\CmsHeroContentAlignment;
 use App\Enums\CMS\CmsHeroTextTheme;
 use App\Enums\CMS\CmsStatus;
 use App\Models\CmsHeroSlide;
+use App\Support\Security\HtmlSanitizer;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -47,5 +48,14 @@ class UpdateCmsHeroSlideRequest extends FormRequest
             'starts_at' => ['sometimes', 'nullable', 'date'],
             'ends_at' => ['sometimes', 'nullable', 'date'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->exists('description') && is_string($this->input('description'))) {
+            $this->merge([
+                'description' => HtmlSanitizer::sanitize($this->input('description')),
+            ]);
+        }
     }
 }

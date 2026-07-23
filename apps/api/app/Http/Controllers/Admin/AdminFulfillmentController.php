@@ -9,6 +9,7 @@ use App\Http\Resources\FulfillmentResource;
 use App\Models\Fulfillment;
 use App\Models\Order;
 use App\Services\Fulfillment\FulfillmentEngine;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -40,6 +41,8 @@ class AdminFulfillmentController extends Controller
 
     public function create(Order $order, FulfillmentEngine $engine): JsonResponse
     {
+        $this->authorize(AdminPermissions::ORDERS_FULFILL);
+
         $fulfillment = $engine->createForOrder($order);
 
         return response()->json([
@@ -51,6 +54,8 @@ class AdminFulfillmentController extends Controller
 
     public function show(Fulfillment $fulfillment, FulfillmentEngine $engine): JsonResponse
     {
+        $this->authorize(AdminPermissions::ORDERS_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => new FulfillmentResource($engine->show($fulfillment)),

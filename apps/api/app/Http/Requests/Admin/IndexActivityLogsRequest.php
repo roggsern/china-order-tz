@@ -2,13 +2,17 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Concerns\AuthorizesAdminPermission;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Foundation\Http\FormRequest;
 
 class IndexActivityLogsRequest extends FormRequest
 {
-    public function authorize(): bool
+    use AuthorizesAdminPermission;
+
+    protected function requiredPermission(): string
     {
-        return true;
+        return AdminPermissions::ACTIVITY_LOGS_VIEW;
     }
 
     public function rules(): array

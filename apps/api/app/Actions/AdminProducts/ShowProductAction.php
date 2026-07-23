@@ -22,6 +22,7 @@ class ShowProductAction
             'shippingOptions',
             'variants.attributeValues.attribute',
             'variants.inventory',
+            'variants.inventories',
             'variants.priceTiers',
         ]);
     }

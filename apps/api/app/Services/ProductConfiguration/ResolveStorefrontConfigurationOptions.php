@@ -2,9 +2,9 @@
 
 namespace App\Services\ProductConfiguration;
 
-use App\Models\Inventory;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Services\Inventory\StockResolver;
 use Illuminate\Support\Collection;
 
 /**
@@ -16,12 +16,14 @@ use Illuminate\Support\Collection;
  * 3. Existing sellable configurations (and stock)
  *
  * No Fashion/Phones/TV hardcoding — all from metadata + configuration rows.
+ * Stock reads go through StockResolver (ADR 055).
  */
 class ResolveStorefrontConfigurationOptions
 {
     public function __construct(
         private readonly AttributeDependencyResolver $dependencyResolver,
         private readonly LoadProductFormSchema $loadProductFormSchema,
+        private readonly StockResolver $stockResolver,
     ) {}
 
     /**
@@ -89,12 +91,12 @@ class ResolveStorefrontConfigurationOptions
         $variants = ProductVariant::query()
             ->where('product_id', $product->id)
             ->where('is_active', true)
-            ->with(['attributeValues.attribute', 'inventory'])
+            ->with(['attributeValues.attribute', 'inventories', 'inventory'])
             ->orderBy('name')
             ->get();
 
         return $variants->map(function (ProductVariant $variant) use ($product) {
-            $stock = $this->availableStock($product->id, $variant);
+            $stock = max(0, $this->stockResolver->resolveVariantProduct($variant, null, $product)->quantityAvailable);
 
             return [
                 'id' => $variant->id,
@@ -202,19 +204,5 @@ class ResolveStorefrontConfigurationOptions
 
             return count($byAttribute) === count($requiredAttributeIds);
         });
-    }
-
-    private function availableStock(string $productId, ProductVariant $variant): int
-    {
-        if ($variant->relationLoaded('inventory') && $variant->inventory) {
-            return max(0, (int) $variant->inventory->availableQuantity());
-        }
-
-        $inventory = Inventory::query()
-            ->where('product_id', $productId)
-            ->where('product_variant_id', $variant->id)
-            ->first();
-
-        return max(0, (int) ($inventory?->availableQuantity() ?? 0));
     }
 }

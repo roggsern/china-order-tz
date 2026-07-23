@@ -2,15 +2,20 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Concerns\AuthorizesAdminPermission;
+use App\Support\Admin\AdminPermissions;
 use App\Enums\ProductMediaType;
+use App\Support\Security\SafePublicUrl;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class UpdateProductMediaRequest extends FormRequest
 {
-    public function authorize(): bool
+    use AuthorizesAdminPermission;
+
+    protected function requiredPermission(): string
     {
-        return true;
+        return AdminPermissions::CATALOG_UPDATE;
     }
 
     /**
@@ -20,14 +25,14 @@ class UpdateProductMediaRequest extends FormRequest
     {
         return [
             'type' => ['sometimes', 'string', Rule::in(array_column(ProductMediaType::cases(), 'value'))],
-            'url' => ['sometimes', 'nullable', 'string', 'max:2048'],
-            'thumbnail_url' => ['sometimes', 'nullable', 'string', 'max:2048'],
+            'url' => ['sometimes', 'nullable', 'string', 'max:2048', SafePublicUrl::rule()],
+            'thumbnail_url' => ['sometimes', 'nullable', 'string', 'max:2048', SafePublicUrl::rule()],
             'alt_text' => ['sometimes', 'nullable', 'string', 'max:255'],
             'title' => ['sometimes', 'nullable', 'string', 'max:255'],
             'sort_order' => ['sometimes', 'integer', 'min:0', 'max:999999'],
             'is_primary' => ['sometimes', 'boolean'],
             'is_active' => ['sometimes', 'boolean'],
-            'file' => ['sometimes', 'nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'file' => ['sometimes', 'nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120', 'dimensions:max_width=5000,max_height=5000'],
         ];
     }
 

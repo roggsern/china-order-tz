@@ -19,6 +19,9 @@ class AdminStoreAssignmentController extends Controller
 
     public function index(Store $store): JsonResponse
     {
+        // Type A — same gate as assignment writes (super-admin only).
+        abort_unless(auth('sanctum')->user()?->is_super_admin === true, 403);
+
         $rows = StoreUserAssignment::query()
             ->with(['admin:id,name,email,role_id', 'admin.role:id,name,slug'])
             ->where('store_id', $store->id)

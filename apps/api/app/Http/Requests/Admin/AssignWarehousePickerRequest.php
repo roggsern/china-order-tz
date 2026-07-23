@@ -2,13 +2,17 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Concerns\AuthorizesAdminPermission;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Foundation\Http\FormRequest;
 
 class AssignWarehousePickerRequest extends FormRequest
 {
-    public function authorize(): bool
+    use AuthorizesAdminPermission;
+
+    protected function requiredPermission(): string
     {
-        return true;
+        return AdminPermissions::WAREHOUSE_JOBS_UPDATE;
     }
 
     /**

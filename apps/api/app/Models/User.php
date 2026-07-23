@@ -43,6 +43,21 @@ class User extends Authenticatable
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::updated(function (User $user): void {
+            if ($user->wasChanged('password')) {
+                $user->tokens()->delete();
+
+                return;
+            }
+
+            if ($user->wasChanged('is_active') && ! $user->is_active) {
+                $user->tokens()->delete();
+            }
+        });
+    }
+
     public function roles(): BelongsToMany
     {
         return $this->belongsToMany(Role::class);

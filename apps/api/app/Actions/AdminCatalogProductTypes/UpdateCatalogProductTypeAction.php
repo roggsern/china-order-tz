@@ -54,7 +54,7 @@ class UpdateCatalogProductTypeAction
         return $catalogProductType->fresh([
             'subcategory.parent.department',
             'subcategory.department',
-        ]);
+        ])->loadCount(['products', 'attributes']);
     }
 
     private function ensureUniqueSlug(string $original, string $ignoreId): string

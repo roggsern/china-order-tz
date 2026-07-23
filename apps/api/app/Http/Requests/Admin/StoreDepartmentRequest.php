@@ -2,13 +2,17 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Concerns\AuthorizesAdminPermission;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreDepartmentRequest extends FormRequest
 {
-    public function authorize(): bool
+    use AuthorizesAdminPermission;
+
+    protected function requiredPermission(): string
     {
-        return true;
+        return AdminPermissions::CATALOG_CREATE;
     }
 
     /**
@@ -23,16 +27,8 @@ class StoreDepartmentRequest extends FormRequest
             'image' => ['sometimes', 'nullable', 'string', 'max:2048'],
             'description' => ['sometimes', 'nullable', 'string'],
             'sort_order' => ['sometimes', 'integer', 'min:0'],
+            // Laravel boolean accepts only: true, false, 0, 1, "0", "1"
             'is_active' => ['sometimes', 'boolean'],
         ];
-    }
-
-    protected function prepareForValidation(): void
-    {
-        if ($this->has('is_active') && ! is_bool($this->input('is_active'))) {
-            $this->merge([
-                'is_active' => filter_var($this->input('is_active'), FILTER_VALIDATE_BOOLEAN),
-            ]);
-        }
     }
 }

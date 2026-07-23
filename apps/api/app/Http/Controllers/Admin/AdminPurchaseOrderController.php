@@ -12,6 +12,7 @@ use App\Models\Admin;
 use App\Models\PurchaseOrder;
 use App\Services\Procurement\PurchaseOrderEngine;
 use App\Services\Procurement\ReceivingEngine;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -25,6 +26,8 @@ class AdminPurchaseOrderController extends Controller
 
     public function index(Request $request): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::PURCHASE_ORDERS_VIEW);
+
         $perPage = min(max((int) $request->query('per_page', 20), 1), 100);
 
         return PurchaseOrderResource::collection(
@@ -51,6 +54,8 @@ class AdminPurchaseOrderController extends Controller
 
     public function show(PurchaseOrder $purchaseOrder): JsonResponse
     {
+        $this->authorize(AdminPermissions::PURCHASE_ORDERS_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => new PurchaseOrderResource($this->purchaseOrders->show($purchaseOrder)),

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Support\Admin\AdminPermissions;
 use App\Services\Reporting\ReportGenerator;
 use App\Services\Reporting\ReportingEngine;
 use Illuminate\Http\JsonResponse;
@@ -17,6 +18,8 @@ class AdminReportController extends Controller
 
     public function dashboard(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::REPORTS_VIEW);
+
         $data = $this->reporting->dashboard($request->only(['from', 'to']));
 
         return response()->json([
@@ -27,41 +30,57 @@ class AdminReportController extends Controller
 
     public function sales(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::REPORTS_VIEW);
+
         return $this->reportJson('sales', $request);
     }
 
     public function orders(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::REPORTS_VIEW);
+
         return $this->reportJson('orders', $request);
     }
 
     public function payments(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::REPORTS_VIEW);
+
         return $this->reportJson('payments', $request);
     }
 
     public function warehouse(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::REPORTS_VIEW);
+
         return $this->reportJson('warehouse', $request);
     }
 
     public function shipments(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::REPORTS_VIEW);
+
         return $this->reportJson('shipments', $request);
     }
 
     public function returns(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::REPORTS_VIEW);
+
         return $this->reportJson('returns', $request);
     }
 
     public function notifications(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::REPORTS_VIEW);
+
         return $this->reportJson('notifications', $request);
     }
 
     public function export(string $type, Request $request): StreamedResponse|JsonResponse
     {
+        $this->authorize(AdminPermissions::REPORTS_EXPORT);
+
         $type = strtolower($type);
         if (! in_array($type, ReportGenerator::TYPES, true)) {
             return response()->json([

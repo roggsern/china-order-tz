@@ -24,6 +24,7 @@ use App\Http\Resources\CatalogAttributeResource;
 use App\Models\CatalogAttribute;
 use App\Models\CatalogAttributeOption;
 use App\Models\CatalogProductType;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -31,6 +32,8 @@ class AdminCatalogAttributeController extends Controller
 {
     public function index(GetAdminCatalogAttributesAction $action): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::CONFIGURATION_VIEW);
+
         return CatalogAttributeResource::collection($action->handle())
             ->additional(['success' => true]);
     }
@@ -49,6 +52,8 @@ class AdminCatalogAttributeController extends Controller
         CatalogAttribute $catalogAttribute,
         ShowCatalogAttributeAction $action,
     ): JsonResponse {
+        $this->authorize(AdminPermissions::CONFIGURATION_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => new CatalogAttributeResource($action->handle($catalogAttribute)),
@@ -70,6 +75,8 @@ class AdminCatalogAttributeController extends Controller
         CatalogAttribute $catalogAttribute,
         DeleteCatalogAttributeAction $action,
     ): JsonResponse {
+        $this->authorize(AdminPermissions::CONFIGURATION_MANAGE);
+
         $action->handle($catalogAttribute);
 
         return response()->json([
@@ -80,6 +87,8 @@ class AdminCatalogAttributeController extends Controller
 
     public function restore(string $id, RestoreCatalogAttributeAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::CONFIGURATION_MANAGE);
+
         return response()->json([
             'success' => true,
             'message' => 'Attribute restored successfully.',
@@ -113,6 +122,8 @@ class AdminCatalogAttributeController extends Controller
         CatalogAttributeOption $catalogAttributeOption,
         DeleteCatalogAttributeOptionAction $action,
     ): JsonResponse {
+        $this->authorize(AdminPermissions::CONFIGURATION_MANAGE);
+
         $action->handle($catalogAttributeOption);
 
         return response()->json([
@@ -143,6 +154,8 @@ class AdminCatalogAttributeController extends Controller
 
     public function filters(GetCatalogFiltersAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::CONFIGURATION_VIEW);
+
         $typeId = request()->query('catalog_product_type_id');
         $typeId = is_string($typeId) ? $typeId : null;
 

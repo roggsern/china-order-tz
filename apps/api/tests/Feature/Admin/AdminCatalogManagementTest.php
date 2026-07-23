@@ -442,6 +442,8 @@ class AdminCatalogManagementTest extends TestCase
             'brand_id' => $brand->id,
             'short_description' => 'Product core sample',
             'description' => 'Full description',
+            'price' => 250000,
+            'stock_quantity' => 3,
             'status' => 'active',
             'visibility' => 'public',
             'is_featured' => true,

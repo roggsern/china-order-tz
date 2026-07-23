@@ -13,7 +13,7 @@ class ListCustomerOrdersAction
     {
         $query = Order::query()
             ->where('user_id', $user->id)
-            ->with(['items.product.supplier']);
+            ->with(['items.product.commerceChannel']);
 
         if ($filter === 'active') {
             $query->whereIn('status', [

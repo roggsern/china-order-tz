@@ -18,6 +18,8 @@ class EnsureAdminIsActive
         $admin = auth('sanctum')->user();
 
         if ($admin instanceof Admin && ! $admin->is_active) {
+            $admin->currentAccessToken()?->delete();
+
             throw new HttpResponseException(response()->json([
                 'success' => false,
                 'message' => 'Your account has been disabled.',

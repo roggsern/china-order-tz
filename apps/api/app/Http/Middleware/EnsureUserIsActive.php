@@ -18,6 +18,8 @@ class EnsureUserIsActive
         $user = auth('sanctum')->user();
 
         if ($user instanceof User && ! $user->is_active) {
+            $user->currentAccessToken()?->delete();
+
             throw new HttpResponseException(response()->json([
                 'success' => false,
                 'message' => 'Your account has been disabled.',

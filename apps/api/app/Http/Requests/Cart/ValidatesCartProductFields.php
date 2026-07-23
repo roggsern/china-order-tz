@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Cart;
 
+use App\Services\Cart\ValidateCartProductSelection;
 use Illuminate\Validation\Rule;
 
 trait ValidatesCartProductFields
@@ -15,31 +16,23 @@ trait ValidatesCartProductFields
             'product_id' => [
                 'nullable',
                 'uuid',
-                Rule::exists('products', 'id')
-                    ->where('is_active', true)
-                    ->whereNull('deleted_at'),
+                Rule::exists('products', 'id')->whereNull('deleted_at'),
             ],
             'product_variant_id' => [
                 'nullable',
                 'uuid',
-                Rule::exists('product_variants', 'id')
-                    ->where('is_active', true)
-                    ->whereNull('deleted_at'),
+                Rule::exists('product_variants', 'id')->whereNull('deleted_at'),
             ],
             'variant_id' => [
                 'nullable',
                 'uuid',
-                Rule::exists('product_variants', 'id')
-                    ->where('is_active', true)
-                    ->whereNull('deleted_at'),
+                Rule::exists('product_variants', 'id')->whereNull('deleted_at'),
             ],
             /** Alias for product_variant_id. */
             'configuration_id' => [
                 'nullable',
                 'uuid',
-                Rule::exists('product_variants', 'id')
-                    ->where('is_active', true)
-                    ->whereNull('deleted_at'),
+                Rule::exists('product_variants', 'id')->whereNull('deleted_at'),
             ],
             'quantity' => ['required', 'integer', 'min:1'],
             'currency' => ['sometimes', 'string', 'size:3'],
@@ -67,17 +60,17 @@ trait ValidatesCartProductFields
 
     public function withCartVariantValidator($validator): void
     {
-        $validator->after(function ($validator) {
+        $validator->after(function ($validator): void {
+            $productId = $this->input('product_id');
             $variantId = $this->input('product_variant_id')
                 ?? $this->input('variant_id')
                 ?? $this->input('configuration_id');
 
-            if (! filled($variantId)) {
-                $validator->errors()->add(
-                    'product_variant_id',
-                    'A product variant is required.',
-                );
-            }
+            app(ValidateCartProductSelection::class)->validate(
+                $validator,
+                filled($productId) ? (string) $productId : null,
+                filled($variantId) ? (string) $variantId : null,
+            );
         });
     }
 }

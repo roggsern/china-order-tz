@@ -30,4 +30,26 @@ class Role extends Model
     {
         return $this->hasMany(Admin::class);
     }
+
+    public function permissions(): BelongsToMany
+    {
+        return $this->belongsToMany(Permission::class);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function permissionSlugs(): array
+    {
+        if ($this->relationLoaded('permissions')) {
+            return $this->permissions->pluck('slug')->all();
+        }
+
+        return $this->permissions()->pluck('slug')->all();
+    }
+
+    public function hasPermission(string $slug): bool
+    {
+        return in_array($slug, $this->permissionSlugs(), true);
+    }
 }

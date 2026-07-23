@@ -35,6 +35,7 @@ use App\Services\Crm\CustomerProfileService;
 use App\Services\Crm\CustomerSegmentationService;
 use App\Services\Crm\CustomerStatusService;
 use App\Services\Crm\CustomerTimelineService;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -52,6 +53,8 @@ class AdminCustomerController extends Controller
 
     public function index(Request $request): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::CUSTOMERS_VIEW);
+
         $perPage = min(max((int) $request->query('per_page', 20), 1), 100);
 
         return CustomerProfileResource::collection(
@@ -61,6 +64,8 @@ class AdminCustomerController extends Controller
 
     public function summary(): JsonResponse
     {
+        $this->authorize(AdminPermissions::CUSTOMERS_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => $this->profiles->summary(),
@@ -69,6 +74,8 @@ class AdminCustomerController extends Controller
 
     public function show(CustomerProfile $customer): JsonResponse
     {
+        $this->authorize(AdminPermissions::CUSTOMERS_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => new CustomerProfileResource($this->profiles->show($customer)),
@@ -95,6 +102,8 @@ class AdminCustomerController extends Controller
 
     public function rebuildMetrics(CustomerProfile $customer): JsonResponse
     {
+        $this->authorize(AdminPermissions::CUSTOMERS_UPDATE);
+
         $admin = auth('sanctum')->user();
         $metric = $this->metrics->recalculate($customer);
         event(CustomerMetricsRebuiltAudit::fromMetric(
@@ -111,6 +120,8 @@ class AdminCustomerController extends Controller
 
     public function orders(CustomerProfile $customer, Request $request): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::CUSTOMERS_VIEW);
+
         $perPage = min(max((int) $request->query('per_page', 20), 1), 100);
         $orders = Order::query()
             ->real()
@@ -123,6 +134,8 @@ class AdminCustomerController extends Controller
 
     public function payments(CustomerProfile $customer, Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::CUSTOMERS_VIEW);
+
         $perPage = min(max((int) $request->query('per_page', 20), 1), 100);
 
         $legacy = Payment::query()
@@ -164,6 +177,8 @@ class AdminCustomerController extends Controller
 
     public function shipments(CustomerProfile $customer, Request $request): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::CUSTOMERS_VIEW);
+
         $perPage = min(max((int) $request->query('per_page', 20), 1), 100);
         $shipments = Shipment::query()
             ->whereHas('order', fn ($q) => $q->where('user_id', $customer->user_id)->where('is_demo', false))
@@ -176,6 +191,8 @@ class AdminCustomerController extends Controller
 
     public function returns(CustomerProfile $customer, Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::CUSTOMERS_VIEW);
+
         $perPage = min(max((int) $request->query('per_page', 20), 1), 100);
 
         $returns = ReturnRequest::query()
@@ -212,6 +229,8 @@ class AdminCustomerController extends Controller
 
     public function addresses(CustomerProfile $customer): JsonResponse
     {
+        $this->authorize(AdminPermissions::CUSTOMERS_VIEW);
+
         $userId = $customer->user_id;
 
         return response()->json([
@@ -264,6 +283,8 @@ class AdminCustomerController extends Controller
 
     public function timeline(CustomerProfile $customer, Request $request): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::CUSTOMERS_VIEW);
+
         $perPage = min(max((int) $request->query('per_page', 20), 1), 100);
 
         return CustomerTimelineEventResource::collection(
@@ -292,6 +313,8 @@ class AdminCustomerController extends Controller
 
     public function removeTag(CustomerProfile $customer, CustomerTag $tag): JsonResponse
     {
+        $this->authorize(AdminPermissions::CUSTOMERS_MANAGE_TAGS);
+
         $admin = auth('sanctum')->user();
         $updated = $this->segmentation->removeTag(
             $customer,
@@ -346,6 +369,8 @@ class AdminCustomerController extends Controller
 
     public function destroyNote(CustomerProfile $customer, CustomerNote $note): JsonResponse
     {
+        $this->authorize(AdminPermissions::CUSTOMERS_MANAGE_NOTES);
+
         $this->assertNoteBelongs($customer, $note);
         $admin = auth('sanctum')->user();
         $this->notes->delete($note, $admin instanceof Admin ? $admin : null);
@@ -358,6 +383,8 @@ class AdminCustomerController extends Controller
 
     public function notes(CustomerProfile $customer, Request $request): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::CUSTOMERS_VIEW);
+
         $perPage = min(max((int) $request->query('per_page', 20), 1), 100);
 
         return CustomerNoteResource::collection(

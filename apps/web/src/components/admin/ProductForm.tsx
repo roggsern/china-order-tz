@@ -727,7 +727,7 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
                 <p className="mt-1 text-xs text-zinc-500">
                   {form.skuOverride
                     ? "Custom SKU will be saved as entered."
-                    : "A unique SKU is generated from origin and category on save. Configuration SKUs still use this base + Product Type pattern."}
+                    : "A unique SKU is generated from origin and category on save. Configuration SKUs still use this base + Configuration Template pattern."}
                 </p>
                 <FieldError message={errors.sku} />
               </div>
@@ -871,7 +871,7 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
             <section className="admin-card p-5">
               <h2 className="text-sm font-semibold text-zinc-900">Inventory</h2>
               <p className="mt-1 text-xs text-zinc-500">
-                Used when the Product Type has no configurations, or before you generate any.
+                Used when the Configuration Template has no configurations, or before you generate any.
               </p>
               <div className="mt-4 max-w-xs">
                 <label className="admin-label" htmlFor="stock">

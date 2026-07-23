@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Concerns\AuthorizesAdminPermission;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -9,9 +11,11 @@ use Illuminate\Foundation\Http\FormRequest;
  */
 class UpdateShipmentLifecycleRequest extends FormRequest
 {
-    public function authorize(): bool
+    use AuthorizesAdminPermission;
+
+    protected function requiredPermission(): string
     {
-        return true;
+        return AdminPermissions::ORDERS_SHIP;
     }
 
     /**
@@ -25,7 +29,7 @@ class UpdateShipmentLifecycleRequest extends FormRequest
             'origin' => ['sometimes', 'nullable', 'string', 'max:255'],
             'destination' => ['sometimes', 'nullable', 'string', 'max:255'],
             'notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
-            // Rejected by ShipmentEngine if present — status is event-derived.
+            // Rejected by ShipmentEngine if present â€” status is event-derived.
             'status' => ['prohibited'],
         ];
     }

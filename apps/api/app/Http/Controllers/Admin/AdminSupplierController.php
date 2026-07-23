@@ -11,6 +11,7 @@ use App\Http\Resources\SupplierResource;
 use App\Models\Admin;
 use App\Models\Supplier;
 use App\Services\Procurement\SupplierEngine;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -23,6 +24,8 @@ class AdminSupplierController extends Controller
 
     public function index(Request $request): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::SUPPLIERS_VIEW);
+
         $perPage = min(max((int) $request->query('per_page', 20), 1), 100);
 
         return SupplierResource::collection(
@@ -46,6 +49,8 @@ class AdminSupplierController extends Controller
 
     public function show(Supplier $supplier): JsonResponse
     {
+        $this->authorize(AdminPermissions::SUPPLIERS_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => new SupplierResource($this->suppliers->show($supplier)),

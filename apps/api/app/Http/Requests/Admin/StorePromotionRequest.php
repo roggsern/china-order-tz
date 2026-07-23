@@ -6,14 +6,18 @@ use App\Enums\PromotionDiscountType;
 use App\Enums\PromotionRuleType;
 use App\Enums\PromotionStatus;
 use App\Enums\PromotionType;
+use App\Http\Requests\Concerns\AuthorizesAdminPermission;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class StorePromotionRequest extends FormRequest
 {
-    public function authorize(): bool
+    use AuthorizesAdminPermission;
+
+    protected function requiredPermission(): string
     {
-        return true;
+        return AdminPermissions::PROMOTIONS_CREATE;
     }
 
     /**

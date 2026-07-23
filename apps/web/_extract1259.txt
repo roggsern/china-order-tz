@@ -1,0 +1,70 @@
+## 1. Root cause addressed
+
+Empty MAIN bootstrap no longer shadows positive legacy stock. Opening MAIN qty is resolved at initialization and applied via MutationGate `Receive`.
+
+## 2. Canonical initialization policy
+
+`CanonicalVariantInventoryInitializer::ensure()`:
+
+| State | Behavior |
+|---|---|
+| Active MAIN exists | No-op (zero stays valid) |
+| No MAIN / trashed restore + legacy > 0 | Bootstrap 0 → `Receive` legacy qty |
+| Explicit `on_hand` > 0 | That qty only (not legacy + requested) |
+| Omitted / explicit 0 on first establish | Inherit positive legacy |
+| No legacy | MAIN at 0, no ledger |
+
+## 3. Files changed
+
+- `app/Services/Inventory/CanonicalVariantInventoryInitializer.php` *(new)*
+- `app/Services/Inventory/AdminInventoryApplicationService.php`
+- `app/Services/Inventory/InventoryControlEngine.php`
+- `app/Http/Requests/Admin/StoreVariantInventoryRequest.php`
+- `database/seeders/Iphone16ProDemoSeeder.php`
+- `tests/Unit/Services/Inventory/CanonicalVariantInventoryInitializerTest.php` *(new)*
+
+## 4. Seeder fix
+
+`ensureMainInventory` removed; uses initializer after config sync so MAIN inherits legacy stock.
+
+## 5. Admin initialization fix
+
+`createVariantInventory` delegates to initializer; omitted `on_hand` inherits legacy; explicit positive does not sum with legacy.
+
+## 6. InventoryControlEngine / restore fix
+
+`resolveOrCreateInventory` and `receiveToWarehouseCode` bootstrap via initializer (create + trashed restore migrate legacy).
+
+## 7. Legacy migration behavior
+
+Legacy `inventory.quantity` is **left unchanged** after MAIN opening receive (compatibility; StockResolver already prefers MAIN).
+
+## 8. Ledger and transaction behavior
+
+Zero bootstrap = no ledger; positive opening = `Receive` via gate → `InventoryLedgerService`. Work wrapped in transactions + `lockForUpdate`.
+
+## 9. Idempotency behavior
+
+Active MAIN short-circuits; opening receive keyed (`…:opening_receive`). Re-run does not double stock/ledger.
+
+## 10. Tests added or updated
+
+`CanonicalVariantInventoryInitializerTest` (10 cases). `Iphone16ProConfigurationDemoTest` now PASS.
+
+## 11. Regression results
+
+**92 passed** — initializer, iPhone demo, config storefront, MutationGate, Ledger, admin inventory, StockResolver, CatalogStockReader, cart, quote parity, purchasability.
+
+## 12. Remaining direct unsafe initialization paths
+
+None in `app/` outside the initializer’s intentional zero bootstrap. Factories/seeders elsewhere may still create MAIN directly (out of RC1-B1 runtime paths).
+
+## 13. Blockers
+
+**None** for this fix scope.
+
+## 14. PASS / FAIL
+
+**PASS**
+
+**Stop.**

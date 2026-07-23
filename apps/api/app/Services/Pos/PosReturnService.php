@@ -214,7 +214,7 @@ class PosReturnService
             ]);
 
             foreach ($prepared as $row) {
-                ReturnItem::query()->create([
+                $returnItem = ReturnItem::query()->create([
                     'return_request_id' => $return->id,
                     'order_item_id' => $row['order_item']->id,
                     'quantity' => $row['quantity'],
@@ -235,6 +235,7 @@ class PosReturnService
                     $row['disposition'],
                     $row['exchange_variant'],
                     $cashier,
+                    $returnItem,
                 );
             }
 
@@ -495,9 +496,12 @@ class PosReturnService
         InventoryDisposition $disposition,
         ?ProductVariant $exchangeVariant,
         Admin $cashier,
+        ReturnItem $returnItem,
     ): void {
         $store = $order->store()->firstOrFail();
         $location = $this->stores->defaultLocation($store);
+        // Per-ReturnItem idempotency (RC1-G3 POS harden) — not order-level.
+        $restockKey = 'return-restock:'.$returnItem->id;
 
         if ($disposition->restocksSellable() && $orderItem->product_variant_id) {
             $variant = ProductVariant::query()->findOrFail($orderItem->product_variant_id);
@@ -506,8 +510,9 @@ class PosReturnService
                 $inventory,
                 $quantity,
                 $cashier,
-                ReturnRequest::class,
-                $order->id,
+                ReturnItem::class,
+                $returnItem->id,
+                $restockKey,
             );
             event(StorePlatformAudit::inventoryReturned($order, $orderItem->product_variant_id, $quantity, $cashier));
         } elseif ($disposition === InventoryDisposition::Damaged && $orderItem->product_variant_id) {
@@ -518,8 +523,9 @@ class PosReturnService
                 $quantity,
                 'POS return marked damaged',
                 $cashier,
-                ReturnRequest::class,
-                $order->id,
+                ReturnItem::class,
+                $returnItem->id,
+                $restockKey,
             );
             event(StorePlatformAudit::inventoryMarkedDamaged($order, $orderItem->product_variant_id, $quantity, $cashier));
         }
@@ -535,8 +541,8 @@ class PosReturnService
                 $out,
                 $quantity,
                 $cashier,
-                ReturnRequest::class,
-                $order->id,
+                ReturnItem::class,
+                $returnItem->id,
             );
         }
     }

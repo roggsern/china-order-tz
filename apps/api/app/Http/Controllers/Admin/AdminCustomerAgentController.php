@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Admin;
 use App\Models\Order;
 use App\Services\CustomerAgent\CustomerAgentWorkflowEngine;
+use App\Support\Admin\AdminPermissions;
 use App\Support\CustomerAgent\CustomerAgentPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,6 +20,7 @@ class AdminCustomerAgentController extends Controller
 
     public function show(Order $order): JsonResponse
     {
+        $this->authorize(AdminPermissions::ORDERS_VIEW);
         $this->admin();
         $pickup = $this->workflow->showForOrder($order);
 
@@ -32,7 +34,7 @@ class AdminCustomerAgentController extends Controller
     public function bootstrap(Order $order): JsonResponse
     {
         $admin = $this->admin();
-        CustomerAgentPermissions::assert($admin, CustomerAgentPermissions::LOGISTICS, 'bootstrap');
+        CustomerAgentPermissions::assert($admin, AdminPermissions::ORDERS_SHIP, 'bootstrap');
 
         $pickup = $this->workflow->bootstrap($order, $admin);
 
@@ -46,7 +48,7 @@ class AdminCustomerAgentController extends Controller
     public function authorizePickup(Order $order, Request $request): JsonResponse
     {
         $admin = $this->admin();
-        CustomerAgentPermissions::assert($admin, CustomerAgentPermissions::LOGISTICS, 'authorize');
+        CustomerAgentPermissions::assert($admin, AdminPermissions::ORDERS_SHIP, 'authorize');
 
         $data = $request->validate([
             'expires_at' => ['sometimes', 'nullable', 'date'],
@@ -69,7 +71,7 @@ class AdminCustomerAgentController extends Controller
     public function reject(Order $order, Request $request): JsonResponse
     {
         $admin = $this->admin();
-        CustomerAgentPermissions::assert($admin, CustomerAgentPermissions::LOGISTICS, 'reject');
+        CustomerAgentPermissions::assert($admin, AdminPermissions::ORDERS_SHIP, 'reject');
 
         $data = $request->validate([
             'reason' => ['required', 'string', 'max:2000'],
@@ -87,7 +89,7 @@ class AdminCustomerAgentController extends Controller
     public function revoke(Order $order, Request $request): JsonResponse
     {
         $admin = $this->admin();
-        CustomerAgentPermissions::assert($admin, CustomerAgentPermissions::LOGISTICS, 'revoke');
+        CustomerAgentPermissions::assert($admin, AdminPermissions::ORDERS_SHIP, 'revoke');
 
         $data = $request->validate([
             'reason' => ['required', 'string', 'max:2000'],
@@ -105,7 +107,7 @@ class AdminCustomerAgentController extends Controller
     public function schedule(Order $order, Request $request): JsonResponse
     {
         $admin = $this->admin();
-        CustomerAgentPermissions::assert($admin, CustomerAgentPermissions::WAREHOUSE, 'schedule');
+        CustomerAgentPermissions::assert($admin, AdminPermissions::WAREHOUSE_JOBS_UPDATE, 'schedule');
 
         $data = $request->validate([
             'scheduled_at' => ['sometimes', 'nullable', 'date'],
@@ -125,7 +127,7 @@ class AdminCustomerAgentController extends Controller
     public function release(Order $order, Request $request): JsonResponse
     {
         $admin = $this->admin();
-        CustomerAgentPermissions::assert($admin, CustomerAgentPermissions::WAREHOUSE, 'warehouse_release');
+        CustomerAgentPermissions::assert($admin, AdminPermissions::WAREHOUSE_JOBS_UPDATE, 'warehouse_release');
 
         $data = $request->validate([
             'status' => ['required', 'string'],
@@ -157,7 +159,7 @@ class AdminCustomerAgentController extends Controller
     public function arrive(Order $order, Request $request): JsonResponse
     {
         $admin = $this->admin();
-        CustomerAgentPermissions::assert($admin, CustomerAgentPermissions::HANDOVER, 'arrive');
+        CustomerAgentPermissions::assertAny($admin, [AdminPermissions::ORDERS_SHIP, AdminPermissions::WAREHOUSE_JOBS_UPDATE], 'arrive');
 
         $data = $request->validate([
             'notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
@@ -175,7 +177,7 @@ class AdminCustomerAgentController extends Controller
     public function handover(Order $order, Request $request): JsonResponse
     {
         $admin = $this->admin();
-        CustomerAgentPermissions::assert($admin, CustomerAgentPermissions::HANDOVER, 'handover');
+        CustomerAgentPermissions::assertAny($admin, [AdminPermissions::ORDERS_SHIP, AdminPermissions::WAREHOUSE_JOBS_UPDATE], 'handover');
 
         $data = $request->validate([
             'signature' => ['sometimes', 'nullable', 'string', 'max:5000'],

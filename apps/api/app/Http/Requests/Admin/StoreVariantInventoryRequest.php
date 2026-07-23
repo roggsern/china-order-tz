@@ -2,14 +2,18 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Concerns\AuthorizesAdminPermission;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class StoreVariantInventoryRequest extends FormRequest
 {
-    public function authorize(): bool
+    use AuthorizesAdminPermission;
+
+    protected function requiredPermission(): string
     {
-        return true;
+        return AdminPermissions::INVENTORY_RECEIVE;
     }
 
     /**
@@ -34,13 +38,20 @@ class StoreVariantInventoryRequest extends FormRequest
             'reorder_level' => ['sometimes', 'integer', 'min:0'],
             'safety_stock' => ['sometimes', 'integer', 'min:0'],
             'is_active' => ['sometimes', 'boolean'],
+            'idempotency_key' => ['sometimes', 'nullable', 'string', 'max:191'],
         ];
     }
 
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
-            $onHand = (int) ($this->input('on_hand', 0));
+            // When on_hand is omitted, opening qty may inherit from legacy (RC1-B1).
+            // Only enforce reserved â‰¤ on_hand when the client supplies on_hand explicitly.
+            if (! $this->exists('on_hand')) {
+                return;
+            }
+
+            $onHand = (int) $this->input('on_hand', 0);
             $reserved = (int) ($this->input('reserved', 0));
 
             if ($reserved > $onHand) {

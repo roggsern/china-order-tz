@@ -29,12 +29,19 @@ export async function POST() {
     message: "Logged out successfully",
   });
 
+  const secure = process.env.NODE_ENV === "production";
+
   response.cookies.set(ADMIN_TOKEN_COOKIE, "", {
     httpOnly: true,
+    sameSite: "lax",
+    secure,
     path: "/",
     maxAge: 0,
   });
   response.cookies.set(ADMIN_AUTH_COOKIE, "", {
+    httpOnly: false,
+    sameSite: "lax",
+    secure,
     path: "/",
     maxAge: 0,
   });

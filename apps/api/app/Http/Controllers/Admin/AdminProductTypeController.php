@@ -12,19 +12,31 @@ use App\Http\Resources\ProductFormSchemaResource;
 use App\Http\Resources\ProductTypeResource;
 use App\Models\Category;
 use App\Models\ProductType;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
+/**
+ * Admin Configuration Template APIs (ADR 052).
+ *
+ * Routes under /admin/product-types expose the legacy ProductType model
+ * (configuration schema). Catalog taxonomy CRUD lives under
+ * /admin/catalog-product-types and the Admin "Product Types" screen.
+ */
 class AdminProductTypeController extends Controller
 {
     public function index(ListProductTypesAction $action): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::CONFIGURATION_VIEW);
+
         return ProductTypeResource::collection($action->handle())
             ->additional(['success' => true]);
     }
 
     public function show(ProductType $productType, ShowProductTypeAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::CONFIGURATION_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => new ProductTypeResource($action->handle($productType)),
@@ -35,6 +47,8 @@ class AdminProductTypeController extends Controller
         Category $category,
         LoadCategoryProductFormSchemaAction $action,
     ): JsonResponse {
+        $this->authorize(AdminPermissions::CONFIGURATION_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => new ProductFormSchemaResource($action->handle($category)),

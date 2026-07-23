@@ -29,7 +29,7 @@ class CreateCatalogProductTypeAction
         ])->fresh([
             'subcategory.parent.department',
             'subcategory.department',
-        ]);
+        ])->loadCount(['products', 'attributes']);
     }
 
     private function generateUniqueSlug(string $value): string

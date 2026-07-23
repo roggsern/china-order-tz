@@ -6,6 +6,7 @@ use App\Events\Audit\AnalyticsReportExportedAudit;
 use App\Http\Controllers\Controller;
 use App\Models\Admin;
 use App\Services\Analytics\RetailAnalyticsEngine;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -20,66 +21,92 @@ class AdminAnalyticsController extends Controller
 
     public function dashboard(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::ANALYTICS_VIEW);
+
         return $this->jsonSection($request, fn ($filter) => $this->analytics->dashboard($filter));
     }
 
     public function sales(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::ANALYTICS_VIEW);
+
         return $this->jsonSection($request, fn ($filter) => $this->analytics->sales($filter));
     }
 
     public function profit(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::ANALYTICS_VIEW);
+
         return $this->jsonSection($request, fn ($filter) => $this->analytics->profit($filter));
     }
 
     public function payments(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::ANALYTICS_VIEW);
+
         return $this->jsonSection($request, fn ($filter) => $this->analytics->payments($filter));
     }
 
     public function inventory(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::ANALYTICS_VIEW);
+
         return $this->jsonSection($request, fn ($filter) => $this->analytics->inventory($filter));
     }
 
     public function returns(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::ANALYTICS_VIEW);
+
         return $this->jsonSection($request, fn ($filter) => $this->analytics->returns($filter));
     }
 
     public function customers(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::ANALYTICS_VIEW);
+
         return $this->jsonSection($request, fn ($filter) => $this->analytics->customers($filter));
     }
 
     public function promotions(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::ANALYTICS_VIEW);
+
         return $this->jsonSection($request, fn ($filter) => $this->analytics->promotions($filter));
     }
 
     public function loyalty(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::ANALYTICS_VIEW);
+
         return $this->jsonSection($request, fn ($filter) => $this->analytics->loyalty($filter));
     }
 
     public function growth(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::ANALYTICS_VIEW);
+
         return $this->jsonSection($request, fn ($filter) => $this->analytics->growth($filter));
     }
 
     public function stores(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::ANALYTICS_VIEW);
+
         return $this->jsonSection($request, fn ($filter) => $this->analytics->stores($filter));
     }
 
     public function sessions(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::ANALYTICS_VIEW);
+
         return $this->jsonSection($request, fn ($filter) => $this->analytics->sessions($filter));
     }
 
     public function export(string $type, Request $request): StreamedResponse|JsonResponse
     {
+        $this->authorize(AdminPermissions::ANALYTICS_EXPORT);
+
         $type = strtolower($type);
         if (! in_array($type, RetailAnalyticsEngine::EXPORT_TYPES, true)) {
             return response()->json([

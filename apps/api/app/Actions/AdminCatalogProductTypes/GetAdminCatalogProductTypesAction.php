@@ -26,7 +26,8 @@ class GetAdminCatalogProductTypesAction
                 'subcategory.parent:id,name,slug,department_id',
                 'subcategory.parent.department:id,name,slug,icon',
                 'subcategory.department:id,name,slug,icon',
-            ]);
+            ])
+            ->withCount(['products', 'attributes']);
 
         if (request()->boolean('trashed')) {
             $query->onlyTrashed();

@@ -3,14 +3,18 @@
 namespace App\Http\Requests\Admin;
 
 use App\Enums\WarehouseJobStatus;
+use App\Http\Requests\Concerns\AuthorizesAdminPermission;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class IndexWarehouseJobsRequest extends FormRequest
 {
-    public function authorize(): bool
+    use AuthorizesAdminPermission;
+
+    protected function requiredPermission(): string
     {
-        return true;
+        return AdminPermissions::WAREHOUSE_JOBS_VIEW;
     }
 
     /**

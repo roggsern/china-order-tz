@@ -69,7 +69,7 @@ Developer
 - **Yes:** Next.js storefront (`apps/web`) via PM2 on the DigitalOcean VPS.
 - **No:** Laravel API, Composer install, migrations, Nginx, MySQL, Redis, queue, scheduler.
 
-API / queue: Compose path documented; live host procedure is **Pending Infrastructure Audit #2**.
+API / queue / scheduler: Compose path documented in [OPERATIONS.md](./OPERATIONS.md); live host procedure remains **Pending Infrastructure Audit #2**.
 
 **Vercel** = preview/legacy only — not authoritative production. See [PRODUCTION_OWNERSHIP.md](./PRODUCTION_OWNERSHIP.md).
 

@@ -101,12 +101,14 @@ class Product extends Model
 
     public function productType(): BelongsTo
     {
+        // Configuration Template domain (legacy ProductType) — ADR 052.
         return $this->belongsTo(ProductType::class);
     }
 
-    /**
-     * Taxonomy catalog product type (Department → Category → Subcategory → CatalogProductType).
-     * Distinct from configuration-schema productType().
+  /**
+     * Taxonomy Catalog Product Type (ADR 052).
+     * Department → Category → Subcategory → CatalogProductType → Product.
+     * Distinct from configuration-schema productType() (Configuration Template).
      */
     public function catalogProductType(): BelongsTo
     {
@@ -226,20 +228,26 @@ class Product extends Model
 
     /**
      * Published for storefront listing: active status + public visibility + active flag.
+     * Visibility ≠ purchasability (ADR 053) — use isVisible() / isPurchasable() for instance checks.
      */
     public function scopePublished(Builder $query): Builder
     {
         return $query
             ->where('lifecycle_status', ProductLifecycleStatus::Active)
             ->where('visibility', ProductVisibility::Public)
-            ->where('is_active', true);
+            ->where('is_active', true)
+            ->where('is_demo', false);
     }
 
+    /**
+     * Lifecycle candidates for purchase. Full path rules live in ProductPurchasabilityPolicy.
+     */
     public function scopePurchasable(Builder $query): Builder
     {
         return $query
             ->where('lifecycle_status', ProductLifecycleStatus::Active)
-            ->where('is_active', true);
+            ->where('is_active', true)
+            ->where('is_demo', false);
     }
 
     public function scopeReal(Builder $query): Builder
@@ -247,9 +255,22 @@ class Product extends Model
         return $query->where('is_demo', false);
     }
 
+    /**
+     * Add-to-cart eligibility (ADR 053). Visibility is separate — use isVisible().
+     */
     public function isPurchasable(): bool
     {
-        return $this->lifecycle_status?->isPurchasable() ?? $this->is_active;
+        return app(\App\Services\ProductPurchasability\ProductPurchasabilityPolicy::class)
+            ->isPurchasable($this);
+    }
+
+    /**
+     * Catalog display eligibility (ADR 053). Independent of isPurchasable().
+     */
+    public function isVisible(): bool
+    {
+        return app(\App\Services\ProductPurchasability\ProductPurchasabilityPolicy::class)
+            ->isVisible($this);
     }
 
     /**

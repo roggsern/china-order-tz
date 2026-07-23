@@ -39,6 +39,7 @@ return [
         'http_connect_timeout' => (int) env('NMB_HTTP_CONNECT_TIMEOUT', 10),
         'http_retry_times' => (int) env('NMB_HTTP_RETRY_TIMES', 2),
         'webhook_require_signature' => env('NMB_WEBHOOK_REQUIRE_SIGNATURE', false),
+        'webhook_scheme' => env('NMB_WEBHOOK_SCHEME', 'notification_secret'),
         'webhook_replay_ttl_seconds' => (int) env('NMB_WEBHOOK_REPLAY_TTL_SECONDS', 86400),
         'log_channel' => env('NMB_LOG_CHANNEL', 'stack'),
     ],

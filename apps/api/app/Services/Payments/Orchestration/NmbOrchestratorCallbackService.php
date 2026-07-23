@@ -45,12 +45,20 @@ class NmbOrchestratorCallbackService
             $this->logger->warning('nmb.orchestrator.callback.signature_rejected', [
                 'session_id' => $this->callbackVerifier->extractSessionId($payload),
                 'order_reference' => $this->callbackVerifier->extractOrderReference($payload),
+                'provider_transaction_id' => is_array($payload['transaction'] ?? null)
+                    ? ($payload['transaction']['id'] ?? null)
+                    : null,
             ]);
 
             throw ValidationException::withMessages([
                 'callback' => ['Invalid NMB callback signature.'],
             ]);
         }
+
+        $this->logger->info('nmb.orchestrator.callback.signature_accepted', [
+            'session_id' => $this->callbackVerifier->extractSessionId($payload),
+            'order_reference' => $this->callbackVerifier->extractOrderReference($payload),
+        ]);
 
         $sessionId = $this->callbackVerifier->extractSessionId($payload);
         $orderReference = $this->callbackVerifier->extractOrderReference($payload);

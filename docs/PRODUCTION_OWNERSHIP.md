@@ -37,11 +37,23 @@ Repository documents Compose/Makefile migrate flows for local/prod Compose. Live
 
 ## 6. How is the queue worker deployed/restarted?
 
-`docker-compose.prod.yml` defines a `queue` service (`php artisan queue:work ...`). Live process manager and restart procedure: **Pending Infrastructure Audit #2.**
+`docker-compose.prod.yml` defines a `queue` service (`php artisan queue:work database ...`, `restart: always`, shared `api_storage`).
+
+After API deploy: `php artisan queue:restart` (also optional via `QUEUE_RESTART_ON_BOOT=true` on API entrypoint). Helper: `scripts/deploy-api-compose.sh`.
+
+Live VPS process confirmation: **Pending Infrastructure Audit #2.**
 
 ## 7. How is the scheduler operated?
 
-No certified scheduler deploy exists in root GitHub Actions. Laravel scheduler (`schedule:run` / cron) on production: **Pending Infrastructure Audit #2.**
+`docker-compose.prod.yml` defines a **`scheduler`** service (`php artisan schedule:work`, `restart: always`). Schedules include `nmb:reconcile-payments` every 5 minutes and daily prune jobs. See [OPERATIONS.md](./OPERATIONS.md).
+
+Host cron alternative (only if not using the scheduler container):
+
+```cron
+* * * * * cd /var/www/html && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Live VPS confirmation: **Pending Infrastructure Audit #2.**
 
 ## 8. Which parts are automatic?
 

@@ -21,6 +21,7 @@ use App\Models\LoyaltyRedemption;
 use App\Models\LoyaltyReward;
 use App\Models\LoyaltyTier;
 use App\Services\Loyalty\LoyaltyEngine;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -34,6 +35,8 @@ class AdminLoyaltyController extends Controller
 
     public function dashboard(): JsonResponse
     {
+        $this->authorize(AdminPermissions::LOYALTY_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => $this->loyalty->dashboard(),
@@ -42,6 +45,8 @@ class AdminLoyaltyController extends Controller
 
     public function customers(Request $request): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::LOYALTY_VIEW);
+
         $perPage = min(max((int) $request->query('per_page', 20), 1), 100);
         $search = trim((string) $request->query('search', ''));
 
@@ -68,6 +73,8 @@ class AdminLoyaltyController extends Controller
 
     public function showCustomer(LoyaltyAccount $account): JsonResponse
     {
+        $this->authorize(AdminPermissions::LOYALTY_VIEW);
+
         $account->load([
             'tier',
             'profile.user:id,name,email,phone',
@@ -87,6 +94,8 @@ class AdminLoyaltyController extends Controller
 
     public function enroll(CustomerProfile $customer): JsonResponse
     {
+        $this->authorize(AdminPermissions::LOYALTY_MANAGE);
+
         $account = $this->loyalty->ensureAccount($customer);
 
         return response()->json([
@@ -98,6 +107,8 @@ class AdminLoyaltyController extends Controller
 
     public function adjust(LoyaltyAccount $account, Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::LOYALTY_MANAGE);
+
         $data = $request->validate([
             'points' => ['required', 'integer', 'not_in:0'],
             'reason' => ['required', 'string', 'max:500'],
@@ -119,6 +130,8 @@ class AdminLoyaltyController extends Controller
 
     public function redeem(LoyaltyAccount $account, Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::LOYALTY_MANAGE);
+
         $data = $request->validate([
             'reward_id' => ['required', 'uuid', 'exists:loyalty_rewards,id'],
             'channel' => ['sometimes', 'string', 'in:pos,storefront,admin'],
@@ -147,6 +160,8 @@ class AdminLoyaltyController extends Controller
 
     public function redemptions(Request $request): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::LOYALTY_VIEW);
+
         $perPage = min(max((int) $request->query('per_page', 20), 1), 100);
 
         $rows = LoyaltyRedemption::query()
@@ -159,6 +174,8 @@ class AdminLoyaltyController extends Controller
 
     public function tiers(): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::LOYALTY_VIEW);
+
         return LoyaltyTierResource::collection(
             LoyaltyTier::query()->orderBy('sort_order')->get()
         );
@@ -166,6 +183,8 @@ class AdminLoyaltyController extends Controller
 
     public function storeTier(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::LOYALTY_MANAGE);
+
         $data = $request->validate([
             'code' => ['required', 'string', 'max:64', 'unique:loyalty_tiers,code'],
             'name' => ['required', 'string', 'max:120'],
@@ -189,6 +208,8 @@ class AdminLoyaltyController extends Controller
 
     public function updateTier(LoyaltyTier $tier, Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::LOYALTY_MANAGE);
+
         $data = $request->validate([
             'code' => ['sometimes', 'string', 'max:64', Rule::unique('loyalty_tiers', 'code')->ignore($tier->id)],
             'name' => ['sometimes', 'string', 'max:120'],
@@ -212,6 +233,8 @@ class AdminLoyaltyController extends Controller
 
     public function rules(): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::LOYALTY_VIEW);
+
         return LoyaltyEarnRuleResource::collection(
             LoyaltyEarnRule::query()->orderBy('priority')->get()
         );
@@ -219,6 +242,8 @@ class AdminLoyaltyController extends Controller
 
     public function storeRule(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::LOYALTY_MANAGE);
+
         $data = $request->validate([
             'code' => ['required', 'string', 'max:64', 'unique:loyalty_earn_rules,code'],
             'name' => ['required', 'string', 'max:160'],
@@ -247,6 +272,8 @@ class AdminLoyaltyController extends Controller
 
     public function updateRule(LoyaltyEarnRule $rule, Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::LOYALTY_MANAGE);
+
         $data = $request->validate([
             'code' => ['sometimes', 'string', 'max:64', Rule::unique('loyalty_earn_rules', 'code')->ignore($rule->id)],
             'name' => ['sometimes', 'string', 'max:160'],
@@ -275,6 +302,8 @@ class AdminLoyaltyController extends Controller
 
     public function rewards(): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::LOYALTY_VIEW);
+
         return LoyaltyRewardResource::collection(
             LoyaltyReward::query()->orderBy('name')->get()
         );
@@ -282,6 +311,8 @@ class AdminLoyaltyController extends Controller
 
     public function storeReward(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::LOYALTY_MANAGE);
+
         $data = $request->validate([
             'code' => ['required', 'string', 'max:64', 'unique:loyalty_rewards,code'],
             'name' => ['required', 'string', 'max:160'],
@@ -310,6 +341,8 @@ class AdminLoyaltyController extends Controller
 
     public function updateReward(LoyaltyReward $reward, Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::LOYALTY_MANAGE);
+
         $data = $request->validate([
             'code' => ['sometimes', 'string', 'max:64', Rule::unique('loyalty_rewards', 'code')->ignore($reward->id)],
             'name' => ['sometimes', 'string', 'max:160'],
@@ -338,6 +371,8 @@ class AdminLoyaltyController extends Controller
 
     public function lookup(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::LOYALTY_VIEW);
+
         $data = $request->validate([
             'customer_id' => ['nullable', 'uuid'],
             'loyalty_number' => ['nullable', 'string'],
@@ -392,6 +427,8 @@ class AdminLoyaltyController extends Controller
 
     public function ledger(LoyaltyAccount $account, Request $request): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::LOYALTY_VIEW);
+
         $perPage = min(max((int) $request->query('per_page', 50), 1), 100);
 
         return LoyaltyLedgerEntryResource::collection(

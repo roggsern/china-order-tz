@@ -2,6 +2,7 @@
 
 namespace App\Services\Returns;
 
+use App\Enums\InventoryDisposition;
 use App\Enums\ReturnItemResolution;
 use App\Enums\ReturnRequestStatus;
 use App\Events\Returns\ReturnApproved;
@@ -14,6 +15,7 @@ use App\Models\OrderItem;
 use App\Models\ReturnItem;
 use App\Models\ReturnRequest;
 use App\Models\User;
+use App\Services\Inventory\ReturnInventoryRestorationService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -21,12 +23,16 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Returns Engine — controlled return workflow.
- * Does not refund automatically or restore inventory in this phase.
+ *
+ * Online inventory restoration runs only on a real transition into Completed
+ * (RC1-G3), via ReturnInventoryRestorationService + MutationGate.
+ * Does not refund automatically; refunds remain a separate engine concern.
  */
 class ReturnEngine
 {
     public function __construct(
         private readonly ReturnEligibilityService $eligibility,
+        private readonly ReturnInventoryRestorationService $inventoryRestoration,
     ) {}
 
     /**
@@ -109,7 +115,8 @@ class ReturnEngine
      *         id: string,
      *         condition?: string|null,
      *         resolution?: string|null,
-     *         refund_amount?: float|int|string|null
+     *         refund_amount?: float|int|string|null,
+     *         inventory_disposition?: string|null
      *     }>
      * }  $input
      */
@@ -130,6 +137,7 @@ class ReturnEngine
                 ? $locked->status
                 : ReturnRequestStatus::from((string) $locked->status);
 
+            // Already at target status: allow notes/item edits, never re-trigger inventory restore.
             if ($current === $next) {
                 if (array_key_exists('admin_notes', $input)) {
                     $locked->admin_notes = $input['admin_notes'];
@@ -148,6 +156,15 @@ class ReturnEngine
                 ]);
             }
 
+            // Apply item decisions (including disposition) before Completed validation/restore.
+            $this->applyItemDecisions($locked, $input['items'] ?? [], $admin);
+
+            if ($next === ReturnRequestStatus::Completed) {
+                $locked->load('items');
+                $this->inventoryRestoration->assertItemsReadyForCompletion($locked);
+                $this->inventoryRestoration->restoreForCompletedReturn($locked, $admin);
+            }
+
             $locked->status = $next;
 
             if (array_key_exists('admin_notes', $input)) {
@@ -164,7 +181,6 @@ class ReturnEngine
             }
 
             $locked->save();
-            $this->applyItemDecisions($locked, $input['items'] ?? [], $admin);
 
             $fresh = $locked->fresh(['items.orderItem', 'order.user', 'customer', 'approver', 'refundTransactions']) ?? $locked;
 
@@ -230,7 +246,13 @@ class ReturnEngine
     }
 
     /**
-     * @param  list<array{id: string, condition?: string|null, resolution?: string|null, refund_amount?: mixed}>  $items
+     * @param  list<array{
+     *     id: string,
+     *     condition?: string|null,
+     *     resolution?: string|null,
+     *     refund_amount?: mixed,
+     *     inventory_disposition?: string|null
+     * }>  $items
      */
     private function applyItemDecisions(ReturnRequest $return, array $items, ?Admin $admin): void
     {
@@ -262,6 +284,15 @@ class ReturnEngine
                     ]);
                 }
                 $item->resolution = $resolution;
+            }
+            if (array_key_exists('inventory_disposition', $row) && filled($row['inventory_disposition'])) {
+                $disposition = InventoryDisposition::tryFrom((string) $row['inventory_disposition']);
+                if ($disposition === null) {
+                    throw ValidationException::withMessages([
+                        'items' => ["Invalid inventory_disposition for return item {$item->id}."],
+                    ]);
+                }
+                $item->inventory_disposition = $disposition;
             }
             if (array_key_exists('refund_amount', $row) && $row['refund_amount'] !== null) {
                 $item->refund_amount = $row['refund_amount'];

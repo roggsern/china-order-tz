@@ -4,6 +4,7 @@ namespace App\Actions\UserAuth;
 
 use App\Http\Requests\Auth\LoginRequest;
 use App\Models\User;
+use App\Support\Auth\SanctumTokenIssuer;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
@@ -42,7 +43,8 @@ class LoginUserAction
             ], 403));
         }
 
-        $token = $user->createToken('customer-api')->plainTextToken;
+        // Customers keep multi-device tokens; new token still has finite expiry.
+        $token = SanctumTokenIssuer::issueCustomer($user)->plainTextToken;
 
         Auth::guard('web')->logout();
 

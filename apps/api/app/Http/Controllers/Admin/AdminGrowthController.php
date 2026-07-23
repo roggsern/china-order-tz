@@ -14,6 +14,7 @@ use App\Models\GrowthJourney;
 use App\Models\GrowthSegment;
 use App\Services\Growth\GrowthEngine;
 use App\Services\Stores\ActiveStoreContext;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -28,6 +29,8 @@ class AdminGrowthController extends Controller
 
     public function dashboard(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::GROWTH_VIEW);
+
         /** @var Admin $admin */
         $admin = $request->user();
         $storeId = $request->query('store_id');
@@ -43,6 +46,8 @@ class AdminGrowthController extends Controller
 
     public function segments(Request $request): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::GROWTH_VIEW);
+
         return GrowthSegmentResource::collection($this->growth->paginateSegments(
             min(max((int) $request->query('per_page', 20), 1), 100)
         ));
@@ -50,6 +55,8 @@ class AdminGrowthController extends Controller
 
     public function storeSegment(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::GROWTH_MANAGE);
+
         /** @var Admin $admin */
         $admin = $request->user();
         $data = $request->validate([
@@ -74,6 +81,8 @@ class AdminGrowthController extends Controller
 
     public function updateSegment(GrowthSegment $segment, Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::GROWTH_MANAGE);
+
         $data = $request->validate([
             'name' => ['sometimes', 'string', 'max:160'],
             'description' => ['nullable', 'string'],
@@ -90,6 +99,8 @@ class AdminGrowthController extends Controller
 
     public function refreshSegment(GrowthSegment $segment): JsonResponse
     {
+        $this->authorize(AdminPermissions::GROWTH_MANAGE);
+
         $count = $this->growth->segments()->refreshMembers($segment);
 
         return response()->json([
@@ -101,6 +112,8 @@ class AdminGrowthController extends Controller
 
     public function campaigns(Request $request): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::GROWTH_VIEW);
+
         return GrowthCampaignResource::collection(
             $this->growth->paginateCampaigns($request->only(['status', 'store_id']), 20)
         );
@@ -108,6 +121,8 @@ class AdminGrowthController extends Controller
 
     public function storeCampaign(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::GROWTH_MANAGE);
+
         /** @var Admin $admin */
         $admin = $request->user();
         $data = $request->validate([
@@ -137,6 +152,8 @@ class AdminGrowthController extends Controller
 
     public function showCampaign(GrowthCampaign $campaign): JsonResponse
     {
+        $this->authorize(AdminPermissions::GROWTH_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => new GrowthCampaignResource($campaign->load(['segment', 'store', 'promotion'])),
@@ -145,6 +162,8 @@ class AdminGrowthController extends Controller
 
     public function updateCampaign(GrowthCampaign $campaign, Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::GROWTH_MANAGE);
+
         /** @var Admin $admin */
         $admin = $request->user();
         $data = $request->validate([
@@ -169,6 +188,8 @@ class AdminGrowthController extends Controller
 
     public function sendCampaign(GrowthCampaign $campaign): JsonResponse
     {
+        $this->authorize(AdminPermissions::GROWTH_MANAGE);
+
         /** @var Admin $admin */
         $admin = request()->user();
         $sent = $this->growth->campaigns()->send($campaign, $admin);
@@ -182,6 +203,8 @@ class AdminGrowthController extends Controller
 
     public function campaignAnalytics(GrowthCampaign $campaign): JsonResponse
     {
+        $this->authorize(AdminPermissions::GROWTH_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -193,6 +216,8 @@ class AdminGrowthController extends Controller
 
     public function journeys(Request $request): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::GROWTH_VIEW);
+
         return GrowthJourneyResource::collection($this->growth->paginateJourneys(
             min(max((int) $request->query('per_page', 20), 1), 100)
         ));
@@ -200,6 +225,8 @@ class AdminGrowthController extends Controller
 
     public function storeJourney(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::GROWTH_MANAGE);
+
         /** @var Admin $admin */
         $admin = $request->user();
         $data = $request->validate([
@@ -221,6 +248,8 @@ class AdminGrowthController extends Controller
 
     public function runJourneys(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::GROWTH_MANAGE);
+
         /** @var Admin $admin */
         $admin = $request->user();
         $data = $request->validate([

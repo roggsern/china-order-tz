@@ -5,22 +5,28 @@ namespace Database\Seeders;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\VariantInventory;
+use App\Services\Inventory\CanonicalVariantInventoryInitializer;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
 /**
  * Seeds Inventory Engine rows (MAIN warehouse) for catalog variants.
  * Does not write stock onto product_variants or the legacy inventory table.
+ *
+ * RC1-B1A — MAIN establishment goes through CanonicalVariantInventoryInitializer
+ * (bootstrap at 0 + MutationGate Receive for positive opening stock).
  */
 class VariantInventorySeeder extends Seeder
 {
     public function run(): void
     {
+        $initializer = app(CanonicalVariantInventoryInitializer::class);
+
         ProductVariant::query()
             ->with('product.catalogProductType')
             ->whereHas('product', fn ($query) => $query->whereNotNull('catalog_product_type_id'))
             ->get()
-            ->each(function (ProductVariant $variant) {
+            ->each(function (ProductVariant $variant) use ($initializer) {
                 if (
                     VariantInventory::query()
                         ->where('product_variant_id', $variant->id)
@@ -37,14 +43,17 @@ class VariantInventorySeeder extends Seeder
 
                 [$onHand, $reserved, $reorderLevel] = $this->stockFor($product, $variant);
 
-                VariantInventory::query()->create([
-                    'product_variant_id' => $variant->id,
+                // Explicit positive demo qty → Receive via MutationGate (never legacy + requested).
+                // stockFor is always > 0; zero opening would bootstrap with no ledger inside ensure().
+                $initializer->ensure($variant, [
                     'warehouse_code' => 'MAIN',
-                    'on_hand' => $onHand,
+                    'requested_on_hand' => $onHand,
                     'reserved' => $reserved,
                     'reorder_level' => $reorderLevel,
                     'safety_stock' => max(0, (int) floor($reorderLevel / 2)),
                     'is_active' => true,
+                    'idempotency_key' => 'variant-inventory-seeder:'.$variant->id.':MAIN',
+                    'reason' => 'VariantInventorySeeder — demo opening stock',
                 ]);
             });
     }

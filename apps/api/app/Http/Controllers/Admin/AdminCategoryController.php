@@ -13,6 +13,7 @@ use App\Http\Requests\Admin\StoreCategoryRequest;
 use App\Http\Requests\Admin\UpdateCategoryRequest;
 use App\Http\Resources\CategoryResource;
 use App\Models\Category;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -20,6 +21,8 @@ class AdminCategoryController extends Controller
 {
     public function index(GetAdminCategoriesAction $action): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::CATALOG_VIEW);
+
         return CategoryResource::collection($action->handle())
             ->additional(['success' => true]);
     }
@@ -34,6 +37,8 @@ class AdminCategoryController extends Controller
 
     public function show(Category $category, ShowCategoryAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::CATALOG_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => new CategoryResource($action->handle($category)),
@@ -53,6 +58,8 @@ class AdminCategoryController extends Controller
 
     public function destroy(Category $category, DeleteCategoryAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::CATALOG_DELETE);
+
         $action->handle($category);
 
         return response()->json([
@@ -63,6 +70,7 @@ class AdminCategoryController extends Controller
 
     public function restore(string $id, RestoreCategoryAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::CATALOG_RESTORE);
         return response()->json([
             'success' => true,
             'message' => 'Category restored successfully.',

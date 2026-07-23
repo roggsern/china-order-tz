@@ -10,6 +10,7 @@ use App\Http\Resources\ShipmentResource;
 use App\Models\Fulfillment;
 use App\Models\Shipment;
 use App\Services\Shipments\ShipmentEngine;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -60,6 +61,8 @@ class AdminShipmentsController extends Controller
 
     public function show(Shipment $shipment, ShipmentEngine $engine): JsonResponse
     {
+        $this->authorize(AdminPermissions::ORDERS_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => new ShipmentResource($engine->show($shipment)),
@@ -68,6 +71,8 @@ class AdminShipmentsController extends Controller
 
     public function eligibility(Fulfillment $fulfillment, ShipmentEngine $engine): JsonResponse
     {
+        $this->authorize(AdminPermissions::ORDERS_SHIP);
+
         $result = $engine->eligibilityFor($fulfillment);
 
         return response()->json([

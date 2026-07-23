@@ -21,6 +21,17 @@ class CreateSubcategoryAction
             ]);
         }
 
+        $origin = $parent->resolvedOrigin()?->value
+            ?? ($parent->origin instanceof \App\Enums\CatalogOrigin
+                ? $parent->origin->value
+                : $parent->origin);
+
+        if ($origin === null || $origin === '') {
+            throw ValidationException::withMessages([
+                'category_id' => ['Parent category must have a valid origin (china or tz).'],
+            ]);
+        }
+
         $slugSource = isset($validated['slug']) && is_string($validated['slug']) && trim($validated['slug']) !== ''
             ? $validated['slug']
             : $parent->slug.'-'.$validated['name'];
@@ -28,7 +39,8 @@ class CreateSubcategoryAction
         return Category::create([
             'department_id' => $parent->department_id,
             'parent_id' => $parent->id,
-            'origin' => $parent->resolvedOrigin()?->value ?? $parent->origin,
+            'store_id' => $origin === 'china' ? null : $parent->store_id,
+            'origin' => $origin,
             'name' => $validated['name'],
             'slug' => $this->generateUniqueSlug($slugSource),
             'image' => $validated['image'] ?? null,

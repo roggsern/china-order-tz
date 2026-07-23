@@ -13,6 +13,7 @@ use App\Http\Requests\Admin\StoreDepartmentRequest;
 use App\Http\Requests\Admin\UpdateDepartmentRequest;
 use App\Http\Resources\DepartmentResource;
 use App\Models\Department;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -20,6 +21,8 @@ class AdminDepartmentController extends Controller
 {
     public function index(GetAdminDepartmentsAction $action): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::CATALOG_VIEW);
+
         return DepartmentResource::collection($action->handle())
             ->additional(['success' => true]);
     }
@@ -34,6 +37,8 @@ class AdminDepartmentController extends Controller
 
     public function show(Department $department, ShowDepartmentAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::CATALOG_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => new DepartmentResource($action->handle($department)),
@@ -53,6 +58,8 @@ class AdminDepartmentController extends Controller
 
     public function destroy(Department $department, DeleteDepartmentAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::CATALOG_DELETE);
+
         $action->handle($department);
 
         return response()->json([
@@ -63,6 +70,8 @@ class AdminDepartmentController extends Controller
 
     public function restore(string $id, RestoreDepartmentAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::CATALOG_RESTORE);
+
         return response()->json([
             'success' => true,
             'message' => 'Department restored successfully.',

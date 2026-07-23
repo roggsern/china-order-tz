@@ -21,6 +21,7 @@ export type AdminApiCategory = {
   id: string;
   department_id?: string | null;
   parent_id?: string | null;
+  store_id?: string | null;
   origin?: "china" | "tz" | null;
   product_type_id?: string | null;
   name: string;
@@ -35,6 +36,16 @@ export type AdminApiCategory = {
     name: string;
     slug: string;
     icon?: string | null;
+  } | null;
+  store?: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
+  product_type?: {
+    id: string;
+    name: string;
+    slug: string;
   } | null;
   children?: AdminApiCategory[];
   deleted_at?: string | null;
@@ -240,8 +251,10 @@ export type AdminCategory = Category & {
   departmentName?: string | null;
   departmentIcon?: string | null;
   parentId?: string | null;
+  storeId?: string | null;
   origin?: ProductOrigin | null;
   productTypeId?: string | null;
+  productTypeName?: string | null;
   image?: string | null;
   sortOrder?: number;
   isActive: boolean;
@@ -564,8 +577,10 @@ export function mapAdminApiCategory(category: AdminApiCategory): AdminCategory {
     departmentName: category.department?.name ?? null,
     departmentIcon: category.department?.icon ?? null,
     parentId: category.parent_id ?? null,
+    storeId: category.store_id ?? category.store?.id ?? null,
     origin: category.origin ?? null,
     productTypeId: category.product_type_id ?? null,
+    productTypeName: category.product_type?.name ?? null,
     image: category.image ?? null,
     sortOrder: category.sort_order ?? 0,
     isActive: category.is_active !== false,
@@ -828,7 +843,8 @@ export type AdminCategoryWritePayload = {
   department_id: string;
   slug?: string | null;
   parent_id?: string | null;
-  origin?: "china" | "tz" | null;
+  origin: "china" | "tz";
+  store_id?: string | null;
   product_type_id?: string | null;
   image?: string | null;
   description?: string | null;
@@ -880,6 +896,60 @@ export async function fetchAdminDepartments(
     query,
   );
   return items;
+}
+
+export type AdminApiStore = {
+  id: string;
+  code?: string;
+  name: string;
+  slug: string;
+  is_active?: boolean;
+  storefront_enabled?: boolean;
+  storefront_visible?: boolean;
+  deleted_at?: string | null;
+};
+
+export type AdminStoreOption = {
+  id: string;
+  name: string;
+  slug: string;
+  code: string;
+  isActive: boolean;
+};
+
+/** Active, non-deleted stores from Admin Stores API (DB-backed). */
+export async function fetchAdminStores(): Promise<AdminStoreOption[]> {
+  const response = await fetch("/api/admin/stores", {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  });
+
+  const payload = await parseJsonResponse<{
+    success?: boolean;
+    message?: string;
+    data?: AdminApiStore[];
+  }>(response);
+
+  if (!response.ok || payload.success === false) {
+    throw new AdminCatalogApiError(
+      payload.message?.trim() || "Unable to load stores from the API.",
+      response.status,
+    );
+  }
+
+  const rows = Array.isArray(payload.data) ? payload.data : [];
+
+  return rows
+    .filter((store) => store.is_active !== false && !store.deleted_at)
+    .map((store) => ({
+      id: store.id,
+      name: store.name,
+      slug: store.slug,
+      code: store.code?.trim() || "",
+      isActive: store.is_active !== false,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function createAdminDepartment(
@@ -1080,6 +1150,8 @@ export type AdminApiCatalogProductType = {
   description?: string | null;
   sort_order?: number;
   is_active?: boolean;
+  products_count?: number;
+  attributes_count?: number;
   subcategory?: {
     id: string;
     name: string;
@@ -1117,6 +1189,8 @@ export type AdminCatalogProductType = {
   image: string | null;
   sortOrder: number;
   isActive: boolean;
+  productsCount: number;
+  attributesCount: number;
   deletedAt?: string | null;
 };
 
@@ -1138,6 +1212,8 @@ export function mapAdminApiCatalogProductType(
     image: item.image ?? null,
     sortOrder: item.sort_order ?? 0,
     isActive: item.is_active !== false,
+    productsCount: item.products_count ?? 0,
+    attributesCount: item.attributes_count ?? 0,
     deletedAt: item.deleted_at ?? null,
   };
 }
@@ -1178,6 +1254,51 @@ export async function fetchAdminCatalogProductTypes(
     AdminCatalogProductType
   >("/api/admin/catalog-product-types", mapAdminApiCatalogProductType, query);
   return items;
+}
+
+/** Active Configuration Templates (legacy product_types / ProductType). */
+export type AdminConfigurationTemplate = {
+  id: string;
+  name: string;
+  slug: string;
+  hasConfigurations: boolean;
+};
+
+export async function fetchAdminConfigurationTemplates(): Promise<
+  AdminConfigurationTemplate[]
+> {
+  const response = await fetch("/api/admin/product-types", {
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  });
+
+  const payload = await parseJsonResponse<{
+    success?: boolean;
+    message?: string;
+    data?: Array<{
+      id: string;
+      name: string;
+      slug: string;
+      has_configurations?: boolean;
+      is_active?: boolean;
+    }>;
+  }>(response);
+
+  if (!response.ok || payload.success === false) {
+    throw new AdminCatalogApiError(
+      payload.message?.trim() || "Unable to load Configuration Templates.",
+      response.status,
+    );
+  }
+
+  return (payload.data ?? [])
+    .filter((item) => item.is_active !== false)
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      slug: item.slug,
+      hasConfigurations: item.has_configurations !== false,
+    }));
 }
 
 export async function createAdminCatalogProductType(
@@ -3059,6 +3180,7 @@ export async function fetchProductFormSchema(
 }
 
 export async function generateAdminConfigurations(input: {
+  /** Configuration Template id (legacy `product_types` / ProductType). */
   productTypeId: string;
   selectedValues: Record<string, string[]>;
   baseSku: string;

@@ -15,7 +15,7 @@ class ShowCustomerOrderAction
 
         return $order->load([
             'items',
-            'items.product.supplier',
+            'items.product.commerceChannel',
             'payments',
             'deliveryOption',
         ]);

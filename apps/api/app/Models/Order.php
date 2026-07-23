@@ -207,11 +207,54 @@ class Order extends Model
 
     public function resolveSource(): string
     {
-        $this->loadMissing(['items.product.supplier']);
+        $this->loadMissing(['items.product.commerceChannel']);
+
+        $needsSupplierFallback = false;
 
         foreach ($this->items as $item) {
-            if (strcasecmp($item->product?->supplier?->country ?? '', 'China') === 0) {
-                return 'China';
+            $product = $item->product;
+            if ($product === null) {
+                continue;
+            }
+
+            if ($product->relationLoaded('commerceChannel') && $product->commerceChannel !== null) {
+                if (\App\Enums\CommerceChannelCode::tryFrom($product->commerceChannel->code)
+                    === \App\Enums\CommerceChannelCode::ChinaImport) {
+                    return 'China';
+                }
+
+                continue;
+            }
+
+            if (filled($product->fulfillment_source)) {
+                if (\App\Enums\CommerceChannelCode::fromFulfillmentSource($product->fulfillment_source)
+                    === \App\Enums\CommerceChannelCode::ChinaImport) {
+                    return 'China';
+                }
+
+                continue;
+            }
+
+            $needsSupplierFallback = true;
+        }
+
+        if ($needsSupplierFallback) {
+            $this->loadMissing(['items.product.supplier']);
+
+            foreach ($this->items as $item) {
+                $product = $item->product;
+                if ($product === null) {
+                    continue;
+                }
+
+                if (($product->relationLoaded('commerceChannel') && $product->commerceChannel !== null)
+                    || filled($product->fulfillment_source)) {
+                    continue;
+                }
+
+                if (strcasecmp($product->supplier?->country ?? '', 'China') === 0) {
+                    return 'China';
+                }
             }
         }
 

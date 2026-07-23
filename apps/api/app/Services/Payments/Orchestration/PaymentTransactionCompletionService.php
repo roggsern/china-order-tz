@@ -10,6 +10,8 @@ use App\Models\Order;
 use App\Models\PaymentTransaction;
 use App\Services\CostProfit\ProfitEngine;
 use App\Services\Fulfillment\FulfillmentEngine;
+use App\Services\Inventory\DTOs\InventoryCommitmentContext;
+use App\Services\Inventory\InventoryCommitmentService;
 use App\Services\Notifications\NotificationPlatform;
 use App\Services\Orders\Lifecycle\OrderLifecycleContext;
 use App\Services\Orders\Lifecycle\OrderLifecycleEngine;
@@ -20,7 +22,7 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Marks orchestrator payment transactions (and parent orders) as paid.
- * Triggers Fulfillment Engine after payment success (no inventory/shipping).
+ * Commits inventory once on payment success (ADR 055), then fulfillment.
  */
 class PaymentTransactionCompletionService
 {
@@ -29,6 +31,7 @@ class PaymentTransactionCompletionService
         private readonly NotificationPlatform $notifications,
         private readonly ProfitEngine $profitEngine,
         private readonly OrderLifecycleEngine $lifecycle,
+        private readonly InventoryCommitmentService $inventoryCommitment,
     ) {}
 
     public function applyResult(PaymentTransaction $transaction, PaymentProviderResult $result): PaymentTransaction
@@ -40,10 +43,11 @@ class PaymentTransactionCompletionService
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            // Idempotent: already successful — still ensure fulfillment exists.
+            // Idempotent: already successful — ensure commitment + fulfillment.
             if ($locked->status === PaymentTransactionStatus::Successful) {
                 $locked->loadMissing('order');
                 if ($locked->order !== null) {
+                    $this->commitInventory($locked->order, $locked, strict: false);
                     $this->startFulfillment($locked->order);
                 }
 
@@ -147,6 +151,9 @@ class PaymentTransactionCompletionService
 
         $paidOrder = $order->fresh() ?? $order;
 
+        // Strict on first payment success path (including already-paid race): must commit.
+        $this->commitInventory($paidOrder, $transaction, strict: true);
+
         try {
             $this->profitEngine->calculateForOrder($paidOrder);
         } catch (\Throwable $e) {
@@ -157,6 +164,20 @@ class PaymentTransactionCompletionService
         }
 
         $this->startFulfillment($paidOrder);
+    }
+
+    private function commitInventory(Order $order, PaymentTransaction $transaction, bool $strict): void
+    {
+        $this->inventoryCommitment->commitForOrder(new InventoryCommitmentContext(
+            order: $order,
+            payment: $transaction,
+            source: 'payment_transaction',
+            channel: null,
+            metadata: [
+                'payment_transaction_id' => $transaction->id,
+            ],
+            strict: $strict,
+        ));
     }
 
     private function startFulfillment(Order $order): void

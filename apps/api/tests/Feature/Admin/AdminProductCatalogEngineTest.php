@@ -36,9 +36,17 @@ class AdminProductCatalogEngineTest extends TestCase
             'slug' => 'electronics-smartphones-engine',
         ]);
 
+        $cpt = \App\Models\CatalogProductType::factory()->create([
+            'subcategory_id' => $leaf->id,
+            'name' => 'Engine CPT Phones',
+            'slug' => 'engine-cpt-phones',
+            'is_active' => true,
+        ]);
+
         $response = $this->postJson('/api/v1/admin/products', [
             'name' => 'Auto SKU Phone',
             'category_id' => $leaf->id,
+            'catalog_product_type_id' => $cpt->id,
             'price' => 100000,
             'status' => true,
             'stock_quantity' => 5,

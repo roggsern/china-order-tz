@@ -13,9 +13,7 @@ class SetPrimaryProductMediaAction
     public function handle(Product $product, ProductMedia $media): ProductMedia
     {
         if ($media->product_id !== $product->id) {
-            throw ValidationException::withMessages([
-                'media' => ['Media does not belong to this product.'],
-            ]);
+            abort(404);
         }
 
         if ($media->type !== ProductMediaType::Image) {

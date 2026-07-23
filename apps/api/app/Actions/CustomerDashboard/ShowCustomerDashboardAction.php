@@ -54,7 +54,7 @@ class ShowCustomerDashboardAction
             ],
             'recent_orders' => Order::query()
                 ->where('user_id', $user->id)
-                ->with(['items.product.supplier'])
+                ->with(['items.product.commerceChannel'])
                 ->latest()
                 ->limit(5)
                 ->get()

@@ -180,7 +180,7 @@ export function ProductConfigurationGrid({
       <section className="admin-card p-5">
         <h2 className="text-sm font-semibold text-zinc-900">Configurations</h2>
         <p className="mt-1 text-xs text-zinc-500">
-          Select a category to load its Product Type schema.
+          Select a category to load its Configuration Template schema.
         </p>
       </section>
     );
@@ -194,8 +194,9 @@ export function ProductConfigurationGrid({
             Product configurations
           </h2>
           <p className="mt-1 text-xs text-zinc-500">
-            Driven by Product Type metadata. Only valid combinations from the
-            Attribute Dependency Engine are generated.
+            Driven by Configuration Template metadata. Only valid combinations from the
+            Attribute Dependency Engine are generated. Generate creates a preview only —
+            configurations are saved when you save the product.
           </p>
         </div>
         {productTypeName ? (
@@ -217,15 +218,15 @@ export function ProductConfigurationGrid({
 
       {!schemaLoading && schema && !schema.product_type ? (
         <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          This category has no Product Type assigned. Assign a type in Admin Categories
-          before building configurations.
+          This category has no Configuration Template assigned. Assign one on the
+          category (Configuration Template field) before building configurations.
         </p>
       ) : null}
 
       {!schemaLoading && schema?.product_type && !hasConfigurationsCapability ? (
         <div className="mt-4">
           <p className="text-sm text-zinc-600">
-            This Product Type does not use configurations. Use simple stock below.
+            This Configuration Template does not use configurations. Use simple stock below.
           </p>
           {allowsSimpleStock && onSimpleStockChange ? (
             <div className="mt-3 max-w-xs">
@@ -300,14 +301,14 @@ export function ProductConfigurationGrid({
               disabled={generating || !baseSku.trim()}
               className="rounded-md bg-zinc-900 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {generating ? "Generating…" : "Generate configurations"}
+              {generating ? "Generating preview…" : "Preview configurations"}
             </button>
             {!baseSku.trim() ? (
               <p className="text-xs text-amber-700">Enter a base SKU first (used for auto SKUs).</p>
             ) : (
               <p className="text-xs text-zinc-500">
-                {configurations.length} configuration
-                {configurations.length === 1 ? "" : "s"} ready
+                {configurations.length} preview configuration
+                {configurations.length === 1 ? "" : "s"} — not saved until product save
               </p>
             )}
           </div>

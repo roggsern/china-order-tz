@@ -2,13 +2,17 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Concerns\AuthorizesAdminPermission;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateProductStockRequest extends FormRequest
 {
-    public function authorize(): bool
+    use AuthorizesAdminPermission;
+
+    protected function requiredPermission(): string
     {
-        return true;
+        return AdminPermissions::INVENTORY_ADJUST;
     }
 
     /**
@@ -18,6 +22,7 @@ class UpdateProductStockRequest extends FormRequest
     {
         return [
             'stock_quantity' => ['required', 'integer', 'min:0'],
+            'idempotency_key' => ['sometimes', 'nullable', 'string', 'max:191'],
         ];
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Actions\AdminCategories;
 
+use App\Enums\CatalogOrigin;
 use App\Http\Requests\Admin\UpdateCategoryRequest;
 use App\Models\Category;
 use Illuminate\Support\Str;
@@ -12,10 +13,21 @@ class UpdateCategoryAction
     {
         $validated = $request->validated();
 
+        $origin = $validated['origin'] instanceof CatalogOrigin
+            ? $validated['origin']->value
+            : (string) $validated['origin'];
+
         $data = [
             'name' => $validated['name'],
             'department_id' => $validated['department_id'],
+            'origin' => $origin,
         ];
+
+        if ($origin === CatalogOrigin::China->value) {
+            $data['store_id'] = null;
+        } elseif (array_key_exists('store_id', $validated)) {
+            $data['store_id'] = $validated['store_id'];
+        }
 
         if (array_key_exists('slug', $validated) && is_string($validated['slug']) && trim($validated['slug']) !== '') {
             $data['slug'] = $this->ensureUniqueSlug(Str::slug($validated['slug']), $category->id);
@@ -25,15 +37,6 @@ class UpdateCategoryAction
 
         if (array_key_exists('parent_id', $validated)) {
             $data['parent_id'] = $validated['parent_id'];
-        }
-
-        if (array_key_exists('origin', $validated)) {
-            $data['origin'] = $validated['origin'];
-        } elseif (array_key_exists('parent_id', $validated) && $validated['parent_id'] !== null) {
-            $parent = Category::query()->find($validated['parent_id']);
-            if ($parent !== null && $category->origin === null) {
-                $data['origin'] = $parent->resolvedOrigin()?->value;
-            }
         }
 
         if (array_key_exists('product_type_id', $validated)) {
@@ -58,7 +61,7 @@ class UpdateCategoryAction
 
         $category->update($data);
 
-        return $category->fresh(['department', 'productType', 'parent', 'children']);
+        return $category->fresh(['department', 'productType', 'parent', 'children', 'store']);
     }
 
     private function generateUniqueSlug(string $name, string $ignoreCategoryId): string

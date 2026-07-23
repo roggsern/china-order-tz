@@ -9,6 +9,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+/**
+ * Configuration Template domain (ADR 052).
+ *
+ * Legacy technical name: ProductType / table product_types.
+ * Purpose: configuration schema, SKU patterns, attribute bindings, dependency
+ * rules, and configuration generation — NOT a catalog navigation taxonomy level.
+ *
+ * Catalog taxonomy leaf is CatalogProductType (catalog_product_types).
+ */
 class ProductType extends Model
 {
     use HasFactory, HasUuidPrimaryKey, SoftDeletes;

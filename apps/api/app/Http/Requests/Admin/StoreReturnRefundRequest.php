@@ -2,13 +2,17 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Concerns\AuthorizesAdminPermission;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreReturnRefundRequest extends FormRequest
 {
-    public function authorize(): bool
+    use AuthorizesAdminPermission;
+
+    protected function requiredPermission(): string
     {
-        return true;
+        return AdminPermissions::RETURNS_REFUND;
     }
 
     public function rules(): array
@@ -19,7 +23,7 @@ class StoreReturnRefundRequest extends FormRequest
             'method' => ['sometimes', 'string', 'max:50'],
             'reference' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:2000'],
-            // Optional immediate status advance after create (still manual — not auto-complete).
+            // Optional immediate status advance after create (still manual â€” not auto-complete).
             'status' => ['sometimes', 'string', 'in:pending,approved,processing,completed,failed'],
         ];
     }

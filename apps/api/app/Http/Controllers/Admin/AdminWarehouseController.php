@@ -10,6 +10,7 @@ use App\Http\Requests\Admin\UpdateWarehouseJobStatusRequest;
 use App\Http\Resources\WarehouseJobResource;
 use App\Models\WarehouseJob;
 use App\Services\Warehouse\WarehouseEngine;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -41,6 +42,8 @@ class AdminWarehouseController extends Controller
 
     public function show(WarehouseJob $job): JsonResponse
     {
+        $this->authorize(AdminPermissions::WAREHOUSE_JOBS_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => new WarehouseJobResource($this->engine->show($job)),

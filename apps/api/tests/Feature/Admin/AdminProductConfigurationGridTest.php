@@ -84,6 +84,10 @@ class AdminProductConfigurationGridTest extends TestCase
 
         $phones = ProductType::query()->where('slug', 'phones')->firstOrFail();
         $category = Category::factory()->create(['product_type_id' => $phones->id]);
+        $cpt = \App\Models\CatalogProductType::factory()->create([
+            'subcategory_id' => $category->id,
+            'is_active' => true,
+        ]);
 
         $storage = ProductAttribute::query()->where('slug', 'storage')->firstOrFail();
         $color = ProductAttribute::query()->where('slug', 'color')->firstOrFail();
@@ -105,6 +109,7 @@ class AdminProductConfigurationGridTest extends TestCase
         $payload = [
             'name' => 'Demo Phone',
             'category_id' => $category->id,
+            'catalog_product_type_id' => $cpt->id,
             'sku' => 'PHONE-BASE-1',
             'price' => 500000,
             'stock_quantity' => 0,

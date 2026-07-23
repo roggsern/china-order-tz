@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\IndexActivityLogsRequest;
 use App\Http\Resources\ActivityLogResource;
 use App\Models\ActivityLog;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -59,6 +60,8 @@ class AdminActivityLogController extends Controller
 
     public function show(ActivityLog $activityLog): JsonResponse
     {
+        $this->authorize(AdminPermissions::ACTIVITY_LOGS_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => new ActivityLogResource($activityLog),

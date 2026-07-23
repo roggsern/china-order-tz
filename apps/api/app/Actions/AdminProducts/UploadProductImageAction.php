@@ -5,13 +5,13 @@ namespace App\Actions\AdminProducts;
 use App\Http\Requests\Admin\StoreProductImageRequest;
 use App\Models\Product;
 use App\Models\ProductImage;
-use Illuminate\Support\Facades\Storage;
+use App\Support\Security\SecureImageUpload;
 
 class UploadProductImageAction
 {
     public function handle(StoreProductImageRequest $request, Product $product): ProductImage
     {
-        $path = Storage::disk('public')->putFile('products', $request->file('image'));
+        $path = SecureImageUpload::storePublic($request->file('image'), 'products');
 
         return ProductImage::create([
             'product_id' => $product->id,

@@ -128,13 +128,29 @@ export function AdminCatalogProductTypesPanel() {
 
   const subcategoriesForForm = useMemo(() => {
     if (!form?.categoryId) return [];
+
+    const hasActiveChild = (id: string) =>
+      categories.some((category) => category.parentId === id && category.isActive) ||
+      subcategories.some(
+        (subcategory) => subcategory.categoryId === id && subcategory.isActive,
+      );
+
     const children = subcategories.filter(
-      (subcategory) => subcategory.categoryId === form.categoryId,
+      (subcategory) =>
+        subcategory.categoryId === form.categoryId && subcategory.isActive,
     );
-    if (children.length > 0) return children;
-    // Allow attaching to the category itself when it has no subcategories.
+    const leafChildren = children.filter((subcategory) => !hasActiveChild(subcategory.id));
+
+    if (leafChildren.length > 0) {
+      return leafChildren;
+    }
+
+    // Leaf root category: no active children — attach CPT to the category itself.
     const category = categories.find((item) => item.id === form.categoryId);
-    if (!category) return [];
+    if (!category || !category.isActive || hasActiveChild(category.id)) {
+      return [];
+    }
+
     return [
       {
         id: category.id,
@@ -144,7 +160,7 @@ export function AdminCatalogProductTypesPanel() {
         departmentId: category.departmentId ?? null,
         departmentName: category.departmentName ?? null,
         departmentIcon: category.departmentIcon ?? null,
-        name: `${category.name} (category)`,
+        name: `${category.name} (leaf category)`,
         slug: category.slug,
         description: "",
         image: null,
@@ -222,6 +238,24 @@ export function AdminCatalogProductTypesPanel() {
     }
   }, [subcategoriesForFilter, subcategoryFilter]);
 
+  // Keep leaf parent selection valid when category options change.
+  useEffect(() => {
+    if (!form) return;
+    if (subcategoriesForForm.length === 0) {
+      if (form.subcategoryId !== "") {
+        setForm((current) => (current ? { ...current, subcategoryId: "" } : current));
+      }
+      return;
+    }
+    const stillValid = subcategoriesForForm.some((item) => item.id === form.subcategoryId);
+    if (!stillValid) {
+      const nextId = subcategoriesForForm[0]?.id ?? "";
+      setForm((current) =>
+        current ? { ...current, subcategoryId: nextId } : current,
+      );
+    }
+  }, [form, subcategoriesForForm]);
+
   const openCreate = () => {
     setActionError(null);
     const defaultDepartmentId =
@@ -231,11 +265,10 @@ export function AdminCatalogProductTypesPanel() {
         ? categoryFilter
         : categories.find((category) => category.departmentId === defaultDepartmentId)?.id ??
           "";
+    // Prefer an explicit subcategory filter when it is a leaf; otherwise leave blank
+    // for the leaf-selector effect to fill from DB-backed options.
     const defaultSubcategoryId =
-      subcategoryFilter !== "all"
-        ? subcategoryFilter
-        : subcategories.find((item) => item.categoryId === defaultCategoryId)?.id ??
-          defaultCategoryId;
+      subcategoryFilter !== "all" ? subcategoryFilter : "";
     setForm(emptyForm(defaultDepartmentId, defaultCategoryId, defaultSubcategoryId));
   };
 
@@ -256,6 +289,12 @@ export function AdminCatalogProductTypesPanel() {
   };
 
   const handleDelete = async (item: AdminCatalogProductType) => {
+    if ((item.productsCount ?? 0) > 0) {
+      setActionError(
+        `This Catalog Product Type is used by ${item.productsCount} products. Reassign or remove those products before deleting it.`,
+      );
+      return;
+    }
     if (
       !window.confirm(`Delete product type “${item.name}”? You can restore it later.`)
     ) {
@@ -324,7 +363,11 @@ export function AdminCatalogProductTypesPanel() {
       return;
     }
     if (!form.subcategoryId) {
-      setActionError("Subcategory is required.");
+      setActionError(
+        subcategoriesForForm.length === 0
+          ? "Select a leaf category (a category with no active children)."
+          : "Leaf category is required.",
+      );
       return;
     }
 
@@ -366,8 +409,8 @@ export function AdminCatalogProductTypesPanel() {
         <div>
           <h1 className="text-lg font-semibold text-zinc-900">Product Types</h1>
           <p className="mt-1 text-xs text-zinc-500">
-            Catalog leaves under subcategories. Cascade: Department → Category →
-            Subcategory.
+            Catalog Product Types — taxonomy leaf under Department → Category →
+            Subcategory. Distinct from Configuration Templates (variant/SKU schema).
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -430,7 +473,7 @@ export function AdminCatalogProductTypesPanel() {
             </div>
             <div>
               <label className="admin-label" htmlFor="pt-category">
-                Category *
+                Parent category *
               </label>
               <select
                 id="pt-category"
@@ -438,10 +481,7 @@ export function AdminCatalogProductTypesPanel() {
                 value={form.categoryId}
                 onChange={(event) => {
                   const categoryId = event.target.value;
-                  const firstSub =
-                    subcategories.find((item) => item.categoryId === categoryId)?.id ??
-                    categoryId;
-                  setForm({ ...form, categoryId, subcategoryId: firstSub });
+                  setForm({ ...form, categoryId, subcategoryId: "" });
                 }}
               >
                 <option value="">Select category</option>
@@ -454,21 +494,38 @@ export function AdminCatalogProductTypesPanel() {
             </div>
             <div>
               <label className="admin-label" htmlFor="pt-subcategory">
-                Subcategory *
+                Leaf category *
               </label>
               <select
                 id="pt-subcategory"
                 className="admin-input mt-1.5"
                 value={form.subcategoryId}
                 onChange={(event) => setForm({ ...form, subcategoryId: event.target.value })}
+                disabled={!form.categoryId || subcategoriesForForm.length === 0}
               >
-                <option value="">Select subcategory</option>
+                <option value="">
+                  {!form.categoryId
+                    ? "Select a parent category first"
+                    : subcategoriesForForm.length === 0
+                      ? "No leaf category available"
+                      : "Select leaf category"}
+                </option>
                 {subcategoriesForForm.map((subcategory) => (
                   <option key={subcategory.id} value={subcategory.id}>
                     {subcategory.name}
                   </option>
                 ))}
               </select>
+              {form.categoryId && subcategoriesForForm.length === 0 ? (
+                <p className="mt-1.5 text-xs text-amber-700">
+                  No leaf category under this parent. Choose a category with no active children,
+                  or create a subcategory first.
+                </p>
+              ) : (
+                <p className="mt-1.5 text-xs text-zinc-500">
+                  Catalog Product Types attach only to leaf categories (no active children).
+                </p>
+              )}
             </div>
             <div>
               <label className="admin-label" htmlFor="pt-sort-order">
@@ -661,6 +718,11 @@ export function AdminCatalogProductTypesPanel() {
                       {item.departmentName ?? "No department"} → {item.categoryName ?? "—"} →{" "}
                       {item.subcategoryName} · {item.slug} · sort {item.sortOrder}
                     </p>
+                    <p className="mt-0.5 text-xs text-zinc-500">
+                      {item.productsCount} product{item.productsCount === 1 ? "" : "s"} ·{" "}
+                      {item.attributesCount} attribute
+                      {item.attributesCount === 1 ? "" : "s"}
+                    </p>
                     {item.description ? (
                       <p className="mt-1 text-xs text-zinc-600">{item.description}</p>
                     ) : null}
@@ -682,7 +744,13 @@ export function AdminCatalogProductTypesPanel() {
                     </button>
                     <button
                       type="button"
-                      className="rounded px-2 py-1 text-[11px] font-medium text-red-600 hover:bg-red-50"
+                      className="rounded px-2 py-1 text-[11px] font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={(item.productsCount ?? 0) > 0}
+                      title={
+                        (item.productsCount ?? 0) > 0
+                          ? `Used by ${item.productsCount} products — reassign before deleting`
+                          : "Delete product type"
+                      }
                       onClick={() => void handleDelete(item)}
                     >
                       Delete

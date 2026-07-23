@@ -35,6 +35,8 @@ class CatalogProductTypeResource extends JsonResource
             'description' => $this->description,
             'sort_order' => $this->sort_order,
             'is_active' => $this->is_active,
+            'products_count' => $this->whenCounted('products'),
+            'attributes_count' => $this->whenCounted('attributes'),
             'subcategory' => $subcategory === null ? null : [
                 'id' => $subcategory->id,
                 'name' => $subcategory->name,

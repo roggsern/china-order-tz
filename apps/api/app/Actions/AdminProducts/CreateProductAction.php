@@ -11,15 +11,18 @@ use App\Models\Admin;
 use App\Models\CatalogProductType;
 use App\Models\Category;
 use App\Models\CommerceChannel;
-use App\Models\Inventory;
 use App\Models\Product;
 use App\Services\Catalog\GenerateProductSku;
 use App\Services\Commerce\CommerceChannelResolver;
+use App\Services\Inventory\AdminInventoryApplicationService;
 use App\Services\Pricing\SyncConfigurationPriceTiers;
 use App\Services\ProductConfiguration\ResolveTypeFromCategory;
 use App\Services\ProductConfiguration\SyncProductConfigurations;
+use App\Enums\ProductLifecycleStatus;
+use App\Services\ProductPurchasability\ProductPurchasabilityPolicy;
 use App\Services\ProductShipping\ProductShippingOptionEngine;
 use App\Support\ProductLifecycle;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -33,6 +36,8 @@ class CreateProductAction
         private readonly GenerateProductSku $generateProductSku,
         private readonly ProductShippingOptionEngine $shippingOptionEngine,
         private readonly CommerceChannelResolver $commerceChannelResolver,
+        private readonly ProductPurchasabilityPolicy $purchasabilityPolicy,
+        private readonly AdminInventoryApplicationService $adminInventory,
     ) {}
 
     public function handle(StoreProductRequest $request): Product
@@ -126,11 +131,14 @@ class CreateProductAction
                 'meta_description' => $validated['meta_description'] ?? null,
             ]);
 
-            Inventory::create([
-                'product_id' => $product->id,
-                'product_variant_id' => null,
-                'quantity' => $productStock,
-            ]);
+            /** @var Admin|null $admin */
+            $admin = Auth::user() instanceof Admin ? Auth::user() : null;
+            $this->adminInventory->setSimpleProductStock(
+                product: $product,
+                targetQuantity: $productStock,
+                actor: $admin,
+                reason: 'Admin product create — opening stock',
+            );
 
             if (is_array($configurations) && $configurations !== [] && $productType !== null) {
                 $this->syncProductConfigurations->handle($product, $productType, $configurations);
@@ -156,6 +164,18 @@ class CreateProductAction
                 $this->syncShippingOptionsFromLegacyPrices($product, $validated);
             }
 
+            $product = $product->fresh([
+                'catalogProductType',
+                'category',
+                'inventory',
+                'variants.prices',
+                'variants.inventories',
+            ]) ?? $product;
+
+            if ($lifecycle === ProductLifecycleStatus::Active) {
+                $this->purchasabilityPolicy->assertPublishable($product);
+            }
+
             return tap($product->fresh([
                 'commerceChannel',
                 'category.department',
@@ -168,6 +188,7 @@ class CreateProductAction
                 'shippingOptions',
                 'variants.attributeValues.attribute',
                 'variants.inventory',
+                'variants.inventories',
                 'variants.priceTiers',
             ]), function (Product $created) use ($channel): void {
                 $admin = auth('sanctum')->user();

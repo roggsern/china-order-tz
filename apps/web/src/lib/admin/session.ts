@@ -1,8 +1,4 @@
 import { normalizeAdminEmail } from "@/lib/admin/credentials";
-import {
-  ADMIN_AUTH_COOKIE,
-  ADMIN_AUTH_COOKIE_MAX_AGE_SECONDS,
-} from "@/lib/admin/auth-cookie";
 
 const ADMIN_SESSION_KEY = "china-order-tz-admin-session";
 
@@ -38,29 +34,13 @@ function readSession(): AdminSession | null {
   }
 }
 
-function setAdminAuthCookie(): void {
-  if (typeof document === "undefined") {
-    return;
-  }
-
-  document.cookie = `${ADMIN_AUTH_COOKIE}=1; path=/; max-age=${ADMIN_AUTH_COOKIE_MAX_AGE_SECONDS}; SameSite=Lax`;
-}
-
-function clearAdminAuthCookie(): void {
-  if (typeof document === "undefined") {
-    return;
-  }
-
-  document.cookie = `${ADMIN_AUTH_COOKIE}=; path=/; max-age=0; SameSite=Lax`;
-}
-
 function writeSession(session: AdminSession): void {
   if (typeof window === "undefined") {
     return;
   }
 
+  // UI/display only — authentication is the HttpOnly Sanctum cookie (RC1-G4A).
   window.localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session));
-  setAdminAuthCookie();
 }
 
 export function getAdminSession(): AdminSession | null {
@@ -74,6 +54,7 @@ export function isAdminAuthenticated(): boolean {
 /**
  * Authenticates against Laravel via the Next.js BFF (POST /api/admin/login).
  * Does not accept hardcoded credentials — backend verifies email/password.
+ * Does not set client-writable auth cookies.
  */
 export async function authenticateAdmin(
   email: string,
@@ -143,5 +124,4 @@ export async function signOutAdmin(): Promise<void> {
   }
 
   window.localStorage.removeItem(ADMIN_SESSION_KEY);
-  clearAdminAuthCookie();
 }

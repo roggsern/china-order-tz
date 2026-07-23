@@ -11,12 +11,15 @@ use App\Http\Requests\Admin\StoreVariantPriceRequest;
 use App\Http\Requests\Admin\UpdateVariantPriceRequest;
 use App\Models\ProductVariant;
 use App\Models\VariantPrice;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 
 class AdminVariantPriceController extends Controller
 {
     public function index(ProductVariant $variant, GetVariantPricesAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::PRICING_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => $action->handle($variant),
@@ -47,6 +50,8 @@ class AdminVariantPriceController extends Controller
 
     public function destroy(VariantPrice $price, DeleteVariantPriceAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::PRICING_MANAGE);
+
         $action->handle($price);
 
         return response()->json([

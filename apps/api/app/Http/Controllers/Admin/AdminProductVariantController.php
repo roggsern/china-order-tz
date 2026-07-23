@@ -13,12 +13,15 @@ use App\Http\Requests\Admin\StoreProductVariantRequest;
 use App\Http\Requests\Admin\UpdateProductVariantRequest;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 
 class AdminProductVariantController extends Controller
 {
     public function index(Product $product, GetProductVariantsAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::CATALOG_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => $action->handle($product),
@@ -53,6 +56,8 @@ class AdminProductVariantController extends Controller
         ProductVariant $variant,
         DeleteProductVariantAction $action,
     ): JsonResponse {
+        $this->authorize(AdminPermissions::CATALOG_DELETE);
+
         $action->handle($product, $variant);
 
         return response()->json([

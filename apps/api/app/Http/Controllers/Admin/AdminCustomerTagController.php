@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\UpdateCustomerTagRequest;
 use App\Http\Resources\CustomerTagResource;
 use App\Models\CustomerTag;
 use App\Services\Crm\CustomerSegmentationService;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -19,6 +20,8 @@ class AdminCustomerTagController extends Controller
 
     public function index(Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::CUSTOMERS_VIEW);
+
         $activeOnly = filter_var($request->query('active_only', false), FILTER_VALIDATE_BOOLEAN);
 
         return response()->json([

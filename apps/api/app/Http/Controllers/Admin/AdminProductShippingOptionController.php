@@ -10,6 +10,7 @@ use App\Http\Resources\ProductShippingOptionResource;
 use App\Models\Product;
 use App\Models\ProductShippingOption;
 use App\Services\ProductShipping\ProductShippingOptionEngine;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 
 class AdminProductShippingOptionController extends Controller
@@ -20,6 +21,8 @@ class AdminProductShippingOptionController extends Controller
 
     public function index(Product $product): JsonResponse
     {
+        $this->authorize(AdminPermissions::CATALOG_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => ProductShippingOptionResource::collection(
@@ -40,6 +43,8 @@ class AdminProductShippingOptionController extends Controller
 
     public function show(Product $product, ProductShippingOption $shippingOption): JsonResponse
     {
+        $this->authorize(AdminPermissions::CATALOG_VIEW);
+
         abort_unless($shippingOption->product_id === $product->id, 404);
 
         return response()->json([
@@ -63,6 +68,8 @@ class AdminProductShippingOptionController extends Controller
 
     public function destroy(Product $product, ProductShippingOption $shippingOption): JsonResponse
     {
+        $this->authorize(AdminPermissions::CATALOG_UPDATE);
+
         $this->engine->delete($product, $shippingOption);
 
         return response()->json([
@@ -73,6 +80,8 @@ class AdminProductShippingOptionController extends Controller
 
     public function restore(Product $product, string $id): JsonResponse
     {
+        $this->authorize(AdminPermissions::CATALOG_RESTORE);
+
         $option = $this->engine->restore($product, $id);
 
         return response()->json([

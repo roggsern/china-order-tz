@@ -32,22 +32,30 @@ class NmbConfigValidator
 
         $environment = (string) config('services.nmb.environment', 'sandbox');
         $baseUrl = strtolower((string) config('services.nmb.base_url'));
+        $isProductionRuntime = app()->environment('production')
+            || (string) config('app.env') === 'production';
 
-        if ($environment === 'production') {
+        if ($environment === 'production' || $isProductionRuntime) {
             foreach (['sandbox', 'test', 'localhost'] as $needle) {
                 if (str_contains($baseUrl, $needle)) {
                     $errors[] = 'Production NMB environment cannot use sandbox or local base URLs.';
                     break;
                 }
             }
+
+            if (! filled(config('services.nmb.webhook.secret'))) {
+                $errors[] = 'NMB webhook signature verification is required in production but NMB_WEBHOOK_SECRET is not configured.';
+            }
         }
 
-        if ((bool) config('services.nmb.webhook.require_signature', false)
-            && ! filled(config('services.nmb.webhook.secret'))) {
+        $signatureRequired = $isProductionRuntime
+            || (bool) config('services.nmb.webhook.require_signature', false);
+
+        if ($signatureRequired && ! filled(config('services.nmb.webhook.secret'))) {
             $errors[] = 'NMB webhook signature verification is required but NMB_WEBHOOK_SECRET is not configured.';
         }
 
-        return $errors;
+        return array_values(array_unique($errors));
     }
 
     /**

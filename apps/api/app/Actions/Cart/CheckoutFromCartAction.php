@@ -8,15 +8,19 @@ use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
 use App\Models\Cart;
 use App\Models\CartItem;
-use App\Models\Inventory;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\Inventory\StockResolver;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class CheckoutFromCartAction
 {
+    public function __construct(
+        private readonly StockResolver $stockResolver,
+    ) {}
+
     /**
      * @return array{order: Order, payment: Payment}
      */
@@ -93,18 +97,19 @@ class CheckoutFromCartAction
 
     private function validateInventory(CartItem $item): void
     {
-        $inventory = Inventory::query()
-            ->where('product_id', $item->product_id)
-            ->when(
-                $item->product_variant_id,
-                fn ($query) => $query->where('product_variant_id', $item->product_variant_id),
-                fn ($query) => $query->whereNull('product_variant_id'),
-            )
-            ->first();
+        $product = $item->product;
+        if ($product === null) {
+            $this->throwValidationError('Insufficient stock for cart item.');
+        }
 
-        if ($inventory === null || $inventory->availableQuantity() < $item->quantity) {
+        $stock = $this->stockResolver->resolve(
+            $product,
+            $item->variant,
+        );
+
+        if (! $stock->resolved || $stock->quantityAvailable < $item->quantity) {
             $this->throwValidationError(
-                "Insufficient stock for {$item->product->name}.",
+                "Insufficient stock for {$product->name}.",
             );
         }
     }

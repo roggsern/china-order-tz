@@ -5,6 +5,9 @@ namespace App\Http\Requests\Admin;
 use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductVisibility;
 use App\Enums\ShippingMethod;
+use App\Models\Admin;
+use App\Support\Admin\AdminPermissions;
+use App\Support\Security\HtmlSanitizer;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -12,7 +15,50 @@ class UpdateProductRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        $user = $this->user();
+        if (! $user instanceof Admin) {
+            return false;
+        }
+
+        $lifecycle = $this->input('lifecycle_status');
+        if (is_string($lifecycle)) {
+            if ($lifecycle === ProductLifecycleStatus::Active->value
+                || $lifecycle === ProductLifecycleStatus::OutOfStock->value) {
+                if (! $user->hasAdminPermission(AdminPermissions::CATALOG_PUBLISH)
+                    && ! $user->hasAdminPermission(AdminPermissions::CATALOG_UPDATE)) {
+                    return false;
+                }
+            }
+
+            if ($lifecycle === ProductLifecycleStatus::Archived->value) {
+                return $user->hasAdminPermission(AdminPermissions::CATALOG_ARCHIVE)
+                    || $user->hasAdminPermission(AdminPermissions::CATALOG_UPDATE);
+            }
+
+            if ($lifecycle === ProductLifecycleStatus::Draft->value
+                && ! $user->hasAdminPermission(AdminPermissions::CATALOG_RESTORE)
+                && ! $user->hasAdminPermission(AdminPermissions::CATALOG_UPDATE)) {
+                return false;
+            }
+        }
+
+        if ($this->exists('price') || $this->exists('price_tiers') || $this->exists('compare_at_price')) {
+            if (! $user->hasAdminPermission(AdminPermissions::PRICING_MANAGE)
+                && ! $user->hasAdminPermission(AdminPermissions::CATALOG_UPDATE)) {
+                return false;
+            }
+        }
+
+        if ($this->exists('stock_quantity')) {
+            if (! $user->hasAdminPermission(AdminPermissions::INVENTORY_ADJUST)
+                && ! $user->hasAdminPermission(AdminPermissions::CATALOG_UPDATE)) {
+                return false;
+            }
+        }
+
+        return $user->hasAdminPermission(AdminPermissions::CATALOG_UPDATE)
+            || $user->hasAdminPermission(AdminPermissions::CATALOG_PUBLISH)
+            || $user->hasAdminPermission(AdminPermissions::CATALOG_ARCHIVE);
     }
 
     /**
@@ -110,6 +156,16 @@ class UpdateProductRequest extends FormRequest
 
         if ($this->exists('sku') && ! filled($this->input('sku'))) {
             $this->merge(['sku' => null]);
+        }
+
+        $htmlFields = [];
+        foreach (['description', 'short_description'] as $field) {
+            if ($this->exists($field) && is_string($this->input($field))) {
+                $htmlFields[$field] = HtmlSanitizer::sanitize($this->input($field));
+            }
+        }
+        if ($htmlFields !== []) {
+            $this->merge($htmlFields);
         }
     }
 }

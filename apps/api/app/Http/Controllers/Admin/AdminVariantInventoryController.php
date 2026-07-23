@@ -11,12 +11,15 @@ use App\Http\Requests\Admin\StoreVariantInventoryRequest;
 use App\Http\Requests\Admin\UpdateVariantInventoryRequest;
 use App\Models\ProductVariant;
 use App\Models\VariantInventory;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 
 class AdminVariantInventoryController extends Controller
 {
     public function index(ProductVariant $variant, GetVariantInventoriesAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::INVENTORY_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => $action->handle($variant),
@@ -49,6 +52,8 @@ class AdminVariantInventoryController extends Controller
         VariantInventory $inventory,
         DeleteVariantInventoryAction $action,
     ): JsonResponse {
+        $this->authorize(AdminPermissions::INVENTORY_ADJUST);
+
         $action->handle($inventory);
 
         return response()->json([

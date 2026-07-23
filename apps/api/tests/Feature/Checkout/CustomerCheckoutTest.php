@@ -8,6 +8,7 @@ use App\Models\Admin;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\DeliveryAddress;
+use App\Models\Inventory;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -33,8 +34,24 @@ class CustomerCheckoutTest extends TestCase
         return $user;
     }
 
+    private function ensureSimpleInventory(Product $product, int $quantity = 100): void
+    {
+        Inventory::query()->updateOrCreate(
+            [
+                'product_id' => $product->id,
+                'product_variant_id' => null,
+            ],
+            [
+                'quantity' => $quantity,
+                'reserved_quantity' => 0,
+            ],
+        );
+    }
+
     private function createActiveCartWithItem(User $user, Product $product, array $itemOverrides = []): Cart
     {
+        $this->ensureSimpleInventory($product);
+
         $cart = Cart::factory()->create([
             'user_id' => $user->id,
             'status' => CartStatus::Active,
@@ -45,6 +62,7 @@ class CustomerCheckoutTest extends TestCase
             'product_id' => $product->id,
             'quantity' => 2,
             'unit_price' => $product->price,
+            'price_snapshot' => $product->price,
         ], $itemOverrides));
 
         return $cart;
@@ -173,12 +191,15 @@ class CustomerCheckoutTest extends TestCase
         ]);
 
         $darProduct = Product::factory()->fromDar()->create(['price' => 5000]);
+        $this->ensureSimpleInventory($chinaProduct);
+        $this->ensureSimpleInventory($darProduct);
 
         CartItem::factory()->create([
             'cart_id' => $cart->id,
             'product_id' => $chinaProduct->id,
             'quantity' => 1,
             'unit_price' => 10000,
+            'price_snapshot' => 10000,
             'shipping_method' => ShippingMethod::Air,
             'shipping_price' => 2000,
         ]);
@@ -188,6 +209,7 @@ class CustomerCheckoutTest extends TestCase
             'product_id' => $darProduct->id,
             'quantity' => 1,
             'unit_price' => 5000,
+            'price_snapshot' => 5000,
         ]);
 
         Sanctum::actingAs($user);

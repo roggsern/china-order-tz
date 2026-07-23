@@ -5,6 +5,7 @@ namespace App\Actions\AdminAuth;
 use App\Events\Audit\AdminLogin;
 use App\Http\Requests\Admin\LoginRequest;
 use App\Models\Admin;
+use App\Support\Auth\SanctumTokenIssuer;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
@@ -43,7 +44,10 @@ class LoginAdminAction
             ], 403));
         }
 
-        $token = $admin->createToken('admin-api')->plainTextToken;
+        // Login rotation: one active admin PAT family per account (RC1-G4A).
+        SanctumTokenIssuer::revokeAll($admin);
+
+        $token = SanctumTokenIssuer::issueAdmin($admin)->plainTextToken;
 
         Auth::guard('admin')->logout();
 

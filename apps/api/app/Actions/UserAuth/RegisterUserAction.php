@@ -7,6 +7,7 @@ use App\Http\Requests\Auth\RegisterRequest;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\Crm\CustomerProfileService;
+use App\Support\Auth\SanctumTokenIssuer;
 use Illuminate\Support\Facades\Log;
 
 class RegisterUserAction
@@ -42,7 +43,7 @@ class RegisterUserAction
             ]);
         }
 
-        $token = $user->createToken('customer-api')->plainTextToken;
+        $token = SanctumTokenIssuer::issueCustomer($user)->plainTextToken;
 
         return [
             'user' => $user->load('roles'),

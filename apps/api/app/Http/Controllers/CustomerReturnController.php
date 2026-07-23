@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\Customer\StoreReturnRequestRequest;
-use App\Http\Resources\ReturnRequestResource;
+use App\Http\Resources\CustomerReturnRequestResource;
 use App\Models\Order;
 use App\Models\ReturnRequest;
 use App\Models\User;
@@ -27,7 +27,7 @@ class CustomerReturnController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Return request submitted.',
-            'data' => new ReturnRequestResource($return),
+            'data' => new CustomerReturnRequestResource($return),
         ], 201);
     }
 
@@ -36,7 +36,7 @@ class CustomerReturnController extends Controller
         /** @var User $user */
         $user = auth()->user();
 
-        return ReturnRequestResource::collection(
+        return CustomerReturnRequestResource::collection(
             $this->engine->paginateForCustomer($user)
         )->additional(['success' => true]);
     }
@@ -52,7 +52,7 @@ class CustomerReturnController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => new ReturnRequestResource($this->engine->show($returnRequest)),
+            'data' => new CustomerReturnRequestResource($this->engine->show($returnRequest)),
         ]);
     }
 }

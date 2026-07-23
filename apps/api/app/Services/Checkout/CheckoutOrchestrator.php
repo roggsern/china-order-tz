@@ -11,6 +11,8 @@ use App\Models\User;
 use App\Services\Cart\CartService;
 use App\Services\Cart\ResolveCartPurchasable;
 use App\Services\Commerce\CommerceChannelResolver;
+use App\Services\Inventory\DTOs\ReservationContext;
+use App\Services\Inventory\ReservationService;
 use App\Services\Promotions\DiscountResolver;
 use App\Services\Promotions\DTOs\DiscountResolution;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +22,7 @@ use Illuminate\Validation\ValidationException;
  * Checkout Orchestrator — validates Cart + Pricing + Inventory,
  * creates a CheckoutSession snapshot, then stops.
  * Discount calculation is delegated to DiscountResolver (Promotion Engine).
+ * Soft-holds stock via ReservationService (ADR 055); payment commitment unchanged.
  */
 class CheckoutOrchestrator
 {
@@ -30,6 +33,7 @@ class CheckoutOrchestrator
         private readonly ResolveCartPurchasable $resolveCartPurchasable,
         private readonly CommerceChannelResolver $commerceChannelResolver,
         private readonly DiscountResolver $discountResolver,
+        private readonly ReservationService $reservationService,
     ) {}
 
     public function start(User $user): CheckoutSession
@@ -50,6 +54,13 @@ class CheckoutOrchestrator
             $session->applyTotals($totals);
             $session->status = CheckoutSessionStatus::Validated;
             $session->save();
+
+            $this->reservationService->reserve(new ReservationContext(
+                checkoutSession: $session,
+                cart: $cart,
+                expiresAt: $session->expires_at,
+                source: 'checkout_start',
+            ));
 
             return $this->loadSession($session);
         });
@@ -100,6 +111,14 @@ class CheckoutOrchestrator
         $session->status = CheckoutSessionStatus::Validated;
         $session->expires_at = now()->addMinutes(self::SESSION_TTL_MINUTES);
         $session->save();
+
+        $this->reservationService->syncForCheckout($session, $cart);
+        $this->reservationService->extend(new ReservationContext(
+            checkoutSession: $session,
+            cart: $cart,
+            expiresAt: $session->expires_at,
+            source: 'checkout_refresh',
+        ));
 
         return $this->loadSession($session);
     }
@@ -158,11 +177,19 @@ class CheckoutOrchestrator
             ]);
         }
 
+        $this->reservationService->release(new ReservationContext(
+            checkoutSession: $session,
+            cart: $session->cart,
+            source: 'checkout_cancel',
+        ));
+
         $session->delete();
     }
 
     public function markCompleted(CheckoutSession $session): CheckoutSession
     {
+        // Keep soft-holds until payment convertToCommit (ADR 055 / 2A-3C-2).
+        // Cancel / expire / replace still release via ReservationService.
         $session->status = CheckoutSessionStatus::Completed;
         $session->save();
 
@@ -253,12 +280,6 @@ class CheckoutOrchestrator
 
         /** @var CartItem $item */
         foreach ($cart->items as $item) {
-            if ($item->product_variant_id === null) {
-                throw ValidationException::withMessages([
-                    'cart' => ['Every cart item must have a product variant.'],
-                ]);
-            }
-
             if ($item->quantity < 1) {
                 throw ValidationException::withMessages([
                     'quantity' => ['Quantity must be at least 1.'],
@@ -272,6 +293,7 @@ class CheckoutOrchestrator
                 ]);
             }
 
+            // RC1-C1 — always re-price via CommercePricingResolver (never trust stale snapshots).
             $resolved = $this->resolveCartPurchasable->handle(
                 $item->product_id,
                 $item->product_variant_id,
@@ -280,16 +302,14 @@ class CheckoutOrchestrator
                 null,
             );
 
-            $unit = (string) ($item->price_snapshot ?? $item->unit_price ?? $resolved['unit_price']);
+            $unit = (string) $resolved['unit_price'];
             $subtotal = bcadd($subtotal, bcmul($unit, (string) $item->quantity, 2), 2);
 
-            if ($item->price_snapshot === null) {
-                $item->forceFill([
-                    'price_snapshot' => $resolved['unit_price'],
-                    'unit_price' => $resolved['unit_price'],
-                    'currency' => $resolved['currency'],
-                ])->save();
-            }
+            $item->forceFill([
+                'price_snapshot' => $resolved['unit_price'],
+                'unit_price' => $resolved['unit_price'],
+                'currency' => $resolved['currency'],
+            ])->save();
         }
 
         return [
@@ -420,6 +440,12 @@ class CheckoutOrchestrator
             && $session->expires_at !== null
             && $session->expires_at->isPast()
         ) {
+            $this->reservationService->expire(new ReservationContext(
+                checkoutSession: $session,
+                cart: $session->cart,
+                source: 'checkout_timeout',
+            ));
+
             $session->status = CheckoutSessionStatus::Expired;
             $session->save();
         }
@@ -429,16 +455,26 @@ class CheckoutOrchestrator
 
     private function expireOpenSessionsForCart(User $user, Cart $cart): void
     {
-        CheckoutSession::query()
+        $sessions = CheckoutSession::query()
             ->where('user_id', $user->id)
             ->where('cart_id', $cart->id)
             ->whereIn('status', [
                 CheckoutSessionStatus::Draft->value,
                 CheckoutSessionStatus::Validated->value,
             ])
-            ->update([
+            ->get();
+
+        foreach ($sessions as $open) {
+            $this->reservationService->expire(new ReservationContext(
+                checkoutSession: $open,
+                cart: $cart,
+                source: 'checkout_replaced',
+            ));
+
+            $open->forceFill([
                 'status' => CheckoutSessionStatus::Expired,
                 'expires_at' => now(),
-            ]);
+            ])->save();
+        }
     }
 }

@@ -13,6 +13,7 @@ use App\Http\Requests\Admin\StoreSubcategoryRequest;
 use App\Http\Requests\Admin\UpdateSubcategoryRequest;
 use App\Http\Resources\SubcategoryResource;
 use App\Models\Category;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -20,6 +21,8 @@ class AdminSubcategoryController extends Controller
 {
     public function index(GetAdminSubcategoriesAction $action): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::CATALOG_VIEW);
+
         return SubcategoryResource::collection($action->handle())
             ->additional(['success' => true]);
     }
@@ -34,6 +37,8 @@ class AdminSubcategoryController extends Controller
 
     public function show(Category $subcategory, ShowSubcategoryAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::CATALOG_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => new SubcategoryResource($action->handle($subcategory)),
@@ -53,6 +58,8 @@ class AdminSubcategoryController extends Controller
 
     public function destroy(Category $subcategory, DeleteSubcategoryAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::CATALOG_DELETE);
+
         $action->handle($subcategory);
 
         return response()->json([
@@ -63,6 +70,8 @@ class AdminSubcategoryController extends Controller
 
     public function restore(string $id, RestoreSubcategoryAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::CATALOG_RESTORE);
+
         return response()->json([
             'success' => true,
             'message' => 'Subcategory restored successfully.',

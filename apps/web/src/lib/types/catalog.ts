@@ -19,7 +19,11 @@ export type ProductPriceTierDraft = {
 
 export type ProductOrigin = "china" | "tz";
 
-/** Marketplace mode — `local` is Buy from Dar; `china` is China Order. */
+/**
+ * @deprecated Ambiguous name (ADR 052). Prefer ProductOrigin ("china" | "tz").
+ * Marketplace UI historically used `local` as a display alias for Buy From TZ
+ * (canonical origin `tz`). Not CatalogProductType and not Configuration Template.
+ */
 export type ProductType = "china" | "local";
 
 export type ProductBadgeType =

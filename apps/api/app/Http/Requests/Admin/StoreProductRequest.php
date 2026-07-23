@@ -2,6 +2,9 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Concerns\AuthorizesAdminPermission;
+use App\Support\Admin\AdminPermissions;
+use App\Support\Security\HtmlSanitizer;
 use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductVisibility;
 use App\Enums\ShippingMethod;
@@ -10,9 +13,11 @@ use Illuminate\Validation\Rule;
 
 class StoreProductRequest extends FormRequest
 {
-    public function authorize(): bool
+    use AuthorizesAdminPermission;
+
+    protected function requiredPermission(): string
     {
-        return true;
+        return AdminPermissions::CATALOG_CREATE;
     }
 
     /**
@@ -124,6 +129,16 @@ class StoreProductRequest extends FormRequest
 
         if (! $this->filled('lifecycle_status') && ! $this->has('status')) {
             $this->merge(['lifecycle_status' => ProductLifecycleStatus::Draft->value]);
+        }
+
+        $htmlFields = [];
+        foreach (['description', 'short_description'] as $field) {
+            if ($this->exists($field) && is_string($this->input($field))) {
+                $htmlFields[$field] = HtmlSanitizer::sanitize($this->input($field));
+            }
+        }
+        if ($htmlFields !== []) {
+            $this->merge($htmlFields);
         }
     }
 }

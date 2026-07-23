@@ -4,10 +4,12 @@ namespace Tests\Feature\Catalog;
 
 use App\Models\Brand;
 use App\Models\Category;
+use App\Models\Inventory;
 use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use App\Models\Review;
+use App\Models\VariantInventory;
 use Database\Support\DemoProductImageLibrary;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -144,6 +146,16 @@ class CustomerCatalogTest extends TestCase
             'product_id' => $product->id,
             'name' => 'Black',
             'is_active' => true,
+            'price' => 50000,
+        ]);
+
+        $activeVariant = $product->variants()->where('name', 'Black')->firstOrFail();
+        VariantInventory::query()->create([
+            'product_variant_id' => $activeVariant->id,
+            'warehouse_code' => 'MAIN',
+            'on_hand' => 5,
+            'reserved' => 0,
+            'is_active' => true,
         ]);
 
         ProductVariant::factory()->create([
@@ -225,7 +237,11 @@ class CustomerCatalogTest extends TestCase
 
     public function test_catalog_routes_are_public_without_authentication(): void
     {
-        Product::factory()->create(['slug' => 'public-product']);
+        $product = Product::factory()->create(['slug' => 'public-product', 'price' => 15000]);
+        Inventory::query()->updateOrCreate(
+            ['product_id' => $product->id, 'product_variant_id' => null],
+            ['quantity' => 3, 'reserved_quantity' => 0, 'low_stock_threshold' => 1],
+        );
 
         $this->getJson('/api/v1/products')->assertOk();
         $this->getJson('/api/v1/products/public-product')->assertOk();

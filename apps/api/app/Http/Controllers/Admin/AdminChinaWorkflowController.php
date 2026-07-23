@@ -9,6 +9,7 @@ use App\Models\Admin;
 use App\Models\Order;
 use App\Models\PurchaseOrder;
 use App\Services\China\ChinaWorkflowEngine;
+use App\Support\Admin\AdminPermissions;
 use App\Support\China\ChinaWorkflowPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,6 +23,8 @@ class AdminChinaWorkflowController extends Controller
 
     public function show(Order $order): JsonResponse
     {
+        $this->authorize(AdminPermissions::PROCUREMENT_VIEW);
+
         $record = $this->workflow->showForOrder($order);
         $pos = PurchaseOrder::query()
             ->with(['supplier', 'items'])
@@ -40,7 +43,7 @@ class AdminChinaWorkflowController extends Controller
     public function bootstrap(Order $order, Request $request): JsonResponse
     {
         $admin = $this->admin();
-        ChinaWorkflowPermissions::assert($admin, ChinaWorkflowPermissions::PROCUREMENT, 'bootstrap');
+        ChinaWorkflowPermissions::assert($admin, AdminPermissions::PROCUREMENT_CREATE, 'bootstrap');
 
         $order->loadMissing('fulfillment');
         if ($order->fulfillment === null) {
@@ -62,7 +65,7 @@ class AdminChinaWorkflowController extends Controller
     public function supplierResponse(PurchaseOrder $purchaseOrder, Request $request): JsonResponse
     {
         $admin = $this->admin();
-        ChinaWorkflowPermissions::assert($admin, ChinaWorkflowPermissions::PROCUREMENT, 'supplier_response');
+        ChinaWorkflowPermissions::assert($admin, AdminPermissions::PROCUREMENT_UPDATE, 'supplier_response');
 
         $data = $request->validate([
             'response' => ['required', 'string', Rule::enum(SupplierPoResponse::class)],
@@ -86,7 +89,7 @@ class AdminChinaWorkflowController extends Controller
     public function qc(Order $order, Request $request): JsonResponse
     {
         $admin = $this->admin();
-        ChinaWorkflowPermissions::assert($admin, ChinaWorkflowPermissions::QC, 'qc');
+        ChinaWorkflowPermissions::assert($admin, AdminPermissions::PROCUREMENT_UPDATE, 'qc');
 
         $data = $request->validate([
             'status' => ['required', 'string', Rule::enum(ChinaQcStatus::class)],
@@ -112,7 +115,7 @@ class AdminChinaWorkflowController extends Controller
     public function consolidate(Order $order, Request $request): JsonResponse
     {
         $admin = $this->admin();
-        ChinaWorkflowPermissions::assert($admin, ChinaWorkflowPermissions::WAREHOUSE, 'consolidate');
+        ChinaWorkflowPermissions::assert($admin, AdminPermissions::WAREHOUSE_JOBS_UPDATE, 'consolidate');
 
         $data = $request->validate([
             'batch' => ['sometimes', 'nullable', 'string', 'max:64'],
@@ -130,7 +133,7 @@ class AdminChinaWorkflowController extends Controller
     public function exportReady(Order $order, Request $request): JsonResponse
     {
         $admin = $this->admin();
-        ChinaWorkflowPermissions::assert($admin, ChinaWorkflowPermissions::LOGISTICS, 'export_ready');
+        ChinaWorkflowPermissions::assert($admin, AdminPermissions::WAREHOUSE_JOBS_COMPLETE, 'export_ready');
 
         $data = $request->validate([
             'commercial_invoice' => ['required', 'boolean'],
@@ -154,7 +157,7 @@ class AdminChinaWorkflowController extends Controller
     public function agentHandoff(Order $order, Request $request): JsonResponse
     {
         $admin = $this->admin();
-        ChinaWorkflowPermissions::assert($admin, ChinaWorkflowPermissions::LOGISTICS, 'agent_handoff');
+        ChinaWorkflowPermissions::assert($admin, AdminPermissions::ORDERS_SHIP, 'agent_handoff');
 
         $data = $request->validate([
             'agent_name' => ['required', 'string', 'max:191'],

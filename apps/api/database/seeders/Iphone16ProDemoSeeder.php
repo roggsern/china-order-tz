@@ -12,8 +12,8 @@ use App\Models\ProductImage;
 use App\Models\ProductType;
 use App\Models\ProductVariant;
 use App\Models\Supplier;
-use App\Models\VariantInventory;
 use App\Models\VariantPrice;
+use App\Services\Inventory\CanonicalVariantInventoryInitializer;
 use App\Services\ProductConfiguration\GenerateValidConfigurations;
 use App\Services\ProductConfiguration\SyncProductConfigurations;
 use Database\Support\DemoProductImageLibrary;
@@ -217,9 +217,19 @@ class Iphone16ProDemoSeeder extends Seeder
 
     private function ensureVariantCommerceRows(Product $product): void
     {
+        $initializer = app(CanonicalVariantInventoryInitializer::class);
+
         foreach ($product->variants as $variant) {
             $this->ensureRetailPrice($variant);
-            $this->ensureMainInventory($variant);
+            // RC1-B1: establish MAIN from positive legacy stock (SyncProductConfigurations), never shadow at 0.
+            $initializer->ensure($variant, [
+                'warehouse_code' => 'MAIN',
+                'requested_on_hand' => null,
+                'reorder_level' => 2,
+                'safety_stock' => 1,
+                'is_active' => true,
+                'reason' => 'Iphone16Pro demo seeder — opening MAIN from legacy stock',
+            ]);
         }
     }
 
@@ -244,28 +254,6 @@ class Iphone16ProDemoSeeder extends Seeder
             'currency' => 'TZS',
             'amount' => $amount,
             'minimum_quantity' => 1,
-            'is_active' => true,
-        ]);
-    }
-
-    private function ensureMainInventory(ProductVariant $variant): void
-    {
-        $exists = VariantInventory::query()
-            ->where('product_variant_id', $variant->id)
-            ->where('warehouse_code', 'MAIN')
-            ->exists();
-
-        if ($exists) {
-            return;
-        }
-
-        VariantInventory::query()->create([
-            'product_variant_id' => $variant->id,
-            'warehouse_code' => 'MAIN',
-            'on_hand' => max(0, (int) ($variant->stock_quantity ?? 0)),
-            'reserved' => 0,
-            'reorder_level' => 2,
-            'safety_stock' => 1,
             'is_active' => true,
         ]);
     }

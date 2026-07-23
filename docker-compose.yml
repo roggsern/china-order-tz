@@ -77,14 +77,79 @@ services:
     environment:
       API_INTERNAL_URL: ${API_INTERNAL_URL:-http://nginx}
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
-      ADMIN_API_EMAIL: ${ADMIN_API_EMAIL:-admin@chinaordertz.com}
-      ADMIN_API_PASSWORD: ${ADMIN_API_PASSWORD:-password}
+      ADMIN_TOKEN_MAX_AGE_SECONDS: ${ADMIN_TOKEN_MAX_AGE_SECONDS:-28800}
       WATCHPACK_POLLING: "true"
     volumes:
       - ./apps/web:/app
       - web_node_modules:/app/node_modules
     depends_on:
       - nginx
+    networks:
+      - china-order-tz
+
+  # Local queue worker (optional for async NMB callbacks).
+  queue:
+    profiles: ["workers"]
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      target: development
+    container_name: china-order-tz-queue
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command:
+      [
+        "php",
+        "artisan",
+        "queue:work",
+        "database",
+        "--sleep=1",
+        "--tries=3",
+        "--timeout=120",
+        "--max-time=3600",
+      ]
+    volumes:
+      - ./apps/api:/var/www/html
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: ${MYSQL_DATABASE:-china_order_tz}
+      DB_USERNAME: ${MYSQL_USER:-china_order}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-secret}
+      QUEUE_CONNECTION: database
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - china-order-tz
+
+  scheduler:
+    profiles: ["workers"]
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      target: development
+    container_name: china-order-tz-scheduler
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: ["php", "artisan", "schedule:work"]
+    volumes:
+      - ./apps/api:/var/www/html
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: ${MYSQL_DATABASE:-china_order_tz}
+      DB_USERNAME: ${MYSQL_USER:-china_order}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-secret}
+      QUEUE_CONNECTION: database
+      CACHE_STORE: ${CACHE_STORE:-database}
+    depends_on:
+      mysql:
+        condition: service_healthy
     networks:
       - china-order-tz
 

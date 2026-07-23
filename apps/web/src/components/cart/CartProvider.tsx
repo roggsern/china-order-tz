@@ -138,15 +138,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
         let serverCart = await fetchServerCart(token);
 
         if ((serverCart.items?.length ?? 0) === 0) {
-          const syncable = validated.items.filter(
-            (item) => item.configurationId && item.catalogProductId,
-          );
+          const syncable = validated.items.filter((item) => item.catalogProductId);
 
           for (const item of syncable) {
             await addServerCartItem(
               {
                 productId: item.catalogProductId!,
-                productVariantId: item.configurationId!,
+                productVariantId: item.configurationId ?? null,
                 quantity: item.quantity,
               },
               token,
@@ -261,13 +259,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
       const token = getCustomerApiToken();
       const catalogProductId = product.catalogProductId?.trim();
 
-      if (token && configurationId && catalogProductId) {
+      if (token && catalogProductId) {
         void (async () => {
           try {
             const serverCart = await addServerCartItem(
               {
                 productId: catalogProductId,
-                productVariantId: configurationId,
+                productVariantId: configurationId ?? null,
                 quantity: clampQuantity(quantity, stockLimit),
               },
               token,
@@ -321,7 +319,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
                 items: [
                   ...prev.items,
                   withShipping({
-                    id: createConfigurationCartItemId(product.id, configurationId),
+                    id: configurationId
+                      ? createConfigurationCartItemId(product.id, configurationId)
+                      : createCartItemId(product.id, normalizedVariant),
                     ...snapshot,
                     quantity: nextQuantity,
                     addedAt: new Date().toISOString(),

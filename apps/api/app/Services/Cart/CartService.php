@@ -56,7 +56,7 @@ class CartService
 
             $cart->items()->create([
                 'product_id' => $resolved['product']->id,
-                'product_variant_id' => $resolved['variant']->id,
+                'product_variant_id' => $resolved['variant']?->id,
                 'quantity' => $data['quantity'],
                 'unit_price' => $resolved['unit_price'],
                 'price_snapshot' => $resolved['unit_price'],
@@ -111,10 +111,20 @@ class CartService
         // Reject mixed CHINA_IMPORT + TZ_LOCAL carts before mutating.
         $this->commerceChannelResolver->assertCartSingleChannel($cart, $resolved['product']);
 
-        $existingItem = CartItem::withTrashed()
-            ->where('cart_id', $cart->id)
-            ->where('product_variant_id', $resolved['variant']->id)
-            ->first();
+        $variantId = $resolved['variant']?->id;
+
+        $existingQuery = CartItem::withTrashed()
+            ->where('cart_id', $cart->id);
+
+        if ($variantId !== null) {
+            $existingQuery->where('product_variant_id', $variantId);
+        } else {
+            $existingQuery
+                ->where('product_id', $resolved['product']->id)
+                ->whereNull('product_variant_id');
+        }
+
+        $existingItem = $existingQuery->first();
 
         if ($existingItem !== null) {
             if ($existingItem->trashed()) {
@@ -134,7 +144,7 @@ class CartService
             // Re-validate merged quantity against inventory.
             $this->resolveCartPurchasable->handle(
                 $resolved['product']->id,
-                $resolved['variant']->id,
+                $variantId,
                 (int) $existingItem->fresh()->quantity,
                 $resolved['currency'],
                 $data['shipping_method'] ?? null,
@@ -142,7 +152,7 @@ class CartService
         } else {
             $cart->items()->create([
                 'product_id' => $resolved['product']->id,
-                'product_variant_id' => $resolved['variant']->id,
+                'product_variant_id' => $variantId,
                 'quantity' => $data['quantity'],
                 'unit_price' => $resolved['unit_price'],
                 'price_snapshot' => $resolved['unit_price'],
@@ -159,10 +169,6 @@ class CartService
     {
         $item->load(['cart', 'variant']);
         $this->authorizeCartItem($user, $item);
-
-        if ($item->product_variant_id === null) {
-            abort(422, 'Cart item is missing a product variant.');
-        }
 
         $resolved = $this->resolveCartPurchasable->handle(
             $item->product_id,
@@ -221,10 +227,11 @@ class CartService
     public function loadCart(Cart $cart): Cart
     {
         return $cart->load([
-            'items.product.supplier',
+            'items.product.commerceChannel',
             'items.product.brand',
             'items.product.category',
             'items.product.images',
+            'items.product.shippingOptions',
             'items.variant.attributeValues.attribute',
             'items.variant.catalogAttributeValues.option',
             'items.variant.prices',

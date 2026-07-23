@@ -3,41 +3,34 @@
 namespace App\Actions\AdminProducts;
 
 use App\Http\Requests\Admin\UpdateProductStockRequest;
-use App\Models\Inventory;
+use App\Models\Admin;
 use App\Models\Product;
+use App\Services\Inventory\AdminInventoryApplicationService;
+use Illuminate\Support\Facades\Auth;
 
 class UpdateProductStockAction
 {
+    public function __construct(
+        private readonly AdminInventoryApplicationService $adminInventory,
+    ) {}
+
     public function handle(UpdateProductStockRequest $request, Product $product): Product
     {
-        $newQuantity = $request->validated('stock_quantity');
+        /** @var Admin|null $admin */
+        $admin = Auth::user() instanceof Admin ? Auth::user() : null;
+        $validated = $request->validated();
+        $target = (int) $validated['stock_quantity'];
+        $idempotencyKey = isset($validated['idempotency_key']) && is_string($validated['idempotency_key'])
+            ? $validated['idempotency_key']
+            : null;
 
-        $existingInventory = Inventory::query()
-            ->where('product_id', $product->id)
-            ->whereNull('product_variant_id')
-            ->first();
-
-        $oldQuantity = $existingInventory?->quantity ?? 0;
-
-        $inventory = Inventory::query()->updateOrCreate(
-            [
-                'product_id' => $product->id,
-                'product_variant_id' => null,
-            ],
-            [
-                'quantity' => $newQuantity,
-            ],
+        $this->adminInventory->setSimpleProductStock(
+            product: $product,
+            targetQuantity: $target,
+            actor: $admin,
+            reason: $idempotencyKey ?? 'Admin stock update',
+            idempotencyKey: $idempotencyKey,
         );
-
-        $difference = $newQuantity - $oldQuantity;
-
-        if ($difference !== 0) {
-            $inventory->movements()->create([
-                'quantity' => $difference,
-                'type' => 'adjustment',
-                'reason' => 'Admin stock update',
-            ]);
-        }
 
         return $product->fresh()->load(['category', 'brand', 'inventory']);
     }

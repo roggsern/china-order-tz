@@ -10,6 +10,8 @@ use App\Models\Payment;
 use App\Payments\Gateways\Nmb\NmbPaymentCompletionResult;
 use App\Services\CostProfit\ProfitEngine;
 use App\Services\Fulfillment\FulfillmentEngine;
+use App\Services\Inventory\DTOs\InventoryCommitmentContext;
+use App\Services\Inventory\InventoryCommitmentService;
 use App\Services\Orders\Lifecycle\OrderLifecycleContext;
 use App\Services\Orders\Lifecycle\OrderLifecycleEngine;
 use Illuminate\Support\Facades\DB;
@@ -18,10 +20,10 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Legacy Payment-model NMB completion.
- * Kept for residual Payment rows; always starts Fulfillment (+ warehouse) like the orchestrator path.
+ * Kept for residual Payment rows; always commits inventory then starts Fulfillment like the orchestrator path.
  * New customer payments must use PaymentOrchestrator / PaymentTransactionCompletionService.
  *
- * LOCKED MODULE NOTE (Lifecycle Closure #2): order paid transition now goes through OrderLifecycleEngine.
+ * RC1-C1 — InventoryCommitmentService is mandatory on successful legacy completion.
  */
 class NmbPaymentCompletionService
 {
@@ -29,6 +31,7 @@ class NmbPaymentCompletionService
         private readonly ProfitEngine $profitEngine,
         private readonly FulfillmentEngine $fulfillmentEngine,
         private readonly OrderLifecycleEngine $lifecycle,
+        private readonly InventoryCommitmentService $inventoryCommitment,
     ) {}
 
     public function complete(Payment $payment): NmbPaymentCompletionResult
@@ -49,6 +52,7 @@ class NmbPaymentCompletionService
                 ->firstOrFail();
 
             if ($this->isAlreadyCompleted($lockedPayment)) {
+                $this->commitInventory($order, $lockedPayment, strict: false);
                 $this->startFulfillment($order);
 
                 return new NmbPaymentCompletionResult(
@@ -64,6 +68,8 @@ class NmbPaymentCompletionService
             $this->markCompleted($lockedPayment, $order);
 
             $paidOrder = $order->fresh() ?? $order;
+            $this->commitInventory($paidOrder, $lockedPayment, strict: true);
+
             try {
                 $this->profitEngine->calculateForOrder($paidOrder);
             } catch (\Throwable $e) {
@@ -83,6 +89,21 @@ class NmbPaymentCompletionService
                 orderId: $order->id,
             );
         });
+    }
+
+    private function commitInventory(Order $order, Payment $payment, bool $strict): void
+    {
+        $this->inventoryCommitment->commitForOrder(new InventoryCommitmentContext(
+            order: $order,
+            payment: null,
+            source: 'legacy_nmb_payment',
+            channel: null,
+            metadata: [
+                'payment_id' => $payment->id,
+                'payment_reference' => $payment->reference,
+            ],
+            strict: $strict,
+        ));
     }
 
     private function startFulfillment(Order $order): void

@@ -10,7 +10,7 @@ use App\Payments\Gateways\Nmb\NmbHttpClient;
 use App\Payments\Gateways\Nmb\NmbPayloadMapper;
 use App\Payments\Gateways\Nmb\NmbReplayGuard;
 use App\Payments\Gateways\Nmb\NmbVerificationMapper;
-use App\Payments\Gateways\Nmb\PendingNmbCallbackSignatureVerifier;
+use App\Payments\Gateways\Nmb\NmbWebhookSignatureVerifier;
 use App\Payments\Services\PaymentService;
 use App\Services\Payments\NmbCallbackService;
 use App\Services\Payments\NmbPaymentCompletionService;
@@ -37,7 +37,7 @@ class PaymentServiceProvider extends ServiceProvider
         $this->app->singleton(NmbReplayGuard::class);
         $this->app->singleton(NmbPaymentLogger::class);
         $this->app->singleton(NmbConfigValidator::class);
-        $this->app->singleton(NmbCallbackSignatureVerifierInterface::class, PendingNmbCallbackSignatureVerifier::class);
+        $this->app->singleton(NmbCallbackSignatureVerifierInterface::class, NmbWebhookSignatureVerifier::class);
         $this->app->singleton(NmbCallbackService::class);
         $this->app->singleton(NmbPaymentCompletionService::class);
         $this->app->singleton(NmbVerificationService::class);

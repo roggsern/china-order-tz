@@ -1,8 +1,8 @@
 import { getApiUrl } from "@/lib/config/env";
 import {
   ADMIN_AUTH_COOKIE,
-  ADMIN_AUTH_COOKIE_MAX_AGE_SECONDS,
   ADMIN_TOKEN_COOKIE,
+  adminTokenMaxAgeSeconds,
 } from "@/lib/admin/auth-cookie";
 import { NextResponse } from "next/server";
 
@@ -14,6 +14,7 @@ type LoginBody = {
 /**
  * POST /api/admin/login → Laravel POST /api/v1/admin/login
  * Stores Sanctum token in an HttpOnly cookie for subsequent /api/admin/* proxies.
+ * Does not set any client-writable auth gate cookie (RC1-G4A).
  */
 export async function POST(request: Request) {
   const apiUrl = getApiUrl();
@@ -75,21 +76,23 @@ export async function POST(request: Request) {
   );
 
   const secure = process.env.NODE_ENV === "production";
+  const maxAge = adminTokenMaxAgeSeconds();
 
   response.cookies.set(ADMIN_TOKEN_COOKIE, payload.token, {
     httpOnly: true,
     sameSite: "lax",
     secure,
     path: "/",
-    maxAge: ADMIN_AUTH_COOKIE_MAX_AGE_SECONDS,
+    maxAge,
   });
 
-  response.cookies.set(ADMIN_AUTH_COOKIE, "1", {
+  // Clear legacy forgeable gate cookie if present.
+  response.cookies.set(ADMIN_AUTH_COOKIE, "", {
     httpOnly: false,
     sameSite: "lax",
     secure,
     path: "/",
-    maxAge: ADMIN_AUTH_COOKIE_MAX_AGE_SECONDS,
+    maxAge: 0,
   });
 
   return response;

@@ -12,6 +12,7 @@ use App\Http\Requests\Admin\StorePaymentRequest;
 use App\Http\Requests\Admin\UpdatePaymentRequest;
 use App\Http\Resources\PaymentResource;
 use App\Models\Payment;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -19,6 +20,8 @@ class AdminPaymentController extends Controller
 {
     public function index(GetAdminPaymentsAction $action): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::PAYMENTS_VIEW);
+
         return PaymentResource::collection($action->handle())
             ->additional(['success' => true]);
     }
@@ -33,6 +36,8 @@ class AdminPaymentController extends Controller
 
     public function show(Payment $payment, ShowPaymentAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::PAYMENTS_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => new PaymentResource($action->handle($payment)),
@@ -52,6 +57,8 @@ class AdminPaymentController extends Controller
 
     public function destroy(Payment $payment, DeletePaymentAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::PAYMENTS_MANAGE_MANUAL);
+
         $action->handle($payment);
 
         return response()->json([

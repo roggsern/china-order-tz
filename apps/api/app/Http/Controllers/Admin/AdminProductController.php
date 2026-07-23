@@ -27,6 +27,7 @@ use App\Http\Resources\ConfigurationPriceTierResource;
 use App\Http\Resources\InventoryMovementResource;
 use App\Http\Resources\ProductResource;
 use App\Models\Product;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Storage;
@@ -35,12 +36,16 @@ class AdminProductController extends Controller
 {
     public function index(GetAdminProductsAction $action): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::CATALOG_VIEW);
+
         return ProductResource::collection($action->handle())
             ->additional(['success' => true]);
     }
 
     public function trash(GetTrashedProductsAction $action): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::CATALOG_VIEW);
+
         return ProductResource::collection($action->handle())
             ->additional(['success' => true]);
     }
@@ -55,6 +60,8 @@ class AdminProductController extends Controller
 
     public function show(Product $product, ShowProductAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::CATALOG_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => new ProductResource($action->handle($product)),
@@ -86,6 +93,8 @@ class AdminProductController extends Controller
 
     public function destroy(Product $product, DeleteProductAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::CATALOG_DELETE);
+
         $action->handle($product);
 
         return response()->json([
@@ -96,6 +105,8 @@ class AdminProductController extends Controller
 
     public function restore(string $id, RestoreProductAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::CATALOG_RESTORE);
+
         return response()->json([
             'success' => true,
             'message' => 'Product restored successfully.',
@@ -105,6 +116,8 @@ class AdminProductController extends Controller
 
     public function forceDestroy(string $id, ForceDeleteProductAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::CATALOG_DELETE);
+
         $action->handle($id);
 
         return response()->json([
@@ -132,6 +145,8 @@ class AdminProductController extends Controller
 
     public function indexImages(Product $product, GetProductImagesAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::CATALOG_VIEW);
+
         $data = $action->handle($product)->map(fn ($image) => [
             'id' => $image->id,
             'path' => $image->path,
@@ -149,6 +164,8 @@ class AdminProductController extends Controller
         Product $product,
         GetInventoryMovementsAction $action,
     ): AnonymousResourceCollection {
+        $this->authorize(AdminPermissions::INVENTORY_VIEW);
+
         return InventoryMovementResource::collection($action->handle($product))
             ->additional(['success' => true]);
     }

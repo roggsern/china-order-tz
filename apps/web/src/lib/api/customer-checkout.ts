@@ -276,13 +276,6 @@ export async function syncCartToServer(
     }
 
     const variantId = item.configurationId?.trim();
-    if (!variantId) {
-      throw new CustomerCheckoutApiError(
-        `"${item.name}" is missing a product variant. Remove it and add it again from the product page.`,
-        422,
-      );
-    }
-
     await customerApiFetch(
       "/api/cart/items",
       {
@@ -290,8 +283,12 @@ export async function syncCartToServer(
         headers: getAuthHeaders(token),
         body: JSON.stringify({
           product_id: productId,
-          product_variant_id: variantId,
-          configuration_id: variantId,
+          ...(variantId
+            ? {
+                product_variant_id: variantId,
+                configuration_id: variantId,
+              }
+            : {}),
           quantity: item.quantity,
           ...(shippingMethod ? { shipping_method: shippingMethod } : {}),
         }),

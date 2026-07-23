@@ -12,6 +12,7 @@ use App\Models\Admin;
 use App\Models\ReturnRequest;
 use App\Services\Returns\RefundEngine;
 use App\Services\Returns\ReturnEngine;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -33,6 +34,8 @@ class AdminReturnController extends Controller
 
     public function show(ReturnRequest $returnRequest): JsonResponse
     {
+        $this->authorize(AdminPermissions::RETURNS_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => new ReturnRequestResource($this->returnEngine->show($returnRequest)),

@@ -17,6 +17,7 @@ use App\Http\Requests\Admin\UpdateBrandRequest;
 use App\Http\Requests\Admin\UploadBrandAssetRequest;
 use App\Http\Resources\BrandResource;
 use App\Models\Brand;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -24,6 +25,8 @@ class AdminBrandController extends Controller
 {
     public function index(GetAdminBrandsAction $action): AnonymousResourceCollection
     {
+        $this->authorize(AdminPermissions::CATALOG_VIEW);
+
         return BrandResource::collection($action->handle())
             ->additional(['success' => true]);
     }
@@ -38,6 +41,8 @@ class AdminBrandController extends Controller
 
     public function show(Brand $brand, ShowBrandAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::CATALOG_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => new BrandResource($action->handle($brand)),
@@ -57,6 +62,8 @@ class AdminBrandController extends Controller
 
     public function destroy(Brand $brand, DeleteBrandAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::CATALOG_DELETE);
+
         $action->handle($brand);
 
         return response()->json([
@@ -67,6 +74,8 @@ class AdminBrandController extends Controller
 
     public function restore(string $id, RestoreBrandAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::CATALOG_RESTORE);
+
         return response()->json([
             'success' => true,
             'message' => 'Brand restored successfully.',

@@ -7,12 +7,15 @@ use App\Actions\AdminProductAttributes\SyncProductCatalogAttributesAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\SyncProductCatalogAttributesRequest;
 use App\Models\Product;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 
 class AdminProductAttributeController extends Controller
 {
     public function index(Product $product, GetProductCatalogAttributesAction $action): JsonResponse
     {
+        $this->authorize(AdminPermissions::CATALOG_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => $action->handle($product),

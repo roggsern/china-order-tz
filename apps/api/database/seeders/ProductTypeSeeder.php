@@ -417,7 +417,7 @@ class ProductTypeSeeder extends Seeder
                 'name' => 'Simple Goods',
                 'slug' => 'simple-goods',
                 'description' => 'Single-SKU products without variant combinations (price + stock only).',
-                'sku_pattern' => 'SMP-{SKU}',
+                'sku_pattern' => null,
                 'has_configurations' => false,
                 'allows_price_override' => false,
                 'allows_moq_pricing' => true,

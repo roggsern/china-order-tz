@@ -11,6 +11,6 @@ class ShowCatalogProductTypeAction
         return $catalogProductType->loadMissing([
             'subcategory.parent.department',
             'subcategory.department',
-        ]);
+        ])->loadCount(['products', 'attributes']);
     }
 }

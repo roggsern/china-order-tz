@@ -4,12 +4,17 @@ namespace App\Services\Pricing\Stages;
 
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Services\Pricing\CommercePricingResolver;
 use App\Services\Pricing\Contracts\PriceStageInterface;
 use App\Services\Pricing\DTOs\PriceQuoteInput;
 use App\Services\Pricing\DTOs\PriceStageResult;
 
 final class BasePriceStage implements PriceStageInterface
 {
+    public function __construct(
+        private readonly CommercePricingResolver $commercePricingResolver,
+    ) {}
+
     public function key(): string
     {
         return 'base';
@@ -26,7 +31,9 @@ final class BasePriceStage implements PriceStageInterface
         PriceQuoteInput $input,
         string $currentUnitPrice,
     ): PriceStageResult {
-        $unitPrice = $this->format($product->price);
+        // Quote pipeline base remains products.price via CommercePricingResolver (ADR 054 Simple SSoT).
+        $resolved = $this->commercePricingResolver->resolveSimpleProductPrice($product);
+        $unitPrice = $resolved->unitPrice;
 
         return new PriceStageResult(
             stage: $this->key(),
@@ -34,11 +41,9 @@ final class BasePriceStage implements PriceStageInterface
             unitPrice: $unitPrice,
             applied: true,
             note: 'Product base price',
+            meta: [
+                'source' => $resolved->source,
+            ],
         );
-    }
-
-    private function format(mixed $amount): string
-    {
-        return number_format((float) $amount, 2, '.', '');
     }
 }

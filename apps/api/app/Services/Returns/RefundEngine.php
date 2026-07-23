@@ -183,6 +183,54 @@ class RefundEngine
     }
 
     /**
+     * Complete an open refund transaction (return or cancellation).
+     * Idempotent when already completed. Does not mutate inventory.
+     *
+     * @throws ValidationException
+     */
+    public function complete(RefundTransaction $refund, Admin $admin): RefundTransaction
+    {
+        return DB::transaction(function () use ($refund, $admin): RefundTransaction {
+            /** @var RefundTransaction $locked */
+            $locked = RefundTransaction::query()
+                ->whereKey($refund->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $current = $locked->status instanceof RefundTransactionStatus
+                ? $locked->status
+                : RefundTransactionStatus::from((string) $locked->status);
+
+            if ($current === RefundTransactionStatus::Completed) {
+                return $locked->fresh(['order', 'returnRequest']) ?? $locked;
+            }
+
+            if ($current === RefundTransactionStatus::Failed) {
+                throw ValidationException::withMessages([
+                    'refund' => ['Failed refunds cannot be completed.'],
+                ]);
+            }
+
+            $path = match ($current) {
+                RefundTransactionStatus::Pending => ['approved', 'processing', 'completed'],
+                RefundTransactionStatus::Approved => ['processing', 'completed'],
+                RefundTransactionStatus::Processing => ['completed'],
+                default => [],
+            };
+
+            $currentRefund = $locked;
+            foreach ($path as $step) {
+                $currentRefund = $this->updateStatus($currentRefund, [
+                    'status' => $step,
+                    'notes' => $currentRefund->notes ?? 'Refund completed.',
+                ], $admin);
+            }
+
+            return $currentRefund->fresh(['order', 'returnRequest']) ?? $currentRefund;
+        });
+    }
+
+    /**
      * Ensure a pending cancellation RefundTransaction exists for a refund_pending order.
      * Idempotent: returns the existing open (non-terminal) cancellation refund when present.
      */

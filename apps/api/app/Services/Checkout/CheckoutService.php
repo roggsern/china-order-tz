@@ -6,13 +6,21 @@ use App\Enums\CartStatus;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\DeliveryAddress;
-use App\Models\Inventory;
 use App\Models\User;
-use Illuminate\Support\Facades\Log;
+use App\Services\Cart\ResolveCartPurchasable;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * Legacy prepare / preview surface.
+ * RC1-C1 — address + CommercePricingResolver line pricing parity with checkout session.
+ * Channel mix and promotions remain session/confirm concerns; prepare still surfaces shipping summaries.
+ */
 class CheckoutService
 {
+    public function __construct(
+        private readonly ResolveCartPurchasable $resolveCartPurchasable,
+    ) {}
+
     /**
      * @return array{
      *     customer: User,
@@ -26,31 +34,81 @@ class CheckoutService
      */
     public function prepare(User $user): array
     {
+        $deliveryAddress = $this->resolveDeliveryAddress($user);
         $cart = $this->resolveCheckoutCart($user);
         $this->validateCartHasItems($cart);
-        $deliveryAddress = $this->resolveDeliveryAddress($user);
+        $cart = $this->loadCart($user, $cart);
 
-        $cart->load(['items.product.supplier', 'items.variant']);
-
-        foreach ($cart->items as $item) {
-            $this->logCartItemAvailabilityCheck($item);
-        }
-
-        // Shipping choice is enforced on the checkout session before order/payment,
-        // not on the legacy prepare preview.
-        $subtotal = $this->calculateItemsSubtotal($cart);
+        $subtotal = $this->refreshLinePricing($cart);
         $chinaShippingTotal = $this->calculateChinaShippingTotal($cart);
+        $shippingSummary = $this->buildShippingSummary($cart, $chinaShippingTotal);
         $grandTotal = bcadd($subtotal, $chinaShippingTotal, 2);
 
         return [
             'customer' => $user,
             'delivery_address' => $deliveryAddress,
-            'cart' => $cart,
+            'cart' => $cart->fresh([
+                'items.product.commerceChannel',
+                'items.variant',
+            ]) ?? $cart,
             'subtotal' => $subtotal,
-            'shipping_summary' => $this->buildShippingSummary($cart, $chinaShippingTotal),
+            'shipping_summary' => $shippingSummary,
             'grand_total' => $grandTotal,
             'ready_for_confirmation' => true,
         ];
+    }
+
+    /**
+     * Re-price every line through ResolveCartPurchasable (CommercePricingResolver + stock).
+     */
+    private function refreshLinePricing(Cart $cart): string
+    {
+        $currency = strtoupper((string) ($cart->currency ?: 'TZS'));
+        $subtotal = '0.00';
+
+        foreach ($cart->items as $item) {
+            if ($item->quantity < 1) {
+                throw ValidationException::withMessages([
+                    'quantity' => ['Quantity must be at least 1.'],
+                ]);
+            }
+
+            $resolved = $this->resolveCartPurchasable->handle(
+                $item->product_id,
+                $item->product_variant_id,
+                (int) $item->quantity,
+                $currency,
+                $item->shipping_method?->value,
+            );
+
+            $unit = (string) $resolved['unit_price'];
+            $subtotal = bcadd($subtotal, bcmul($unit, (string) $item->quantity, 2), 2);
+
+            $item->forceFill([
+                'price_snapshot' => $resolved['unit_price'],
+                'unit_price' => $resolved['unit_price'],
+                'currency' => $resolved['currency'],
+            ])->save();
+        }
+
+        return $subtotal;
+    }
+
+    private function loadCart(User $user, Cart $cart): Cart
+    {
+        $cart->load([
+            'items.product.commerceChannel',
+            'items.product.inventory',
+            'items.product.shippingOptions',
+            'items.variant.inventories',
+            'items.variant.prices',
+        ]);
+
+        if ($cart->user_id !== $user->id) {
+            abort(404);
+        }
+
+        return $cart;
     }
 
     private function resolveCheckoutCart(User $user): Cart
@@ -79,6 +137,8 @@ class CheckoutService
 
     private function resolveDeliveryAddress(User $user): DeliveryAddress
     {
+        $user->unsetRelation('deliveryAddress');
+        $user->load('deliveryAddress');
         $address = $user->deliveryAddress;
 
         if ($address === null) {
@@ -97,39 +157,12 @@ class CheckoutService
         }
     }
 
-    private function validateChinaItemsHaveShipping(Cart $cart): void
-    {
-        foreach ($cart->items as $item) {
-            if (! $item->product->requiresChinaShipping()) {
-                continue;
-            }
-
-            if ($item->shipping_method === null || $item->shipping_price === null) {
-                $this->throwValidationError(
-                    'cart',
-                    "Shipping method is required for {$item->product->name}.",
-                );
-            }
-        }
-    }
-
-    private function calculateItemsSubtotal(Cart $cart): string
-    {
-        $total = '0.00';
-
-        foreach ($cart->items as $item) {
-            $total = bcadd($total, $item->subtotal(), 2);
-        }
-
-        return $total;
-    }
-
     private function calculateChinaShippingTotal(Cart $cart): string
     {
         $total = '0.00';
 
         foreach ($cart->items as $item) {
-            if (! $item->product->requiresChinaShipping()) {
+            if (! $item->product?->requiresChinaShipping()) {
                 continue;
             }
 
@@ -145,11 +178,11 @@ class CheckoutService
     private function buildShippingSummary(Cart $cart, string $chinaShippingTotal): array
     {
         $hasChinaItems = $cart->items->contains(
-            fn (CartItem $item) => $item->product->requiresChinaShipping(),
+            fn (CartItem $item) => (bool) $item->product?->requiresChinaShipping(),
         );
 
         $hasDarItems = $cart->items->contains(
-            fn (CartItem $item) => ! $item->product->requiresChinaShipping(),
+            fn (CartItem $item) => $item->product !== null && ! $item->product->requiresChinaShipping(),
         );
 
         $summary = [];
@@ -157,7 +190,7 @@ class CheckoutService
         if ($hasChinaItems) {
             $summary['china_shipping_total'] = $chinaShippingTotal;
             $summary['china_items'] = $cart->items
-                ->filter(fn (CartItem $item) => $item->product->requiresChinaShipping())
+                ->filter(fn (CartItem $item) => (bool) $item->product?->requiresChinaShipping())
                 ->map(fn (CartItem $item) => [
                     'product_id' => $item->product_id,
                     'shipping_method' => $item->shipping_method?->value,
@@ -180,45 +213,6 @@ class CheckoutService
     {
         throw ValidationException::withMessages([
             $field => [$message],
-        ]);
-    }
-
-    private function logCartItemAvailabilityCheck(CartItem $item): void
-    {
-        $product = $item->product;
-
-        $inventory = Inventory::query()
-            ->where('product_id', $item->product_id)
-            ->when(
-                $item->product_variant_id,
-                fn ($query) => $query->where('product_variant_id', $item->product_variant_id),
-                fn ($query) => $query->whereNull('product_variant_id'),
-            )
-            ->first();
-
-        $availableQuantity = $inventory?->availableQuantity();
-        $isActive = $product->isPurchasable();
-        $hasStock = $inventory !== null && $availableQuantity >= $item->quantity;
-
-        $failureReason = match (true) {
-            $product === null => 'Product record missing',
-            ! $isActive => 'Product is not available for purchase',
-            $inventory === null => 'No inventory record found',
-            $availableQuantity < $item->quantity => 'Insufficient stock',
-            default => null,
-        };
-
-        Log::info('checkout.cart_item_validation', [
-            'cart_item_id' => $item->id,
-            'cart_product_id' => $item->product_id,
-            'database_product_id' => $product?->id,
-            'product_name' => $product?->name,
-            'quantity_requested' => $item->quantity,
-            'stock_quantity' => $availableQuantity,
-            'inventory_record_id' => $inventory?->id,
-            'availability_status' => $hasStock ? 'available' : 'unavailable',
-            'active_status' => $isActive,
-            'validation_failure_reason' => $failureReason,
         ]);
     }
 }

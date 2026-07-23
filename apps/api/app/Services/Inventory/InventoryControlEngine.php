@@ -22,12 +22,15 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Inventory control over VariantInventory — ledger, counts, adjustments, valuation.
- * Does not replace VariantInventory as source of truth.
+ * Sellable mutations go through InventoryMutationGate (ADR 055).
+ * Does not replace VariantInventory as Catalog Stock SSoT.
  */
 class InventoryControlEngine
 {
     public function __construct(
         private readonly StoreService $stores,
+        private readonly InventoryMutationGate $mutationGate,
+        private readonly CanonicalVariantInventoryInitializer $canonicalInitializer,
     ) {}
 
     public function resolveOrCreateInventory(
@@ -35,61 +38,36 @@ class InventoryControlEngine
         InventoryLocation $location,
         bool $lock = true,
     ): VariantInventory {
-        $query = VariantInventory::withTrashed()
-            ->where('product_variant_id', $variant->id)
-            ->where(function ($q) use ($location) {
-                $q->where('inventory_location_id', $location->id)
-                    ->orWhere('warehouse_code', $location->code);
-            });
-
-        if ($lock) {
-            $query->lockForUpdate();
-        }
-
-        $inventory = $query->first();
-
-        if ($inventory === null) {
-            $inventory = VariantInventory::query()->create([
-                'product_variant_id' => $variant->id,
-                'inventory_location_id' => $location->id,
+        return DB::transaction(function () use ($variant, $location, $lock) {
+            // Establish MAIN/location row without shadowing positive legacy stock (RC1-B1).
+            $inventory = $this->canonicalInitializer->ensure($variant, [
                 'warehouse_code' => $location->code,
-                'on_hand' => 0,
-                'reserved' => 0,
-                'damaged' => 0,
-                'inspection' => 0,
+                'inventory_location_id' => $location->id,
+                'requested_on_hand' => null,
                 'reorder_level' => 5,
                 'safety_stock' => 0,
                 'is_active' => true,
+                'reason' => 'Inventory control bootstrap — opening stock from legacy',
             ]);
+
+            if ($inventory->inventory_location_id === null
+                || (string) $inventory->inventory_location_id !== (string) $location->id
+            ) {
+                $inventory->forceFill([
+                    'inventory_location_id' => $location->id,
+                    'warehouse_code' => $location->code,
+                ])->save();
+            }
 
             return $lock
                 ? VariantInventory::query()->whereKey($inventory->id)->lockForUpdate()->firstOrFail()
-                : $inventory;
-        }
-
-        if ($inventory->trashed()) {
-            $inventory->restore();
-            $inventory->forceFill([
-                'on_hand' => 0,
-                'reserved' => 0,
-                'damaged' => 0,
-                'inspection' => 0,
-                'is_active' => true,
-                'inventory_location_id' => $location->id,
-                'warehouse_code' => $location->code,
-            ])->save();
-        } elseif ($inventory->inventory_location_id === null) {
-            $inventory->forceFill([
-                'inventory_location_id' => $location->id,
-                'warehouse_code' => $location->code,
-            ])->save();
-        }
-
-        return $inventory;
+                : ($inventory->fresh() ?? $inventory);
+        });
     }
 
     /**
      * Apply a signed change to sellable on_hand and append a ledger row.
+     * Delegates to InventoryMutationGate (canonical write authority).
      */
     public function mutateSellable(
         VariantInventory $inventory,
@@ -102,57 +80,34 @@ class InventoryControlEngine
         ?array $metadata = null,
         int $damagedDelta = 0,
         int $inspectionDelta = 0,
+        ?string $idempotencyKey = null,
     ): InventoryStockMovement {
-        return DB::transaction(function () use (
-            $inventory, $type, $quantityChange, $actor, $reason,
-            $referenceType, $referenceId, $metadata, $damagedDelta, $inspectionDelta,
-        ) {
-            /** @var VariantInventory $locked */
-            $locked = VariantInventory::query()->whereKey($inventory->id)->lockForUpdate()->firstOrFail();
+        $kind = InventoryMutationGate::kindFromMovementType($type);
+        $adjustSubtype = $type === InventoryMovementType::Correction ? 'correction' : null;
 
-            $before = (int) $locked->on_hand;
-            $after = $before + $quantityChange;
-            if ($after < 0) {
-                throw ValidationException::withMessages([
-                    'quantity' => ['Insufficient sellable stock for this operation.'],
-                ]);
-            }
+        $result = $this->mutationGate->mutateVariantSellable(
+            inventory: $inventory,
+            kind: $kind,
+            quantityChange: $quantityChange,
+            actor: $actor,
+            reason: $reason,
+            referenceType: $referenceType,
+            referenceId: $referenceId,
+            metadata: $metadata,
+            damagedDelta: $damagedDelta,
+            inspectionDelta: $inspectionDelta,
+            adjustSubtype: $adjustSubtype,
+            idempotencyKey: $idempotencyKey,
+        );
 
-            $damaged = max(0, (int) $locked->damaged + $damagedDelta);
-            $inspection = max(0, (int) $locked->inspection + $inspectionDelta);
-
-            $locked->forceFill([
-                'on_hand' => $after,
-                'damaged' => $damaged,
-                'inspection' => $inspection,
-                'is_active' => true,
-            ])->save();
-
-            $storeId = $locked->inventoryLocation?->store_id
-                ?? InventoryLocation::query()->whereKey($locked->inventory_location_id)->value('store_id');
-
-            $movement = InventoryStockMovement::query()->create([
-                'variant_inventory_id' => $locked->id,
-                'product_variant_id' => $locked->product_variant_id,
-                'inventory_location_id' => $locked->inventory_location_id,
-                'store_id' => $storeId,
-                'movement_type' => $type,
-                'quantity_before' => $before,
-                'quantity_change' => $quantityChange,
-                'quantity_after' => $after,
-                'damaged_after' => $damaged,
-                'inspection_after' => $inspection,
-                'reason' => $reason,
-                'reference_type' => $referenceType,
-                'reference_id' => $referenceId,
-                'actor_type' => $actor ? 'admin' : 'system',
-                'actor_id' => $actor?->id,
-                'metadata' => $metadata,
-                'created_at' => now(),
+        $movement = $result->movement;
+        if (! $movement instanceof InventoryStockMovement) {
+            throw ValidationException::withMessages([
+                'inventory' => ['Variant mutation did not produce a stock movement.'],
             ]);
+        }
 
-            return $movement;
-        });
+        return $movement;
     }
 
     public function receiveToLocation(
@@ -201,35 +156,17 @@ class InventoryControlEngine
         }
 
         return DB::transaction(function () use ($variant, $warehouseCode, $qty, $actor, $reason, $referenceType, $referenceId) {
-            $inventory = VariantInventory::withTrashed()
-                ->where('product_variant_id', $variant->id)
-                ->where('warehouse_code', $warehouseCode)
-                ->lockForUpdate()
-                ->first();
+            $inventory = $this->canonicalInitializer->ensure($variant, [
+                'warehouse_code' => $warehouseCode,
+                'requested_on_hand' => null,
+                'reorder_level' => 0,
+                'safety_stock' => 0,
+                'is_active' => true,
+                'actor' => $actor,
+                'reason' => 'Inventory control warehouse bootstrap — opening stock from legacy',
+            ]);
 
-            if ($inventory === null) {
-                $inventory = VariantInventory::query()->create([
-                    'product_variant_id' => $variant->id,
-                    'warehouse_code' => $warehouseCode,
-                    'on_hand' => 0,
-                    'reserved' => 0,
-                    'damaged' => 0,
-                    'inspection' => 0,
-                    'reorder_level' => 0,
-                    'safety_stock' => 0,
-                    'is_active' => true,
-                ]);
-                $inventory = VariantInventory::query()->whereKey($inventory->id)->lockForUpdate()->firstOrFail();
-            } elseif ($inventory->trashed()) {
-                $inventory->restore();
-                $inventory->forceFill([
-                    'on_hand' => 0,
-                    'reserved' => 0,
-                    'damaged' => 0,
-                    'inspection' => 0,
-                    'is_active' => true,
-                ])->save();
-            }
+            $inventory = VariantInventory::query()->whereKey($inventory->id)->lockForUpdate()->firstOrFail();
 
             return $this->mutateSellable(
                 $inventory,
@@ -267,6 +204,7 @@ class InventoryControlEngine
         ?Admin $actor = null,
         ?string $referenceType = null,
         ?string $referenceId = null,
+        ?string $idempotencyKey = null,
     ): InventoryStockMovement {
         return $this->mutateSellable(
             $inventory,
@@ -276,6 +214,7 @@ class InventoryControlEngine
             'Sellable return restock',
             $referenceType,
             $referenceId,
+            idempotencyKey: $idempotencyKey,
         );
     }
 
@@ -290,6 +229,7 @@ class InventoryControlEngine
         ?Admin $actor = null,
         ?string $referenceType = null,
         ?string $referenceId = null,
+        ?string $idempotencyKey = null,
     ): InventoryStockMovement {
         if ($qty < 1) {
             throw ValidationException::withMessages(['quantity' => ['Quantity must be at least 1.']]);
@@ -305,6 +245,7 @@ class InventoryControlEngine
             $referenceId,
             ['intake' => true],
             damagedDelta: $qty,
+            idempotencyKey: $idempotencyKey,
         );
         if ($actor) {
             event(InventoryControlAudit::damaged($movement, $actor));

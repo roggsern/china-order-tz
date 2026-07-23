@@ -314,6 +314,7 @@ class ReturnsEngineTest extends TestCase
                 'condition' => 'used',
                 'resolution' => 'refund',
                 'refund_amount' => 35000,
+                'inventory_disposition' => 'no_restock',
             ]],
         ])->assertOk()->assertJsonPath('data.status', 'completed');
 

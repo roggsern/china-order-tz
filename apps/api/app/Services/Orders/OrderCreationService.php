@@ -31,6 +31,9 @@ class OrderCreationService
      */
     public function confirm(User $user, array $shippingInput): Order
     {
+        $user->unsetRelation('deliveryAddress');
+        $user->load('deliveryAddress');
+
         if ($user->deliveryAddress === null) {
             throw ValidationException::withMessages([
                 'delivery_address' => ['Delivery address is required before checkout.'],

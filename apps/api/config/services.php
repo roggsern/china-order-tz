@@ -50,8 +50,18 @@ return [
             'retry_times' => env('NMB_HTTP_RETRY_TIMES', 2),
         ],
         'webhook' => [
+            /*
+             * Production always forces verification (see NmbWebhookSignatureVerifier::isRequired).
+             * Outside production, false allows local/sandbox unsigned callbacks explicitly.
+             */
             'require_signature' => env('NMB_WEBHOOK_REQUIRE_SIGNATURE', false),
             'secret' => env('NMB_WEBHOOK_SECRET'),
+            /*
+             * notification_secret — MPGS X-Notification-Secret (default, evidenced)
+             * hmac_sha256 — HMAC-SHA256(raw body) vs X-Notification-Signature / X-Signature
+             * both — require both checks
+             */
+            'scheme' => env('NMB_WEBHOOK_SCHEME', 'notification_secret'),
             'replay_ttl_seconds' => env('NMB_WEBHOOK_REPLAY_TTL_SECONDS', 86400),
         ],
         'logging' => [

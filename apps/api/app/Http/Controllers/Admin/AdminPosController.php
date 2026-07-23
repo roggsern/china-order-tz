@@ -40,6 +40,8 @@ class AdminPosController extends Controller
     {
         /** @var Admin $admin */
         $admin = $request->user();
+        // Type B — store/session-scoped POS: cashier/master/super via PosSessionPolicy.
+        $this->authorize('viewAny', PosSession::class);
 
         return response()->json([
             'success' => true,
@@ -150,6 +152,8 @@ class AdminPosController extends Controller
     {
         /** @var Admin $admin */
         $admin = $request->user();
+        // Type B — open session belongs to acting cashier (policy + service).
+        $this->authorize('viewAny', PosSession::class);
 
         $session = $this->sessions->currentOpen($admin);
         $summary = $session ? $this->sessions->summaryPayload($session) : null;
@@ -217,6 +221,8 @@ class AdminPosController extends Controller
     {
         /** @var Admin $admin */
         $admin = $request->user();
+        // Type B — requires open POS session + store assignment (not AdminPermissions).
+        $this->authorize('viewAny', PosSession::class);
         $session = $this->sessions->currentOpen($admin);
         abort_if($session === null, 422, 'Open a POS session first.');
 
@@ -244,6 +250,8 @@ class AdminPosController extends Controller
     {
         /** @var Admin $admin */
         $admin = $request->user();
+        // Type B — session-scoped sale quote.
+        $this->authorize('viewAny', PosSession::class);
         $session = $this->sessions->currentOpen($admin);
         abort_if($session === null, 422, 'Open a POS session first.');
 
@@ -272,6 +280,9 @@ class AdminPosController extends Controller
 
     public function paymentMethods(): JsonResponse
     {
+        // Type B — POS checkout helpers for cashiers with session capability.
+        $this->authorize('viewAny', PosSession::class);
+
         $methods = PaymentMethodDefinition::query()
             ->where('is_active', true)
             ->orderBy('sort_order')
@@ -286,6 +297,8 @@ class AdminPosController extends Controller
     {
         /** @var Admin $admin */
         $admin = $request->user();
+        // Type B — completing a sale requires open cashier session.
+        $this->authorize('viewAny', PosSession::class);
         $session = $this->sessions->currentOpen($admin);
         if ($session === null) {
             \App\Support\Pos\PosErrors::sessionRequired();

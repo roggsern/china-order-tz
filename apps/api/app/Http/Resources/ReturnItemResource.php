@@ -20,6 +20,13 @@ class ReturnItemResource extends JsonResource
             'resolution' => $this->resolution instanceof \BackedEnum
                 ? $this->resolution->value
                 : $this->resolution,
+            // Admin operational field only — never expose to customer return payloads (RC1-G1 / G3).
+            'inventory_disposition' => $this->when(
+                $request->is('api/v1/admin/*'),
+                fn () => $this->inventory_disposition instanceof \BackedEnum
+                    ? $this->inventory_disposition->value
+                    : $this->inventory_disposition,
+            ),
             'refund_amount' => $this->refund_amount,
             'replacement_requested' => (bool) $this->replacement_requested,
             'order_item' => $this->whenLoaded('orderItem', fn () => $this->orderItem ? [

@@ -5,24 +5,24 @@ namespace App\Actions\AdminOrders;
 use App\Enums\FulfillmentStatus;
 use App\Enums\OrderStatus;
 use App\Models\Admin;
-use App\Models\Inventory;
 use App\Models\Order;
-use App\Models\OrderItem;
+use App\Services\Inventory\OrderInventoryRestockService;
 use App\Services\Orders\Lifecycle\OrderLifecycleContext;
 use App\Services\Orders\Lifecycle\OrderLifecycleEngine;
 use App\Services\Returns\RefundEngine;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 /**
  * Admin order cancellation — routed through OrderLifecycleEngine.
+ * Inventory restore / hold release via OrderInventoryRestockService (ADR-055 / 2A-3C-3).
  */
 class CancelOrderAction
 {
     public function __construct(
         private readonly OrderLifecycleEngine $lifecycle,
         private readonly RefundEngine $refunds,
+        private readonly OrderInventoryRestockService $inventoryRestock,
     ) {}
 
     public function handle(Order $order, ?string $reason = null): Order
@@ -42,12 +42,12 @@ class CancelOrderAction
 
             $updated = $this->lifecycle->cancel($before, $context);
 
-            // Restock when leaving a paid operational state (cancel or refund_pending).
-            if ($priorStatus !== null
-                && in_array($priorStatus, [OrderStatus::Paid, OrderStatus::Confirmed, OrderStatus::Processing], true)
-            ) {
-                $this->restock($updated);
-                $this->cancelOpenFulfillment($updated);
+            if ($priorStatus !== null) {
+                $this->inventoryRestock->applyAfterCancel($updated, $priorStatus, $admin);
+
+                if (in_array($priorStatus, [OrderStatus::Paid, OrderStatus::Confirmed, OrderStatus::Processing], true)) {
+                    $this->cancelOpenFulfillment($updated);
+                }
             }
 
             $fresh = $updated->fresh() ?? $updated;
@@ -70,26 +70,6 @@ class CancelOrderAction
         });
     }
 
-    private function restock(Order $order): void
-    {
-        $order->load('items');
-
-        foreach ($order->items as $item) {
-            $inventory = $this->findInventoryForItem($item);
-
-            if ($inventory === null) {
-                continue;
-            }
-
-            $inventory->increment('quantity', $item->quantity);
-            $inventory->movements()->create([
-                'quantity' => $item->quantity,
-                'type' => 'restock',
-                'reason' => "Order {$order->order_number} cancelled",
-            ]);
-        }
-    }
-
     private function cancelOpenFulfillment(Order $order): void
     {
         $order->loadMissing('fulfillment');
@@ -108,18 +88,5 @@ class CancelOrderAction
                 'completed_at' => now(),
             ])->save();
         }
-    }
-
-    private function findInventoryForItem(OrderItem $item): ?Inventory
-    {
-        return Inventory::query()
-            ->where('product_id', $item->product_id)
-            ->when(
-                $item->product_variant_id,
-                fn ($query) => $query->where('product_variant_id', $item->product_variant_id),
-                fn ($query) => $query->whereNull('product_variant_id'),
-            )
-            ->lockForUpdate()
-            ->first();
     }
 }

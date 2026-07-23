@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Admin;
 use App\Models\Order;
 use App\Services\Tracking\TrackingEngine;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -22,6 +23,8 @@ class AdminOrderTimelineController extends Controller
 
     public function show(Order $order, Request $request): JsonResponse
     {
+        $this->authorize(AdminPermissions::ORDERS_VIEW);
+
         $this->admin();
 
         $view = (string) $request->query('visibility', TimelineVisibility::Internal->value);
@@ -37,6 +40,8 @@ class AdminOrderTimelineController extends Controller
 
     public function rebuild(Order $order): JsonResponse
     {
+        $this->authorize(AdminPermissions::ORDERS_UPDATE);
+
         $this->admin();
 
         $beforeCount = \App\Models\Notification::query()->count();

@@ -11,15 +11,18 @@ use App\Models\Admin;
 use App\Models\CatalogProductType;
 use App\Models\Category;
 use App\Models\CommerceChannel;
-use App\Models\Inventory;
 use App\Models\Product;
 use App\Services\Audit\ActivityLogFormatter;
 use App\Services\Catalog\GenerateProductSku;
+use App\Services\Inventory\AdminInventoryApplicationService;
 use App\Services\Pricing\SyncConfigurationPriceTiers;
 use App\Services\ProductConfiguration\ResolveTypeFromCategory;
 use App\Services\ProductConfiguration\SyncProductConfigurations;
+use App\Enums\ProductLifecycleStatus;
+use App\Services\ProductPurchasability\ProductPurchasabilityPolicy;
 use App\Services\ProductShipping\ProductShippingOptionEngine;
 use App\Support\ProductLifecycle;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -33,6 +36,8 @@ class UpdateProductAction
         private readonly GenerateProductSku $generateProductSku,
         private readonly ProductShippingOptionEngine $shippingOptionEngine,
         private readonly ActivityLogFormatter $activityLogFormatter,
+        private readonly ProductPurchasabilityPolicy $purchasabilityPolicy,
+        private readonly AdminInventoryApplicationService $adminInventory,
     ) {}
 
     public function handle(UpdateProductRequest $request, Product $product): Product
@@ -55,6 +60,8 @@ class UpdateProductAction
 
             $productData = [];
             $assignedChannel = null;
+            $lifecycleTouched = array_key_exists('lifecycle_status', $validated)
+                || array_key_exists('status', $validated);
 
             $assignable = [
                 'name',
@@ -155,27 +162,24 @@ class UpdateProductAction
                 $product->update($productData);
             }
 
+            /** @var Admin|null $admin */
+            $admin = Auth::user() instanceof Admin ? Auth::user() : null;
+
             if (array_key_exists('stock_quantity', $validated) && ! is_array($configurations)) {
-                Inventory::query()->updateOrCreate(
-                    [
-                        'product_id' => $product->id,
-                        'product_variant_id' => null,
-                    ],
-                    [
-                        'quantity' => $validated['stock_quantity'] ?? 0,
-                    ],
+                $this->adminInventory->setSimpleProductStock(
+                    product: $product,
+                    targetQuantity: (int) ($validated['stock_quantity'] ?? 0),
+                    actor: $admin,
+                    reason: 'Admin product update — set stock',
                 );
             }
 
             if (is_array($configurations) && $productType !== null) {
-                Inventory::query()->updateOrCreate(
-                    [
-                        'product_id' => $product->id,
-                        'product_variant_id' => null,
-                    ],
-                    [
-                        'quantity' => 0,
-                    ],
+                $this->adminInventory->setSimpleProductStock(
+                    product: $product,
+                    targetQuantity: 0,
+                    actor: $admin,
+                    reason: 'Admin product update — clear simple stock for configurations',
                 );
 
                 $this->syncProductConfigurations->handle($product->fresh(), $productType, $configurations);
@@ -234,8 +238,24 @@ class UpdateProductAction
                 'shippingOptions',
                 'variants.attributeValues.attribute',
                 'variants.inventory',
+                'variants.prices',
+                'variants.inventories',
                 'variants.priceTiers',
             ]);
+
+            $publishCandidate = $fresh ?? $product;
+            $lifecycle = $publishCandidate->lifecycle_status;
+            $isActiveLifecycle = $lifecycle === ProductLifecycleStatus::Active
+                || (
+                    $lifecycle instanceof ProductLifecycleStatus
+                    && $lifecycle->isPurchasable()
+                );
+
+            // Publish gate: create-as-active is handled in CreateProductAction;
+            // on update, enforce when lifecycle/status is explicitly set to active.
+            if ($lifecycleTouched && $isActiveLifecycle) {
+                $this->purchasabilityPolicy->assertPublishable($publishCandidate);
+            }
 
             $after = ($fresh ?? $product)->only(array_keys($before));
             $diff = $this->activityLogFormatter->diffAttributes($before, $after);

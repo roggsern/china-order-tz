@@ -1,4 +1,4 @@
-import { getApiUrl, isDevelopment } from "@/lib/config/env";
+import { getApiUrl } from "@/lib/config/env";
 import { ADMIN_TOKEN_COOKIE } from "@/lib/admin/auth-cookie";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
@@ -12,93 +12,39 @@ type ProxyOptions = {
   accept?: string;
 };
 
-type CachedAdminToken = {
-  token: string;
-  expiresAt: number;
-};
-
-let cachedServiceToken: CachedAdminToken | null = null;
-
-function getAdminApiCredentials(): { email: string; password: string } | null {
-  const email =
-    process.env.ADMIN_API_EMAIL?.trim() ||
-    (isDevelopment() ? "admin@chinaordertz.com" : "");
-  const password =
-    process.env.ADMIN_API_PASSWORD?.trim() || (isDevelopment() ? "password" : "");
-
-  if (!email || !password) {
-    return null;
-  }
-
-  return { email, password };
-}
-
-async function loginAdminForUpstream(apiUrl: string): Promise<string> {
-  const credentials = getAdminApiCredentials();
-
-  if (!credentials) {
-    throw new Error(
-      "Admin API credentials are not configured. Set ADMIN_API_EMAIL and ADMIN_API_PASSWORD.",
-    );
-  }
-
-  const response = await fetch(`${apiUrl}/api/v1/admin/login`, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(credentials),
-    cache: "no-store",
-  });
-
-  const payload = (await response.json().catch(() => null)) as {
-    success?: boolean;
-    token?: string;
-    message?: string;
-  } | null;
-
-  if (!response.ok || !payload?.token) {
-    throw new Error(payload?.message?.trim() || "Unable to authenticate with the admin API.");
-  }
-
-  return payload.token;
-}
-
 async function getSessionAdminToken(): Promise<string | null> {
   try {
     const cookieStore = await cookies();
-    return cookieStore.get(ADMIN_TOKEN_COOKIE)?.value ?? null;
+    const value = cookieStore.get(ADMIN_TOKEN_COOKIE)?.value?.trim();
+    return value || null;
   } catch {
     return null;
   }
 }
 
-/** Prefer the logged-in admin's Sanctum cookie; fall back to ADMIN_API_* service login. */
-export async function getAdminUpstreamToken(apiUrl: string): Promise<string> {
+/**
+ * Require the logged-in admin's HttpOnly Sanctum cookie.
+ * Never authenticates via ADMIN_API_EMAIL / ADMIN_API_PASSWORD (RC1-G4A).
+ */
+async function requireSessionAdminToken(): Promise<string> {
   const sessionToken = await getSessionAdminToken();
-  if (sessionToken) {
-    return sessionToken;
+  if (!sessionToken) {
+    throw new Error("Unauthenticated.");
   }
 
-  const now = Date.now();
-
-  if (cachedServiceToken && cachedServiceToken.expiresAt > now) {
-    return cachedServiceToken.token;
-  }
-
-  const token = await loginAdminForUpstream(apiUrl);
-  cachedServiceToken = { token, expiresAt: now + 50 * 60 * 1000 };
-  return token;
+  return sessionToken;
 }
 
-export function clearAdminUpstreamTokenCache(): void {
-  cachedServiceToken = null;
+function unauthenticatedResponse(): NextResponse {
+  return NextResponse.json(
+    { success: false, message: "Unauthenticated." },
+    { status: 401 },
+  );
 }
 
 /**
  * Proxies an authenticated admin request to Laravel `/api/v1/admin/...`.
- * Relies on Next middleware cookie gate for `/api/admin/*` (except login).
+ * Requires HttpOnly Sanctum session cookie set by POST /api/admin/login.
  */
 export async function proxyAdminApiRequest(
   upstreamPath: string,
@@ -114,20 +60,10 @@ export async function proxyAdminApiRequest(
   }
 
   let token: string;
-  let usedSessionToken = false;
-
   try {
-    const sessionToken = await getSessionAdminToken();
-    usedSessionToken = Boolean(sessionToken);
-    token = sessionToken ?? (await getAdminUpstreamToken(apiUrl));
-  } catch (error) {
-    return NextResponse.json(
-      {
-        success: false,
-        message: error instanceof Error ? error.message : "Admin API authentication failed.",
-      },
-      { status: 502 },
-    );
+    token = await requireSessionAdminToken();
+  } catch {
+    return unauthenticatedResponse();
   }
 
   const method = options?.method ?? "GET";
@@ -150,35 +86,12 @@ export async function proxyAdminApiRequest(
 
   const upstreamUrl = `${apiUrl}/api/v1/admin${upstreamPath}${query ? `?${query}` : ""}`;
 
-  let upstream = await fetch(upstreamUrl, {
+  const upstream = await fetch(upstreamUrl, {
     method,
     headers,
     body,
     cache: "no-store",
   });
-
-  if (upstream.status === 401 && !usedSessionToken) {
-    clearAdminUpstreamTokenCache();
-    try {
-      token = await loginAdminForUpstream(apiUrl);
-      cachedServiceToken = { token, expiresAt: Date.now() + 50 * 60 * 1000 };
-      headers.Authorization = `Bearer ${token}`;
-      upstream = await fetch(upstreamUrl, {
-        method,
-        headers,
-        body,
-        cache: "no-store",
-      });
-    } catch (error) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: error instanceof Error ? error.message : "Admin API authentication failed.",
-        },
-        { status: 502 },
-      );
-    }
-  }
 
   if (options?.raw) {
     const buffer = await upstream.arrayBuffer();
@@ -226,20 +139,10 @@ export async function proxyAdminMultipartRequest(
   }
 
   let token: string;
-  let usedSessionToken = false;
-
   try {
-    const sessionToken = await getSessionAdminToken();
-    usedSessionToken = Boolean(sessionToken);
-    token = sessionToken ?? (await getAdminUpstreamToken(apiUrl));
-  } catch (error) {
-    return NextResponse.json(
-      {
-        success: false,
-        message: error instanceof Error ? error.message : "Admin API authentication failed.",
-      },
-      { status: 502 },
-    );
+    token = await requireSessionAdminToken();
+  } catch {
+    return unauthenticatedResponse();
   }
 
   const headers: Record<string, string> = {
@@ -249,35 +152,12 @@ export async function proxyAdminMultipartRequest(
 
   const upstreamUrl = `${apiUrl}/api/v1/admin${upstreamPath}`;
 
-  let upstream = await fetch(upstreamUrl, {
+  const upstream = await fetch(upstreamUrl, {
     method,
     headers,
     body: formData,
     cache: "no-store",
   });
-
-  if (upstream.status === 401 && !usedSessionToken) {
-    clearAdminUpstreamTokenCache();
-    try {
-      token = await loginAdminForUpstream(apiUrl);
-      cachedServiceToken = { token, expiresAt: Date.now() + 50 * 60 * 1000 };
-      headers.Authorization = `Bearer ${token}`;
-      upstream = await fetch(upstreamUrl, {
-        method,
-        headers,
-        body: formData,
-        cache: "no-store",
-      });
-    } catch (error) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: error instanceof Error ? error.message : "Admin API authentication failed.",
-        },
-        { status: 502 },
-      );
-    }
-  }
 
   const raw = await upstream.text();
   let payload: unknown = null;
@@ -316,7 +196,6 @@ export function forwardAllowedSearchParams(
 
 /**
  * Proxies a binary/file admin response (CSV, XLSX, etc.) without JSON-parsing the body.
- * Forwards Authorization and preserves Content-Type / Content-Disposition when present.
  */
 export async function proxyAdminBinaryRequest(
   upstreamPath: string,
@@ -332,20 +211,10 @@ export async function proxyAdminBinaryRequest(
   }
 
   let token: string;
-  let usedSessionToken = false;
-
   try {
-    const sessionToken = await getSessionAdminToken();
-    usedSessionToken = Boolean(sessionToken);
-    token = sessionToken ?? (await getAdminUpstreamToken(apiUrl));
-  } catch (error) {
-    return NextResponse.json(
-      {
-        success: false,
-        message: error instanceof Error ? error.message : "Admin API authentication failed.",
-      },
-      { status: 502 },
-    );
+    token = await requireSessionAdminToken();
+  } catch {
+    return unauthenticatedResponse();
   }
 
   const method = options?.method ?? "GET";
@@ -368,35 +237,12 @@ export async function proxyAdminBinaryRequest(
 
   const upstreamUrl = `${apiUrl}/api/v1/admin${upstreamPath}${query ? `?${query}` : ""}`;
 
-  let upstream = await fetch(upstreamUrl, {
+  const upstream = await fetch(upstreamUrl, {
     method,
     headers,
     body,
     cache: "no-store",
   });
-
-  if (upstream.status === 401 && !usedSessionToken) {
-    clearAdminUpstreamTokenCache();
-    try {
-      token = await loginAdminForUpstream(apiUrl);
-      cachedServiceToken = { token, expiresAt: Date.now() + 50 * 60 * 1000 };
-      headers.Authorization = `Bearer ${token}`;
-      upstream = await fetch(upstreamUrl, {
-        method,
-        headers,
-        body,
-        cache: "no-store",
-      });
-    } catch (error) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: error instanceof Error ? error.message : "Admin API authentication failed.",
-        },
-        { status: 502 },
-      );
-    }
-  }
 
   const contentType = upstream.headers.get("content-type") || "";
 

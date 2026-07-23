@@ -13,6 +13,10 @@ class RoleSeeder extends Seeder
             ['name' => 'Customer', 'slug' => 'customer', 'description' => 'Standard storefront customer'],
             ['name' => 'Administrator', 'slug' => 'administrator', 'description' => 'Full platform administrator'],
             ['name' => 'Manager', 'slug' => 'manager', 'description' => 'Operations and catalog manager'],
+            ['name' => 'Operations Admin', 'slug' => 'operations_admin', 'description' => 'Orders, fulfillment, shipping, limited inventory'],
+            ['name' => 'Catalog Manager', 'slug' => 'catalog_manager', 'description' => 'Catalog, configuration, product media'],
+            ['name' => 'Finance Admin', 'slug' => 'finance_admin', 'description' => 'Payments, refunds, reconciliation, reports'],
+            ['name' => 'Inventory Manager', 'slug' => 'inventory_manager', 'description' => 'Inventory receive/adjust/transfer/restock'],
             ['name' => 'Support', 'slug' => 'support', 'description' => 'Customer support agent'],
             ['name' => 'Master Cashier', 'slug' => 'master_cashier', 'description' => 'POS cashier with multi-store assignments'],
             ['name' => 'Store Cashier', 'slug' => 'store_cashier', 'description' => 'POS cashier assigned to store(s)'],
@@ -25,5 +29,9 @@ class RoleSeeder extends Seeder
         foreach ($roles as $role) {
             Role::query()->updateOrCreate(['slug' => $role['slug']], $role);
         }
+
+        // Keep role ↔ permission matrix in sync whenever roles are seeded
+        // (feature tests often seed RoleSeeder without DatabaseSeeder).
+        $this->call(AdminPermissionSeeder::class);
     }
 }

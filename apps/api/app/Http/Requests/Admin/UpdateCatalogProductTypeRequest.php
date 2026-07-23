@@ -2,14 +2,20 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Http\Requests\Concerns\AuthorizesAdminPermission;
+use App\Support\Admin\AdminPermissions;
+use App\Support\Catalog\CatalogLeafCategoryRules;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class UpdateCatalogProductTypeRequest extends FormRequest
 {
-    public function authorize(): bool
+    use AuthorizesAdminPermission;
+
+    protected function requiredPermission(): string
     {
-        return true;
+        return AdminPermissions::CONFIGURATION_MANAGE;
     }
 
     /**
@@ -22,7 +28,11 @@ class UpdateCatalogProductTypeRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'max:255'],
-            'subcategory_id' => ['required', 'uuid', 'exists:categories,id'],
+            'subcategory_id' => [
+                'required',
+                'uuid',
+                Rule::exists('categories', 'id')->whereNull('deleted_at'),
+            ],
             'slug' => [
                 'sometimes',
                 'nullable',
@@ -33,16 +43,32 @@ class UpdateCatalogProductTypeRequest extends FormRequest
             'image' => ['sometimes', 'nullable', 'string', 'max:2048'],
             'description' => ['sometimes', 'nullable', 'string'],
             'sort_order' => ['sometimes', 'integer', 'min:0'],
+            // Strict boolean: true/false/0/1/"0"/"1" only â€” no filter_var coercion.
             'is_active' => ['sometimes', 'boolean'],
         ];
     }
 
-    protected function prepareForValidation(): void
+    public function withValidator(Validator $validator): void
     {
-        if ($this->has('is_active') && ! is_bool($this->input('is_active'))) {
-            $this->merge([
-                'is_active' => filter_var($this->input('is_active'), FILTER_VALIDATE_BOOLEAN),
-            ]);
-        }
+        $validator->after(function (Validator $validator): void {
+            if ($validator->errors()->isNotEmpty()) {
+                return;
+            }
+
+            $subcategoryId = $this->input('subcategory_id');
+            if (! is_string($subcategoryId) || $subcategoryId === '') {
+                return;
+            }
+
+            try {
+                CatalogLeafCategoryRules::assertValidLeafParent($subcategoryId);
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                foreach ($e->errors() as $field => $messages) {
+                    foreach ($messages as $message) {
+                        $validator->errors()->add($field, $message);
+                    }
+                }
+            }
+        });
     }
 }

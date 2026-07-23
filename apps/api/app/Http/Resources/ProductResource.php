@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Services\Inventory\CatalogStockPresenter;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -10,6 +11,8 @@ class ProductResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $presenter = app(CatalogStockPresenter::class);
+
         return [
             'id' => $this->id,
             'name' => $this->name,
@@ -51,7 +54,11 @@ class ProductResource extends JsonResource
             'images' => ProductImageResource::collection($this->whenLoaded('images')),
             'variants' => ProductVariantResource::collection($this->whenLoaded('variants')),
             'configurations' => ProductVariantResource::collection($this->whenLoaded('variants')),
-            'inventory' => InventoryResource::collection($this->whenLoaded('inventory')),
+            // Canonical simple Catalog Stock via StockResolver when inventory relation is in play.
+            'inventory' => $this->when(
+                $this->relationLoaded('inventory'),
+                fn () => $presenter->simpleInventoryCollection($this->resource),
+            ),
             'reviews' => ReviewResource::collection($this->whenLoaded('reviews')),
             'price_tiers' => ConfigurationPriceTierResource::collection($this->whenLoaded('priceTiers')),
             'average_rating' => $this->when(
