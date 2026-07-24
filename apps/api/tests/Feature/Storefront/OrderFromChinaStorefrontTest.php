@@ -9,12 +9,16 @@ use App\Enums\ProductVisibility;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\CommerceChannel;
+use App\Models\Inventory;
 use App\Models\Product;
+use App\Models\ProductShippingOption;
 use App\Models\Store;
 use App\Services\Stores\StoreService;
 use Database\Seeders\CategorySeeder;
 use Database\Seeders\CommerceChannelSeeder;
 use Database\Seeders\RoleSeeder;
+use Database\Seeders\StoreSeeder;
+use Database\Seeders\TzStoreCategorySeeder;
 use Database\Support\CatalogBible;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -100,6 +104,7 @@ class OrderFromChinaStorefrontTest extends TestCase
             'is_featured' => true,
             'name' => 'China Phone',
         ]);
+        $this->ensureChinaListable($chinaProduct);
         $tzProduct = $this->makeProduct($phones, $brand, 'tz-phone', $this->tz, [
             'name' => 'TZ Phone',
         ]);
@@ -171,6 +176,90 @@ class OrderFromChinaStorefrontTest extends TestCase
         $this->assertContains('electronics', $slugs);
     }
 
+    public function test_china_product_without_shipping_is_excluded_from_listing(): void
+    {
+        $this->seed(CategorySeeder::class);
+        $phones = Category::query()->where('slug', 'electronics-phones')->firstOrFail();
+        $brand = Brand::factory()->create(['is_active' => true]);
+
+        $product = $this->makeProduct($phones, $brand, 'china-no-shipping', $this->china);
+        $this->ensureChinaInventory($product);
+
+        $slugs = collect($this->getJson('/api/v1/storefront/china/products?category=electronics')->assertOk()->json('data'))
+            ->pluck('slug')
+            ->all();
+
+        $this->assertNotContains($product->slug, $slugs);
+    }
+
+    public function test_china_product_without_price_is_excluded_from_listing(): void
+    {
+        $this->seed(CategorySeeder::class);
+        $phones = Category::query()->where('slug', 'electronics-phones')->firstOrFail();
+        $brand = Brand::factory()->create(['is_active' => true]);
+
+        $product = $this->makeProduct($phones, $brand, 'china-no-price', $this->china, [
+            'price' => 0,
+        ]);
+        $this->ensureChinaInventory($product);
+        ProductShippingOption::factory()->air(5000)->create(['product_id' => $product->id]);
+
+        $slugs = collect($this->getJson('/api/v1/storefront/china/products?category=electronics')->assertOk()->json('data'))
+            ->pluck('slug')
+            ->all();
+
+        $this->assertNotContains($product->slug, $slugs);
+    }
+
+    public function test_china_product_with_zero_stock_still_appears_in_listing(): void
+    {
+        $this->seed(CategorySeeder::class);
+        $phones = Category::query()->where('slug', 'electronics-phones')->firstOrFail();
+        $brand = Brand::factory()->create(['is_active' => true]);
+
+        $product = $this->makeProduct($phones, $brand, 'china-zero-stock', $this->china);
+        ProductShippingOption::factory()->air(5000)->create(['product_id' => $product->id]);
+        Inventory::query()->updateOrCreate(
+            ['product_id' => $product->id, 'product_variant_id' => null],
+            ['quantity' => 0, 'reserved_quantity' => 0, 'low_stock_threshold' => 1],
+        );
+
+        $slugs = collect($this->getJson('/api/v1/storefront/china/products?category=electronics')->assertOk()->json('data'))
+            ->pluck('slug')
+            ->all();
+
+        $this->assertContains($product->slug, $slugs);
+    }
+
+    public function test_tz_catalog_listing_is_unaffected_by_china_safety_filters(): void
+    {
+        $this->seed(StoreSeeder::class);
+        $this->seed(TzStoreCategorySeeder::class);
+
+        $store = Store::query()->where('slug', 'zion-mode')->firstOrFail();
+        $category = Category::query()->where('store_id', $store->id)->where('name', 'Dresses')->firstOrFail();
+
+        $tzProduct = Product::factory()->create([
+            'slug' => 'tz-no-shipping-no-inventory',
+            'name' => 'TZ No Shipping No Inventory',
+            'store_id' => $store->id,
+            'category_id' => $category->id,
+            'commerce_channel_id' => $this->tz->id,
+            'fulfillment_source' => CommerceChannelCode::TzLocal->fulfillmentSource(),
+            'is_active' => true,
+            'is_demo' => false,
+            'lifecycle_status' => ProductLifecycleStatus::Active,
+            'visibility' => ProductVisibility::Public,
+            'price' => 28000,
+        ]);
+
+        $slugs = collect($this->getJson('/api/v1/storefront/tz/stores/zion-mode/products')->assertOk()->json('data'))
+            ->pluck('slug')
+            ->all();
+
+        $this->assertContains($tzProduct->slug, $slugs);
+    }
+
     /**
      * @param  array<string, mixed>  $overrides
      */
@@ -197,5 +286,19 @@ class OrderFromChinaStorefrontTest extends TestCase
             'visibility' => ProductVisibility::Public,
             'price' => 45000,
         ], $overrides));
+    }
+
+    private function ensureChinaInventory(Product $product): void
+    {
+        Inventory::query()->updateOrCreate(
+            ['product_id' => $product->id, 'product_variant_id' => null],
+            ['quantity' => 5, 'reserved_quantity' => 0, 'low_stock_threshold' => 1],
+        );
+    }
+
+    private function ensureChinaListable(Product $product): void
+    {
+        $this->ensureChinaInventory($product);
+        ProductShippingOption::factory()->air(5000)->create(['product_id' => $product->id]);
     }
 }

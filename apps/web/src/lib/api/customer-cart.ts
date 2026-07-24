@@ -10,6 +10,38 @@ type ApiSuccessResponse<T> = {
   errors?: Record<string, string[]>;
 };
 
+export type ServerCartProduct = {
+  id: string;
+  name?: string;
+  slug?: string;
+  commerce_channel_code?: string | null;
+  commerce_source_label?: string | null;
+  requires_china_shipping?: boolean;
+  shipping_prices?: {
+    air?: string | number | null;
+    sea?: string | number | null;
+  };
+  /** @deprecated Legacy cart payload field — prefer shipping_prices */
+  air_shipping_price?: string | number | null;
+  /** @deprecated Legacy cart payload field — prefer shipping_prices */
+  sea_shipping_price?: string | number | null;
+  brand?: { name?: string; slug?: string } | null;
+  category?: { slug?: string } | null;
+  primary_image?: {
+    id?: string;
+    url?: string | null;
+    path?: string | null;
+    alt_text?: string | null;
+  } | null;
+  images?: Array<{
+    id?: string;
+    url?: string | null;
+    path?: string | null;
+    is_primary?: boolean;
+    alt?: string | null;
+  }>;
+};
+
 export type ServerCartItem = {
   id: string;
   product_id: string;
@@ -20,22 +52,7 @@ export type ServerCartItem = {
   currency?: string;
   available_stock?: number | null;
   subtotal?: string | number;
-  product?: {
-    id: string;
-    name?: string;
-    slug?: string;
-    air_shipping_price?: string | number | null;
-    sea_shipping_price?: string | number | null;
-    brand?: { name?: string; slug?: string } | null;
-    category?: { slug?: string } | null;
-    images?: Array<{
-      id?: string;
-      url?: string | null;
-      path?: string | null;
-      is_primary?: boolean;
-      alt?: string | null;
-    }>;
-  } | null;
+  product?: ServerCartProduct | null;
   variant?: {
     id: string;
     sku?: string | null;
@@ -145,13 +162,48 @@ function apiIdToNumericId(id: string): number {
   return hash % 2_000_000_000 || 1;
 }
 
-function resolveOrigin(product: ServerCartItem["product"]): ProductOrigin {
-  const air = product?.air_shipping_price;
-  const sea = product?.sea_shipping_price;
-  const hasFreight =
-    (air !== null && air !== undefined && air !== "") ||
-    (sea !== null && sea !== undefined && sea !== "");
-  return hasFreight ? "china" : "tz";
+function hasPositiveFreightValue(value: string | number | null | undefined): boolean {
+  if (value === null || value === undefined || value === "") {
+    return false;
+  }
+
+  const parsed = typeof value === "number" ? value : Number.parseFloat(value);
+  return Number.isFinite(parsed) && parsed > 0;
+}
+
+/**
+ * Resolve cart line origin from the server cart product contract.
+ * Channel code is authoritative; freight fields are legacy fallbacks only.
+ */
+export function resolveServerCartProductOrigin(
+  product: ServerCartProduct | null | undefined,
+): ProductOrigin {
+  const code = product?.commerce_channel_code?.trim().toUpperCase();
+  if (code === "TZ_LOCAL") {
+    return "tz";
+  }
+  if (code === "CHINA_IMPORT") {
+    return "china";
+  }
+
+  const air = product?.shipping_prices?.air ?? product?.air_shipping_price;
+  const sea = product?.shipping_prices?.sea ?? product?.sea_shipping_price;
+
+  if (hasPositiveFreightValue(air) || hasPositiveFreightValue(sea)) {
+    return "china";
+  }
+
+  return "tz";
+}
+
+function resolveShippingCosts(product: ServerCartProduct | null | undefined) {
+  const air = product?.shipping_prices?.air ?? product?.air_shipping_price;
+  const sea = product?.shipping_prices?.sea ?? product?.sea_shipping_price;
+
+  return {
+    airCost: parseMoney(air) || undefined,
+    seaCost: parseMoney(sea) || undefined,
+  };
 }
 
 function resolveImage(item: ServerCartItem) {
@@ -201,6 +253,8 @@ export function mapServerCartItems(cart: ServerCart): CartLineItem[] {
         item.variant?.sku ||
         undefined;
 
+      const { airCost, seaCost } = resolveShippingCosts(item.product);
+
       const base: CartLineItem = {
         id: item.id,
         productId: apiIdToNumericId(item.product_id),
@@ -208,7 +262,7 @@ export function mapServerCartItems(cart: ServerCart): CartLineItem[] {
         slug: item.product?.slug ?? item.product_id,
         name: item.product?.name ?? "Product",
         unitPrice,
-        origin: resolveOrigin(item.product),
+        origin: resolveServerCartProductOrigin(item.product),
         brand: item.product?.brand?.name,
         brandSlug: item.product?.brand?.slug,
         categorySlug: item.product?.category?.slug ?? "uncategorized",
@@ -219,8 +273,8 @@ export function mapServerCartItems(cart: ServerCart): CartLineItem[] {
         configurationLabel: label,
         configurationSku: item.variant?.sku ?? undefined,
         selectedAttributes: attributes,
-        airCost: parseMoney(item.product?.air_shipping_price) || undefined,
-        seaCost: parseMoney(item.product?.sea_shipping_price) || undefined,
+        airCost,
+        seaCost,
         quantity: item.quantity,
         addedAt: new Date().toISOString(),
         shippingMethod: "sea_freight",

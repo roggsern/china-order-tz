@@ -6,6 +6,7 @@ use App\Models\Admin;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\VariantInventory;
+use App\Enums\ProductLifecycleStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
@@ -21,9 +22,11 @@ class AdminVariantInventoryTest extends TestCase
 
         $this->assertTrue(Schema::hasTable('variant_inventories'));
 
-        $product = Product::factory()->create([
+        $product = Product::factory()->fromChina()->create([
             'name' => 'Inventory Demo Phone',
             'slug' => 'inventory-demo-phone',
+            'lifecycle_status' => ProductLifecycleStatus::Draft,
+            'is_active' => false,
         ]);
         $variant = ProductVariant::factory()->create([
             'product_id' => $product->id,

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Http\Resources\Concerns\PresentsCustomerCatalogStock;
 use App\Models\Product;
 use App\Services\Catalog\CustomerProductMediaResolver;
 use Illuminate\Http\Request;
@@ -10,6 +11,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /** @mixin Product */
 class CustomerProductCardResource extends JsonResource
 {
+    use PresentsCustomerCatalogStock;
+
     public function toArray(Request $request): array
     {
         return [
@@ -35,6 +38,19 @@ class CustomerProductCardResource extends JsonResource
                 fn () => $this->commerceChannel->code,
             ),
             'commerce_source_label' => $this->resolveCommerceSourceLabel(),
+            'stock' => $this->when(
+                $this->usesSimpleProductStockPath(),
+                fn () => $this->simpleProductAvailableStock(),
+            ),
+            'in_stock' => $this->when(
+                $this->usesSimpleProductStockPath(),
+                fn () => $this->simpleProductAvailableStock() > 0,
+            ),
+            'inventory' => $this->when(
+                $this->usesSimpleProductStockPath() && $this->simpleProductInventoryContract() !== null,
+                fn () => $this->simpleProductInventoryContract(),
+            ),
+            'variants' => CustomerProductVariantResource::collection($this->whenLoaded('variants')),
         ];
     }
 

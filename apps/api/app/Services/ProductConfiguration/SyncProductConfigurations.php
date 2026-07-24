@@ -9,6 +9,7 @@ use App\Models\ProductType;
 use App\Models\ProductVariant;
 use App\Services\Inventory\AdminInventoryApplicationService;
 use App\Services\Pricing\SyncConfigurationPriceTiers;
+use App\Services\ProductPurchasability\ProductPurchasabilityPolicy;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -22,6 +23,7 @@ class SyncProductConfigurations
         private readonly GenerateConfigurationSku $generateConfigurationSku,
         private readonly SyncConfigurationPriceTiers $syncConfigurationPriceTiers,
         private readonly AdminInventoryApplicationService $adminInventory,
+        private readonly ProductPurchasabilityPolicy $purchasabilityPolicy,
     ) {}
 
     /**
@@ -38,6 +40,14 @@ class SyncProductConfigurations
     public function handle(Product $product, ProductType $productType, array $rows): Product
     {
         return DB::transaction(function () use ($product, $productType, $rows) {
+            $product->loadMissing([
+                'variants.prices',
+                'variants.inventories',
+                'shippingOptions',
+                'commerceChannel',
+            ]);
+            $hadSellableVariants = $this->purchasabilityPolicy->snapshotHadSellableVariants($product);
+
             $keepIds = [];
 
             foreach (array_values($rows) as $index => $row) {
@@ -120,12 +130,23 @@ class SyncProductConfigurations
                 $variant->delete();
             }
 
-            return $product->fresh([
+            $fresh = $product->fresh([
                 'variants.attributeValues.attribute',
                 'variants.inventory',
+                'variants.inventories',
+                'variants.prices',
                 'variants.priceTiers',
                 'inventory',
+                'shippingOptions',
+                'commerceChannel',
             ]);
+
+            $this->purchasabilityPolicy->assertActiveVariantIntegrityAfterMutation(
+                $fresh ?? $product,
+                $hadSellableVariants,
+            );
+
+            return $fresh;
         });
     }
 

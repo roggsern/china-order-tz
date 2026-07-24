@@ -109,7 +109,10 @@ function legacyEditUrl(legacyNumericId: number): string {
 
 /**
  * Resolve admin edit URL and decision reason.
- * Uses `canRedirectLegacyProduct()` for policy — does not duplicate block rules.
+ *
+ * Canonical-first: safe products always get `/admin/products?edit={uuid}`.
+ * Uses `canRedirectLegacyProduct()` for policy — does not duplicate block rules and
+ * does not consult `NEXT_PUBLIC_ADMIN_LEGACY_EDIT_REDIRECT` (numeric route page only).
  */
 export function resolveAdminProductEditUrl(
   product: Product | AdminCatalogProduct | AdminProductEditLinkProduct,
@@ -117,6 +120,8 @@ export function resolveAdminProductEditUrl(
   const linkProduct = normalizeAdminProductEditLinkProduct(product);
 
   if (!isAdminProductEditLinkContextComplete(linkProduct)) {
+    // Fail-safe: wholesale flags or legacy-configuration flag unknown — stay on ProductForm
+    // until full admin product context is available (e.g. catalog list row without tier data).
     return {
       url: legacyEditUrl(linkProduct.legacyNumericId),
       reason: "incomplete_product_context",

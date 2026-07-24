@@ -6,15 +6,25 @@ import {
 import { fetchAdminCatalogProductsPage } from "@/lib/api/admin-catalog";
 
 /**
- * RC1-A5.1 — Opt-in redirect from `/admin/products/[numericId]/edit` to the canonical panel.
- * Default OFF: legacy ProductForm remains the editor.
+ * RC1-A5.1 / RC1-C01 — Canonical-first redirect from `/admin/products/[numericId]/edit`
+ * to `/admin/products?edit={uuid}` when `canRedirectLegacyProduct()` allows it.
+ *
+ * Default ON. Set `NEXT_PUBLIC_ADMIN_LEGACY_EDIT_REDIRECT=0|false|no` to opt out and keep
+ * ProductForm as the default for the numeric edit route (rollback / local debugging only).
+ *
+ * Link builders (`buildAdminProductEditUrl`) always use redirect policy and never consult
+ * this flag.
  */
 export function isLegacyEditRedirectEnabled(
   flagValue: string | null | undefined = process.env.NEXT_PUBLIC_ADMIN_LEGACY_EDIT_REDIRECT,
 ): boolean {
   const normalized = flagValue?.trim().toLowerCase();
 
-  return normalized === "1" || normalized === "true" || normalized === "yes";
+  if (normalized === "0" || normalized === "false" || normalized === "no") {
+    return false;
+  }
+
+  return true;
 }
 
 /**

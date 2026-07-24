@@ -9,7 +9,9 @@ use App\Models\Admin;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\DeliveryAddress;
+use App\Models\Inventory;
 use App\Models\Order;
+use App\Models\Product;
 use App\Models\ProductShippingOption;
 use App\Models\User;
 use Database\Factories\Support\CatalogCartFixture;
@@ -178,11 +180,39 @@ class CustomerOrderConfirmationTest extends TestCase
     public function test_dar_delivery_negotiation_saved(): void
     {
         $user = $this->createCustomerWithAddress();
-        ['product' => $product] = $this->seedPurchasableCart($user, 35000, 1);
+        $product = Product::factory()->fromDar()->create(['price' => 35000]);
+
+        Inventory::query()->updateOrCreate(
+            [
+                'product_id' => $product->id,
+                'product_variant_id' => null,
+            ],
+            [
+                'quantity' => 10,
+                'reserved_quantity' => 0,
+            ],
+        );
+
+        $cart = Cart::factory()->create([
+            'user_id' => $user->id,
+            'status' => CartStatus::Active,
+            'currency' => 'TZS',
+        ]);
+
+        CartItem::factory()->create([
+            'cart_id' => $cart->id,
+            'product_id' => $product->id,
+            'quantity' => 1,
+            'unit_price' => 35000,
+            'price_snapshot' => 35000,
+            'currency' => 'TZS',
+        ]);
 
         Sanctum::actingAs($user);
 
-        $this->postJson('/api/v1/orders/confirm', ['shipping_choice' => 'customer_agent'])
+        // Legacy POST /orders/confirm uses channel-specific shipping choices.
+        // TZ_LOCAL carts require negotiated_delivery (not customer_agent) for Dar negotiation lines.
+        $this->postJson('/api/v1/orders/confirm', ['shipping_choice' => 'negotiated_delivery'])
             ->assertCreated()
             ->assertJsonPath('data.items.0.delivery_status', 'To Be Negotiated')
             ->assertJsonMissingPath('data.items.0.shipping_method');

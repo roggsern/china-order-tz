@@ -115,6 +115,8 @@ class ProductShippingOptionEngine
         $this->assertChinaImportProduct($product);
 
         return DB::transaction(function () use ($product, $option, $input): ProductShippingOption {
+            $hadPublishableShipping = $this->snapshotHadPublishableShipping($product);
+
             /** @var ProductShippingOption $locked */
             $locked = ProductShippingOption::query()->whereKey($option->id)->lockForUpdate()->firstOrFail();
 
@@ -157,6 +159,7 @@ class ProductShippingOptionEngine
             $this->syncLegacyColumns($product->fresh() ?? $product);
 
             $fresh = $locked->fresh() ?? $locked;
+            $this->assertActiveProductShippingIntegrity($product, $hadPublishableShipping);
             $admin = auth('sanctum')->user();
             event(ShippingOptionUpdated::fromOption(
                 $fresh,
@@ -175,8 +178,11 @@ class ProductShippingOptionEngine
         $this->assertOwns($product, $option);
 
         DB::transaction(function () use ($product, $option): void {
+            $hadPublishableShipping = $this->snapshotHadPublishableShipping($product);
+
             $option->delete();
             $this->syncLegacyColumns($product->fresh() ?? $product);
+            $this->assertActiveProductShippingIntegrity($product, $hadPublishableShipping);
         });
     }
 
@@ -217,6 +223,8 @@ class ProductShippingOptionEngine
         $this->assertChinaImportProduct($product);
 
         return DB::transaction(function () use ($product, $rows): array {
+            $hadPublishableShipping = $this->snapshotHadPublishableShipping($product);
+
             $seenModes = [];
             $keepIds = [];
 
@@ -264,7 +272,10 @@ class ProductShippingOptionEngine
 
             $this->syncLegacyColumns($product->fresh() ?? $product);
 
-            return $this->listForProduct($product->fresh() ?? $product);
+            $options = $this->listForProduct($product->fresh() ?? $product);
+            $this->assertActiveProductShippingIntegrity($product, $hadPublishableShipping);
+
+            return $options;
         });
     }
 
@@ -499,5 +510,27 @@ class ProductShippingOptionEngine
             'currency' => $option->currency,
             'is_available' => $option->is_available,
         ];
+    }
+
+    private function snapshotHadPublishableShipping(Product $product): bool
+    {
+        return $this->purchasabilityPolicy()->snapshotHadPublishableShippingOption(
+            $product->fresh(['shippingOptions', 'commerceChannel']) ?? $product,
+        );
+    }
+
+    private function assertActiveProductShippingIntegrity(
+        Product $product,
+        bool $hadPublishableShippingBefore,
+    ): void {
+        $this->purchasabilityPolicy()->assertActiveShippingIntegrityAfterMutation(
+            $product->fresh(['shippingOptions', 'commerceChannel']) ?? $product,
+            $hadPublishableShippingBefore,
+        );
+    }
+
+    private function purchasabilityPolicy(): \App\Services\ProductPurchasability\ProductPurchasabilityPolicy
+    {
+        return app(\App\Services\ProductPurchasability\ProductPurchasabilityPolicy::class);
     }
 }

@@ -67,6 +67,46 @@ test("Case 3: API does not return stock => frontend fallback = 0", () => {
   assert.equal(mapApiProductCardToCatalogProduct(BASE_PRODUCT).stock, 0);
 });
 
+test("listing card stock is mapped from API card payload", () => {
+  const mapped = mapApiProductCardToCatalogProduct({
+    ...BASE_PRODUCT,
+    stock: 15,
+    in_stock: true,
+  });
+
+  assert.equal(mapped.stock, 15);
+});
+
+test("listing card variant stock aggregates when product stock is absent", () => {
+  const mapped = mapApiProductCardToCatalogProduct({
+    ...BASE_PRODUCT,
+    variants: [
+      {
+        id: "019f7a6e-bbbb-7376-aca4-aed79f33519b",
+        sku: "SKU-2",
+        name: "Blue",
+        price: "1000",
+        compare_at_price: null,
+        weight: null,
+        stock: 4,
+        in_stock: true,
+      },
+      {
+        id: "019f7a6e-cccc-7376-aca4-aed79f33519b",
+        sku: "SKU-3",
+        name: "Red",
+        price: "1000",
+        compare_at_price: null,
+        weight: null,
+        stock: 3,
+        in_stock: true,
+      },
+    ],
+  });
+
+  assert.equal(mapped.stock, 7);
+});
+
 test("variant stock is mapped when product-level stock is absent", () => {
   const mapped = mapApiProductDetailToCatalogProduct({
     ...BASE_PRODUCT,

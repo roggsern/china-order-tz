@@ -45,6 +45,9 @@ class UpdateProductAction
         $validated = $request->validated();
 
         return DB::transaction(function () use ($validated, $product) {
+            $wasActiveLifecycle = $this->hasActiveLifecycle($product);
+            $purchasabilityFieldsTouched = $this->requestTouchesPurchasabilityFields($validated);
+
             $before = $product->only([
                 'name',
                 'sku',
@@ -143,7 +146,10 @@ class UpdateProductAction
                     ? ($validated['store_id'] ?? null)
                     : $product->store_id;
 
-                if ($effectiveChannelCode === CommerceChannelCode::TzLocal && blank($storeId)) {
+                if ($effectiveChannelCode === CommerceChannelCode::TzLocal
+                    && blank($storeId)
+                    && $this->resolveEffectiveActiveLifecycle($product, $productData)
+                ) {
                     throw ValidationException::withMessages([
                         'store_id' => ['TZ_LOCAL products must belong to a store.'],
                     ]);
@@ -277,9 +283,16 @@ class UpdateProductAction
                     && $lifecycle->isPurchasable()
                 );
 
-            // Publish gate: create-as-active is handled in CreateProductAction;
-            // on update, enforce when lifecycle/status is explicitly set to active.
-            if ($lifecycleTouched && $isActiveLifecycle) {
+            // Publish gate: create-as-active is handled in CreateProductAction.
+            // On update, enforce when activating or when an already-active product mutates
+            // fields that affect purchasability.
+            if (
+                $isActiveLifecycle
+                && (
+                    $lifecycleTouched
+                    || ($wasActiveLifecycle && $purchasabilityFieldsTouched)
+                )
+            ) {
                 $this->purchasabilityPolicy->assertPublishable($publishCandidate);
             }
 
@@ -367,6 +380,61 @@ class UpdateProductAction
         }
 
         return CommerceChannelCode::fromFulfillmentSource($product->fulfillment_source ?? null);
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function requestTouchesPurchasabilityFields(array $validated): bool
+    {
+        foreach ([
+            'price',
+            'catalog_product_type_id',
+            'store_id',
+            'category_id',
+            'commerce_channel_id',
+            'configurations',
+        ] as $field) {
+            if (array_key_exists($field, $validated)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function hasActiveLifecycle(Product $product): bool
+    {
+        if (! $product->is_active) {
+            return false;
+        }
+
+        $lifecycle = $product->lifecycle_status;
+        if ($lifecycle instanceof ProductLifecycleStatus) {
+            return $lifecycle->isPurchasable();
+        }
+
+        return ProductLifecycleStatus::tryFromMixed($lifecycle)?->isPurchasable() ?? false;
+    }
+
+    /**
+     * @param  array<string, mixed>  $productData
+     */
+    private function resolveEffectiveActiveLifecycle(Product $product, array $productData): bool {
+        $isActive = array_key_exists('is_active', $productData)
+            ? (bool) $productData['is_active']
+            : (bool) $product->is_active;
+
+        if (! $isActive) {
+            return false;
+        }
+
+        $lifecycle = $productData['lifecycle_status'] ?? $product->lifecycle_status;
+        if ($lifecycle instanceof ProductLifecycleStatus) {
+            return $lifecycle->isPurchasable();
+        }
+
+        return ProductLifecycleStatus::tryFromMixed($lifecycle)?->isPurchasable() ?? false;
     }
 
     private function generateUniqueSlug(string $value, string $ignoreProductId, bool $treatAsSlug = false): string

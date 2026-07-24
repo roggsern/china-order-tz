@@ -114,6 +114,7 @@ class AdminProductConfigurationGridTest extends TestCase
             'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
             'sku' => 'PHONE-BASE-1',
             'price' => 500000,
+            'air_shipping_price' => 8000,
             'stock_quantity' => 0,
             'status' => true,
             'configurations' => [
@@ -170,7 +171,7 @@ class AdminProductConfigurationGridTest extends TestCase
             'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
             'sku' => 'FASH-BAD-1',
             'price' => 20000,
-            'status' => true,
+            'status' => 'draft',
             'configurations' => [
                 [
                     'attribute_value_ids' => [$xl->id, $red->id],

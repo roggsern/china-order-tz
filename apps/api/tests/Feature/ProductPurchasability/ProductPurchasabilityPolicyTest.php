@@ -330,7 +330,25 @@ class ProductPurchasabilityPolicyTest extends TestCase
         $this->assertTrue(true);
     }
 
-    public function test_updating_tz_local_product_and_removing_store_fails_validation(): void
+    public function test_updating_active_tz_local_product_and_removing_store_fails_validation(): void
+    {
+        Sanctum::actingAs(Admin::factory()->create());
+
+        $store = $this->makeTzStore();
+        $product = $this->makePublishableProduct(CommerceChannelCode::TzLocal, [
+            'store_id' => $store->id,
+            'lifecycle_status' => ProductLifecycleStatus::Active,
+            'is_active' => true,
+        ]);
+
+        $this->putJson('/api/v1/admin/products/'.$product->id, [
+            'store_id' => null,
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['store_id']);
+    }
+
+    public function test_updating_draft_tz_local_product_can_remove_store(): void
     {
         Sanctum::actingAs(Admin::factory()->create());
 
@@ -344,8 +362,9 @@ class ProductPurchasabilityPolicyTest extends TestCase
         $this->putJson('/api/v1/admin/products/'.$product->id, [
             'store_id' => null,
         ])
-            ->assertStatus(422)
-            ->assertJsonValidationErrors(['store_id']);
+            ->assertOk();
+
+        $this->assertNull(Product::query()->whereKey($product->id)->value('store_id'));
     }
 
     /**

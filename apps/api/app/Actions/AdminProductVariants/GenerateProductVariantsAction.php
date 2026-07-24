@@ -3,6 +3,7 @@
 namespace App\Actions\AdminProductVariants;
 
 use App\Actions\AdminProductVariants\Concerns\ResolvesVariantDefaults;
+use App\Actions\Concerns\GuardsActiveProductSubResourceIntegrity;
 use App\Enums\CatalogAttributeType;
 use App\Http\Requests\Admin\GenerateProductVariantsRequest;
 use App\Http\Resources\AdminCatalogProductVariantResource;
@@ -12,17 +13,20 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Services\Catalog\GenerateVariantSku;
 use App\Services\Catalog\SyncVariantCatalogAttributeValues;
+use App\Services\ProductPurchasability\ProductPurchasabilityPolicy;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class GenerateProductVariantsAction
 {
+    use GuardsActiveProductSubResourceIntegrity;
     use ResolvesVariantDefaults;
 
     public function __construct(
         private readonly SyncVariantCatalogAttributeValues $syncAttributeValues,
         private readonly GenerateVariantSku $generateVariantSku,
         private readonly GetProductVariantsAction $getProductVariants,
+        private readonly ProductPurchasabilityPolicy $purchasabilityPolicy,
     ) {}
 
     /**
@@ -107,11 +111,15 @@ class GenerateProductVariantsAction
         $combinations = $this->cartesian($axes);
         $createdCount = 0;
 
+        $product->load(['variants.prices', 'variants.inventories']);
+        $hadSellableVariants = $this->snapshotSellableVariants($this->purchasabilityPolicy, $product);
+
         DB::transaction(function () use (
             $product,
             $replaceExisting,
             $combinations,
             $allowedById,
+            $hadSellableVariants,
             &$createdCount,
         ) {
             if ($replaceExisting) {
@@ -162,6 +170,14 @@ class GenerateProductVariantsAction
             }
 
             $this->ensureSingleDefault($product);
+
+            if ($replaceExisting) {
+                $this->assertActiveProductIntegrityAfterMutation(
+                    $this->purchasabilityPolicy,
+                    $product,
+                    $hadSellableVariants,
+                );
+            }
         });
 
         $payload = $this->getProductVariants->handle($product);

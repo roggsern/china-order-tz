@@ -47,6 +47,10 @@ import { productService } from "@/lib/services/product-service.client";
 import { applyCartItemShipping } from "@/lib/cart/shipping";
 import { clearCheckoutDraft } from "@/lib/checkout/draft";
 import { isAdminPath, isPostCheckoutPath } from "@/lib/checkout/routes";
+import {
+  getCustomerCartErrorMessage,
+  shouldFallbackToLocalCartOnError,
+} from "@/lib/cart/sync-errors";
 import { PRODUCTS_UPDATED_EVENT } from "@/lib/admin/product-storage";
 import { getCustomerApiToken } from "@/lib/api/customer-auth";
 import {
@@ -86,13 +90,19 @@ function withShipping(
 export function CartProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<CartState>(EMPTY_CART_STATE);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const hydrationRef = useRef(false);
   const itemsRef = useRef(state.items);
   const serverModeRef = useRef(false);
   itemsRef.current = state.items;
 
+  const clearSyncError = useCallback(() => {
+    setSyncError(null);
+  }, []);
+
   const applyServerCart = useCallback((serverItems: CartLineItem[], prev: CartState): CartState => {
     serverModeRef.current = true;
+    setSyncError(null);
     return normalizeCartState({
       ...prev,
       items: serverItems,
@@ -141,18 +151,29 @@ export function CartProvider({ children }: { children: ReactNode }) {
           const syncable = validated.items.filter((item) => item.catalogProductId);
 
           for (const item of syncable) {
-            await addServerCartItem(
-              {
-                productId: item.catalogProductId!,
-                productVariantId: item.configurationId ?? null,
-                quantity: item.quantity,
-              },
-              token,
-            );
-          }
+            try {
+              serverCart = await addServerCartItem(
+                {
+                  productId: item.catalogProductId!,
+                  productVariantId: item.configurationId ?? null,
+                  quantity: item.quantity,
+                },
+                token,
+              );
+            } catch (error) {
+              if (shouldFallbackToLocalCartOnError(error)) {
+                throw error;
+              }
 
-          if (syncable.length > 0) {
-            serverCart = await fetchServerCart(token);
+              setSyncError(
+                getCustomerCartErrorMessage(
+                  error,
+                  "Unable to sync your cart with the server.",
+                ),
+              );
+              serverCart = await fetchServerCart(token);
+              break;
+            }
           }
         }
 
@@ -165,9 +186,30 @@ export function CartProvider({ children }: { children: ReactNode }) {
           serverModeRef.current = false;
           setState(validated);
         }
-      } catch {
-        serverModeRef.current = false;
-        setState(validated);
+      } catch (error) {
+        if (shouldFallbackToLocalCartOnError(error)) {
+          serverModeRef.current = false;
+          setState(validated);
+        } else {
+          setSyncError(
+            getCustomerCartErrorMessage(error, "Unable to sync your cart with the server."),
+          );
+
+          try {
+            const serverCart = await fetchServerCart(token);
+            if ((serverCart.items?.length ?? 0) > 0) {
+              const next = applyServerCart(mapServerCartItems(serverCart), validated);
+              persistState(next);
+              setState(next);
+            } else {
+              serverModeRef.current = false;
+              setState(validated);
+            }
+          } catch {
+            serverModeRef.current = false;
+            setState(validated);
+          }
+        }
       }
 
       setIsHydrated(true);
@@ -231,6 +273,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const restoreServerCart = useCallback(
+    async (token: string) => {
+      try {
+        const serverCart = await fetchServerCart(token);
+        updateState((prev) => applyServerCart(mapServerCartItems(serverCart), prev));
+      } catch {
+        // Keep current UI state; syncError already surfaced.
+      }
+    },
+    [applyServerCart, updateState],
+  );
+
   const addToCart = useCallback(
     ({
       product,
@@ -271,8 +325,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
               token,
             );
             updateState((prev) => applyServerCart(mapServerCartItems(serverCart), prev));
-          } catch {
-            // Fall through to local cart so the shopper still sees the item.
+          } catch (error) {
+            if (!shouldFallbackToLocalCartOnError(error)) {
+              setSyncError(
+                getCustomerCartErrorMessage(error, "Unable to add item to your cart."),
+              );
+              await restoreServerCart(token);
+              return;
+            }
+
             const snapshot = productToCartSnapshot(product, {
               variant: normalizedVariant,
               configurationId,
@@ -384,7 +445,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         };
       });
     },
-    [applyServerCart, updateState],
+    [applyServerCart, restoreServerCart, updateState],
   );
 
   const updateQuantity = useCallback(
@@ -408,8 +469,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
                     token,
                   );
             updateState((prev) => applyServerCart(mapServerCartItems(serverCart), prev));
-          } catch {
-            // Keep optimistic local update when the API is unavailable.
+          } catch (error) {
+            if (shouldFallbackToLocalCartOnError(error)) {
+              return;
+            }
+
+            setSyncError(
+              getCustomerCartErrorMessage(error, "Unable to update cart quantity."),
+            );
+            void restoreServerCart(token);
           }
         })();
       }
@@ -438,7 +506,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         };
       });
     },
-    [applyServerCart, updateState],
+    [applyServerCart, restoreServerCart, updateState],
   );
 
   const updateLinePricing = useCallback(
@@ -492,8 +560,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
           try {
             const serverCart = await removeServerCartItem(itemId, token);
             updateState((prev) => applyServerCart(mapServerCartItems(serverCart), prev));
-          } catch {
-            // Local removal still applied below.
+          } catch (error) {
+            if (shouldFallbackToLocalCartOnError(error)) {
+              return;
+            }
+
+            setSyncError(getCustomerCartErrorMessage(error, "Unable to remove cart item."));
+            void restoreServerCart(token);
           }
         })();
       }
@@ -503,7 +576,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         items: prev.items.filter((item) => item.id !== itemId),
       }));
     },
-    [applyServerCart, updateState],
+    [applyServerCart, restoreServerCart, updateState],
   );
 
   const saveForLater = useCallback(
@@ -675,8 +748,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
               discount: 0,
             }),
           );
-        } catch {
-          updateState(() => EMPTY_CART_STATE);
+        } catch (error) {
+          if (shouldFallbackToLocalCartOnError(error)) {
+            updateState(() => EMPTY_CART_STATE);
+            return;
+          }
+
+          setSyncError(getCustomerCartErrorMessage(error, "Unable to clear your cart."));
+          void restoreServerCart(token);
         }
       })();
       return;
@@ -684,7 +763,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     serverModeRef.current = false;
     updateState(() => EMPTY_CART_STATE);
-  }, [applyServerCart, updateState]);
+  }, [applyServerCart, restoreServerCart, updateState]);
 
   const isInCart = useCallback(
     (productId: number) => itemsRef.current.some((item) => item.productId === productId),
@@ -703,8 +782,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       discount: state.discount,
       totals,
       isHydrated,
+      syncError,
     }),
-    [state.items, state.savedForLater, state.discount, totals, isHydrated],
+    [state.items, state.savedForLater, state.discount, totals, isHydrated, syncError],
   );
 
   const actionsValue = useMemo<CartActionsValue>(
@@ -720,6 +800,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       clearCart,
       clearPurchasedItems,
       isInCart,
+      clearSyncError,
     }),
     [
       addToCart,
@@ -733,6 +814,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       clearCart,
       clearPurchasedItems,
       isInCart,
+      clearSyncError,
     ],
   );
 

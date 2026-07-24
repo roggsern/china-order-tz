@@ -8,17 +8,19 @@ use App\Models\CartItem;
 use App\Models\DeliveryAddress;
 use App\Models\User;
 use App\Services\Cart\ResolveCartPurchasable;
+use App\Services\Commerce\CommerceChannelResolver;
 use Illuminate\Validation\ValidationException;
 
 /**
  * Legacy prepare / preview surface.
  * RC1-C1 — address + CommercePricingResolver line pricing parity with checkout session.
- * Channel mix and promotions remain session/confirm concerns; prepare still surfaces shipping summaries.
+ * RC1-P1-3 — single-channel cart gate aligned with checkout session; promotions remain session concerns.
  */
 class CheckoutService
 {
     public function __construct(
         private readonly ResolveCartPurchasable $resolveCartPurchasable,
+        private readonly CommerceChannelResolver $commerceChannelResolver,
     ) {}
 
     /**
@@ -38,6 +40,7 @@ class CheckoutService
         $cart = $this->resolveCheckoutCart($user);
         $this->validateCartHasItems($cart);
         $cart = $this->loadCart($user, $cart);
+        $this->commerceChannelResolver->assertCartSingleChannel($cart);
 
         $subtotal = $this->refreshLinePricing($cart);
         $chinaShippingTotal = $this->calculateChinaShippingTotal($cart);
@@ -54,8 +57,26 @@ class CheckoutService
             'subtotal' => $subtotal,
             'shipping_summary' => $shippingSummary,
             'grand_total' => $grandTotal,
-            'ready_for_confirmation' => true,
+            'ready_for_confirmation' => $this->resolveReadyForConfirmation($cart),
         ];
+    }
+
+    /**
+     * Preview runs before checkout-session shipping choice; never claim order confirmation readiness.
+     */
+    private function resolveReadyForConfirmation(Cart $cart): bool
+    {
+        foreach ($cart->items as $item) {
+            if (! $item->product?->requiresChinaShipping()) {
+                continue;
+            }
+
+            if ($item->shipping_method === null || $item->shipping_price === null) {
+                return false;
+            }
+        }
+
+        return false;
     }
 
     /**

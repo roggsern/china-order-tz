@@ -6,10 +6,12 @@ use App\Enums\CatalogOrigin;
 use App\Enums\CommerceChannelCode;
 use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductVisibility;
+use App\Enums\VariantPriceType;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
 use App\Services\Catalog\CustomerProductMediaResolver;
+use App\Services\Inventory\CatalogStockPresenter;
 use Database\Support\CatalogBible;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -99,7 +101,7 @@ class ChinaStorefrontCatalog
                 'commerceChannel:id,name,code',
                 'category:id,name,slug',
                 'brand:id,name,slug',
-            ], CustomerProductMediaResolver::catalogEagerLoads()))
+            ], CustomerProductMediaResolver::catalogEagerLoads(), CatalogStockPresenter::catalogListingEagerLoads()))
             ->withAvg(
                 ['reviews as average_rating' => fn ($query) => $query->where('is_approved', true)],
                 'rating',
@@ -140,6 +142,38 @@ class ChinaStorefrontCatalog
             ->where('lifecycle_status', ProductLifecycleStatus::Active)
             ->where('visibility', ProductVisibility::Public)
             ->whereNull('store_id')
-            ->whereHas('commerceChannel', fn (Builder $q) => $q->where('code', CommerceChannelCode::ChinaImport->value));
+            ->whereHas('commerceChannel', fn (Builder $q) => $q->where('code', CommerceChannelCode::ChinaImport->value))
+            ->whereHas('shippingOptions', fn (Builder $q) => $q->available()->where('price', '>', 0))
+            ->where(function (Builder $q) {
+                $q->whereHas('variants', fn (Builder $variant) => $this->applySellableVariantConstraints($variant))
+                    ->orWhere(function (Builder $simple) {
+                        $simple->where('price', '>', 0)
+                            ->whereHas('inventory', fn (Builder $inventory) => $inventory->whereNull('product_variant_id'))
+                            ->whereDoesntHave('variants', fn (Builder $variant) => $this->applySellableVariantConstraints($variant));
+                    });
+            });
+    }
+
+    /**
+     * Mirrors ProductPurchasabilityPolicy sellable-variant rules for listing safety.
+     */
+    private function applySellableVariantConstraints(Builder $query): Builder
+    {
+        return $query
+            ->where('is_active', true)
+            ->where(function (Builder $variant) {
+                $variant->where(function (Builder $priced) {
+                    $priced->whereNotNull('price')->where('price', '>', 0);
+                })->orWhereHas('prices', function (Builder $prices) {
+                    $prices->ofType(VariantPriceType::Retail)
+                        ->active()
+                        ->where('amount', '>', 0);
+                });
+            })
+            ->where(function (Builder $variant) {
+                $variant->whereHas('inventories', function (Builder $inventory) {
+                    $inventory->where('warehouse_code', 'MAIN')->where('is_active', true);
+                })->orWhereHas('inventory');
+            });
     }
 }

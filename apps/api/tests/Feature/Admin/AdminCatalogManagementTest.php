@@ -1408,7 +1408,7 @@ class AdminCatalogManagementTest extends TestCase
             $storage->id => ['is_required' => false, 'sort_order' => 2],
         ]);
 
-        $product = Product::factory()->create([
+        $product = Product::factory()->fromChina()->create([
             'name' => 'Variant iPhone',
             'slug' => 'variant-iphone',
             'sku' => 'VAR-IPHONE',

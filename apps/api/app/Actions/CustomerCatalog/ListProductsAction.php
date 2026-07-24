@@ -5,6 +5,7 @@ namespace App\Actions\CustomerCatalog;
 use App\Enums\CommerceChannelCode;
 use App\Models\Product;
 use App\Services\Catalog\CustomerProductMediaResolver;
+use App\Services\Inventory\CatalogStockPresenter;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class ListProductsAction
@@ -35,7 +36,7 @@ class ListProductsAction
                 'category:id,name,slug',
                 'brand:id,name,slug',
                 'store:id,name,slug',
-            ], CustomerProductMediaResolver::catalogEagerLoads()))
+            ], CustomerProductMediaResolver::catalogEagerLoads(), CatalogStockPresenter::catalogListingEagerLoads()))
             ->withAvg(
                 ['reviews as average_rating' => fn ($query) => $query->where('is_approved', true)],
                 'rating',

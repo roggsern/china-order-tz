@@ -20,7 +20,7 @@ class AdminVariantPriceTest extends TestCase
     {
         Sanctum::actingAs(Admin::factory()->create());
 
-        $product = Product::factory()->create([
+        $product = Product::factory()->fromChina()->create([
             'name' => 'Pricing Demo Phone',
             'slug' => 'pricing-demo-phone',
         ]);

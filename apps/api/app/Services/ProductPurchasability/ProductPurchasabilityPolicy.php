@@ -198,6 +198,88 @@ final class ProductPurchasabilityPolicy
     }
 
     /**
+     * Guard active products after variant sub-resource mutations.
+     * Draft products are not restricted.
+     */
+    public function assertActiveVariantIntegrityAfterMutation(
+        Product $product,
+        bool $hadSellableVariantsBeforeMutation = false,
+    ): void {
+        if (! $this->hasActiveLifecycle($product)) {
+            return;
+        }
+
+        if ($hadSellableVariantsBeforeMutation && ! $this->hasSellableVariants($product)) {
+            throw ValidationException::withMessages([
+                'variants' => [
+                    'Active products must retain at least one sellable variant with pricing and inventory.',
+                ],
+            ]);
+        }
+    }
+
+    /**
+     * Guard active China products after shipping mutations.
+     * Draft products are not restricted.
+     */
+    public function assertActiveShippingIntegrityAfterMutation(
+        Product $product,
+        bool $hadPublishableShippingBeforeMutation = false,
+    ): void {
+        if (! $this->hasActiveLifecycle($product)) {
+            return;
+        }
+
+        if (! $this->isChinaImportProduct($product)) {
+            return;
+        }
+
+        if (! $hadPublishableShippingBeforeMutation) {
+            return;
+        }
+
+        if ($this->shippingOptionEngine->hasPublishableShippingOption($product)) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'shipping_options' => [
+                'China import products require at least one available shipping option with a price greater than zero.',
+            ],
+        ]);
+    }
+
+    /**
+     * @deprecated Prefer explicit variant/shipping integrity guards at mutation call sites.
+     */
+    public function assertActiveCriticalRequirementsAfterMutation(
+        Product $product,
+        bool $hadSellableVariantsBeforeMutation = false,
+        bool $hadPublishableShippingBeforeMutation = false,
+    ): void {
+        $this->assertActiveVariantIntegrityAfterMutation($product, $hadSellableVariantsBeforeMutation);
+        $this->assertActiveShippingIntegrityAfterMutation($product, $hadPublishableShippingBeforeMutation);
+    }
+
+    public function snapshotHadSellableVariants(Product $product): bool
+    {
+        $product->loadMissing(['variants.prices', 'variants.inventories']);
+
+        return $this->hasSellableVariants($product);
+    }
+
+    public function snapshotHadPublishableShippingOption(Product $product): bool
+    {
+        if (! $this->isChinaImportProduct($product)) {
+            return false;
+        }
+
+        $product->loadMissing('shippingOptions');
+
+        return $this->shippingOptionEngine->hasPublishableShippingOption($product);
+    }
+
+    /**
      * @return list<string>
      */
     private function validateSimplePath(Product $product): array

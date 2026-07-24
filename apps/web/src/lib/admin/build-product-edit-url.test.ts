@@ -8,6 +8,7 @@ import {
 } from "./build-product-edit-url";
 import type { AdminCatalogProduct } from "@/lib/api/admin-catalog";
 import { legacyNumericIdFromCatalogProductId } from "./product-id-map";
+import { isLegacyEditRedirectEnabled } from "./legacy-edit-redirect";
 
 const CATALOG_UUID = "019f7a6e-4d46-7376-aca4-aed79f33519b";
 const LEGACY_NUMERIC_ID = legacyNumericIdFromCatalogProductId(CATALOG_UUID);
@@ -180,4 +181,29 @@ test("known policy blockers still stay legacy after complete context", () => {
     }).reason,
     "wholesale_pricing",
   );
+});
+
+test("Case 5: safe product is canonical without env flag (link builder ignores env)", () => {
+  assert.equal(isLegacyEditRedirectEnabled(undefined), true);
+
+  const decision = resolveAdminProductEditUrl(COMPLETE_SAFE_LINK);
+  assert.equal(decision.reason, "safe_for_canonical");
+  assert.equal(
+    decision.url,
+    `/admin/products?edit=${encodeURIComponent(CATALOG_UUID)}`,
+  );
+});
+
+test("Case 6: direct numeric legacy URL target preserved when policy blocks redirect", () => {
+  const configuration = resolveAdminProductEditUrl({
+    ...COMPLETE_SAFE_LINK,
+    legacyConfigurationProduct: true,
+  });
+  assert.equal(configuration.url, `/admin/products/${LEGACY_NUMERIC_ID}/edit`);
+
+  const wholesale = resolveAdminProductEditUrl({
+    ...COMPLETE_SAFE_LINK,
+    hasProductPriceTiers: true,
+  });
+  assert.equal(wholesale.url, `/admin/products/${LEGACY_NUMERIC_ID}/edit`);
 });

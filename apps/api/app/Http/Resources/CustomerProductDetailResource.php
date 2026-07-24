@@ -2,17 +2,17 @@
 
 namespace App\Http\Resources;
 
-use App\Enums\PurchasabilityPath;
+use App\Http\Resources\Concerns\PresentsCustomerCatalogStock;
 use App\Models\Product;
 use App\Services\Catalog\CustomerProductMediaResolver;
-use App\Services\Inventory\CatalogStockPresenter;
-use App\Services\ProductPurchasability\ProductPurchasabilityPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /** @mixin Product */
 class CustomerProductDetailResource extends JsonResource
 {
+    use PresentsCustomerCatalogStock;
+
     public function toArray(Request $request): array
     {
         return [
@@ -69,31 +69,6 @@ class CustomerProductDetailResource extends JsonResource
                 fn () => $this->simpleProductInventoryContract(),
             ),
         ];
-    }
-
-    private function usesSimpleProductStockPath(): bool
-    {
-        return app(ProductPurchasabilityPolicy::class)->resolvePath($this->resource) === PurchasabilityPath::Simple;
-    }
-
-    private function simpleProductAvailableStock(): int
-    {
-        return app(CatalogStockPresenter::class)->availableForSimple($this->resource);
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    private function simpleProductInventoryContract(): ?array
-    {
-        $presenter = app(CatalogStockPresenter::class);
-        $stock = $presenter->resolveForProduct($this->resource);
-
-        if (! $stock->resolved) {
-            return null;
-        }
-
-        return $presenter->toInventoryContract($stock, includeWarehouseLocation: false);
     }
 
     private function resolveCommerceSourceLabel(): string

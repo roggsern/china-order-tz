@@ -8,6 +8,7 @@ use App\Enums\ProductVisibility;
 use App\Enums\ShippingMethod;
 use App\Http\Requests\Concerns\AuthorizesAdminPermission;
 use App\Http\Requests\Concerns\RejectsTzLocalChinaFreight;
+use App\Models\Admin;
 use App\Models\CommerceChannel;
 use App\Support\Admin\AdminPermissions;
 use App\Support\Security\HtmlSanitizer;
@@ -145,6 +146,10 @@ class StoreProductRequest extends FormRequest
         if ($htmlFields !== []) {
             $this->merge($htmlFields);
         }
+
+        if ($this->requestsCreateAsActive() && ! $this->adminCanPublishOnCreate()) {
+            $this->forceDraftLifecycleForCreateOnlyAdmin();
+        }
     }
 
     public function withValidator(Validator $validator): void
@@ -162,5 +167,40 @@ class StoreProductRequest extends FormRequest
 
             $this->rejectTzLocalChinaFreight($validator, $channelCode);
         });
+    }
+
+    /**
+     * Create-as-active requires catalog.publish (see UpdateProductRequest for updates).
+     * Create-only admins are downgraded to draft — request still succeeds.
+     */
+    private function adminCanPublishOnCreate(): bool
+    {
+        $user = $this->user();
+
+        return $user instanceof Admin
+            && $user->hasAdminPermission(AdminPermissions::CATALOG_PUBLISH);
+    }
+
+    private function requestsCreateAsActive(): bool
+    {
+        if ($this->filled('lifecycle_status')) {
+            return ProductLifecycleStatus::tryFromMixed($this->input('lifecycle_status'))
+                === ProductLifecycleStatus::Active;
+        }
+
+        if ($this->has('status') && is_bool($this->input('status'))) {
+            return $this->boolean('status');
+        }
+
+        return false;
+    }
+
+    private function forceDraftLifecycleForCreateOnlyAdmin(): void
+    {
+        $input = $this->all();
+        $input['lifecycle_status'] = ProductLifecycleStatus::Draft->value;
+        $input['is_active'] = false;
+        unset($input['status']);
+        $this->replace($input);
     }
 }

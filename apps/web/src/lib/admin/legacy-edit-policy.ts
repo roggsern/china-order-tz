@@ -123,11 +123,14 @@ export function listLegacyEditSoftBlockers(
 /**
  * Central redirect eligibility for legacy `/admin/products/[numericId]/edit`.
  *
- * Hard blockers (stay on ProductForm):
- * - UUID missing
- * - legacy_configuration_product
- * - catalog_product_type_id missing
- * - wholesale / MOQ tiers (product or configuration)
+ * Hard blockers (stay on ProductForm — these products require legacy workflows):
+ *
+ * | reason                         | Why legacy is required                                      |
+ * |--------------------------------|-------------------------------------------------------------|
+ * | uuid_unresolved                | Cannot open canonical panel without catalog UUID            |
+ * | legacy_configuration_product | Configuration Template grid only exists in ProductForm      |
+ * | missing_catalog_product_type   | Canonical editor requires catalog product type assignment   |
+ * | wholesale_pricing              | MOQ / wholesale tiers only editable in ProductForm            |
  *
  * Soft blockers (weight, compare-at, demo, out_of_stock, rich text) are documented
  * via `listLegacyEditSoftBlockers()` but do not block redirect.
@@ -138,18 +141,22 @@ export function canRedirectLegacyProduct(
   const catalogProductId = product.id?.trim() || null;
 
   if (!catalogProductId) {
+    // Legacy numeric id could not be mapped to a catalog UUID.
     return { redirect: false, reason: "uuid_unresolved" };
   }
 
   if (product.legacyConfigurationProduct) {
+    // SyncProductConfigurations / attribute combo grid is legacy-only.
     return { redirect: false, reason: "legacy_configuration_product" };
   }
 
   if (!product.catalogProductTypeId?.trim()) {
+    // Canonical Details tab, publish readiness, and taxonomy require CPT.
     return { redirect: false, reason: "missing_catalog_product_type" };
   }
 
   if (product.hasProductPriceTiers || product.hasConfigurationPriceTiers) {
+    // WholesalePricingEditor and per-configuration tiers are legacy-only.
     return { redirect: false, reason: "wholesale_pricing" };
   }
 

@@ -15,6 +15,8 @@ import {
 } from "@/lib/api/customer-checkout-session";
 import type { CheckoutShippingChoice } from "@/lib/checkout/shipping-choice";
 import { toApiShippingMethod } from "@/lib/checkout/shipping-choice";
+import { inferProductOrigin } from "@/lib/catalog/map-api-product";
+import type { ProductOrigin } from "@/lib/types/catalog";
 
 type ApiSuccessResponse<T> = {
   success?: boolean;
@@ -126,27 +128,41 @@ function shouldSendChinaShippingMethod(
   return item.shippingMethod === "air_freight" || item.shippingMethod === "sea_freight";
 }
 
+/** Resolve checkout sync shipping requirements using commerce channel as authoritative. */
+export function resolveCheckoutSyncProductResolution(input: {
+  productId: string;
+  commerceChannelCode?: string | null;
+  commerceSourceLabel?: string | null;
+  origin?: ProductOrigin;
+  requiresChinaShipping?: boolean;
+  airCost?: number;
+  seaCost?: number;
+}): { productId: string; requiresChinaShipping: boolean } {
+  return {
+    productId: input.productId.trim(),
+    requiresChinaShipping:
+      inferProductOrigin({
+        commerceChannelCode: input.commerceChannelCode,
+        commerceSourceLabel: input.commerceSourceLabel,
+        origin: input.origin,
+        requiresChinaShipping: input.requiresChinaShipping,
+        shippingAir: input.airCost,
+        shippingSea: input.seaCost,
+      }) === "china",
+  };
+}
+
 async function resolveCatalogProductForSync(item: CartLineItem): Promise<{
   productId: string;
   requiresChinaShipping: boolean;
 }> {
-  if (item.catalogProductId?.trim() && (item.airCost != null || item.seaCost != null)) {
-    return {
-      productId: item.catalogProductId.trim(),
-      requiresChinaShipping: true,
-    };
-  }
-
-  if (
-    item.catalogProductId?.trim() &&
-    item.origin === "tz" &&
-    item.airCost == null &&
-    item.seaCost == null
-  ) {
-    return {
-      productId: item.catalogProductId.trim(),
-      requiresChinaShipping: false,
-    };
+  if (item.catalogProductId?.trim()) {
+    return resolveCheckoutSyncProductResolution({
+      productId: item.catalogProductId,
+      origin: item.origin,
+      airCost: item.airCost,
+      seaCost: item.seaCost,
+    });
   }
 
   const response = await fetch(`/api/catalog/products/${encodeURIComponent(item.slug)}`, {
@@ -157,6 +173,8 @@ async function resolveCatalogProductForSync(item: CartLineItem): Promise<{
 
   const payload = (await response.json()) as ApiSuccessResponse<{
     id?: string;
+    commerce_channel_code?: string | null;
+    commerce_source_label?: string | null;
     requires_china_shipping?: boolean;
     shipping_prices?: { air?: string | number | null; sea?: string | number | null };
   }>;
@@ -170,14 +188,22 @@ async function resolveCatalogProductForSync(item: CartLineItem): Promise<{
 
   const air = payload.data.shipping_prices?.air;
   const sea = payload.data.shipping_prices?.sea;
-  const hasFreightRates =
-    (air !== null && air !== undefined && air !== "") ||
-    (sea !== null && sea !== undefined && sea !== "");
-
-  return {
-    productId: payload.data.id,
-    requiresChinaShipping: payload.data.requires_china_shipping ?? hasFreightRates,
+  const parseFreight = (value: string | number | null | undefined): number | undefined => {
+    if (value === null || value === undefined || value === "") {
+      return undefined;
+    }
+    const parsed = typeof value === "number" ? value : Number.parseFloat(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
   };
+
+  return resolveCheckoutSyncProductResolution({
+    productId: payload.data.id,
+    commerceChannelCode: payload.data.commerce_channel_code,
+    commerceSourceLabel: payload.data.commerce_source_label,
+    requiresChinaShipping: payload.data.requires_china_shipping,
+    airCost: parseFreight(air),
+    seaCost: parseFreight(sea),
+  });
 }
 
 export async function updateCustomerProfile(

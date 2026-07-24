@@ -110,9 +110,11 @@ function mapApiImage(
   };
 }
 
-function inferOrigin(input: {
+export function inferProductOrigin(input: {
   commerceChannelCode?: string | null;
   commerceSourceLabel?: string | null;
+  /** Cart/catalog line origin when commerce channel code is unavailable. */
+  origin?: ProductOrigin;
   requiresChinaShipping?: boolean;
   shippingAir?: number;
   shippingSea?: number;
@@ -120,6 +122,9 @@ function inferOrigin(input: {
   const code = input.commerceChannelCode?.toUpperCase();
   if (code === "TZ_LOCAL") return "tz";
   if (code === "CHINA_IMPORT") return "china";
+
+  if (input.origin === "tz") return "tz";
+  if (input.origin === "china") return "china";
 
   const label = input.commerceSourceLabel?.toLowerCase() ?? "";
   if (label.includes("tanzania")) return "tz";
@@ -167,7 +172,7 @@ export function mapApiProductCardToCatalogProduct(product: ApiCatalogProductCard
     badge: badgeLabel,
     badges: resolveProductBadges(badgeLabel, stock),
     trustBadges: product.is_featured ? ["Premium"] : [],
-    origin: inferOrigin({
+    origin: inferProductOrigin({
       commerceChannelCode: product.commerce_channel_code,
       commerceSourceLabel: product.commerce_source_label,
       requiresChinaShipping: product.requires_china_shipping,
@@ -224,7 +229,7 @@ export function mapApiProductDetailToCatalogProduct(product: ApiCatalogProductDe
     fullDescription: product.description?.trim() || undefined,
     sku: product.variants?.[0]?.sku?.trim() || undefined,
     weightKg,
-    origin: inferOrigin({
+    origin: inferProductOrigin({
       commerceChannelCode: product.commerce_channel?.code ?? product.commerce_channel_code,
       commerceSourceLabel: product.commerce_source_label,
       requiresChinaShipping: product.requires_china_shipping,

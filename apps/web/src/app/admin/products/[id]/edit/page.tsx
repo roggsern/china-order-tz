@@ -3,8 +3,9 @@
 /**
  * Legacy product edit route (`/admin/products/[numericId]/edit`).
  *
- * RC1-A5.1 / RC1-A5.2 — Conditional redirect when
- * `NEXT_PUBLIC_ADMIN_LEGACY_EDIT_REDIRECT=1` and `canRedirectLegacyProduct()` allows it.
+ * RC1-C01 — Canonical-first: redirect to `/admin/products?edit={uuid}` by default when
+ * `canRedirectLegacyProduct()` allows it. Opt out via
+ * `NEXT_PUBLIC_ADMIN_LEGACY_EDIT_REDIRECT=0|false|no` (rollback only).
  *
  * ProductForm remains for hard blockers (see `legacy-edit-policy.ts`):
  * - legacy_configuration_product

@@ -47,6 +47,7 @@ export type ApiCatalogProductCard = ApiCatalogStockSource & {
   brand: ApiCatalogBrand | null;
   average_rating: number;
   review_count: number;
+  in_stock?: boolean | null;
   shipping_prices?: {
     air: string | number | null;
     sea: string | number | null;
@@ -54,6 +55,7 @@ export type ApiCatalogProductCard = ApiCatalogStockSource & {
   requires_china_shipping?: boolean;
   commerce_channel_code?: string | null;
   commerce_source_label?: string | null;
+  variants?: ApiCatalogProductVariant[] | null;
 };
 
 export type ApiCatalogProductVariant = {

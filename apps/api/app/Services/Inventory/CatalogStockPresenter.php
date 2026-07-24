@@ -18,6 +18,21 @@ final class CatalogStockPresenter
         private readonly StockResolver $stockResolver,
     ) {}
 
+    /**
+     * Eager loads for customer listing cards (stock presentation without N+1).
+     *
+     * @return array<string, mixed>
+     */
+    public static function catalogListingEagerLoads(): array
+    {
+        return [
+            'inventory',
+            'variants' => fn ($query) => $query
+                ->where('is_active', true)
+                ->with(['prices', 'inventories', 'inventory', 'product']),
+        ];
+    }
+
     public function resolveForProduct(Product $product, ?ProductVariant $variant = null): StockResolutionResult
     {
         return $this->stockResolver->resolve($product, $variant);

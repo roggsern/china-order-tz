@@ -79,7 +79,7 @@ class CustomerCheckoutTest extends TestCase
         $this->postJson('/api/v1/checkout/prepare')
             ->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('data.ready_for_confirmation', true)
+            ->assertJsonPath('data.ready_for_confirmation', false)
             ->assertJsonPath('data.customer.first_name', 'Jane')
             ->assertJsonPath('data.delivery_address.street', 'Sam Nujoma Road')
             ->assertJsonPath('data.subtotal', '40000.00')
@@ -98,7 +98,7 @@ class CustomerCheckoutTest extends TestCase
         $this->getJson('/api/v1/checkout')
             ->assertOk()
             ->assertJsonPath('data.subtotal', '10000.00')
-            ->assertJsonPath('data.ready_for_confirmation', true);
+            ->assertJsonPath('data.ready_for_confirmation', false);
     }
 
     public function test_empty_cart_rejected(): void
@@ -176,7 +176,7 @@ class CustomerCheckoutTest extends TestCase
             ->assertJsonPath('data.grand_total', '35000.00');
     }
 
-    public function test_mixed_cart_includes_both_shipping_summaries(): void
+    public function test_mixed_cart_prepare_rejected(): void
     {
         $user = $this->createCustomerWithAddress();
 
@@ -215,11 +215,34 @@ class CustomerCheckoutTest extends TestCase
         Sanctum::actingAs($user);
 
         $this->postJson('/api/v1/checkout/prepare')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['cart']);
+
+        $this->getJson('/api/v1/checkout')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['cart']);
+    }
+
+    public function test_china_cart_without_shipping_not_ready_for_confirmation(): void
+    {
+        $user = $this->createCustomerWithAddress();
+        $product = Product::factory()->fromChina()->create([
+            'price' => 50000,
+            'air_shipping_price' => 8000,
+            'sea_shipping_price' => 4000,
+        ]);
+
+        $this->createActiveCartWithItem($user, $product, [
+            'quantity' => 1,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/v1/checkout/prepare')
             ->assertOk()
-            ->assertJsonPath('data.subtotal', '15000.00')
-            ->assertJsonPath('data.shipping_summary.china_shipping_total', '2000.00')
-            ->assertJsonPath('data.shipping_summary.dar_delivery_status', 'To Be Negotiated')
-            ->assertJsonPath('data.grand_total', '17000.00');
+            ->assertJsonPath('data.subtotal', '50000.00')
+            ->assertJsonPath('data.grand_total', '50000.00')
+            ->assertJsonPath('data.ready_for_confirmation', false);
     }
 
     public function test_guest_rejected(): void

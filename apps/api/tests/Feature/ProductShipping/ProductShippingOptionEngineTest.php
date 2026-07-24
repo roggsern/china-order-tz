@@ -7,6 +7,7 @@ use App\Models\CommerceChannel;
 use App\Models\Product;
 use App\Models\ProductShippingOption;
 use App\Models\User;
+use App\Enums\ProductLifecycleStatus;
 use Database\Seeders\ProductTypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -20,6 +21,8 @@ class ProductShippingOptionEngineTest extends TestCase
     {
         $product = Product::factory()->fromChina()->create([
             'fulfillment_source' => 'imported_from_china',
+            'lifecycle_status' => ProductLifecycleStatus::Draft,
+            'is_active' => false,
         ]);
 
         if ($clearOptions) {

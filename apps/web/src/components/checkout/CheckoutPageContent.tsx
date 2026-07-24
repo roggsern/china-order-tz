@@ -39,8 +39,10 @@ import {
   validateShippingChoice,
 } from "@/lib/checkout/shipping-choice";
 import { validateCartAgainstCatalog, summarizeCartValidationFailures } from "@/lib/cart/validation";
+import { hasBlockingCartSyncError } from "@/lib/cart/sync-errors";
 import { fetchClientCatalogProducts } from "@/lib/catalog/client-catalog";
 import { productService } from "@/lib/services/product-service.client";
+import { CartSyncErrorAlert } from "@/components/cart/CartSyncErrorAlert";
 import { CheckoutSection } from "./CheckoutSection";
 import { CheckoutStepIndicator } from "./CheckoutStepIndicator";
 import { CheckoutCustomerStep } from "./CheckoutCustomerStep";
@@ -63,7 +65,8 @@ function getFullNameFromForm(form: CheckoutFormData): string {
 export function CheckoutPageContent() {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
-  const { items, savedForLater, discount, totals, isHydrated, updateShippingMethod } = useCart();
+  const { items, savedForLater, discount, totals, isHydrated, syncError, clearSyncError, updateShippingMethod } =
+    useCart();
 
   const [form, setForm] = useState<CheckoutFormData>(EMPTY_CHECKOUT_FORM);
   const [fullName, setFullName] = useState("");
@@ -218,8 +221,20 @@ export function CheckoutPageContent() {
     [],
   );
 
+  const hasBlockingSyncError = hasBlockingCartSyncError(syncError);
+
+  const checkoutBlocked =
+    hasBlockingSyncError ||
+    !shippingChoice ||
+    (shippingChoice === "company_shipping" && !selectedShippingMethod);
+
   const handleContinueToPayment = async () => {
     if (submitInFlightRef.current || isSubmitting) return;
+
+    if (hasBlockingSyncError) {
+      scrollToFirstError();
+      return;
+    }
 
     const merged = buildFormWithFullName(fullName, form);
     const normalized = normalizeCheckoutForm(merged);
@@ -400,6 +415,14 @@ export function CheckoutPageContent() {
 
       <CheckoutStepIndicator current="checkout" />
 
+      {syncError ? (
+        <CartSyncErrorAlert
+          message={syncError}
+          onDismiss={clearSyncError}
+          className="mt-6"
+        />
+      ) : null}
+
       <div className="mt-8 grid gap-8 pb-28 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start lg:pb-0">
         <fieldset disabled={isSubmitting} className="space-y-6 border-0 p-0">
           <motion.div transition={{ duration: 0.28, ease: "easeOut" }} {...sectionMotion}>
@@ -494,9 +517,13 @@ export function CheckoutPageContent() {
             }
             onSubmit={handleContinueToPayment}
             isSubmitting={isSubmitting}
-            submitDisabled={!shippingChoice || (shippingChoice === "company_shipping" && !selectedShippingMethod)}
+            submitDisabled={checkoutBlocked}
             submitLabel="Continue to Payment"
-            submitHint="Secure checkout — shipping must be selected before payment"
+            submitHint={
+              hasBlockingSyncError
+                ? "Resolve the cart issue above before continuing to payment"
+                : "Secure checkout — shipping must be selected before payment"
+            }
             mode="cart"
             className="lg:static"
           />
@@ -507,7 +534,7 @@ export function CheckoutPageContent() {
         totals={totals}
         onSubmit={handleContinueToPayment}
         isSubmitting={isSubmitting}
-        submitDisabled={!shippingChoice || (shippingChoice === "company_shipping" && !selectedShippingMethod)}
+        submitDisabled={checkoutBlocked}
         submitLabel="Continue to Payment"
         itemCount={items.length}
       />

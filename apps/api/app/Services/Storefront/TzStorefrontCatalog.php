@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\Store;
 use App\Services\Catalog\CustomerProductMediaResolver;
+use App\Services\Inventory\CatalogStockPresenter;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -73,7 +74,7 @@ class TzStorefrontCatalog
                 'category:id,name,slug,store_id',
                 'brand:id,name,slug',
                 'store:id,name,slug,code',
-            ], CustomerProductMediaResolver::catalogEagerLoads()))
+            ], CustomerProductMediaResolver::catalogEagerLoads(), CatalogStockPresenter::catalogListingEagerLoads()))
             ->withAvg(
                 ['reviews as average_rating' => fn ($query) => $query->where('is_approved', true)],
                 'rating',

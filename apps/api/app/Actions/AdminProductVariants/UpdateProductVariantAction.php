@@ -3,20 +3,24 @@
 namespace App\Actions\AdminProductVariants;
 
 use App\Actions\AdminProductVariants\Concerns\ResolvesVariantDefaults;
+use App\Actions\Concerns\GuardsActiveProductSubResourceIntegrity;
 use App\Http\Requests\Admin\UpdateProductVariantRequest;
 use App\Http\Resources\AdminCatalogProductVariantResource;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Services\Catalog\SyncVariantCatalogAttributeValues;
+use App\Services\ProductPurchasability\ProductPurchasabilityPolicy;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class UpdateProductVariantAction
 {
+    use GuardsActiveProductSubResourceIntegrity;
     use ResolvesVariantDefaults;
 
     public function __construct(
         private readonly SyncVariantCatalogAttributeValues $syncAttributeValues,
+        private readonly ProductPurchasabilityPolicy $purchasabilityPolicy,
     ) {}
 
     /**
@@ -35,7 +39,10 @@ class UpdateProductVariantAction
 
         $data = $request->validated();
 
-        $variant = DB::transaction(function () use ($product, $variant, $data) {
+        $product->load(['variants.prices', 'variants.inventories']);
+        $hadSellableVariants = $this->snapshotSellableVariants($this->purchasabilityPolicy, $product);
+
+        $variant = DB::transaction(function () use ($product, $variant, $data, $hadSellableVariants) {
             if (array_key_exists('is_default', $data) && $data['is_default']) {
                 $this->clearOtherDefaults($product, $variant->id);
             }
@@ -72,7 +79,15 @@ class UpdateProductVariantAction
 
             $this->ensureSingleDefault($product);
 
-            return $variant->fresh(['catalogAttributeValues.attribute', 'catalogAttributeValues.option']);
+            $fresh = $variant->fresh(['catalogAttributeValues.attribute', 'catalogAttributeValues.option']);
+
+            $this->assertActiveProductIntegrityAfterMutation(
+                $this->purchasabilityPolicy,
+                $product,
+                $hadSellableVariants,
+            );
+
+            return $fresh;
         });
 
         return (new AdminCatalogProductVariantResource($variant))->resolve();

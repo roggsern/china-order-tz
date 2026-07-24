@@ -11,6 +11,7 @@ use App\Models\Admin;
 use App\Models\CommerceChannel;
 use App\Models\Product;
 use App\Support\Admin\AdminPermissions;
+use App\Support\ProductLifecycle;
 use App\Support\Security\HtmlSanitizer;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -183,6 +184,18 @@ class UpdateProductRequest extends FormRequest
             /** @var Product $product */
             $product = $this->route('product');
 
+            if ($this->has('commerce_channel_id') && filled($product->commerce_channel_id)) {
+                $existingChannelId = (string) $product->commerce_channel_id;
+                $incomingChannelId = (string) $this->input('commerce_channel_id');
+
+                if ($existingChannelId !== $incomingChannelId) {
+                    $validator->errors()->add(
+                        'commerce_channel_id',
+                        'Commerce channel cannot be changed after product creation.',
+                    );
+                }
+            }
+
             $channelId = $this->input('commerce_channel_id', $product->commerce_channel_id);
             $channel = is_string($channelId) && $channelId !== ''
                 ? CommerceChannel::query()->find($channelId)
@@ -196,6 +209,10 @@ class UpdateProductRequest extends FormRequest
                 return;
             }
 
+            if (! $this->requestTargetsActiveLifecycle($product)) {
+                return;
+            }
+
             $storeId = $this->has('store_id') ? $this->input('store_id') : $product->store_id;
             if (blank($storeId)) {
                 $validator->errors()->add(
@@ -204,5 +221,32 @@ class UpdateProductRequest extends FormRequest
                 );
             }
         });
+    }
+
+    private function requestTargetsActiveLifecycle(Product $product): bool
+    {
+        $isActive = $this->has('is_active')
+            ? filter_var($this->input('is_active'), FILTER_VALIDATE_BOOLEAN)
+            : (bool) $product->is_active;
+
+        if (! $isActive) {
+            return false;
+        }
+
+        if ($this->has('lifecycle_status') || $this->has('status')) {
+            $lifecycle = ProductLifecycle::resolveFromRequest(
+                $this->input('lifecycle_status'),
+                $this->has('status') ? filter_var($this->input('status'), FILTER_VALIDATE_BOOLEAN) : null,
+            );
+
+            return $lifecycle->isPurchasable();
+        }
+
+        $lifecycle = $product->lifecycle_status;
+        if ($lifecycle instanceof ProductLifecycleStatus) {
+            return $lifecycle->isPurchasable();
+        }
+
+        return ProductLifecycleStatus::tryFromMixed($lifecycle)?->isPurchasable() ?? false;
     }
 }

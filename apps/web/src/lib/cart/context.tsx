@@ -15,6 +15,8 @@ export type CartContextValue = {
   discount: number;
   totals: CartTotals;
   isHydrated: boolean;
+  syncError: string | null;
+  clearSyncError: () => void;
   addToCart: (input: AddToCartInput) => void;
   updateQuantity: (itemId: string, quantity: number) => void;
   updateLinePricing: (
@@ -44,11 +46,12 @@ export type CartActionsValue = Pick<
   | "clearCart"
   | "clearPurchasedItems"
   | "isInCart"
+  | "clearSyncError"
 >;
 
 export type CartStateValue = Pick<
   CartContextValue,
-  "items" | "savedForLater" | "discount" | "totals" | "isHydrated"
+  "items" | "savedForLater" | "discount" | "totals" | "isHydrated" | "syncError"
 >;
 
 export const CartContext = createContext<CartContextValue | null>(null);

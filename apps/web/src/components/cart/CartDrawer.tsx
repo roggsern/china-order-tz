@@ -5,12 +5,13 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useCartState } from "@/lib/cart/context";
+import { useCartActions, useCartState } from "@/lib/cart/context";
 import { useCartDrawer } from "@/lib/cart/drawer-context";
 import { clearCheckoutDraft } from "@/lib/checkout/draft";
 import { CloseIcon } from "@/components/home/icons";
 import { OrderSummaryTotals } from "./OrderSummaryTotals";
 import { CartDrawerItem } from "./CartDrawerItem";
+import { CartSyncErrorAlert } from "./CartSyncErrorAlert";
 
 function useIsDesktop() {
   const [isDesktop, setIsDesktop] = useState(false);
@@ -31,7 +32,8 @@ export function CartDrawer() {
   const reduceMotion = useReducedMotion();
   const isDesktop = useIsDesktop();
   const { isOpen, drawerActive, close } = useCartDrawer();
-  const { items, totals, isHydrated } = useCartState();
+  const { items, totals, isHydrated, syncError } = useCartState();
+  const { clearSyncError } = useCartActions();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -78,6 +80,14 @@ export function CartDrawer() {
         className="fixed bottom-0 left-0 z-10 flex max-h-[92vh] w-full flex-col rounded-t-3xl bg-white shadow-[0_-12px_48px_rgba(0,0,0,0.15)] md:inset-y-0 md:right-0 md:bottom-auto md:left-auto md:h-full md:max-h-none md:max-w-[420px] md:rounded-none md:shadow-[-8px_0_32px_rgba(0,0,0,0.12)]"
       >
         <DrawerHeader itemCount={isHydrated ? totals.itemCount : 0} onClose={close} />
+
+        {syncError ? (
+          <CartSyncErrorAlert
+            message={syncError}
+            onDismiss={clearSyncError}
+            className="mx-5 mt-3 md:mx-6"
+          />
+        ) : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-2 md:px-6">
           <DrawerBody isHydrated={isHydrated} items={items} onClose={close} />
