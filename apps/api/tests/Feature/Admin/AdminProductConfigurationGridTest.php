@@ -4,6 +4,7 @@ namespace Tests\Feature\Admin;
 
 use App\Models\Admin;
 use App\Models\Category;
+use App\Models\CommerceChannel;
 use App\Models\Product;
 use App\Models\ProductAttribute;
 use App\Models\ProductAttributeValue;
@@ -110,6 +111,7 @@ class AdminProductConfigurationGridTest extends TestCase
             'name' => 'Demo Phone',
             'category_id' => $category->id,
             'catalog_product_type_id' => $cpt->id,
+            'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
             'sku' => 'PHONE-BASE-1',
             'price' => 500000,
             'stock_quantity' => 0,
@@ -129,7 +131,8 @@ class AdminProductConfigurationGridTest extends TestCase
 
         $response->assertCreated()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('data.sku', 'PHONE-BASE-1');
+            ->assertJsonPath('data.sku', 'PHONE-BASE-1')
+            ->assertJsonPath('data.legacy_configuration_product', true);
 
         $product = Product::query()->where('sku', 'PHONE-BASE-1')->firstOrFail();
         $this->assertSame($phones->id, $product->product_type_id);
@@ -164,6 +167,7 @@ class AdminProductConfigurationGridTest extends TestCase
         $this->postJson('/api/v1/admin/products', [
             'name' => 'Bad Fashion Combo',
             'category_id' => $category->id,
+            'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
             'sku' => 'FASH-BAD-1',
             'price' => 20000,
             'status' => true,

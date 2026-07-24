@@ -9,6 +9,7 @@ use App\Enums\ProductVisibility;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
+use App\Services\Catalog\CustomerProductMediaResolver;
 use Database\Support\CatalogBible;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -94,12 +95,11 @@ class ChinaStorefrontCatalog
         return $this->chinaPublishedProductQuery(Product::query())
             ->real()
             ->whereNull('store_id')
-            ->with([
+            ->with(array_merge([
                 'commerceChannel:id,name,code',
                 'category:id,name,slug',
                 'brand:id,name,slug',
-                'images' => fn ($query) => $query->orderBy('sort_order'),
-            ])
+            ], CustomerProductMediaResolver::catalogEagerLoads()))
             ->withAvg(
                 ['reviews as average_rating' => fn ($query) => $query->where('is_approved', true)],
                 'rating',

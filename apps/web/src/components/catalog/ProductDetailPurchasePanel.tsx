@@ -41,7 +41,7 @@ export function ProductDetailPurchasePanel({
   onSelectedColorChange,
 }: ProductDetailPurchasePanelProps) {
   const [quantity, setQuantity] = useState(1);
-  const [quantityMax, setQuantityMax] = useState(Math.min(product.stock || 99, 99));
+  const [quantityMax, setQuantityMax] = useState(Math.min(Math.max(product.stock, 0), 99));
   const [configSelection, setConfigSelection] = useState<StorefrontConfigurationSelection>({
     configurationId: null,
     label: "",

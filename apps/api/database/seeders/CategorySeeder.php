@@ -15,6 +15,28 @@ use Illuminate\Support\Str;
 class CategorySeeder extends Seeder
 {
     /**
+     * Department-linked categories that should remain active for admin catalog use.
+     *
+     * @var list<string>
+     */
+    private const ACTIVE_DEPARTMENT_CATEGORY_SLUGS = [
+        'computers-office-computer-accessories',
+        'computers-office-desktop-computers',
+        'computers-office-laptops',
+        'computers-office-monitors',
+        'computers-office-printers',
+        'consumer-electronics-audio',
+        'consumer-electronics-cameras',
+        'consumer-electronics-gaming',
+        'consumer-electronics-smart-devices',
+        'consumer-electronics-tvs',
+        'phones-tablets-feature-phones',
+        'phones-tablets-tablets',
+        'professional-audio-speakers',
+        'professional-audio-audio-accessories',
+    ];
+
+    /**
      * @return array<string, list<string>>
      */
     public static function departmentCategories(): array
@@ -124,7 +146,7 @@ class CategorySeeder extends Seeder
                         'image' => null,
                         'description' => null,
                         'sort_order' => $index + 1,
-                        'is_active' => false,
+                        'is_active' => in_array($slug, self::ACTIVE_DEPARTMENT_CATEGORY_SLUGS, true),
                     ],
                 );
             }

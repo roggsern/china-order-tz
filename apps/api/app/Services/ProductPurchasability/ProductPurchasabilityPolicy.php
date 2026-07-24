@@ -6,10 +6,13 @@ use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductVisibility;
 use App\Enums\PurchasabilityPath;
 use App\Enums\VariantPriceType;
+use App\Enums\CommerceChannelCode;
 use App\Models\CatalogProductType;
+use App\Models\CommerceChannel;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Services\Inventory\StockResolver;
+use App\Services\ProductShipping\ProductShippingOptionEngine;
 use App\Support\Catalog\CatalogLeafCategoryRules;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
@@ -25,6 +28,7 @@ final class ProductPurchasabilityPolicy
 {
     public function __construct(
         private readonly StockResolver $stockResolver,
+        private readonly ProductShippingOptionEngine $shippingOptionEngine,
     ) {}
 
     public function evaluate(Product $product): ProductPurchasabilityResult
@@ -171,6 +175,8 @@ final class ProductPurchasabilityPolicy
 
         $this->collectLeafCategoryErrors($product, $messages);
         $this->collectCatalogProductTypeErrors($product, $messages);
+        $this->collectChinaImportShippingErrors($product, $messages);
+        $this->collectTzLocalStoreErrors($product, $messages);
 
         $path = $this->resolvePath($product);
         $pathErrors = $path === PurchasabilityPath::Variant
@@ -325,5 +331,75 @@ final class ProductPurchasabilityPolicy
                 'Catalog Product Type parent category must match the product category.',
             ];
         }
+    }
+
+    /**
+     * @param  array<string, list<string>>  $messages
+     */
+    private function collectChinaImportShippingErrors(Product $product, array &$messages): void
+    {
+        if (! $this->isChinaImportProduct($product)) {
+            return;
+        }
+
+        if ($this->shippingOptionEngine->hasPublishableShippingOption($product)) {
+            return;
+        }
+
+        $messages['shipping_options'] = [
+            'China import products require at least one available shipping option with a price greater than zero.',
+        ];
+    }
+
+    private function isChinaImportProduct(Product $product): bool
+    {
+        if ($product->relationLoaded('commerceChannel') && $product->commerceChannel !== null) {
+            return CommerceChannelCode::tryFrom($product->commerceChannel->code) === CommerceChannelCode::ChinaImport;
+        }
+
+        if (filled($product->commerce_channel_id)) {
+            $code = CommerceChannel::query()
+                ->whereKey($product->commerce_channel_id)
+                ->value('code');
+
+            return CommerceChannelCode::tryFrom((string) $code) === CommerceChannelCode::ChinaImport;
+        }
+
+        return CommerceChannelCode::fromFulfillmentSource($product->fulfillment_source ?? null)
+            === CommerceChannelCode::ChinaImport;
+    }
+
+    /**
+     * @param  array<string, list<string>>  $messages
+     */
+    private function collectTzLocalStoreErrors(Product $product, array &$messages): void
+    {
+        if (! $this->isTzLocalProduct($product)) {
+            return;
+        }
+
+        if (filled($product->store_id)) {
+            return;
+        }
+
+        $messages['store_id'] = ['TZ_LOCAL products must belong to a store.'];
+    }
+
+    private function isTzLocalProduct(Product $product): bool
+    {
+        if ($product->relationLoaded('commerceChannel') && $product->commerceChannel !== null) {
+            return CommerceChannelCode::tryFrom($product->commerceChannel->code) === CommerceChannelCode::TzLocal;
+        }
+
+        if (filled($product->commerce_channel_id)) {
+            $code = CommerceChannel::query()
+                ->whereKey($product->commerce_channel_id)
+                ->value('code');
+
+            return CommerceChannelCode::tryFrom((string) $code) === CommerceChannelCode::TzLocal;
+        }
+
+        return CommerceChannelCode::fromFulfillmentSource($product->fulfillment_source ?? null)
+            === CommerceChannelCode::TzLocal;
     }
 }

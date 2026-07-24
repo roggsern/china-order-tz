@@ -130,6 +130,32 @@ class UpdateProductAction
                 $productData['fulfillment_source'] = $channelCode->fulfillmentSource();
             }
 
+            $effectiveChannelCode = $assignedChannel !== null
+                ? (CommerceChannelCode::tryFrom($assignedChannel->code) ?? CommerceChannelCode::ChinaImport)
+                : $this->resolveProductChannelCode($product);
+
+            if ($effectiveChannelCode === CommerceChannelCode::TzLocal) {
+                unset($productData['air_shipping_price'], $productData['sea_shipping_price']);
+            }
+
+            if (array_key_exists('store_id', $validated) || $assignedChannel !== null) {
+                $storeId = array_key_exists('store_id', $validated)
+                    ? ($validated['store_id'] ?? null)
+                    : $product->store_id;
+
+                if ($effectiveChannelCode === CommerceChannelCode::TzLocal && blank($storeId)) {
+                    throw ValidationException::withMessages([
+                        'store_id' => ['TZ_LOCAL products must belong to a store.'],
+                    ]);
+                }
+
+                if ($effectiveChannelCode === CommerceChannelCode::ChinaImport) {
+                    $storeId = null;
+                }
+
+                $productData['store_id'] = $storeId;
+            }
+
             [$category, $catalogProductTypeId] = $this->resolveCategoryAndCatalogType(
                 $validated,
                 $product,
@@ -323,6 +349,24 @@ class UpdateProductAction
             Category::query()->findOrFail($categoryId),
             $catalogProductTypeId,
         ];
+    }
+
+    private function resolveProductChannelCode(Product $product): CommerceChannelCode
+    {
+        if ($product->relationLoaded('commerceChannel') && $product->commerceChannel !== null) {
+            return CommerceChannelCode::tryFrom($product->commerceChannel->code)
+                ?? CommerceChannelCode::ChinaImport;
+        }
+
+        if (filled($product->commerce_channel_id)) {
+            $code = CommerceChannel::query()
+                ->whereKey($product->commerce_channel_id)
+                ->value('code');
+
+            return CommerceChannelCode::tryFrom((string) $code) ?? CommerceChannelCode::ChinaImport;
+        }
+
+        return CommerceChannelCode::fromFulfillmentSource($product->fulfillment_source ?? null);
     }
 
     private function generateUniqueSlug(string $value, string $ignoreProductId, bool $treatAsSlug = false): string

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Product, ProductOrigin, ProductStatus } from "@/lib/types/catalog";
+import { buildAdminProductEditUrl } from "@/lib/admin/build-product-edit-url";
 import { formatAdminDate, getProductThumbnail } from "@/lib/admin/product-utils";
 import { ProductImageDisplay } from "@/components/catalog/ProductImageDisplay";
 import { formatPrice } from "@/lib/catalog/utils";
@@ -172,7 +173,7 @@ export function ProductTable({
         <p className="mt-4 text-sm font-medium text-zinc-700">No products yet</p>
         <p className="mt-1 text-xs text-zinc-500">Add your first product to get started.</p>
         <Link
-          href="/admin/products/new"
+          href="/admin/products?create=1"
           className="mt-5 inline-flex rounded-lg bg-[#c9a227] px-4 py-2 text-sm font-semibold text-zinc-900 transition hover:bg-[#e8c547]"
         >
           Add product
@@ -445,7 +446,7 @@ export function ProductTable({
                             <EyeIcon className="h-4 w-4" />
                           </Link>
                           <Link
-                            href={`/admin/products/${product.id}/edit`}
+                            href={buildAdminProductEditUrl(product)}
                             className="flex h-8 w-8 items-center justify-center rounded-md text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800"
                             aria-label={`Edit ${product.name}`}
                           >

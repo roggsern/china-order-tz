@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { use } from "react";
+import { buildAdminProductEditUrl } from "@/lib/admin/build-product-edit-url";
 import { useAdminProducts } from "@/components/admin/AdminProductsProvider";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { formatAdminDate, getProductThumbnail } from "@/lib/admin/product-utils";
@@ -101,7 +102,7 @@ export default function ProductViewPage({ params }: ProductViewPageProps) {
           <p className="mt-1 text-sm text-zinc-500">{product.slug}</p>
         </div>
         <Link
-          href={`/admin/products/${product.id}/edit`}
+          href={buildAdminProductEditUrl(product)}
           className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
         >
           <EditIcon className="h-4 w-4" />

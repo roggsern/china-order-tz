@@ -2,8 +2,11 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\PurchasabilityPath;
 use App\Models\Product;
-use App\Models\ProductImage;
+use App\Services\Catalog\CustomerProductMediaResolver;
+use App\Services\Inventory\CatalogStockPresenter;
+use App\Services\ProductPurchasability\ProductPurchasabilityPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -24,8 +27,8 @@ class CustomerProductDetailResource extends JsonResource
             'dimensions' => $this->dimensions,
             'category' => new CustomerCategoryResource($this->whenLoaded('category')),
             'brand' => new CustomerBrandResource($this->whenLoaded('brand')),
-            'primary_image' => $this->resolvePrimaryImage(),
-            'images' => CustomerProductImageResource::collection($this->whenLoaded('images')),
+            'primary_image' => app(CustomerProductMediaResolver::class)->resolvePrimary($this->resource),
+            'images' => app(CustomerProductMediaResolver::class)->resolveGallery($this->resource),
             'variants' => CustomerProductVariantResource::collection($this->whenLoaded('variants')),
             'configurations' => CustomerProductVariantResource::collection($this->whenLoaded('variants')),
             'product_type_id' => $this->product_type_id,
@@ -53,7 +56,44 @@ class CustomerProductDetailResource extends JsonResource
                 ],
             ),
             'commerce_source_label' => $this->resolveCommerceSourceLabel(),
+            'stock' => $this->when(
+                $this->usesSimpleProductStockPath(),
+                fn () => $this->simpleProductAvailableStock(),
+            ),
+            'in_stock' => $this->when(
+                $this->usesSimpleProductStockPath(),
+                fn () => $this->simpleProductAvailableStock() > 0,
+            ),
+            'inventory' => $this->when(
+                $this->usesSimpleProductStockPath() && $this->simpleProductInventoryContract() !== null,
+                fn () => $this->simpleProductInventoryContract(),
+            ),
         ];
+    }
+
+    private function usesSimpleProductStockPath(): bool
+    {
+        return app(ProductPurchasabilityPolicy::class)->resolvePath($this->resource) === PurchasabilityPath::Simple;
+    }
+
+    private function simpleProductAvailableStock(): int
+    {
+        return app(CatalogStockPresenter::class)->availableForSimple($this->resource);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function simpleProductInventoryContract(): ?array
+    {
+        $presenter = app(CatalogStockPresenter::class);
+        $stock = $presenter->resolveForProduct($this->resource);
+
+        if (! $stock->resolved) {
+            return null;
+        }
+
+        return $presenter->toInventoryContract($stock, includeWarehouseLocation: false);
     }
 
     private function resolveCommerceSourceLabel(): string
@@ -67,24 +107,6 @@ class CustomerProductDetailResource extends JsonResource
         $code = \App\Enums\CommerceChannelCode::fromFulfillmentSource($this->fulfillment_source ?? null);
 
         return $code->customerSourceLabel();
-    }
-
-    private function resolvePrimaryImage(): ?array
-    {
-        if ($this->relationLoaded('images')) {
-            $image = $this->images->firstWhere('is_primary', true)
-                ?? $this->images->sortBy('sort_order')->first();
-
-            return $image instanceof ProductImage
-                ? (new CustomerProductImageResource($image))->resolve()
-                : null;
-        }
-
-        $image = $this->primaryImage();
-
-        return $image instanceof ProductImage
-            ? (new CustomerProductImageResource($image))->resolve()
-            : null;
     }
 
     private function formatAverageRating(): float

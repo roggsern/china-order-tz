@@ -11,11 +11,25 @@ import {
   uploadAdminProductMediaImage,
   type AdminProductMedia,
 } from "@/lib/api/admin-catalog";
+import {
+  hasLegacyMediaItems,
+  isLegacyMediaItem,
+  LEGACY_MEDIA_HELPER_TEXT,
+  supportsCatalogMediaActions,
+} from "@/lib/admin/product-media-legacy";
 
 type ProductMediaManagerProps = {
   productId: string;
   productName: string;
 };
+
+function LegacyImageBadge() {
+  return (
+    <span className="ml-2 rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-sky-700">
+      Legacy image
+    </span>
+  );
+}
 
 export function ProductMediaManager({ productId, productName }: ProductMediaManagerProps) {
   const [items, setItems] = useState<AdminProductMedia[]>([]);
@@ -55,6 +69,7 @@ export function ProductMediaManager({ productId, productName }: ProductMediaMana
     [items],
   );
   const primary = images.find((item) => item.isPrimary) ?? images[0] ?? null;
+  const showLegacyHelper = hasLegacyMediaItems(images);
 
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
@@ -75,11 +90,12 @@ export function ProductMediaManager({ productId, productName }: ProductMediaMana
     if (!fileList || fileList.length === 0) return;
     await run(async () => {
       const files = Array.from(fileList);
+      const catalogImages = images.filter((item) => supportsCatalogMediaActions(item));
       for (let index = 0; index < files.length; index += 1) {
         await uploadAdminProductMediaImage(productId, files[index], {
           title: `${productName} image`,
-          isPrimary: images.length === 0 && index === 0,
-          sortOrder: images.length + index,
+          isPrimary: catalogImages.length === 0 && index === 0,
+          sortOrder: catalogImages.length + index,
         });
       }
     });
@@ -100,6 +116,10 @@ export function ProductMediaManager({ productId, productName }: ProductMediaMana
   };
 
   const moveImage = async (media: AdminProductMedia, direction: -1 | 1) => {
+    if (!supportsCatalogMediaActions(media)) {
+      return;
+    }
+
     const ordered = [...images];
     const index = ordered.findIndex((item) => item.id === media.id);
     const target = index + direction;
@@ -111,8 +131,9 @@ export function ProductMediaManager({ productId, productName }: ProductMediaMana
     swapped[target] = current;
 
     await run(async () => {
+      const catalogImages = swapped.filter((item) => supportsCatalogMediaActions(item));
       await Promise.all(
-        swapped.map((item, sortOrder) =>
+        catalogImages.map((item, sortOrder) =>
           updateAdminProductMedia(productId, item.id, { sort_order: sortOrder }),
         ),
       );
@@ -124,6 +145,12 @@ export function ProductMediaManager({ productId, productName }: ProductMediaMana
       {error ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {error}
+        </div>
+      ) : null}
+
+      {showLegacyHelper ? (
+        <div className="rounded-lg border border-sky-200 bg-sky-50/70 px-4 py-3 text-sm text-sky-900">
+          {LEGACY_MEDIA_HELPER_TEXT}
         </div>
       ) : null}
 
@@ -177,7 +204,13 @@ export function ProductMediaManager({ productId, productName }: ProductMediaMana
           <section>
             <h3 className="text-sm font-semibold text-zinc-900">Primary image</h3>
             {primary ? (
-              <div className="mt-2 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50/40 p-3">
+              <div
+                className={`mt-2 flex items-start gap-3 rounded-lg border p-3 ${
+                  isLegacyMediaItem(primary)
+                    ? "border-sky-200 bg-sky-50/40"
+                    : "border-amber-200 bg-amber-50/40"
+                }`}
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={primary.thumbnailUrl || primary.url}
@@ -187,8 +220,17 @@ export function ProductMediaManager({ productId, productName }: ProductMediaMana
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-zinc-900">
                     {primary.title || "Primary image"}
+                    {primary.isPrimary ? (
+                      <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-700">
+                        Primary
+                      </span>
+                    ) : null}
+                    {isLegacyMediaItem(primary) ? <LegacyImageBadge /> : null}
                   </p>
                   <p className="text-xs text-zinc-500 truncate">{primary.url}</p>
+                  {isLegacyMediaItem(primary) ? (
+                    <p className="mt-2 text-xs text-sky-800">{LEGACY_MEDIA_HELPER_TEXT}</p>
+                  ) : null}
                 </div>
               </div>
             ) : (
@@ -202,90 +244,106 @@ export function ProductMediaManager({ productId, productName }: ProductMediaMana
               <p className="mt-2 text-sm text-zinc-500">No gallery images.</p>
             ) : (
               <ul className="mt-2 divide-y divide-zinc-100 rounded-lg border border-zinc-200">
-                {images.map((image, index) => (
-                  <li key={image.id} className="flex flex-wrap items-center gap-3 px-3 py-2">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={image.thumbnailUrl || image.url}
-                      alt={image.altText || ""}
-                      className="h-14 w-14 rounded object-cover"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-zinc-900">
-                        {image.title || `Image ${index + 1}`}
-                        {image.isPrimary ? (
-                          <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-700">
-                            Primary
-                          </span>
+                {images.map((image, index) => {
+                  const legacy = isLegacyMediaItem(image);
+                  const actionsDisabled = busy || legacy;
+
+                  return (
+                    <li
+                      key={image.id}
+                      className={`flex flex-wrap items-center gap-3 px-3 py-2 ${
+                        legacy ? "bg-sky-50/40" : ""
+                      }`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={image.thumbnailUrl || image.url}
+                        alt={image.altText || ""}
+                        className="h-14 w-14 rounded object-cover"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-zinc-900">
+                          {image.title || `Image ${index + 1}`}
+                          {image.isPrimary ? (
+                            <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-700">
+                              Primary
+                            </span>
+                          ) : null}
+                          {legacy ? <LegacyImageBadge /> : null}
+                          {!image.isActive && !legacy ? (
+                            <span className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-zinc-500">
+                              Inactive
+                            </span>
+                          ) : null}
+                        </p>
+                        <p className="text-[11px] text-zinc-500">sort {image.sortOrder}</p>
+                        {legacy ? (
+                          <p className="mt-1 text-[11px] text-sky-800">{LEGACY_MEDIA_HELPER_TEXT}</p>
                         ) : null}
-                        {!image.isActive ? (
-                          <span className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-zinc-500">
-                            Inactive
-                          </span>
-                        ) : null}
-                      </p>
-                      <p className="text-[11px] text-zinc-500">sort {image.sortOrder}</p>
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      <button
-                        type="button"
-                        className="rounded px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-100"
-                        disabled={busy || index === 0}
-                        onClick={() => void moveImage(image, -1)}
-                      >
-                        Up
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-100"
-                        disabled={busy || index === images.length - 1}
-                        onClick={() => void moveImage(image, 1)}
-                      >
-                        Down
-                      </button>
-                      {!image.isPrimary ? (
+                      </div>
+                      <div className="flex flex-wrap gap-1">
                         <button
                           type="button"
-                          className="rounded px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-100"
-                          disabled={busy}
+                          className="rounded px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={actionsDisabled || index === 0}
+                          onClick={() => void moveImage(image, -1)}
+                        >
+                          Up
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={actionsDisabled || index === images.length - 1}
+                          onClick={() => void moveImage(image, 1)}
+                        >
+                          Down
+                        </button>
+                        {!image.isPrimary ? (
+                          <button
+                            type="button"
+                            className="rounded px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={actionsDisabled}
+                            onClick={() =>
+                              void run(async () => {
+                                await setAdminProductMediaPrimary(productId, image.id);
+                              })
+                            }
+                          >
+                            Set primary
+                          </button>
+                        ) : null}
+                        {!legacy ? (
+                          <button
+                            type="button"
+                            className="rounded px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={busy}
+                            onClick={() =>
+                              void run(async () => {
+                                await updateAdminProductMedia(productId, image.id, {
+                                  is_active: !image.isActive,
+                                });
+                              })
+                            }
+                          >
+                            {image.isActive ? "Deactivate" : "Activate"}
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="rounded px-2 py-1 text-[11px] font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={actionsDisabled}
                           onClick={() =>
                             void run(async () => {
-                              await setAdminProductMediaPrimary(productId, image.id);
+                              await deleteAdminProductMedia(productId, image.id);
                             })
                           }
                         >
-                          Set primary
+                          Delete
                         </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        className="rounded px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-100"
-                        disabled={busy}
-                        onClick={() =>
-                          void run(async () => {
-                            await updateAdminProductMedia(productId, image.id, {
-                              is_active: !image.isActive,
-                            });
-                          })
-                        }
-                      >
-                        {image.isActive ? "Deactivate" : "Activate"}
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded px-2 py-1 text-[11px] font-medium text-red-600 hover:bg-red-50"
-                        disabled={busy}
-                        onClick={() =>
-                          void run(async () => {
-                            await deleteAdminProductMedia(productId, image.id);
-                          })
-                        }
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </li>
-                ))}
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>

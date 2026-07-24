@@ -3,7 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Product;
-use App\Models\ProductImage;
+use App\Services\Catalog\CustomerProductMediaResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -20,7 +20,7 @@ class CustomerProductCardResource extends JsonResource
             'price' => $this->price,
             'compare_at_price' => $this->compare_at_price,
             'is_featured' => $this->is_featured,
-            'primary_image' => $this->resolvePrimaryImage(),
+            'primary_image' => app(CustomerProductMediaResolver::class)->resolvePrimary($this->resource),
             'category' => new CustomerCategoryResource($this->whenLoaded('category')),
             'brand' => new CustomerBrandResource($this->whenLoaded('brand')),
             'average_rating' => $this->formatAverageRating(),
@@ -49,24 +49,6 @@ class CustomerProductCardResource extends JsonResource
         $code = \App\Enums\CommerceChannelCode::fromFulfillmentSource($this->fulfillment_source ?? null);
 
         return $code->customerSourceLabel();
-    }
-
-    private function resolvePrimaryImage(): ?array
-    {
-        if ($this->relationLoaded('images')) {
-            $image = $this->images->firstWhere('is_primary', true)
-                ?? $this->images->sortBy('sort_order')->first();
-
-            return $image instanceof ProductImage
-                ? (new CustomerProductImageResource($image))->resolve()
-                : null;
-        }
-
-        $image = $this->primaryImage();
-
-        return $image instanceof ProductImage
-            ? (new CustomerProductImageResource($image))->resolve()
-            : null;
     }
 
     private function formatAverageRating(): float

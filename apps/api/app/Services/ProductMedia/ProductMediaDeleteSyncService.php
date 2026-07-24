@@ -1,0 +1,100 @@
+<?php
+
+namespace App\Services\ProductMedia;
+
+use App\Enums\ProductMediaType;
+use App\Models\ProductImage;
+use App\Models\ProductMedia;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+
+class ProductMediaDeleteSyncService
+{
+    public function deleteFromLegacyImage(ProductImage $image): void
+    {
+        DB::transaction(function () use ($image) {
+            $pairedMedia = $this->findMediaForLegacyImage($image);
+
+            $this->clearPrimaryOnTargets($image, $pairedMedia);
+
+            $image->delete();
+
+            if ($pairedMedia !== null) {
+                $pairedMedia->delete();
+            }
+        });
+    }
+
+    public function deleteFromCatalogMedia(ProductMedia $media): void
+    {
+        DB::transaction(function () use ($media) {
+            if ($media->type === ProductMediaType::Video) {
+                $this->clearPrimaryOnMedia($media);
+                $media->delete();
+
+                return;
+            }
+
+            $pairedImage = $this->findLegacyImageForMedia($media);
+
+            $this->clearPrimaryOnTargets($pairedImage, $media);
+
+            $media->delete();
+
+            if ($pairedImage !== null) {
+                $pairedImage->delete();
+            }
+        });
+    }
+
+    private function clearPrimaryOnTargets(?ProductImage $image, ?ProductMedia $media): void
+    {
+        if ($image !== null && $image->is_primary) {
+            $image->update(['is_primary' => false]);
+        }
+
+        if ($media !== null && $media->is_primary) {
+            $media->update(['is_primary' => false]);
+        }
+    }
+
+    private function clearPrimaryOnMedia(ProductMedia $media): void
+    {
+        if ($media->is_primary) {
+            $media->update(['is_primary' => false]);
+        }
+    }
+
+    private function findMediaForLegacyImage(ProductImage $image): ?ProductMedia
+    {
+        if (! $image->path) {
+            return null;
+        }
+
+        $url = Storage::disk('public')->url($image->path);
+
+        return ProductMedia::query()
+            ->where('product_id', $image->product_id)
+            ->where('type', ProductMediaType::Image)
+            ->where('url', $url)
+            ->first();
+    }
+
+    private function findLegacyImageForMedia(ProductMedia $media): ?ProductImage
+    {
+        if (! $media->url) {
+            return null;
+        }
+
+        return ProductImage::query()
+            ->where('product_id', $media->product_id)
+            ->get()
+            ->first(function (ProductImage $image) use ($media): bool {
+                if (! $image->path) {
+                    return false;
+                }
+
+                return Storage::disk('public')->url($image->path) === $media->url;
+            });
+    }
+}

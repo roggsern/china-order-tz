@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
+import { buildAdminProductEditUrl } from "@/lib/admin/build-product-edit-url";
 import { useAdminProducts } from "@/components/admin/AdminProductsProvider";
 import { useAdminOrders } from "@/components/admin/AdminOrdersProvider";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
@@ -51,7 +52,7 @@ export function AdminDashboard() {
           <Link href="/admin/orders" className="admin-btn-secondary">
             Manage orders
           </Link>
-          <Link href="/admin/products/new" className="admin-btn-primary inline-flex items-center gap-2">
+          <Link href="/admin/products?create=1" className="admin-btn-primary inline-flex items-center gap-2">
             <PlusIcon className="h-4 w-4" />
             Add product
           </Link>
@@ -244,7 +245,7 @@ export function AdminDashboard() {
               return (
                 <li key={product.id}>
                   <Link
-                    href={`/admin/products/${product.id}/edit`}
+                    href={buildAdminProductEditUrl(product)}
                     className="flex items-center gap-3 px-4 py-3 transition hover:bg-zinc-50"
                   >
                     <div

@@ -3,6 +3,7 @@
 namespace App\Actions\CustomerCatalog;
 
 use App\Models\Product;
+use App\Services\Catalog\CustomerProductMediaResolver;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class ShowProductAction
@@ -13,16 +14,15 @@ class ShowProductAction
             throw new NotFoundHttpException('Product not found.');
         }
 
-        $product->load([
+        $product->load(array_merge([
             'commerceChannel:id,name,code,description,is_active',
             'category:id,name,slug',
             'brand:id,name,slug',
-            'images' => fn ($query) => $query->orderBy('sort_order'),
             'shippingOptions' => fn ($query) => $query->available()->ordered(),
             'variants' => fn ($query) => $query
                 ->where('is_active', true)
                 ->with(['product', 'attributeValues.attribute', 'inventories', 'inventory']),
-        ]);
+        ], CustomerProductMediaResolver::catalogEagerLoads()));
 
         $product->loadAvg(
             ['reviews as average_rating' => fn ($query) => $query->where('is_approved', true)],

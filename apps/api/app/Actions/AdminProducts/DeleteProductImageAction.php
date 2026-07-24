@@ -3,16 +3,16 @@
 namespace App\Actions\AdminProducts;
 
 use App\Models\ProductImage;
-use Illuminate\Support\Facades\Storage;
+use App\Services\ProductMedia\ProductMediaDeleteSyncService;
 
 class DeleteProductImageAction
 {
+    public function __construct(
+        private readonly ProductMediaDeleteSyncService $deleteSync,
+    ) {}
+
     public function handle(ProductImage $image): void
     {
-        if ($image->path && Storage::disk('public')->exists($image->path)) {
-            Storage::disk('public')->delete($image->path);
-        }
-
-        $image->forceDelete();
+        $this->deleteSync->deleteFromLegacyImage($image);
     }
 }

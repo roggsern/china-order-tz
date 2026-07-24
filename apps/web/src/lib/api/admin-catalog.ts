@@ -1,4 +1,5 @@
 import { enrichApiCategoryFromStatic } from "@/lib/catalog/category-presentation";
+import { legacyNumericIdFromCatalogProductId as apiIdToNumericId } from "@/lib/admin/product-id-map";
 import type {
   Category,
   Product,
@@ -90,9 +91,13 @@ export type AdminApiDepartment = {
 };
 
 export type AdminApiInventory = {
+  id?: string | null;
   quantity?: number | string | null;
   reserved_quantity?: number | string | null;
   available_quantity?: number | string | null;
+  low_stock_threshold?: number | string | null;
+  is_low_stock?: boolean;
+  warehouse_location?: string | null;
 };
 
 export type AdminApiProductImage = {
@@ -154,6 +159,7 @@ export type AdminApiProduct = {
   price: string | number;
   compare_at_price?: string | number | null;
   commerce_channel_id?: string | null;
+  store_id?: string | null;
   fulfillment_source?: string | null;
   commerce_channel?: AdminApiCommerceChannel | null;
   air_shipping_price?: string | number | null;
@@ -177,6 +183,7 @@ export type AdminApiProduct = {
   sort_order?: number;
   product_type_id?: string | null;
   catalog_product_type_id?: string | null;
+  legacy_configuration_product?: boolean;
   catalog_product_type?: {
     id?: string | null;
     name?: string | null;
@@ -200,6 +207,7 @@ export type AdminCatalogProduct = {
   name: string;
   slug: string;
   sku: string | null;
+  price: number;
   shortDescription: string;
   description: string;
   status: "draft" | "active" | "archived" | "out_of_stock";
@@ -214,6 +222,12 @@ export type AdminCatalogProduct = {
   categoryId: string | null;
   categoryName: string | null;
   departmentId: string | null;
+  commerceChannelId: string | null;
+  commerceChannelCode: string | null;
+  storeId: string | null;
+  hasSimpleInventoryPolicy: boolean;
+  legacyConfigurationProduct: boolean;
+  isDemo: boolean;
   deletedAt: string | null;
 };
 
@@ -222,6 +236,7 @@ export type AdminCatalogProductWritePayload = {
   catalog_product_type_id: string;
   brand_id?: string | null;
   sku?: string | null;
+  price?: number;
   short_description?: string | null;
   description?: string | null;
   status?: "draft" | "active" | "archived";
@@ -229,7 +244,21 @@ export type AdminCatalogProductWritePayload = {
   is_featured?: boolean;
   is_active?: boolean;
   sort_order?: number;
+  commerce_channel_id?: string | null;
+  store_id?: string | null;
 };
+
+export function buildAdminCatalogLifecycleWritePayload(
+  input: Pick<AdminCatalogProductWritePayload, "name" | "catalog_product_type_id"> & {
+    status: "draft" | "active" | "archived";
+  },
+): AdminCatalogProductWritePayload {
+  return {
+    name: input.name,
+    catalog_product_type_id: input.catalog_product_type_id,
+    status: input.status,
+  };
+}
 
 export type AdminCatalogProductListParams = {
   page?: number;
@@ -332,16 +361,6 @@ export type AdminProductListParams = {
 
 const DEFAULT_GRADIENT = "from-zinc-800 via-zinc-700 to-zinc-900";
 const DEFAULT_EMOJI = "🛍️";
-
-function apiIdToNumericId(id: string): number {
-  let hash = 0;
-
-  for (let index = 0; index < id.length; index += 1) {
-    hash = (hash * 31 + id.charCodeAt(index)) >>> 0;
-  }
-
-  return hash || 1;
-}
 
 function parseMoney(value: string | number | null | undefined): number {
   if (value === null || value === undefined || value === "") {
@@ -518,6 +537,9 @@ export function mapAdminApiProductToProduct(product: AdminApiProduct): Product {
   return {
     id: apiIdToNumericId(product.id),
     catalogProductId: product.id,
+    catalogProductTypeId:
+      product.catalog_product_type_id ?? product.catalog_product_type?.id ?? null,
+    legacyConfigurationProduct: product.legacy_configuration_product === true,
     categoryId: product.category?.id,
     parentCategoryId: product.category?.parent_id ?? undefined,
     brandId: product.brand?.id,
@@ -1904,6 +1926,21 @@ export function commerceChannelCodeForProductForm(
   return "CHINA_IMPORT";
 }
 
+export type CommerceJourney = "china" | "tz";
+
+export function commerceJourneyToChannelCode(
+  journey: CommerceJourney,
+): "CHINA_IMPORT" | "TZ_LOCAL" {
+  return journey === "tz" ? "TZ_LOCAL" : "CHINA_IMPORT";
+}
+
+export function resolveAdminCommerceChannelId(
+  channels: AdminApiCommerceChannel[],
+  code: "CHINA_IMPORT" | "TZ_LOCAL",
+): string | null {
+  return channels.find((channel) => channel.code === code)?.id ?? null;
+}
+
 export async function fetchAdminCommerceChannels(): Promise<AdminApiCommerceChannel[]> {
   const response = await fetch("/api/admin/commerce-channels", {
     method: "GET",
@@ -2045,6 +2082,7 @@ export function mapAdminApiCatalogProduct(product: AdminApiProduct): AdminCatalo
     name: product.name,
     slug: product.slug,
     sku: product.sku ?? null,
+    price: parseMoney(product.price),
     shortDescription: product.short_description?.trim() || "",
     description: product.description?.trim() || "",
     status,
@@ -2060,6 +2098,12 @@ export function mapAdminApiCatalogProduct(product: AdminApiProduct): AdminCatalo
     categoryId: product.category?.id ?? null,
     categoryName: product.category?.name ?? null,
     departmentId: product.category?.department_id ?? null,
+    commerceChannelId: product.commerce_channel_id ?? product.commerce_channel?.id ?? null,
+    commerceChannelCode: product.commerce_channel?.code ?? null,
+    storeId: product.store_id ?? null,
+    hasSimpleInventoryPolicy: (product.inventory?.length ?? 0) > 0,
+    legacyConfigurationProduct: product.legacy_configuration_product === true,
+    isDemo: product.is_demo === true,
     deletedAt: product.deleted_at ?? null,
   };
 }
@@ -2107,6 +2151,34 @@ export async function fetchAdminCatalogProductsPage(
   };
 }
 
+export async function fetchAdminCatalogProduct(id: string): Promise<AdminCatalogProduct> {
+  const trimmed = id.trim();
+
+  if (!trimmed) {
+    throw new AdminCatalogApiError("Product id is required.", 422);
+  }
+
+  const response = await fetch(`/api/admin/products/${encodeURIComponent(trimmed)}`, {
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  });
+
+  const payload = await parseJsonResponse<{
+    success?: boolean;
+    message?: string;
+    data?: AdminApiProduct;
+  }>(response);
+
+  if (!response.ok || payload.success === false || !payload.data?.id) {
+    throw new AdminCatalogApiError(
+      payload.message?.trim() || "Unable to load product.",
+      response.status,
+    );
+  }
+
+  return mapAdminApiCatalogProduct(payload.data);
+}
+
 export async function createAdminCatalogProduct(
   payload: AdminCatalogProductWritePayload,
 ): Promise<AdminCatalogProduct> {
@@ -2151,6 +2223,185 @@ export async function restoreAdminCatalogProduct(id: string): Promise<AdminCatal
   return mapAdminApiCatalogProduct(data);
 }
 
+export type AdminProductShippingOption = {
+  id: string;
+  productId: string;
+  transportMode: "air" | "sea";
+  transportModeLabel: string;
+  price: number;
+  currency: string;
+  isAvailable: boolean;
+  notes: string;
+  sortOrder: number;
+};
+
+type AdminApiProductShippingOption = {
+  id: string;
+  product_id: string;
+  transport_mode: "air" | "sea" | string;
+  transport_mode_label?: string | null;
+  price: string | number;
+  currency?: string | null;
+  is_available?: boolean;
+  notes?: string | null;
+  sort_order?: number;
+};
+
+export function mapAdminApiProductShippingOption(
+  item: AdminApiProductShippingOption,
+): AdminProductShippingOption {
+  return {
+    id: item.id,
+    productId: item.product_id,
+    transportMode: item.transport_mode === "sea" ? "sea" : "air",
+    transportModeLabel: item.transport_mode_label?.trim() || (item.transport_mode === "sea" ? "Sea Freight" : "Air Freight"),
+    price: Number(item.price),
+    currency: item.currency?.trim() || "TZS",
+    isAvailable: item.is_available !== false,
+    notes: item.notes?.trim() || "",
+    sortOrder: Number(item.sort_order ?? 0),
+  };
+}
+
+export async function fetchAdminProductShippingOptions(
+  productId: string,
+): Promise<AdminProductShippingOption[]> {
+  const response = await fetch(
+    `/api/admin/products/${encodeURIComponent(productId)}/shipping-options`,
+    { headers: { Accept: "application/json" }, cache: "no-store" },
+  );
+
+  const payload = await parseJsonResponse<{
+    success?: boolean;
+    message?: string;
+    data?: AdminApiProductShippingOption[];
+  }>(response);
+
+  if (!response.ok || payload.success === false) {
+    throw new AdminCatalogApiError(
+      payload.message?.trim() || "Unable to load shipping options.",
+      response.status,
+    );
+  }
+
+  return (payload.data ?? []).map(mapAdminApiProductShippingOption);
+}
+
+export type AdminProductStock = {
+  id: string | null;
+  quantity: number;
+  reservedQuantity: number;
+  availableQuantity: number;
+  hasPolicy: boolean;
+};
+
+function parseInventoryInteger(value: number | string | null | undefined): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(0, Math.floor(value));
+  }
+
+  if (value === null || value === undefined || value === "") {
+    return 0;
+  }
+
+  const parsed = Number.parseFloat(String(value));
+  return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
+}
+
+export function mapAdminApiProductStock(
+  inventory: AdminApiInventory[] | undefined,
+): AdminProductStock {
+  const row = inventory?.[0];
+
+  if (!row) {
+    return {
+      id: null,
+      quantity: 0,
+      reservedQuantity: 0,
+      availableQuantity: 0,
+      hasPolicy: false,
+    };
+  }
+
+  const quantity = parseInventoryInteger(row.quantity);
+  const reservedQuantity = parseInventoryInteger(row.reserved_quantity);
+  const availableQuantity =
+    row.available_quantity === undefined || row.available_quantity === null
+      ? Math.max(0, quantity - reservedQuantity)
+      : parseInventoryInteger(row.available_quantity);
+
+  return {
+    id: row.id?.trim() || null,
+    quantity,
+    reservedQuantity,
+    availableQuantity,
+    hasPolicy: true,
+  };
+}
+
+export async function fetchAdminProductStock(productId: string): Promise<AdminProductStock> {
+  const trimmed = productId.trim();
+
+  if (!trimmed) {
+    throw new AdminCatalogApiError("Product id is required.", 422);
+  }
+
+  const response = await fetch(`/api/admin/products/${encodeURIComponent(trimmed)}`, {
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  });
+
+  const payload = await parseJsonResponse<{
+    success?: boolean;
+    message?: string;
+    data?: AdminApiProduct;
+  }>(response);
+
+  if (!response.ok || payload.success === false || !payload.data) {
+    throw new AdminCatalogApiError(
+      payload.message?.trim() || "Unable to load product stock.",
+      response.status,
+    );
+  }
+
+  return mapAdminApiProductStock(payload.data.inventory);
+}
+
+export async function updateAdminProductStock(
+  productId: string,
+  body: { stock_quantity: number; idempotency_key?: string | null },
+): Promise<AdminProductStock> {
+  const data = await mutateAdminJson<AdminApiProduct>(
+    `/api/admin/products/${encodeURIComponent(productId)}/stock`,
+    "PATCH",
+    body,
+    "Unable to update product stock.",
+  );
+
+  return mapAdminApiProductStock(data.inventory);
+}
+
+export async function syncAdminProductShippingOptions(
+  productId: string,
+  body: { shipping_options: Array<{
+    transport_mode: "air" | "sea";
+    price: number;
+    currency?: string;
+    is_available?: boolean;
+    notes?: string | null;
+    sort_order?: number;
+  }> },
+): Promise<AdminProductShippingOption[]> {
+  const data = await mutateAdminJson<AdminApiProductShippingOption[]>(
+    `/api/admin/products/${encodeURIComponent(productId)}/shipping-options/sync`,
+    "PUT",
+    body,
+    "Unable to save shipping options.",
+  );
+
+  return (data ?? []).map(mapAdminApiProductShippingOption);
+}
+
 export type AdminProductMedia = {
   id: string;
   productId: string;
@@ -2162,6 +2413,7 @@ export type AdminProductMedia = {
   sortOrder: number;
   isPrimary: boolean;
   isActive: boolean;
+  isLegacy: boolean;
 };
 
 type AdminApiProductMedia = {
@@ -2175,6 +2427,7 @@ type AdminApiProductMedia = {
   sort_order?: number;
   is_primary?: boolean;
   is_active?: boolean;
+  is_legacy?: boolean;
 };
 
 export function mapAdminApiProductMedia(item: AdminApiProductMedia): AdminProductMedia {
@@ -2189,6 +2442,7 @@ export function mapAdminApiProductMedia(item: AdminApiProductMedia): AdminProduc
     sortOrder: item.sort_order ?? 0,
     isPrimary: item.is_primary === true,
     isActive: item.is_active !== false,
+    isLegacy: item.is_legacy === true,
   };
 }
 

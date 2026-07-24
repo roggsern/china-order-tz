@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Services\Inventory\CatalogStockPresenter;
+use App\Services\ProductConfiguration\LegacyConfigurationProductDetector;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -12,6 +13,7 @@ class ProductResource extends JsonResource
     public function toArray(Request $request): array
     {
         $presenter = app(CatalogStockPresenter::class);
+        $legacyConfigurationDetector = app(LegacyConfigurationProductDetector::class);
 
         return [
             'id' => $this->id,
@@ -38,7 +40,11 @@ class ProductResource extends JsonResource
             'meta_description' => $this->meta_description,
             'product_type_id' => $this->product_type_id,
             'catalog_product_type_id' => $this->catalog_product_type_id,
+            'legacy_configuration_product' => $legacyConfigurationDetector->isLegacyConfigurationProduct(
+                $this->resource,
+            ),
             'commerce_channel_id' => $this->commerce_channel_id,
+            'store_id' => $this->store_id,
             'fulfillment_source' => $this->fulfillment_source,
             'commerce_channel' => new CommerceChannelResource($this->whenLoaded('commerceChannel')),
             'product_type' => new ProductTypeResource($this->whenLoaded('productType')),

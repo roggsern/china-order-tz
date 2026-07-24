@@ -6,6 +6,7 @@ use App\Enums\CommerceChannelCode;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\Store;
+use App\Services\Catalog\CustomerProductMediaResolver;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -67,13 +68,12 @@ class TzStorefrontCatalog
         $search = trim((string) ($filters['search'] ?? ''));
 
         return $this->storeProductQuery($store)
-            ->with([
+            ->with(array_merge([
                 'commerceChannel:id,name,code',
                 'category:id,name,slug,store_id',
                 'brand:id,name,slug',
-                'images' => fn ($query) => $query->orderBy('sort_order'),
                 'store:id,name,slug,code',
-            ])
+            ], CustomerProductMediaResolver::catalogEagerLoads()))
             ->withAvg(
                 ['reviews as average_rating' => fn ($query) => $query->where('is_approved', true)],
                 'rating',
@@ -108,16 +108,15 @@ class TzStorefrontCatalog
     {
         $product = $this->storeProductQuery($store)
             ->where('slug', $productSlug)
-            ->with([
+            ->with(array_merge([
                 'commerceChannel:id,name,code,description,is_active',
                 'category:id,name,slug,store_id',
                 'brand:id,name,slug',
-                'images' => fn ($query) => $query->orderBy('sort_order'),
                 'store:id,name,slug,code,theme_color,logo_path',
                 'variants' => fn ($query) => $query
                     ->where('is_active', true)
                     ->with(['product', 'attributeValues.attribute', 'inventories', 'inventory']),
-            ])
+            ], CustomerProductMediaResolver::catalogEagerLoads()))
             ->first();
 
         if ($product === null) {

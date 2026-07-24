@@ -5,16 +5,23 @@ namespace Tests\Feature\ProductPurchasability;
 use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductVisibility;
 use App\Enums\PurchasabilityPath;
+use App\Enums\CommerceChannelCode;
+use App\Models\Admin;
+use App\Models\CatalogProductType;
 use App\Models\Category;
+use App\Models\CommerceChannel;
 use App\Models\Department;
 use App\Models\Inventory;
 use App\Models\Product;
+use App\Models\ProductShippingOption;
 use App\Models\ProductVariant;
+use App\Models\Store;
 use App\Services\Cart\ResolveCartPurchasable;
 use App\Services\ProductPurchasability\ProductPurchasabilityPolicy;
 use Database\Factories\Support\CatalogCartFixture;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
@@ -192,6 +199,219 @@ class ProductPurchasabilityPolicyTest extends TestCase
 
         $this->assertSame($variant->id, $resolved['variant']->id);
         $this->assertSame('22000.00', $resolved['unit_price']);
+    }
+
+    public function test_china_import_product_with_shipping_option_can_be_published(): void
+    {
+        $product = $this->makePublishableProduct(CommerceChannelCode::ChinaImport);
+        ProductShippingOption::factory()->air(8000)->create(['product_id' => $product->id]);
+
+        $fresh = $product->fresh([
+            'commerceChannel',
+            'catalogProductType',
+            'category',
+            'inventory',
+            'shippingOptions',
+            'variants.prices',
+            'variants.inventories',
+        ]);
+
+        $this->policy->assertPublishable($fresh ?? $product);
+        $this->assertTrue(true);
+    }
+
+    public function test_china_import_product_without_shipping_is_blocked_from_publish(): void
+    {
+        $product = $this->makePublishableProduct(CommerceChannelCode::ChinaImport);
+        ProductShippingOption::query()->where('product_id', $product->id)->forceDelete();
+
+        $fresh = $product->fresh([
+            'commerceChannel',
+            'catalogProductType',
+            'category',
+            'inventory',
+            'shippingOptions',
+            'variants.prices',
+            'variants.inventories',
+        ]);
+
+        try {
+            $this->policy->assertPublishable($fresh ?? $product);
+            $this->fail('Expected ValidationException for missing China shipping options.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('shipping_options', $exception->errors());
+        }
+    }
+
+    public function test_tz_local_product_without_shipping_can_be_published(): void
+    {
+        $product = $this->makePublishableProduct(CommerceChannelCode::TzLocal);
+        ProductShippingOption::query()->where('product_id', $product->id)->forceDelete();
+
+        $fresh = $product->fresh([
+            'commerceChannel',
+            'catalogProductType',
+            'category',
+            'inventory',
+            'shippingOptions',
+            'variants.prices',
+            'variants.inventories',
+        ]);
+
+        $this->policy->assertPublishable($fresh ?? $product);
+        $this->assertTrue(true);
+    }
+
+    public function test_tz_local_product_without_store_is_blocked_from_publish(): void
+    {
+        $product = $this->makePublishableProduct(CommerceChannelCode::TzLocal, [
+            'store_id' => null,
+        ]);
+        ProductShippingOption::query()->where('product_id', $product->id)->forceDelete();
+
+        $fresh = $product->fresh([
+            'commerceChannel',
+            'catalogProductType',
+            'category',
+            'inventory',
+            'shippingOptions',
+            'variants.prices',
+            'variants.inventories',
+        ]);
+
+        try {
+            $this->policy->assertPublishable($fresh ?? $product);
+            $this->fail('Expected ValidationException for TZ_LOCAL product without store.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('store_id', $exception->errors());
+        }
+    }
+
+    public function test_tz_local_product_with_store_can_be_published(): void
+    {
+        $store = $this->makeTzStore();
+        $product = $this->makePublishableProduct(CommerceChannelCode::TzLocal, [
+            'store_id' => $store->id,
+        ]);
+        ProductShippingOption::query()->where('product_id', $product->id)->forceDelete();
+
+        $fresh = $product->fresh([
+            'commerceChannel',
+            'catalogProductType',
+            'category',
+            'inventory',
+            'shippingOptions',
+            'variants.prices',
+            'variants.inventories',
+        ]);
+
+        $this->policy->assertPublishable($fresh ?? $product);
+        $this->assertTrue(true);
+    }
+
+    public function test_china_import_product_without_store_can_be_published(): void
+    {
+        $product = $this->makePublishableProduct(CommerceChannelCode::ChinaImport, [
+            'store_id' => null,
+        ]);
+        ProductShippingOption::factory()->air(8000)->create(['product_id' => $product->id]);
+
+        $fresh = $product->fresh([
+            'commerceChannel',
+            'catalogProductType',
+            'category',
+            'inventory',
+            'shippingOptions',
+            'variants.prices',
+            'variants.inventories',
+        ]);
+
+        $this->policy->assertPublishable($fresh ?? $product);
+        $this->assertTrue(true);
+    }
+
+    public function test_updating_tz_local_product_and_removing_store_fails_validation(): void
+    {
+        Sanctum::actingAs(Admin::factory()->create());
+
+        $store = $this->makeTzStore();
+        $product = $this->makePublishableProduct(CommerceChannelCode::TzLocal, [
+            'store_id' => $store->id,
+            'lifecycle_status' => ProductLifecycleStatus::Draft,
+            'is_active' => false,
+        ]);
+
+        $this->putJson('/api/v1/admin/products/'.$product->id, [
+            'store_id' => null,
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['store_id']);
+    }
+
+    /**
+     * @param  array<string, mixed>  $overrides
+     */
+    private function makePublishableProduct(
+        CommerceChannelCode $channelCode,
+        array $overrides = [],
+    ): Product {
+        $department = Department::factory()->create();
+        $category = Category::factory()->forDepartment($department)->create(['parent_id' => null]);
+        $subcategory = Category::factory()->forDepartment($department)->create([
+            'parent_id' => $category->id,
+        ]);
+        $catalogType = CatalogProductType::factory()->create([
+            'subcategory_id' => $subcategory->id,
+            'is_active' => true,
+        ]);
+
+        $channelId = CommerceChannel::query()->where('code', $channelCode->value)->value('id')
+            ?? match ($channelCode) {
+                CommerceChannelCode::TzLocal => CommerceChannel::factory()->tanzania()->create()->id,
+                default => CommerceChannel::factory()->china()->create()->id,
+            };
+
+        $defaults = [
+            'is_active' => true,
+            'lifecycle_status' => ProductLifecycleStatus::Active,
+            'is_demo' => false,
+            'visibility' => ProductVisibility::Public,
+            'price' => 10000,
+            'category_id' => $subcategory->id,
+            'catalog_product_type_id' => $catalogType->id,
+            'commerce_channel_id' => $channelId,
+            'fulfillment_source' => $channelCode->fulfillmentSource(),
+        ];
+
+        if ($channelCode === CommerceChannelCode::TzLocal && ! array_key_exists('store_id', $overrides)) {
+            $defaults['store_id'] = $this->makeTzStore()->id;
+        }
+
+        $product = Product::factory()->create(array_merge($defaults, $overrides));
+
+        Inventory::query()->firstOrCreate(
+            [
+                'product_id' => $product->id,
+                'product_variant_id' => null,
+            ],
+            [
+                'quantity' => 10,
+                'reserved_quantity' => 0,
+                'low_stock_threshold' => 2,
+            ],
+        );
+
+        return $product->fresh(['inventory', 'variants']) ?? $product;
+    }
+
+    private function makeTzStore(): Store
+    {
+        return Store::query()->create([
+            'code' => 'TZ'.strtoupper(substr((string) str()->uuid(), 0, 4)),
+            'name' => 'Test TZ Store',
+            'slug' => 'test-tz-store-'.str()->random(8),
+            'is_active' => true,
+        ]);
     }
 
     /**

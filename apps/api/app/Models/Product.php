@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\CommerceChannelCode;
 use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductVisibility;
 use App\Models\Concerns\HasUuidPrimaryKey;
@@ -304,23 +305,15 @@ class Product extends Model
 
     /**
      * Whether checkout must collect air/sea shipping for this product.
-     * Matches storefront: Air/Sea when freight options exist, or China-sourced stock.
+     * Authoritative rule: commerce channel (CHINA_IMPORT only).
      */
     public function requiresChinaShipping(): bool
     {
-        if ($this->isFromChina()) {
-            return true;
-        }
+        $channel = app(\App\Services\Commerce\CommerceChannelResolver::class)
+            ->resolveProductChannel($this);
 
-        if ($this->relationLoaded('shippingOptions')) {
-            if ($this->shippingOptions->contains(fn (ProductShippingOption $o) => $o->is_available)) {
-                return true;
-            }
-        } elseif ($this->shippingOptions()->available()->exists()) {
-            return true;
-        }
-
-        return $this->air_shipping_price !== null || $this->sea_shipping_price !== null;
+        return CommerceChannelCode::tryFrom((string) $channel->code)
+            === CommerceChannelCode::ChinaImport;
     }
 
     public function shippingPriceForMethod(string $method): ?string

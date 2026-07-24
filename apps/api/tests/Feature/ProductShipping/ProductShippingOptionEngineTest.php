@@ -3,6 +3,7 @@
 namespace Tests\Feature\ProductShipping;
 
 use App\Models\Admin;
+use App\Models\CommerceChannel;
 use App\Models\Product;
 use App\Models\ProductShippingOption;
 use App\Models\User;
@@ -162,6 +163,7 @@ class ProductShippingOptionEngineTest extends TestCase
             'name' => 'Shipping Options Phone',
             'category_id' => $category->id,
             'catalog_product_type_id' => $cpt->id,
+            'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
             'price' => 200000,
             'status' => true,
             'stock_quantity' => 3,

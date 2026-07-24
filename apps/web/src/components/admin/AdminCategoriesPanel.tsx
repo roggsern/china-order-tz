@@ -12,6 +12,7 @@ import {
   restoreAdminCategory,
   updateAdminCategory,
   type AdminCategory,
+  type AdminCategoryWritePayload,
   type AdminConfigurationTemplate,
   type AdminDepartment,
   type AdminStoreOption,
@@ -258,7 +259,7 @@ export function AdminCategoriesPanel() {
       return;
     }
 
-    const origin = form.origin === "tz" ? "tz" : "china";
+    const origin: AdminCategoryWritePayload["origin"] = form.origin === "tz" ? "tz" : "china";
     if (origin === "tz" && !form.storeId.trim()) {
       setActionError("Select a store for Tanzania categories.");
       return;

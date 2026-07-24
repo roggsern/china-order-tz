@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test:storefront": "tsx --test src/lib/storefront/navigation-policy.test.ts src/lib/storefront/resolve-storefront-navigation.test.ts src/lib/catalog/product-type.test.ts",
     "test:homepage": "tsx --test src/lib/content/homepage/*.test.ts",
-    "test:unit": "tsx --test src/lib/storefront/navigation-policy.test.ts src/lib/storefront/resolve-storefront-navigation.test.ts src/lib/catalog/product-type.test.ts src/lib/content/homepage/*.test.ts src/lib/admin/auth-cookie.test.ts",
+    "test:admin": "tsx --test src/lib/admin/*.test.ts src/lib/api/admin-catalog-lifecycle.test.ts src/lib/api/admin-catalog-pricing.test.ts",
+    "test:unit": "tsx --test src/lib/admin/*.test.ts src/lib/api/admin-catalog-lifecycle.test.ts src/lib/api/admin-catalog-pricing.test.ts src/lib/catalog/*.test.ts src/lib/storefront/*.test.ts src/lib/content/homepage/*.test.ts",
 
     "extract-branding": "node scripts/extract-branding.mjs",
     "generate-icons": "node scripts/generate-icons.mjs"

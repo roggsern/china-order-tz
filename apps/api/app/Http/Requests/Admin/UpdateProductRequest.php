@@ -5,14 +5,21 @@ namespace App\Http\Requests\Admin;
 use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductVisibility;
 use App\Enums\ShippingMethod;
+use App\Enums\CommerceChannelCode;
+use App\Http\Requests\Concerns\RejectsTzLocalChinaFreight;
 use App\Models\Admin;
+use App\Models\CommerceChannel;
+use App\Models\Product;
 use App\Support\Admin\AdminPermissions;
 use App\Support\Security\HtmlSanitizer;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class UpdateProductRequest extends FormRequest
 {
+    use RejectsTzLocalChinaFreight;
+
     public function authorize(): bool
     {
         $user = $this->user();
@@ -73,6 +80,7 @@ class UpdateProductRequest extends FormRequest
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'slug' => ['sometimes', 'nullable', 'string', 'max:255', Rule::unique('products', 'slug')->ignore($product)],
             'commerce_channel_id' => ['sometimes', 'required', 'uuid', 'exists:commerce_channels,id'],
+            'store_id' => ['sometimes', 'nullable', 'uuid', 'exists:stores,id'],
             'category_id' => ['sometimes', 'nullable', 'uuid', 'exists:categories,id'],
             'catalog_product_type_id' => ['sometimes', 'nullable', 'uuid', 'exists:catalog_product_types,id'],
             'brand_id' => ['nullable', 'uuid', 'exists:brands,id'],
@@ -167,5 +175,34 @@ class UpdateProductRequest extends FormRequest
         if ($htmlFields !== []) {
             $this->merge($htmlFields);
         }
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            /** @var Product $product */
+            $product = $this->route('product');
+
+            $channelId = $this->input('commerce_channel_id', $product->commerce_channel_id);
+            $channel = is_string($channelId) && $channelId !== ''
+                ? CommerceChannel::query()->find($channelId)
+                : null;
+            $channelCode = CommerceChannelCode::tryFrom((string) ($channel?->code ?? ''))
+                ?? CommerceChannelCode::fromFulfillmentSource($product->fulfillment_source ?? null);
+
+            $this->rejectTzLocalChinaFreight($validator, $channelCode);
+
+            if ($channelCode !== CommerceChannelCode::TzLocal) {
+                return;
+            }
+
+            $storeId = $this->has('store_id') ? $this->input('store_id') : $product->store_id;
+            if (blank($storeId)) {
+                $validator->errors()->add(
+                    'store_id',
+                    'TZ_LOCAL products must belong to a store.',
+                );
+            }
+        });
     }
 }

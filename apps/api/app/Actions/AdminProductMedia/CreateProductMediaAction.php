@@ -6,27 +6,40 @@ use App\Enums\ProductMediaType;
 use App\Http\Requests\Admin\StoreProductMediaRequest;
 use App\Models\Product;
 use App\Models\ProductMedia;
+use App\Services\ProductMedia\ProductImageWriteSyncService;
 use App\Support\ProductMediaUrl;
-use App\Support\Security\SecureImageUpload;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 
 class CreateProductMediaAction
 {
+    public function __construct(
+        private readonly ProductImageWriteSyncService $imageWriteSync,
+    ) {}
+
     public function handle(StoreProductMediaRequest $request, Product $product): ProductMedia
     {
         $validated = $request->validated();
         $type = ProductMediaType::from($validated['type']);
 
-        return DB::transaction(function () use ($validated, $request, $product, $type) {
+        if ($type === ProductMediaType::Image && $request->hasFile('file')) {
+            return $this->imageWriteSync->storeUploadedImage(
+                $request->file('file'),
+                $product,
+                [
+                    'alt_text' => $validated['alt_text'] ?? null,
+                    'title' => $validated['title'] ?? null,
+                    'sort_order' => isset($validated['sort_order'])
+                        ? (int) $validated['sort_order']
+                        : (int) $product->media()->max('sort_order') + 1,
+                    'is_primary' => (bool) ($validated['is_primary'] ?? false),
+                    'is_active' => $validated['is_active'] ?? true,
+                ],
+            )->catalogMedia;
+        }
+
+        return DB::transaction(function () use ($validated, $type, $product) {
             $url = $validated['url'] ?? null;
             $thumbnail = $validated['thumbnail_url'] ?? null;
-
-            if ($type === ProductMediaType::Image && $request->hasFile('file')) {
-                $path = SecureImageUpload::storePublic($request->file('file'), 'product-media');
-                $url = Storage::disk('public')->url($path);
-                $thumbnail = $thumbnail ?? $url;
-            }
 
             if ($type === ProductMediaType::Video) {
                 ProductMediaUrl::assertSupportedVideoUrl((string) $url);

@@ -23,7 +23,18 @@ export type ApiCatalogImage = {
   alt_text: string | null;
 };
 
-export type ApiCatalogProductCard = {
+export type ApiCatalogStockSource = {
+  stock?: string | number | null;
+  quantity_available?: string | number | null;
+  available_quantity?: string | number | null;
+  inventory?: {
+    available_quantity?: string | number | null;
+    quantity?: string | number | null;
+  } | null;
+  variants?: ApiCatalogProductVariant[] | null;
+};
+
+export type ApiCatalogProductCard = ApiCatalogStockSource & {
   id: string;
   slug: string;
   name: string;
@@ -53,6 +64,12 @@ export type ApiCatalogProductVariant = {
   compare_at_price: string | number | null;
   weight: string | number | null;
   effective_price?: string | number;
+  stock?: string | number | null;
+  in_stock?: boolean | null;
+  inventory?: {
+    available_quantity?: string | number | null;
+    quantity?: string | number | null;
+  } | null;
   attribute_values?: Array<{
     id: string;
     value: string;
@@ -71,6 +88,12 @@ export type ApiCatalogProductDetail = ApiCatalogProductCard & {
   description: string | null;
   weight: string | number | null;
   dimensions: string | null;
+  stock?: string | number | null;
+  in_stock?: boolean | null;
+  inventory?: {
+    available_quantity?: string | number | null;
+    quantity?: string | number | null;
+  } | null;
   images: ApiCatalogImage[];
   variants: ApiCatalogProductVariant[];
   shipping_prices: {

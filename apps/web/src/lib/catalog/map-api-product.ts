@@ -2,6 +2,8 @@ import type {
   ApiCatalogImage,
   ApiCatalogProductCard,
   ApiCatalogProductDetail,
+  ApiCatalogProductVariant,
+  ApiCatalogStockSource,
 } from "@/lib/api/products";
 import { resolveProductBadges } from "@/lib/catalog/badges";
 import { getDefaultFlatShippingDeliveryDays } from "@/lib/shipping/config";
@@ -9,7 +11,55 @@ import type { Product, ProductImage, ProductOrigin, ProductSpecification } from 
 
 const DEFAULT_GRADIENT = "from-zinc-800 via-zinc-700 to-zinc-900";
 const DEFAULT_EMOJI = "🛍️";
-const DEFAULT_STOCK = 99;
+
+function parseApiStockQuantity(value: string | number | null | undefined): number | undefined {
+  if (value === null || value === undefined || value === "") {
+    return undefined;
+  }
+
+  const parsed = typeof value === "number" ? value : Number.parseFloat(String(value));
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+
+  return Math.max(0, Math.floor(parsed));
+}
+
+function resolveVariantStockFromApi(
+  variants: ApiCatalogProductVariant[] | null | undefined,
+): number | undefined {
+  if (!variants?.length) {
+    return undefined;
+  }
+
+  const stocks = variants
+    .map(
+      (variant) =>
+        parseApiStockQuantity(variant.stock) ??
+        parseApiStockQuantity(variant.inventory?.available_quantity),
+    )
+    .filter((value): value is number => value !== undefined);
+
+  if (stocks.length === 0) {
+    return undefined;
+  }
+
+  return stocks.reduce((total, value) => total + value, 0);
+}
+
+export function resolveApiProductStock(input: ApiCatalogStockSource): number {
+  const direct =
+    parseApiStockQuantity(input.stock) ??
+    parseApiStockQuantity(input.quantity_available) ??
+    parseApiStockQuantity(input.available_quantity) ??
+    parseApiStockQuantity(input.inventory?.available_quantity);
+
+  if (direct !== undefined) {
+    return direct;
+  }
+
+  return resolveVariantStockFromApi(input.variants) ?? 0;
+}
 
 function apiIdToNumericId(id: string): number {
   let hash = 0;
@@ -93,6 +143,7 @@ function inferOrigin(input: {
 export function mapApiProductCardToCatalogProduct(product: ApiCatalogProductCard): Product {
   const price = parseMoney(product.price);
   const oldPrice = parseOptionalMoney(product.compare_at_price) ?? 0;
+  const stock = resolveApiProductStock(product);
   const primaryImage = mapApiImage(product.primary_image, product.name);
   const badgeLabel = product.is_featured ? "Featured" : "";
   const airCost = parseOptionalMoney(product.shipping_prices?.air);
@@ -114,7 +165,7 @@ export function mapApiProductCardToCatalogProduct(product: ApiCatalogProductCard
     rating: product.average_rating ?? 0,
     reviews: product.review_count ?? 0,
     badge: badgeLabel,
-    badges: resolveProductBadges(badgeLabel, DEFAULT_STOCK),
+    badges: resolveProductBadges(badgeLabel, stock),
     trustBadges: product.is_featured ? ["Premium"] : [],
     origin: inferOrigin({
       commerceChannelCode: product.commerce_channel_code,
@@ -128,7 +179,7 @@ export function mapApiProductCardToCatalogProduct(product: ApiCatalogProductCard
     gradient: DEFAULT_GRADIENT,
     emoji: DEFAULT_EMOJI,
     categorySlug: product.category?.slug ?? "uncategorized",
-    stock: DEFAULT_STOCK,
+    stock,
     airCost,
     seaCost,
     shippingOptions: shippingOptions.length > 0 ? shippingOptions : undefined,
@@ -151,6 +202,7 @@ export function mapApiProductCardToCatalogProduct(product: ApiCatalogProductCard
 
 export function mapApiProductDetailToCatalogProduct(product: ApiCatalogProductDetail): Product {
   const card = mapApiProductCardToCatalogProduct(product);
+  const stock = resolveApiProductStock(product);
   const images = (product.images ?? [])
     .map((image, index) => mapApiImage(image, product.name, index))
     .filter((image): image is ProductImage => Boolean(image));
@@ -165,6 +217,8 @@ export function mapApiProductDetailToCatalogProduct(product: ApiCatalogProductDe
 
   return {
     ...card,
+    stock,
+    badges: resolveProductBadges(card.badge, stock),
     description: product.description?.trim() || card.description,
     shortDescription: product.short_description?.trim() || card.shortDescription,
     fullDescription: product.description?.trim() || undefined,

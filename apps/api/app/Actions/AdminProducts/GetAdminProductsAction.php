@@ -4,11 +4,16 @@ namespace App\Actions\AdminProducts;
 
 use App\Models\Category;
 use App\Models\Product;
+use App\Services\ProductConfiguration\LegacyConfigurationProductDetector;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
 class GetAdminProductsAction
 {
+    public function __construct(
+        private readonly LegacyConfigurationProductDetector $legacyConfigurationDetector,
+    ) {}
+
     public function handle(): LengthAwarePaginator
     {
         $search = trim((string) request()->query('search', ''));
@@ -39,8 +44,9 @@ class GetAdminProductsAction
 
         $sortField = in_array($sort, $allowedSorts, true) ? $sort : null;
 
-        $query = Product::query()
-            ->with([
+        $query = Product::query();
+        $this->legacyConfigurationDetector->applyExistsSelect($query);
+        $query->with([
                 'commerceChannel',
                 'category.department',
                 'category.parent',

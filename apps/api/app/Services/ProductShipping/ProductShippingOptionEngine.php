@@ -2,12 +2,14 @@
 
 namespace App\Services\ProductShipping;
 
+use App\Enums\CommerceChannelCode;
 use App\Enums\ShippingMethod;
 use App\Events\Audit\ShippingOptionUpdated;
 use App\Models\Admin;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductShippingOption;
+use App\Services\Commerce\CommerceChannelResolver;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -17,6 +19,9 @@ use Illuminate\Validation\ValidationException;
  */
 class ProductShippingOptionEngine
 {
+    public function __construct(
+        private readonly CommerceChannelResolver $commerceChannelResolver,
+    ) {}
     /**
      * @return list<ProductShippingOption>
      */
@@ -43,6 +48,8 @@ class ProductShippingOptionEngine
      */
     public function create(Product $product, array $input): ProductShippingOption
     {
+        $this->assertChinaImportProduct($product);
+
         $mode = $this->resolveMode($input['transport_mode'] ?? null);
 
         $option = DB::transaction(function () use ($product, $mode, $input): ProductShippingOption {
@@ -105,6 +112,7 @@ class ProductShippingOptionEngine
     public function update(Product $product, ProductShippingOption $option, array $input): ProductShippingOption
     {
         $this->assertOwns($product, $option);
+        $this->assertChinaImportProduct($product);
 
         return DB::transaction(function () use ($product, $option, $input): ProductShippingOption {
             /** @var ProductShippingOption $locked */
@@ -174,6 +182,8 @@ class ProductShippingOptionEngine
 
     public function restore(Product $product, string $optionId): ProductShippingOption
     {
+        $this->assertChinaImportProduct($product);
+
         /** @var ProductShippingOption $option */
         $option = ProductShippingOption::onlyTrashed()
             ->where('product_id', $product->id)
@@ -204,6 +214,8 @@ class ProductShippingOptionEngine
      */
     public function syncForProduct(Product $product, array $rows): array
     {
+        $this->assertChinaImportProduct($product);
+
         return DB::transaction(function () use ($product, $rows): array {
             $seenModes = [];
             $keepIds = [];
@@ -261,6 +273,17 @@ class ProductShippingOptionEngine
      */
     public function syncLegacyColumns(Product $product): void
     {
+        if ($this->isTzLocalProduct($product)) {
+            if ($product->air_shipping_price !== null || $product->sea_shipping_price !== null) {
+                $product->forceFill([
+                    'air_shipping_price' => null,
+                    'sea_shipping_price' => null,
+                ])->save();
+            }
+
+            return;
+        }
+
         $options = ProductShippingOption::query()
             ->where('product_id', $product->id)
             ->get()
@@ -393,6 +416,23 @@ class ProductShippingOptionEngine
         return $modes;
     }
 
+    /**
+     * Publish gate: at least one available option with a positive price.
+     */
+    public function hasPublishableShippingOption(Product $product): bool
+    {
+        if ($product->relationLoaded('shippingOptions')) {
+            return $product->shippingOptions->contains(
+                fn (ProductShippingOption $option) => $option->is_available && (float) $option->price > 0,
+            );
+        }
+
+        return $product->shippingOptions()
+            ->available()
+            ->where('price', '>', 0)
+            ->exists();
+    }
+
     private function resolveMode(mixed $value): ShippingMethod
     {
         $mode = ShippingMethod::tryFrom((string) $value);
@@ -428,6 +468,22 @@ class ProductShippingOptionEngine
         if ($option->product_id !== $product->id) {
             abort(404);
         }
+    }
+
+    private function assertChinaImportProduct(Product $product): void
+    {
+        if ($this->isTzLocalProduct($product)) {
+            throw ValidationException::withMessages([
+                'shipping' => ['China shipping options are only allowed for CHINA_IMPORT products.'],
+            ]);
+        }
+    }
+
+    private function isTzLocalProduct(Product $product): bool
+    {
+        $channel = $this->commerceChannelResolver->resolveProductChannel($product);
+
+        return CommerceChannelCode::tryFrom((string) $channel->code) === CommerceChannelCode::TzLocal;
     }
 
     /**

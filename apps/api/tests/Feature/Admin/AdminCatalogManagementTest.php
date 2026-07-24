@@ -11,15 +11,24 @@ use App\Models\CatalogAttributeOption;
 use App\Models\CatalogProductAttributeValue;
 use App\Models\CatalogProductType;
 use App\Models\Category;
+use App\Models\CommerceChannel;
 use App\Models\Department;
+use App\Models\Inventory;
 use App\Models\Product;
+use App\Models\ProductAttribute;
+use App\Models\ProductAttributeValue;
+use App\Models\ProductImage;
 use App\Models\ProductMedia;
+use App\Models\ProductShippingOption;
+use App\Models\ProductType;
 use App\Models\ProductVariant;
 use App\Models\ProductVariantAttributeValue;
+use Database\Seeders\ProductTypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
+use Tests\Support\MinimalTestImage;
 use Tests\TestCase;
 
 class AdminCatalogManagementTest extends TestCase
@@ -439,11 +448,13 @@ class AdminCatalogManagementTest extends TestCase
         $create = $this->postJson('/api/v1/admin/products', [
             'name' => 'Core Galaxy Phone',
             'catalog_product_type_id' => $catalogType->id,
+            'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
             'brand_id' => $brand->id,
             'short_description' => 'Product core sample',
             'description' => 'Full description',
             'price' => 250000,
             'stock_quantity' => 3,
+            'air_shipping_price' => 8000,
             'status' => 'active',
             'visibility' => 'public',
             'is_featured' => true,
@@ -499,6 +510,347 @@ class AdminCatalogManagementTest extends TestCase
         $this->assertTrue(Product::query()->whereKey($productId)->draft()->exists());
     }
 
+    public function test_canonical_simple_product_stock_update_via_patch_endpoint(): void
+    {
+        Sanctum::actingAs(Admin::factory()->create());
+
+        $department = Department::factory()->create(['slug' => 'stock-dept']);
+        $category = Category::factory()->forDepartment($department)->create([
+            'name' => 'Stock Mobiles',
+            'slug' => 'stock-mobiles',
+            'parent_id' => null,
+        ]);
+        $subcategory = Category::factory()->forDepartment($department)->create([
+            'name' => 'Stock Smartphones',
+            'slug' => 'stock-smartphones',
+            'parent_id' => $category->id,
+        ]);
+        $catalogType = CatalogProductType::factory()->create([
+            'subcategory_id' => $subcategory->id,
+            'name' => 'Stock Android Phone',
+            'slug' => 'stock-android-phone',
+        ]);
+
+        $create = $this->postJson('/api/v1/admin/products', [
+            'name' => 'Stock Galaxy Phone',
+            'catalog_product_type_id' => $catalogType->id,
+            'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
+            'price' => 250000,
+            'stock_quantity' => 3,
+            'status' => 'draft',
+        ]);
+
+        $create->assertCreated();
+        $productId = $create->json('data.id');
+
+        $this->getJson('/api/v1/admin/products/'.$productId)
+            ->assertOk()
+            ->assertJsonPath('data.inventory.0.quantity', 3)
+            ->assertJsonPath('data.inventory.0.available_quantity', 3);
+
+        $update = $this->patchJson('/api/v1/admin/products/'.$productId.'/stock', [
+            'stock_quantity' => 10,
+        ]);
+
+        $update->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.inventory.0.quantity', 10)
+            ->assertJsonPath('data.inventory.0.available_quantity', 10);
+
+        $inventory = Inventory::query()
+            ->where('product_id', $productId)
+            ->whereNull('product_variant_id')
+            ->first();
+
+        $this->assertNotNull($inventory);
+        $this->assertSame(10, (int) $inventory->quantity);
+        $this->assertSame(0, (int) $inventory->reserved_quantity);
+    }
+
+    public function test_admin_product_response_exposes_legacy_configuration_product_flag(): void
+    {
+        Sanctum::actingAs(Admin::factory()->create());
+
+        $department = Department::factory()->create(['slug' => 'legacy-flag-dept']);
+        $category = Category::factory()->forDepartment($department)->create([
+            'name' => 'Legacy Flag Mobiles',
+            'slug' => 'legacy-flag-mobiles',
+            'parent_id' => null,
+        ]);
+        $subcategory = Category::factory()->forDepartment($department)->create([
+            'name' => 'Legacy Flag Smartphones',
+            'slug' => 'legacy-flag-smartphones',
+            'parent_id' => $category->id,
+        ]);
+        $catalogType = CatalogProductType::factory()->create([
+            'subcategory_id' => $subcategory->id,
+            'name' => 'Legacy Flag Phone',
+            'slug' => 'legacy-flag-phone',
+        ]);
+
+        $simpleCreate = $this->postJson('/api/v1/admin/products', [
+            'name' => 'Simple Catalog Phone',
+            'catalog_product_type_id' => $catalogType->id,
+            'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
+            'price' => 250000,
+            'stock_quantity' => 5,
+            'status' => 'draft',
+        ]);
+        $simpleCreate->assertCreated()
+            ->assertJsonPath('data.legacy_configuration_product', false);
+
+        $simpleId = $simpleCreate->json('data.id');
+
+        $this->getJson('/api/v1/admin/products/'.$simpleId)
+            ->assertOk()
+            ->assertJsonPath('data.legacy_configuration_product', false)
+            ->assertJsonPath('data.name', 'Simple Catalog Phone');
+
+        $this->seed(ProductTypeSeeder::class);
+        $phones = ProductType::query()->where('slug', 'phones')->firstOrFail();
+        $legacyCategory = Category::factory()->forDepartment($department)->create([
+            'product_type_id' => $phones->id,
+            'parent_id' => $category->id,
+        ]);
+        $legacyCatalogType = CatalogProductType::factory()->create([
+            'subcategory_id' => $legacyCategory->id,
+            'is_active' => true,
+        ]);
+
+        $storage = ProductAttribute::query()->where('slug', 'storage')->firstOrFail();
+        $color = ProductAttribute::query()->where('slug', 'color')->firstOrFail();
+        $condition = ProductAttribute::query()->where('slug', 'condition')->firstOrFail();
+        $storage128 = ProductAttributeValue::query()
+            ->where('product_attribute_id', $storage->id)
+            ->where('slug', '128gb')
+            ->firstOrFail();
+        $black = ProductAttributeValue::query()
+            ->where('product_attribute_id', $color->id)
+            ->where('slug', 'black')
+            ->firstOrFail();
+        $conditionNew = ProductAttributeValue::query()
+            ->where('product_attribute_id', $condition->id)
+            ->where('slug', 'new')
+            ->firstOrFail();
+
+        $legacyCreate = $this->postJson('/api/v1/admin/products', [
+            'name' => 'Legacy Config Phone',
+            'category_id' => $legacyCategory->id,
+            'catalog_product_type_id' => $legacyCatalogType->id,
+            'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
+            'sku' => 'LEGACY-FLAG-1',
+            'price' => 500000,
+            'air_shipping_price' => 8000,
+            'stock_quantity' => 0,
+            'status' => true,
+            'configurations' => [
+                [
+                    'attribute_value_ids' => [$storage128->id, $black->id, $conditionNew->id],
+                    'sku' => 'LEGACY-FLAG-1-128-BLACK-NEW',
+                    'stock_quantity' => 4,
+                    'price' => 520000,
+                ],
+            ],
+        ]);
+
+        $legacyCreate->assertCreated()
+            ->assertJsonPath('data.legacy_configuration_product', true);
+
+        $legacyId = $legacyCreate->json('data.id');
+
+        $this->getJson('/api/v1/admin/products/'.$legacyId)
+            ->assertOk()
+            ->assertJsonPath('data.legacy_configuration_product', true);
+
+        $this->getJson('/api/v1/admin/products?search=Simple')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $simpleId, 'legacy_configuration_product' => false]);
+
+        $this->getJson('/api/v1/admin/products?search=Legacy+Config')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $legacyId, 'legacy_configuration_product' => true]);
+    }
+
+    public function test_canonical_simple_product_price_update_allows_activation(): void
+    {
+        Sanctum::actingAs(Admin::factory()->create());
+
+        $department = Department::factory()->create(['slug' => 'pricing-dept']);
+        $category = Category::factory()->forDepartment($department)->create([
+            'name' => 'Pricing Mobiles',
+            'slug' => 'pricing-mobiles',
+            'parent_id' => null,
+        ]);
+        $subcategory = Category::factory()->forDepartment($department)->create([
+            'name' => 'Pricing Smartphones',
+            'slug' => 'pricing-smartphones',
+            'parent_id' => $category->id,
+        ]);
+        $catalogType = CatalogProductType::factory()->create([
+            'subcategory_id' => $subcategory->id,
+            'name' => 'Pricing Android Phone',
+            'slug' => 'pricing-android-phone',
+        ]);
+
+        $create = $this->postJson('/api/v1/admin/products', [
+            'name' => 'Canonical Pricing Phone',
+            'catalog_product_type_id' => $catalogType->id,
+            'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
+            'status' => 'draft',
+            'visibility' => 'public',
+        ]);
+
+        $create->assertCreated()
+            ->assertJsonPath('data.status', 'draft');
+
+        $productId = $create->json('data.id');
+
+        $this->putJson('/api/v1/admin/products/'.$productId, [
+            'name' => 'Canonical Pricing Phone',
+            'catalog_product_type_id' => $catalogType->id,
+            'price' => 175000,
+            'air_shipping_price' => 8000,
+            'stock_quantity' => 5,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.price', '175000.00');
+
+        $this->assertSame('175000.00', (string) Product::query()->whereKey($productId)->value('price'));
+
+        $this->putJson('/api/v1/admin/products/'.$productId, [
+            'name' => 'Canonical Pricing Phone',
+            'catalog_product_type_id' => $catalogType->id,
+            'price' => 175000,
+            'status' => 'active',
+            'visibility' => 'public',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'active')
+            ->assertJsonPath('data.price', '175000.00');
+    }
+
+    public function test_lifecycle_status_change_syncs_is_active_without_explicit_is_active_payload(): void
+    {
+        Sanctum::actingAs(Admin::factory()->create());
+
+        $department = Department::factory()->create(['slug' => 'lifecycle-dept']);
+        $category = Category::factory()->forDepartment($department)->create([
+            'name' => 'Lifecycle Mobiles',
+            'slug' => 'lifecycle-mobiles',
+            'parent_id' => null,
+        ]);
+        $subcategory = Category::factory()->forDepartment($department)->create([
+            'name' => 'Lifecycle Smartphones',
+            'slug' => 'lifecycle-smartphones',
+            'parent_id' => $category->id,
+        ]);
+        $catalogType = CatalogProductType::factory()->create([
+            'subcategory_id' => $subcategory->id,
+            'name' => 'Lifecycle Android Phone',
+            'slug' => 'lifecycle-android-phone',
+        ]);
+
+        $productId = $this->postJson('/api/v1/admin/products', [
+            'name' => 'Lifecycle Alignment Phone',
+            'catalog_product_type_id' => $catalogType->id,
+            'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
+            'price' => 200000,
+            'air_shipping_price' => 8000,
+            'stock_quantity' => 3,
+            'status' => 'active',
+            'visibility' => 'public',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'active')
+            ->json('data.id');
+
+        $this->assertTrue(Product::query()->whereKey($productId)->value('is_active'));
+
+        $this->putJson('/api/v1/admin/products/'.$productId, [
+            'name' => 'Lifecycle Alignment Phone',
+            'catalog_product_type_id' => $catalogType->id,
+            'status' => 'draft',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'draft');
+
+        $this->assertFalse(Product::query()->whereKey($productId)->value('is_active'));
+
+        $this->putJson('/api/v1/admin/products/'.$productId, [
+            'name' => 'Lifecycle Alignment Phone',
+            'catalog_product_type_id' => $catalogType->id,
+            'price' => 200000,
+            'status' => 'active',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'active');
+
+        $this->assertTrue(Product::query()->whereKey($productId)->value('is_active'));
+
+        $this->putJson('/api/v1/admin/products/'.$productId, [
+            'name' => 'Lifecycle Alignment Phone',
+            'catalog_product_type_id' => $catalogType->id,
+            'status' => 'archived',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'archived');
+
+        $this->assertFalse(Product::query()->whereKey($productId)->value('is_active'));
+    }
+
+    public function test_canonical_shipping_sync_loads_and_updates_china_import_product(): void
+    {
+        Sanctum::actingAs(Admin::factory()->create());
+
+        $product = Product::factory()->fromChina()->create([
+            'fulfillment_source' => 'imported_from_china',
+            'air_shipping_price' => null,
+            'sea_shipping_price' => null,
+        ]);
+
+        ProductShippingOption::withTrashed()
+            ->where('product_id', $product->id)
+            ->forceDelete();
+
+        $this->getJson('/api/v1/admin/products/'.$product->id.'/shipping-options')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $this->putJson('/api/v1/admin/products/'.$product->id.'/shipping-options/sync', [
+            'shipping_options' => [
+                [
+                    'transport_mode' => 'air',
+                    'price' => 11000,
+                    'currency' => 'TZS',
+                    'is_available' => true,
+                    'notes' => 'Canonical air',
+                    'sort_order' => 0,
+                ],
+                [
+                    'transport_mode' => 'sea',
+                    'price' => 4200,
+                    'currency' => 'TZS',
+                    'is_available' => true,
+                    'notes' => 'Canonical sea',
+                    'sort_order' => 1,
+                ],
+            ],
+        ])
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.transport_mode', 'air')
+            ->assertJsonPath('data.1.transport_mode', 'sea');
+
+        $product->refresh();
+        $this->assertSame('11000.00', (string) $product->air_shipping_price);
+        $this->assertSame('4200.00', (string) $product->sea_shipping_price);
+
+        $this->getJson('/api/v1/admin/products/'.$product->id.'/shipping-options')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.notes', 'Canonical air');
+    }
+
     public function test_admin_can_manage_product_media(): void
     {
         Storage::fake('public');
@@ -520,7 +872,8 @@ class AdminCatalogManagementTest extends TestCase
         $upload->assertCreated()
             ->assertJsonPath('data.type', 'image')
             ->assertJsonPath('data.is_primary', true)
-            ->assertJsonPath('data.alt_text', 'Main shot');
+            ->assertJsonPath('data.alt_text', 'Main shot')
+            ->assertJsonPath('data.is_legacy', false);
 
         $mediaId = $upload->json('data.id');
 
@@ -568,6 +921,309 @@ class AdminCatalogManagementTest extends TestCase
 
         $this->deleteJson('/api/v1/admin/products/'.$product->id.'/media/'.$mediaId)->assertOk();
         $this->assertSoftDeleted('product_media', ['id' => $mediaId]);
+    }
+
+    public function test_admin_product_media_returns_catalog_media_when_active_catalog_exists(): void
+    {
+        Sanctum::actingAs(Admin::factory()->create());
+
+        $product = Product::factory()->create([
+            'name' => 'Catalog Media Product',
+            'slug' => 'catalog-media-product',
+        ]);
+
+        ProductImage::factory()->create([
+            'product_id' => $product->id,
+            'path' => 'demo-products/phone.jpg',
+            'alt_text' => 'Legacy image',
+        ]);
+
+        $catalogMedia = ProductMedia::factory()->primary()->create([
+            'product_id' => $product->id,
+            'url' => '/storage/demo-products/shoes.jpg',
+            'is_active' => true,
+        ]);
+
+        $this->getJson('/api/v1/admin/products/'.$product->id.'/media')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $catalogMedia->id)
+            ->assertJsonPath('data.0.is_legacy', false);
+    }
+
+    public function test_admin_product_media_read_bridge_returns_legacy_images_without_writes(): void
+    {
+        Storage::fake('public');
+        Sanctum::actingAs(Admin::factory()->create());
+
+        $product = Product::factory()->create([
+            'name' => 'Legacy Media Product',
+            'slug' => 'legacy-media-product',
+        ]);
+
+        $primaryPath = 'demo-products/phone.jpg';
+        $secondaryPath = 'demo-products/shoes.jpg';
+        Storage::disk('public')->put($primaryPath, 'fake-image');
+        Storage::disk('public')->put($secondaryPath, 'fake-image');
+
+        ProductImage::factory()->primary()->create([
+            'product_id' => $product->id,
+            'path' => $primaryPath,
+            'alt_text' => 'Legacy primary',
+            'sort_order' => 0,
+        ]);
+        ProductImage::factory()->create([
+            'product_id' => $product->id,
+            'path' => $secondaryPath,
+            'alt_text' => 'Legacy secondary',
+            'sort_order' => 1,
+        ]);
+
+        $this->assertSame(0, ProductMedia::query()->count());
+
+        $response = $this->getJson('/api/v1/admin/products/'.$product->id.'/media');
+
+        $response->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.type', 'image')
+            ->assertJsonPath('data.0.is_legacy', true)
+            ->assertJsonPath('data.0.is_primary', true)
+            ->assertJsonPath('data.0.alt_text', 'Legacy primary')
+            ->assertJsonPath('data.0.url', Storage::disk('public')->url($primaryPath))
+            ->assertJsonPath('data.1.is_legacy', true)
+            ->assertJsonPath('data.1.alt_text', 'Legacy secondary');
+
+        $this->assertSame(0, ProductMedia::query()->count());
+        $this->assertSame(2, $product->fresh()->images()->count());
+    }
+
+    public function test_catalog_file_upload_creates_product_media_and_product_images(): void
+    {
+        Storage::fake('public');
+        Sanctum::actingAs(Admin::factory()->create());
+
+        $product = Product::factory()->create([
+            'name' => 'Dual Write Product',
+            'slug' => 'dual-write-product',
+        ]);
+
+        $response = $this->post('/api/v1/admin/products/'.$product->id.'/media', [
+            'type' => 'image',
+            'file' => MinimalTestImage::jpeg('catalog-upload.jpg'),
+            'alt_text' => 'Catalog upload',
+            'title' => 'Catalog upload title',
+        ], [
+            'Accept' => 'application/json',
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.type', 'image')
+            ->assertJsonPath('data.alt_text', 'Catalog upload')
+            ->assertJsonPath('data.is_legacy', false);
+
+        $this->assertSame(1, ProductImage::query()->count());
+        $this->assertSame(1, ProductMedia::query()->count());
+
+        $legacy = ProductImage::query()->firstOrFail();
+        $media = ProductMedia::query()->firstOrFail();
+
+        $this->assertSame($product->id, $legacy->product_id);
+        $this->assertSame($product->id, $media->product_id);
+        $this->assertSame('Catalog upload', $legacy->alt_text);
+        $this->assertSame(Storage::disk('public')->url($legacy->path), $media->url);
+        $this->assertTrue(Storage::disk('public')->exists($legacy->path));
+    }
+
+    public function test_legacy_image_upload_creates_product_images_and_product_media(): void
+    {
+        Storage::fake('public');
+        Sanctum::actingAs(Admin::factory()->create());
+
+        $product = Product::factory()->create([
+            'name' => 'Legacy Upload Product',
+            'slug' => 'legacy-upload-product',
+        ]);
+
+        $response = $this->post('/api/v1/admin/products/'.$product->id.'/images', [
+            'image' => MinimalTestImage::jpeg('legacy-upload.jpg'),
+        ], [
+            'Accept' => 'application/json',
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonStructure(['data' => ['id', 'path', 'url']]);
+
+        $this->assertSame(1, ProductImage::query()->count());
+        $this->assertSame(1, ProductMedia::query()->count());
+
+        $legacy = ProductImage::query()->firstOrFail();
+        $media = ProductMedia::query()->firstOrFail();
+
+        $this->assertSame($response->json('data.id'), $legacy->id);
+        $this->assertSame($response->json('data.path'), $legacy->path);
+        $this->assertSame(Storage::disk('public')->url($legacy->path), $media->url);
+        $this->assertTrue(Storage::disk('public')->exists($legacy->path));
+    }
+
+    public function test_legacy_and_catalog_uploads_create_one_row_pair_each_without_duplicates(): void
+    {
+        Storage::fake('public');
+        Sanctum::actingAs(Admin::factory()->create());
+
+        $product = Product::factory()->create([
+            'name' => 'Dual Surface Product',
+            'slug' => 'dual-surface-product',
+        ]);
+
+        $this->post('/api/v1/admin/products/'.$product->id.'/images', [
+            'image' => MinimalTestImage::jpeg('legacy-first.jpg'),
+        ], [
+            'Accept' => 'application/json',
+        ])->assertCreated();
+
+        $this->post('/api/v1/admin/products/'.$product->id.'/media', [
+            'type' => 'image',
+            'file' => MinimalTestImage::jpeg('catalog-second.jpg'),
+            'alt_text' => 'Catalog second',
+        ], [
+            'Accept' => 'application/json',
+        ])->assertCreated();
+
+        $this->assertSame(2, ProductImage::query()->where('product_id', $product->id)->count());
+        $this->assertSame(2, ProductMedia::query()->where('product_id', $product->id)->count());
+    }
+
+    public function test_update_product_media_rejects_image_file_replacement(): void
+    {
+        Storage::fake('public');
+        Sanctum::actingAs(Admin::factory()->create());
+
+        $product = Product::factory()->create([
+            'name' => 'Replace Guard Product',
+            'slug' => 'replace-guard-product',
+        ]);
+
+        $upload = $this->post('/api/v1/admin/products/'.$product->id.'/media', [
+            'type' => 'image',
+            'file' => MinimalTestImage::jpeg('original.jpg'),
+            'alt_text' => 'Original image',
+        ], [
+            'Accept' => 'application/json',
+        ]);
+
+        $upload->assertCreated();
+        $mediaId = $upload->json('data.id');
+        $originalUrl = $upload->json('data.url');
+        $legacyPath = ProductImage::query()->value('path');
+
+        $this->put('/api/v1/admin/products/'.$product->id.'/media/'.$mediaId, [
+            'file' => MinimalTestImage::jpeg('replacement.jpg'),
+        ], [
+            'Accept' => 'application/json',
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['file'])
+            ->assertJsonPath(
+                'errors.file.0',
+                'Image replacement is not supported. Delete the image and upload a new one.',
+            );
+
+        $this->assertSame($originalUrl, ProductMedia::query()->whereKey($mediaId)->value('url'));
+        $this->assertSame($legacyPath, ProductImage::query()->value('path'));
+        $this->assertSame('Original image', ProductMedia::query()->whereKey($mediaId)->value('alt_text'));
+    }
+
+    public function test_update_product_media_json_metadata_update_still_works(): void
+    {
+        Storage::fake('public');
+        Sanctum::actingAs(Admin::factory()->create());
+
+        $product = Product::factory()->create([
+            'name' => 'Metadata Update Product',
+            'slug' => 'metadata-update-product',
+        ]);
+
+        $upload = $this->post('/api/v1/admin/products/'.$product->id.'/media', [
+            'type' => 'image',
+            'file' => MinimalTestImage::jpeg('metadata.jpg'),
+            'alt_text' => 'Before update',
+            'sort_order' => 5,
+            'is_active' => true,
+        ], [
+            'Accept' => 'application/json',
+        ]);
+
+        $upload->assertCreated();
+        $mediaId = $upload->json('data.id');
+
+        $this->putJson('/api/v1/admin/products/'.$product->id.'/media/'.$mediaId, [
+            'alt_text' => 'After update',
+            'sort_order' => 1,
+            'is_active' => false,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.alt_text', 'After update')
+            ->assertJsonPath('data.sort_order', 1)
+            ->assertJsonPath('data.is_active', false);
+
+        $media = ProductMedia::query()->whereKey($mediaId)->firstOrFail();
+        $this->assertSame('After update', $media->alt_text);
+        $this->assertSame(1, $media->sort_order);
+        $this->assertFalse($media->is_active);
+    }
+
+    public function test_update_product_media_primary_uses_dual_write_synchronization(): void
+    {
+        Storage::fake('public');
+        Sanctum::actingAs(Admin::factory()->create());
+
+        $product = Product::factory()->create([
+            'name' => 'Primary Sync Product',
+            'slug' => 'primary-sync-product',
+        ]);
+
+        $first = $this->post('/api/v1/admin/products/'.$product->id.'/media', [
+            'type' => 'image',
+            'file' => MinimalTestImage::jpeg('first.jpg'),
+            'is_primary' => true,
+        ], [
+            'Accept' => 'application/json',
+        ])->assertCreated();
+
+        $second = $this->post('/api/v1/admin/products/'.$product->id.'/media', [
+            'type' => 'image',
+            'file' => MinimalTestImage::jpeg('second.jpg'),
+        ], [
+            'Accept' => 'application/json',
+        ])->assertCreated();
+
+        $firstMediaId = $first->json('data.id');
+        $secondMediaId = $second->json('data.id');
+        $secondMediaUrl = $second->json('data.url');
+
+        $this->putJson('/api/v1/admin/products/'.$product->id.'/media/'.$secondMediaId, [
+            'is_primary' => true,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.is_primary', true);
+
+        $this->assertFalse(ProductMedia::query()->whereKey($firstMediaId)->value('is_primary'));
+        $this->assertTrue(ProductMedia::query()->whereKey($secondMediaId)->value('is_primary'));
+
+        $secondLegacy = ProductImage::query()
+            ->get()
+            ->first(fn (ProductImage $image): bool => Storage::disk('public')->url($image->path) === $secondMediaUrl);
+
+        $this->assertNotNull($secondLegacy);
+        $this->assertTrue($secondLegacy->is_primary);
+
+        $firstLegacy = ProductImage::query()
+            ->get()
+            ->first(fn (ProductImage $image): bool => Storage::disk('public')->url($image->path) === $first->json('data.url'));
+
+        $this->assertNotNull($firstLegacy);
+        $this->assertFalse($firstLegacy->is_primary);
     }
 
     public function test_admin_can_manage_product_catalog_attribute_values(): void

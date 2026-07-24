@@ -174,6 +174,10 @@ export type Product = {
   id: number;
   /** UUID from the Customer API — required for server cart sync. */
   catalogProductId?: string;
+  /** Catalog product type UUID — required for canonical admin editor. */
+  catalogProductTypeId?: string | null;
+  /** When true, product uses legacy Configuration Template engine (stay on ProductForm). */
+  legacyConfigurationProduct?: boolean;
   /** Laravel category UUID (admin API). */
   categoryId?: string;
   /** Parent category UUID when categoryId is a subcategory (admin cascade). */

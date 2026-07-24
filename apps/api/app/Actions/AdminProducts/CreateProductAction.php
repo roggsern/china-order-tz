@@ -13,7 +13,6 @@ use App\Models\Category;
 use App\Models\CommerceChannel;
 use App\Models\Product;
 use App\Services\Catalog\GenerateProductSku;
-use App\Services\Commerce\CommerceChannelResolver;
 use App\Services\Inventory\AdminInventoryApplicationService;
 use App\Services\Pricing\SyncConfigurationPriceTiers;
 use App\Services\ProductConfiguration\ResolveTypeFromCategory;
@@ -35,7 +34,6 @@ class CreateProductAction
         private readonly SyncConfigurationPriceTiers $syncConfigurationPriceTiers,
         private readonly GenerateProductSku $generateProductSku,
         private readonly ProductShippingOptionEngine $shippingOptionEngine,
-        private readonly CommerceChannelResolver $commerceChannelResolver,
         private readonly ProductPurchasabilityPolicy $purchasabilityPolicy,
         private readonly AdminInventoryApplicationService $adminInventory,
     ) {}
@@ -82,14 +80,30 @@ class CreateProductAction
             $visibility = ProductVisibility::tryFromMixed($validated['visibility'] ?? null)
                 ?? ProductVisibility::Public;
 
-            $channel = filled($validated['commerce_channel_id'] ?? null)
-                ? CommerceChannel::query()
-                    ->where('id', $validated['commerce_channel_id'])
-                    ->where('is_active', true)
-                    ->firstOrFail()
-                : $this->commerceChannelResolver->channelByCode(CommerceChannelCode::ChinaImport);
+            if (! filled($validated['commerce_channel_id'] ?? null)) {
+                throw ValidationException::withMessages([
+                    'commerce_channel_id' => ['Commerce channel is required.'],
+                ]);
+            }
 
-            $channelCode = CommerceChannelCode::tryFrom($channel->code) ?? CommerceChannelCode::ChinaImport;
+            $channel = CommerceChannel::query()
+                ->where('id', $validated['commerce_channel_id'])
+                ->where('is_active', true)
+                ->first();
+
+            if ($channel === null) {
+                throw ValidationException::withMessages([
+                    'commerce_channel_id' => ['The selected commerce channel is invalid or inactive.'],
+                ]);
+            }
+
+            $channelCode = CommerceChannelCode::tryFrom($channel->code);
+
+            if ($channelCode === null) {
+                throw ValidationException::withMessages([
+                    'commerce_channel_id' => ['The selected commerce channel is not supported.'],
+                ]);
+            }
 
             $storeId = $validated['store_id'] ?? null;
             if ($channelCode === CommerceChannelCode::TzLocal && blank($storeId)) {
@@ -116,8 +130,12 @@ class CreateProductAction
                 'price' => $validated['price'] ?? 0,
                 'compare_at_price' => $validated['compare_at_price'] ?? null,
                 'cost_price' => $validated['cost_price'] ?? null,
-                'air_shipping_price' => $validated['air_shipping_price'] ?? null,
-                'sea_shipping_price' => $validated['sea_shipping_price'] ?? null,
+                'air_shipping_price' => $channelCode === CommerceChannelCode::ChinaImport
+                    ? ($validated['air_shipping_price'] ?? null)
+                    : null,
+                'sea_shipping_price' => $channelCode === CommerceChannelCode::ChinaImport
+                    ? ($validated['sea_shipping_price'] ?? null)
+                    : null,
                 'weight' => $validated['weight'] ?? null,
                 'short_description' => $validated['short_description'] ?? null,
                 'description' => $validated['description'] ?? null,

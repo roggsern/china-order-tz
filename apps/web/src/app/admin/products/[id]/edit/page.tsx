@@ -1,13 +1,34 @@
 "use client";
 
+/**
+ * Legacy product edit route (`/admin/products/[numericId]/edit`).
+ *
+ * RC1-A5.1 / RC1-A5.2 — Conditional redirect when
+ * `NEXT_PUBLIC_ADMIN_LEGACY_EDIT_REDIRECT=1` and `canRedirectLegacyProduct()` allows it.
+ *
+ * ProductForm remains for hard blockers (see `legacy-edit-policy.ts`):
+ * - legacy_configuration_product
+ * - missing catalog_product_type_id
+ * - uuid_unresolved
+ * - wholesale_pricing (product or configuration MOQ tiers)
+ *
+ * Soft gaps (weight, compare-at, demo, out_of_stock, rich text) do not block redirect.
+ */
+
 import Link from "next/link";
-import { use, useCallback, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ProductFormData } from "@/lib/types/catalog";
 import { useAdminProducts } from "@/components/admin/AdminProductsProvider";
 import { DeleteProductModal } from "@/components/admin/DeleteProductModal";
 import { ProductForm } from "@/components/admin/ProductForm";
 import { ChevronLeftIcon } from "@/components/home/icons";
+import { isLegacyEditRedirectEnabled } from "@/lib/admin/legacy-edit-redirect";
+import {
+  canRedirectLegacyProduct,
+  loadLegacyEditPolicyProduct,
+} from "@/lib/admin/legacy-edit-policy";
+import { buildCatalogProductEditUrl } from "@/lib/admin/product-id-map";
 
 interface EditProductPageProps {
   params: Promise<{ id: string }>;
@@ -17,10 +38,42 @@ export default function EditProductPage({ params }: EditProductPageProps) {
   const router = useRouter();
   const { id } = use(params);
   const productId = Number(id);
-  const { getProduct, updateProduct, deleteProduct, isHydrated } = useAdminProducts();
+  const redirectEnabled = isLegacyEditRedirectEnabled();
+  const { products, getProduct, updateProduct, deleteProduct, isHydrated } = useAdminProducts();
   const product = getProduct(productId);
   const isEditMode = true;
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [redirectPhase, setRedirectPhase] = useState<"idle" | "checking" | "stay">(
+    redirectEnabled ? "checking" : "stay",
+  );
+
+  useEffect(() => {
+    if (!redirectEnabled || !isHydrated) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      setRedirectPhase("checking");
+
+      const policyProduct = await loadLegacyEditPolicyProduct(productId, products);
+      const { redirect } = canRedirectLegacyProduct(policyProduct);
+
+      if (redirect && policyProduct.id) {
+        router.replace(buildCatalogProductEditUrl(policyProduct.id));
+        return;
+      }
+
+      if (!cancelled) {
+        setRedirectPhase("stay");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [redirectEnabled, isHydrated, productId, products, router]);
 
   const handleSaveProduct = useCallback(
     async (data: ProductFormData, options?: { pendingFiles?: Map<number, File> }) => {
@@ -39,7 +92,7 @@ export default function EditProductPage({ params }: EditProductPageProps) {
     router.push("/admin/products");
   }, [deleteProduct, productId, router]);
 
-  if (!isHydrated) {
+  if (!isHydrated || (redirectEnabled && redirectPhase === "checking")) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center p-8 text-sm text-zinc-500">
         Loading product…
@@ -90,13 +143,13 @@ export default function EditProductPage({ params }: EditProductPageProps) {
         </div>
       </div>
 
-      {isDeleteModalOpen && (
+      {isDeleteModalOpen ? (
         <DeleteProductModal
           product={product}
           onConfirm={handleConfirmDeleteProduct}
           onCancel={() => setIsDeleteModalOpen(false)}
         />
-      )}
+      ) : null}
     </>
   );
 }

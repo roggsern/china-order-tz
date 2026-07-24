@@ -6,14 +6,17 @@ use App\Enums\ProductMediaType;
 use App\Http\Requests\Admin\UpdateProductMediaRequest;
 use App\Models\Product;
 use App\Models\ProductMedia;
+use App\Services\ProductMedia\ProductPrimarySyncService;
 use App\Support\ProductMediaUrl;
-use App\Support\Security\SecureImageUpload;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class UpdateProductMediaAction
 {
+    public function __construct(
+        private readonly ProductPrimarySyncService $primarySync,
+    ) {}
+
     public function handle(
         UpdateProductMediaRequest $request,
         Product $product,
@@ -25,7 +28,13 @@ class UpdateProductMediaAction
 
         $validated = $request->validated();
 
-        return DB::transaction(function () use ($validated, $request, $product, $media) {
+        return DB::transaction(function () use ($validated, $request, $media) {
+            if ($request->hasFile('file') && $media->type === ProductMediaType::Image) {
+                throw ValidationException::withMessages([
+                    'file' => ['Image replacement is not supported. Delete the image and upload a new one.'],
+                ]);
+            }
+
             $data = [];
 
             foreach (['alt_text', 'title', 'sort_order', 'is_active', 'thumbnail_url'] as $field) {
@@ -40,13 +49,7 @@ class UpdateProductMediaAction
 
             $type = $data['type'] ?? $media->type;
 
-            if ($request->hasFile('file')) {
-                $path = SecureImageUpload::storePublic($request->file('file'), 'product-media');
-                $data['url'] = Storage::disk('public')->url($path);
-                $data['type'] = ProductMediaType::Image;
-                $data['thumbnail_url'] = $data['thumbnail_url'] ?? $data['url'];
-                $type = ProductMediaType::Image;
-            } elseif (array_key_exists('url', $validated) && filled($validated['url'])) {
+            if (array_key_exists('url', $validated) && filled($validated['url'])) {
                 $data['url'] = $validated['url'];
                 if ($type === ProductMediaType::Video || ($data['type'] ?? null) === ProductMediaType::Video) {
                     ProductMediaUrl::assertSupportedVideoUrl((string) $validated['url']);
@@ -55,24 +58,26 @@ class UpdateProductMediaAction
                 }
             }
 
-            if (array_key_exists('is_primary', $validated) && $validated['is_primary']) {
-                if ($type === ProductMediaType::Video) {
-                    throw ValidationException::withMessages([
-                        'is_primary' => ['Only image media can be primary.'],
-                    ]);
-                }
-
-                $product->media()->images()->where('id', '!=', $media->id)->update(['is_primary' => false]);
-                $data['is_primary'] = true;
-            } elseif (array_key_exists('is_primary', $validated)) {
-                $data['is_primary'] = (bool) $validated['is_primary'];
-            }
-
             if ($data !== []) {
                 $media->update($data);
+                $media = $media->fresh();
             }
 
-            return $media->fresh();
+            if (array_key_exists('is_primary', $validated)) {
+                if ($validated['is_primary']) {
+                    if ($media->type === ProductMediaType::Video) {
+                        throw ValidationException::withMessages([
+                            'is_primary' => ['Only image media can be primary.'],
+                        ]);
+                    }
+
+                    return $this->primarySync->setPrimaryFromCatalogMedia($media);
+                }
+
+                return $this->primarySync->clearPrimaryFromCatalogMedia($media);
+            }
+
+            return $media;
         });
     }
 }

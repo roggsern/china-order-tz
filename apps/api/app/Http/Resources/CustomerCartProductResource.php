@@ -2,7 +2,7 @@
 
 namespace App\Http\Resources;
 
-use App\Models\ProductImage;
+use App\Services\Catalog\CustomerProductMediaResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -24,8 +24,8 @@ class CustomerCartProductResource extends JsonResource
             'sku' => $this->sku,
             'price' => $this->price,
             'compare_at_price' => $this->compare_at_price,
-            'primary_image' => $this->resolvePrimaryImage(),
-            'images' => CustomerProductImageResource::collection($this->whenLoaded('images')),
+            'primary_image' => app(CustomerProductMediaResolver::class)->resolvePrimary($this->resource),
+            'images' => app(CustomerProductMediaResolver::class)->resolveGallery($this->resource),
             'brand' => new CustomerBrandResource($this->whenLoaded('brand')),
             'category' => new CustomerCategoryResource($this->whenLoaded('category')),
             'shipping_prices' => [
@@ -52,23 +52,5 @@ class CustomerCartProductResource extends JsonResource
         $code = \App\Enums\CommerceChannelCode::fromFulfillmentSource($this->fulfillment_source ?? null);
 
         return $code->customerSourceLabel();
-    }
-
-    private function resolvePrimaryImage(): ?array
-    {
-        if ($this->relationLoaded('images')) {
-            $image = $this->images->firstWhere('is_primary', true)
-                ?? $this->images->sortBy('sort_order')->first();
-
-            return $image instanceof ProductImage
-                ? (new CustomerProductImageResource($image))->resolve()
-                : null;
-        }
-
-        $image = $this->primaryImage();
-
-        return $image instanceof ProductImage
-            ? (new CustomerProductImageResource($image))->resolve()
-            : null;
     }
 }

@@ -5,11 +5,15 @@ namespace App\Actions\AdminProductMedia;
 use App\Enums\ProductMediaType;
 use App\Models\Product;
 use App\Models\ProductMedia;
-use Illuminate\Support\Facades\DB;
+use App\Services\ProductMedia\ProductPrimarySyncService;
 use Illuminate\Validation\ValidationException;
 
 class SetPrimaryProductMediaAction
 {
+    public function __construct(
+        private readonly ProductPrimarySyncService $primarySync,
+    ) {}
+
     public function handle(Product $product, ProductMedia $media): ProductMedia
     {
         if ($media->product_id !== $product->id) {
@@ -22,14 +26,6 @@ class SetPrimaryProductMediaAction
             ]);
         }
 
-        return DB::transaction(function () use ($product, $media) {
-            $product->media()->images()->update(['is_primary' => false]);
-            $media->update([
-                'is_primary' => true,
-                'is_active' => true,
-            ]);
-
-            return $media->fresh();
-        });
+        return $this->primarySync->setPrimaryFromCatalogMedia($media);
     }
 }

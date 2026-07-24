@@ -10,6 +10,7 @@ use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use App\Models\Review;
 use App\Models\VariantInventory;
+use Database\Factories\Support\CatalogCartFixture;
 use Database\Support\DemoProductImageLibrary;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -233,6 +234,59 @@ class CustomerCatalogTest extends TestCase
             ->assertJsonPath('data.0.id', $brand->id)
             ->assertJsonPath('data.0.name', 'Samsung')
             ->assertJsonPath('data.0.slug', 'samsung');
+    }
+
+    public function test_simple_product_detail_exposes_resolved_stock(): void
+    {
+        $product = Product::factory()->create([
+            'slug' => 'simple-stock-phone',
+            'price' => 15000,
+            'is_active' => true,
+        ]);
+
+        Inventory::query()->updateOrCreate(
+            ['product_id' => $product->id, 'product_variant_id' => null],
+            ['quantity' => 25, 'reserved_quantity' => 0, 'low_stock_threshold' => 5],
+        );
+
+        $this->getJson('/api/v1/products/simple-stock-phone')
+            ->assertOk()
+            ->assertJsonPath('data.stock', 25)
+            ->assertJsonPath('data.in_stock', true)
+            ->assertJsonPath('data.inventory.available_quantity', 25);
+    }
+
+    public function test_simple_product_detail_exposes_zero_stock(): void
+    {
+        $product = Product::factory()->create([
+            'slug' => 'simple-oos-phone',
+            'price' => 15000,
+            'is_active' => true,
+        ]);
+
+        Inventory::query()->updateOrCreate(
+            ['product_id' => $product->id, 'product_variant_id' => null],
+            ['quantity' => 0, 'reserved_quantity' => 0, 'low_stock_threshold' => 1],
+        );
+
+        $this->getJson('/api/v1/products/simple-oos-phone')
+            ->assertOk()
+            ->assertJsonPath('data.stock', 0)
+            ->assertJsonPath('data.in_stock', false)
+            ->assertJsonPath('data.inventory.available_quantity', 0);
+    }
+
+    public function test_variant_product_detail_keeps_variant_stock_and_omits_product_level_stock(): void
+    {
+        ['product' => $product] = CatalogCartFixture::purchasable(25000, 8);
+        $product->update(['slug' => 'variant-stock-phone']);
+
+        $this->getJson('/api/v1/products/variant-stock-phone')
+            ->assertOk()
+            ->assertJsonMissingPath('data.stock')
+            ->assertJsonMissingPath('data.in_stock')
+            ->assertJsonMissingPath('data.inventory')
+            ->assertJsonPath('data.variants.0.stock', 8);
     }
 
     public function test_catalog_routes_are_public_without_authentication(): void

@@ -5,6 +5,7 @@ namespace Tests\Feature\Admin;
 use App\Enums\CatalogOrigin;
 use App\Models\Admin;
 use App\Models\Category;
+use App\Models\CommerceChannel;
 use App\Models\Product;
 use App\Models\ProductType;
 use Database\Seeders\ProductTypeSeeder;
@@ -47,6 +48,7 @@ class AdminProductCatalogEngineTest extends TestCase
             'name' => 'Auto SKU Phone',
             'category_id' => $leaf->id,
             'catalog_product_type_id' => $cpt->id,
+            'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
             'price' => 100000,
             'status' => true,
             'stock_quantity' => 5,
@@ -93,5 +95,29 @@ class AdminProductCatalogEngineTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.slug', 'china-child-engine');
+    }
+
+    public function test_create_product_requires_commerce_channel(): void
+    {
+        Sanctum::actingAs(Admin::factory()->create());
+
+        $leaf = Category::factory()->create([
+            'origin' => CatalogOrigin::China,
+            'name' => 'Channel Required Leaf',
+            'slug' => 'channel-required-leaf',
+        ]);
+
+        $cpt = \App\Models\CatalogProductType::factory()->create([
+            'subcategory_id' => $leaf->id,
+            'is_active' => true,
+        ]);
+
+        $this->postJson('/api/v1/admin/products', [
+            'name' => 'Missing Channel Product',
+            'category_id' => $leaf->id,
+            'catalog_product_type_id' => $cpt->id,
+            'price' => 100000,
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['commerce_channel_id']);
     }
 }

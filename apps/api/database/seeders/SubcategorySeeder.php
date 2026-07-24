@@ -35,6 +35,13 @@ class SubcategorySeeder extends Seeder
                     'Sandals',
                     'Slippers',
                 ],
+                'Bags' => [
+                    'Backpacks',
+                    'Messenger Bags',
+                    'Duffel Bags',
+                    'Laptop Bags',
+                    'Travel Bags',
+                ],
                 'Accessories' => [
                     'Belts',
                     'Wallets',
@@ -58,12 +65,32 @@ class SubcategorySeeder extends Seeder
                     'Crop Tops',
                     'Bodysuits',
                 ],
+                'Skirts' => [
+                    'Pencil Skirts',
+                    'Pleated Skirts',
+                    'Maxi Skirts',
+                ],
+                'Pants' => [
+                    'Jeans',
+                    'Leggings',
+                    'Palazzo Pants',
+                ],
                 'Shoes' => [
                     'High Heels',
                     'Flats',
                     'Sneakers',
                     'Sandals',
                     'Boots',
+                ],
+                'Hand Bags' => [
+                    'Tote Bags',
+                    'Shoulder Bags',
+                    'Crossbody Bags',
+                ],
+                'Accessories' => [
+                    'Scarves',
+                    "Women's Belts",
+                    'Sunglasses',
                 ],
             ],
             'phones-tablets' => [

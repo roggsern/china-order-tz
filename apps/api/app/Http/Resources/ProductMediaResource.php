@@ -21,6 +21,7 @@ class ProductMediaResource extends JsonResource
             'sort_order' => (int) $this->sort_order,
             'is_primary' => (bool) $this->is_primary,
             'is_active' => (bool) $this->is_active,
+            'is_legacy' => (bool) ($this->legacy_bridge ?? false),
             'deleted_at' => $this->deleted_at,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

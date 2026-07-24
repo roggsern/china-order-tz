@@ -4,6 +4,7 @@ namespace App\Actions\CustomerCatalog;
 
 use App\Enums\CommerceChannelCode;
 use App\Models\Product;
+use App\Services\Catalog\CustomerProductMediaResolver;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class ListProductsAction
@@ -29,13 +30,12 @@ class ListProductsAction
         return Product::query()
             ->real()
             ->purchasable()
-            ->with([
+            ->with(array_merge([
                 'commerceChannel:id,name,code',
                 'category:id,name,slug',
                 'brand:id,name,slug',
                 'store:id,name,slug',
-                'images' => fn ($query) => $query->orderBy('sort_order'),
-            ])
+            ], CustomerProductMediaResolver::catalogEagerLoads()))
             ->withAvg(
                 ['reviews as average_rating' => fn ($query) => $query->where('is_approved', true)],
                 'rating',
