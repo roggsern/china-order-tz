@@ -29,6 +29,7 @@ class Shipment extends Model
         'destination',
         'booked_at',
         'shipped_at',
+        'arrived_at',
         'delivered_at',
         'notes',
         // Legacy aliases
@@ -43,6 +44,7 @@ class Shipment extends Model
             'status' => ShipmentLifecycleStatus::class,
             'booked_at' => 'datetime',
             'shipped_at' => 'datetime',
+            'arrived_at' => 'datetime',
             'delivered_at' => 'datetime',
         ];
     }

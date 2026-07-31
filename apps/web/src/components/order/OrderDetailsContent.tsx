@@ -12,10 +12,11 @@ import { PAYMENT_METHOD_LABELS } from "@/lib/payment/constants";
 import { OrderSummaryPayment } from "@/components/payment/OrderSummaryPayment";
 import { PaymentStatusBadge } from "@/components/payment/PaymentStatusBadge";
 import { OrderItemsList } from "./OrderItemsList";
-import { OrderTimeline } from "./OrderTimeline";
+import { OrderStatusSummary } from "./OrderStatusSummary";
 import { OrderStatusBadge } from "./OrderStatusBadge";
+import { buildCompactOrderStatusSummary } from "@/lib/order/order-status-summary";
 import { OrderDeliveryOptionPanel } from "./OrderDeliveryOptionPanel";
-import { OrderShipmentTrackingPanel } from "./OrderShipmentTrackingPanel";
+import { OrderReceivingChoicePanel } from "./OrderReceivingChoicePanel";
 import { AuthInvitationCard } from "@/components/auth/AuthInvitationCard";
 import {
   isAuthRequiredMessage,
@@ -168,6 +169,7 @@ export function OrderDetailsContent({ orderNumber }: OrderDetailsContentProps) {
     "—";
   const addressLines = formatAddressLines(order);
   const trackHref = `/track/${encodeURIComponent(order.id)}`;
+  const statusSummary = buildCompactOrderStatusSummary(order);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
@@ -250,15 +252,14 @@ export function OrderDetailsContent({ orderNumber }: OrderDetailsContentProps) {
       <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
         <div className="space-y-6">
           <section
-            aria-labelledby="timeline-heading"
+            aria-labelledby="order-status-heading"
             className="rounded-3xl border border-zinc-200/70 bg-white p-5 shadow-[0_2px_20px_rgba(0,0,0,0.04)] sm:p-7"
           >
-            <h2 id="timeline-heading" className="text-lg font-bold text-zinc-900">
-              Order progress
+            <h2 id="order-status-heading" className="text-lg font-bold text-zinc-900">
+              Order Status
             </h2>
-            <p className="mt-1 text-sm text-zinc-500">Follow every step from placement to delivery.</p>
             <div className="mt-6">
-              <OrderTimeline events={order.timeline} />
+              <OrderStatusSummary summary={statusSummary} />
             </div>
           </section>
 
@@ -274,6 +275,12 @@ export function OrderDetailsContent({ orderNumber }: OrderDetailsContentProps) {
             </div>
           </section>
 
+          <OrderReceivingChoicePanel
+            orderNumber={order.orderNumber}
+            receivingChoice={order.receivingChoice}
+            onUpdated={loadOrder}
+          />
+
           <OrderDeliveryOptionPanel
             orderNumber={order.orderNumber}
             canSelect={
@@ -281,8 +288,6 @@ export function OrderDetailsContent({ orderNumber }: OrderDetailsContentProps) {
               ["confirmed", "processing", "shipped", "paid"].includes(order.status)
             }
           />
-
-          <OrderShipmentTrackingPanel orderNumber={order.orderNumber} />
 
           <section
             aria-labelledby="shipping-details-heading"
@@ -342,6 +347,10 @@ export function OrderDetailsContent({ orderNumber }: OrderDetailsContentProps) {
                 paymentStatus={order.paymentStatus}
                 paymentMethod={order.paymentMethod ?? undefined}
                 paymentReference={order.paymentReference}
+                paymentProvider={order.paymentProvider}
+                paymentAmount={order.paymentAmount}
+                paymentCurrency={order.paymentCurrency}
+                paymentPaidAt={order.paymentPaidAt}
               />
             </div>
 

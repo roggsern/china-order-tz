@@ -46,7 +46,7 @@ class StockResolverTest extends TestCase
 
     public function test_simple_product_unresolved_without_inventory_row(): void
     {
-        $product = Product::factory()->create([
+        $product = Product::factory()->tzLocal()->create([
             'is_active' => true,
             'lifecycle_status' => ProductLifecycleStatus::Active,
             'is_demo' => false,
@@ -63,7 +63,7 @@ class StockResolverTest extends TestCase
 
     public function test_variant_product_resolves_main_variant_inventory(): void
     {
-        $product = Product::factory()->create([
+        $product = Product::factory()->tzLocal()->create([
             'is_active' => true,
             'lifecycle_status' => ProductLifecycleStatus::Active,
             'price' => 0,
@@ -94,7 +94,7 @@ class StockResolverTest extends TestCase
 
     public function test_variant_active_main_uses_canonical(): void
     {
-        $product = Product::factory()->create(['price' => 0]);
+        $product = Product::factory()->tzLocal()->create(['price' => 0]);
         $variant = ProductVariant::factory()->create([
             'product_id' => $product->id,
             'is_active' => true,
@@ -126,7 +126,7 @@ class StockResolverTest extends TestCase
 
     public function test_variant_missing_main_falls_back_to_legacy(): void
     {
-        $product = Product::factory()->create(['price' => 0]);
+        $product = Product::factory()->tzLocal()->create(['price' => 0]);
         $variant = ProductVariant::factory()->create([
             'product_id' => $product->id,
             'is_active' => true,
@@ -150,7 +150,7 @@ class StockResolverTest extends TestCase
 
     public function test_variant_inactive_main_only_is_unavailable(): void
     {
-        $product = Product::factory()->create(['price' => 0]);
+        $product = Product::factory()->tzLocal()->create(['price' => 0]);
         $variant = ProductVariant::factory()->create([
             'product_id' => $product->id,
             'is_active' => true,
@@ -173,7 +173,7 @@ class StockResolverTest extends TestCase
 
     public function test_variant_inactive_main_with_legacy_is_unavailable(): void
     {
-        $product = Product::factory()->create(['price' => 0]);
+        $product = Product::factory()->tzLocal()->create(['price' => 0]);
         $variant = ProductVariant::factory()->create([
             'product_id' => $product->id,
             'is_active' => true,
@@ -204,7 +204,7 @@ class StockResolverTest extends TestCase
 
     public function test_variant_ignores_inactive_main_row(): void
     {
-        $product = Product::factory()->create(['price' => 0]);
+        $product = Product::factory()->tzLocal()->create(['price' => 0]);
         $variant = ProductVariant::factory()->create([
             'product_id' => $product->id,
             'is_active' => true,
@@ -230,7 +230,7 @@ class StockResolverTest extends TestCase
         $this->assertSame('simple', $simpleResult->inventoryType);
         $this->assertSame(7, $simpleResult->quantityAvailable);
 
-        $product = Product::factory()->create(['price' => 0]);
+        $product = Product::factory()->tzLocal()->create(['price' => 0]);
         $variant = ProductVariant::factory()->create([
             'product_id' => $product->id,
             'is_active' => true,
@@ -253,7 +253,7 @@ class StockResolverTest extends TestCase
         $context = new StockResolutionContext(warehouseCode: 'MAIN');
         $this->assertSame('MAIN', $context->warehouseCode());
 
-        $product = Product::factory()->create(['price' => 0]);
+        $product = Product::factory()->tzLocal()->create(['price' => 0]);
         $variant = ProductVariant::factory()->create([
             'product_id' => $product->id,
             'is_active' => true,
@@ -278,9 +278,44 @@ class StockResolverTest extends TestCase
         $this->assertFalse($result->meta['reservation_applied']);
     }
 
+    public function test_china_import_variant_resolves_commercial_stock(): void
+    {
+        $product = Product::factory()->fromChina()->create(['price' => 0]);
+        $variant = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'is_active' => true,
+        ]);
+        VariantInventory::query()->create([
+            'product_variant_id' => $variant->id,
+            'warehouse_code' => 'MAIN',
+            'on_hand' => 99,
+            'reserved' => 0,
+            'is_active' => true,
+        ]);
+        \App\Models\ChinaCommercialStock::query()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'available_quantity' => 7,
+            'reserved_quantity' => 1,
+            'ordered_quantity' => 0,
+        ]);
+
+        $result = $this->resolver->resolveVariantProduct(
+            $variant->fresh('inventories'),
+            null,
+            $product->fresh('commerceChannel'),
+        );
+
+        $this->assertTrue($result->resolved);
+        $this->assertSame('china_commercial_stocks', $result->source);
+        $this->assertSame(7, $result->quantityAvailable);
+        $this->assertNull($result->inventory);
+        $this->assertTrue($result->hasInventoryPolicy());
+    }
+
     private function makeSimpleProduct(int $onHand, int $reserved): Product
     {
-        $product = Product::factory()->create([
+        $product = Product::factory()->tzLocal()->create([
             'is_active' => true,
             'lifecycle_status' => ProductLifecycleStatus::Active,
             'is_demo' => false,

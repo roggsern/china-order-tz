@@ -7,6 +7,7 @@ use App\Enums\ChinaQcStatus;
 use App\Enums\ChinaWorkflowStage;
 use App\Enums\DeliveryType;
 use App\Enums\FulfillmentStrategy;
+use App\Enums\FulfillmentStatus;
 use App\Enums\PurchaseOrderStatus;
 use App\Enums\ShipmentStatus;
 use App\Enums\SupplierPoResponse;
@@ -17,6 +18,7 @@ use App\Models\ChinaWorkflowRecord;
 use App\Models\Fulfillment;
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\PurchaseOrder;
 use App\Models\ShipmentStatusHistory;
 use App\Models\SupplierProduct;
@@ -127,7 +129,7 @@ class ChinaWorkflowEngine
      */
     public function createPurchaseOrdersForOrder(Order $order, Fulfillment $fulfillment, ?Admin $admin = null): array
     {
-        $order->loadMissing(['items.product', 'items.variant']);
+        $order->loadMissing(['items.product.supplier', 'items.variant']);
         $groups = $this->groupItemsBySupplier($order);
 
         if ($groups === []) {
@@ -178,6 +180,9 @@ class ChinaWorkflowEngine
                     'purchase_order' => ['Supplier response applies to China order-linked POs.'],
                 ]);
             }
+
+            $order = Order::query()->whereKey($locked->order_id)->firstOrFail();
+            $this->assertFulfillmentOperationalForOrder($order);
 
             $current = SupplierPoResponse::tryFrom((string) ($locked->supplier_response ?? 'pending'))
                 ?? SupplierPoResponse::Pending;
@@ -261,6 +266,7 @@ class ChinaWorkflowEngine
             }
 
             $order = Order::query()->whereKey($po->order_id)->lockForUpdate()->firstOrFail();
+            $this->assertFulfillmentOperationalForOrder($order);
             $pos = PurchaseOrder::query()
                 ->where('order_id', $order->id)
                 ->where('status', '!=', PurchaseOrderStatus::Cancelled->value)
@@ -313,6 +319,7 @@ class ChinaWorkflowEngine
         ?string $idempotencyKey = null,
     ): ChinaWorkflowRecord {
         return DB::transaction(function () use ($order, $status, $notes, $admin, $idempotencyKey): ChinaWorkflowRecord {
+            $this->assertFulfillmentOperationalForOrder($order);
             $record = $this->lockRecord($order);
             $key = $idempotencyKey ?? 'china-qc:'.$order->id.':'.$status->value;
 
@@ -371,6 +378,7 @@ class ChinaWorkflowEngine
     public function completeConsolidation(Order $order, Admin $admin, ?string $batch = null): ChinaWorkflowRecord
     {
         return DB::transaction(function () use ($order, $admin, $batch): ChinaWorkflowRecord {
+            $this->assertFulfillmentOperationalForOrder($order);
             $record = $this->lockRecord($order);
             $key = 'china-consolidation:'.$order->id;
 
@@ -431,6 +439,7 @@ class ChinaWorkflowEngine
     public function markExportReady(Order $order, Admin $admin, array $checklist = []): ChinaWorkflowRecord
     {
         return DB::transaction(function () use ($order, $admin, $checklist): ChinaWorkflowRecord {
+            $this->assertFulfillmentOperationalForOrder($order);
             $record = $this->lockRecord($order);
             $key = 'china-export-ready:'.$order->id;
 
@@ -504,6 +513,7 @@ class ChinaWorkflowEngine
         ?string $evidence = null,
     ): ChinaWorkflowRecord {
         return DB::transaction(function () use ($order, $admin, $agentName, $agentContact, $evidence): ChinaWorkflowRecord {
+            $this->assertFulfillmentOperationalForOrder($order);
             $record = $this->lockRecord($order);
             $key = 'china-agent-handoff:'.$order->id;
 
@@ -511,11 +521,7 @@ class ChinaWorkflowEngine
                 return $record;
             }
 
-            if (! $record->isAuthoritativelyExportReady()) {
-                throw ValidationException::withMessages([
-                    'agent' => ['Agent handoff requires export readiness first.'],
-                ]);
-            }
+            $this->assertCustomerAgentHandoffReady($order, $record);
 
             $order->loadMissing('deliveryOption');
             $type = $order->deliveryOption?->delivery_type;
@@ -590,6 +596,47 @@ class ChinaWorkflowEngine
         if (! $this->isExportReadyForShipment($fulfillment)) {
             throw ValidationException::withMessages([
                 'fulfillment' => ['China export readiness is required before company shipment.'],
+            ]);
+        }
+    }
+
+    private function assertCustomerAgentHandoffReady(Order $order, ChinaWorkflowRecord $record): void
+    {
+        if ($record->qc_status !== ChinaQcStatus::Passed) {
+            throw ValidationException::withMessages([
+                'agent' => ['Agent handoff requires China QC to pass first.'],
+            ]);
+        }
+
+        $stage = $record->stage instanceof ChinaWorkflowStage
+            ? $record->stage
+            : ChinaWorkflowStage::tryFrom((string) $record->stage);
+
+        if ($stage === null || ! in_array($stage, [
+            ChinaWorkflowStage::QcPassed,
+            ChinaWorkflowStage::Consolidated,
+            ChinaWorkflowStage::Consolidating,
+            ChinaWorkflowStage::ExportReady,
+            ChinaWorkflowStage::CompanyShippingReady,
+        ], true)) {
+            throw ValidationException::withMessages([
+                'agent' => ['Agent handoff requires China preparation to complete first.'],
+            ]);
+        }
+
+        $order->loadMissing('fulfillment.warehouseJob');
+        $warehouseStatus = $order->fulfillment?->warehouseJob?->status instanceof WarehouseJobStatus
+            ? $order->fulfillment->warehouseJob->status
+            : ($order->fulfillment?->warehouseJob !== null
+                ? WarehouseJobStatus::tryFrom((string) $order->fulfillment->warehouseJob->status)
+                : null);
+
+        if (! in_array($warehouseStatus, [
+            WarehouseJobStatus::Packed,
+            WarehouseJobStatus::ReadyToShip,
+        ], true)) {
+            throw ValidationException::withMessages([
+                'agent' => ['Agent handoff requires warehouse packing to complete first.'],
             ]);
         }
     }
@@ -673,6 +720,25 @@ class ChinaWorkflowEngine
             ->count();
     }
 
+    private function assertFulfillmentOperationalForOrder(Order $order): void
+    {
+        $order->loadMissing('fulfillment');
+        $fulfillment = $order->fulfillment;
+        if ($fulfillment === null) {
+            return;
+        }
+
+        $status = $fulfillment->status instanceof FulfillmentStatus
+            ? $fulfillment->status
+            : FulfillmentStatus::tryFrom((string) $fulfillment->status);
+
+        if ($status === FulfillmentStatus::Cancelled) {
+            throw ValidationException::withMessages([
+                'fulfillment' => ['China workflow actions are blocked for cancelled fulfillments.'],
+            ]);
+        }
+    }
+
     /**
      * Consumes WarehouseEngine packing state — does not own or mutate it.
      */
@@ -720,42 +786,90 @@ class ChinaWorkflowEngine
         $groups = [];
 
         foreach ($order->items as $item) {
+            /** @var Product|null $product */
+            $product = $item->product;
             $variantId = $item->product_variant_id;
-            if ($variantId === null) {
+            $mapping = null;
+
+            if ($variantId !== null) {
+                $mapping = SupplierProduct::query()
+                    ->where('product_variant_id', $variantId)
+                    ->where('is_active', true)
+                    ->whereHas('supplier', fn ($q) => $q->where('is_active', true))
+                    ->orderByDesc('updated_at')
+                    ->first();
+            }
+
+            $supplierId = $mapping?->supplier_id ?? $this->resolveActiveProductSupplierId($product);
+            if ($supplierId === null) {
                 continue;
             }
 
-            $mapping = SupplierProduct::query()
-                ->where('product_variant_id', $variantId)
-                ->where('is_active', true)
-                ->whereHas('supplier', fn ($q) => $q->where('is_active', true))
-                ->orderByDesc('updated_at')
-                ->first();
-
-            $supplierId = $mapping?->supplier_id;
-            if ($supplierId === null) {
-                /** @var Product|null $product */
-                $product = $item->product;
-                $supplierId = $product?->supplier_id;
-            }
-
-            if ($supplierId === null) {
+            $procurementVariantId = $variantId ?? $this->resolveProcurementVariantIdForProduct($product);
+            if ($procurementVariantId === null) {
                 continue;
             }
 
             $unitCost = $mapping?->purchase_cost
+                ?? $product?->cost_price
                 ?? $item->unit_price_snapshot
                 ?? $item->unit_price
                 ?? '0.00';
 
             $groups[$supplierId][] = [
-                'product_variant_id' => (string) $variantId,
+                'product_variant_id' => (string) $procurementVariantId,
                 'quantity_ordered' => (int) $item->quantity,
                 'unit_cost' => (string) $unitCost,
             ];
         }
 
         return $groups;
+    }
+
+    private function resolveActiveProductSupplierId(?Product $product): ?string
+    {
+        if ($product === null || $product->supplier_id === null) {
+            return null;
+        }
+
+        $supplier = $product->relationLoaded('supplier')
+            ? $product->supplier
+            : $product->supplier()->first();
+
+        if ($supplier === null || ! $supplier->is_active) {
+            return null;
+        }
+
+        return $supplier->id;
+    }
+
+    private function resolveProcurementVariantIdForProduct(?Product $product): ?string
+    {
+        if ($product === null) {
+            return null;
+        }
+
+        $existingId = $product->variants()
+            ->orderByDesc('is_default')
+            ->orderBy('created_at')
+            ->value('id');
+
+        if ($existingId !== null) {
+            return (string) $existingId;
+        }
+
+        $skuBase = filled($product->sku) ? (string) $product->sku : 'PROC-'.substr((string) $product->id, 0, 8);
+
+        $variant = ProductVariant::query()->create([
+            'product_id' => $product->id,
+            'sku' => $skuBase.'-PROC',
+            'name' => $product->name,
+            'is_active' => false,
+            'is_default' => true,
+            'sort_order' => 0,
+        ]);
+
+        return (string) $variant->id;
     }
 
     private function ensureTimelineAtLeast(

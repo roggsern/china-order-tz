@@ -20,3 +20,11 @@ export {
   filterActiveScheduled,
   sortByPriorityDesc,
 } from "./schedule";
+export {
+  storefrontLaunchConfig,
+  isStorefrontLaunchSectionEnabled,
+  isLaunchAdvertisementPlacementVisible,
+  type StorefrontLaunchConfig,
+  type StorefrontLaunchSectionKey,
+} from "./storefront-launch.config";
+export { applyStorefrontLaunchPresentation } from "./apply-storefront-launch";

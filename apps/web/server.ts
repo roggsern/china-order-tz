@@ -19,8 +19,18 @@ import { normalizeUserId } from "./src/lib/notifications/user-id";
 const dev = process.env.NODE_ENV !== "production";
 const hostname = process.env.HOSTNAME ?? "localhost";
 const port = Number.parseInt(process.env.PORT ?? "3000", 10);
+const useWebpack = process.env.NEXT_DEV_WEBPACK === "true";
+const useTurbopack =
+  dev &&
+  !useWebpack &&
+  process.env.NEXT_DEV_TURBOPACK !== "false";
 
-const app = next({ dev, hostname, port });
+const app = next({
+  dev,
+  hostname,
+  port,
+  ...(useTurbopack ? { turbopack: true } : {}),
+});
 const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
@@ -95,7 +105,9 @@ app.prepare().then(() => {
   });
 
   server.listen(port, () => {
-    console.log(`> Next.js ready on http://${hostname}:${port}`);
+    console.log(
+      `> Next.js ready on http://${hostname}:${port} (${useTurbopack ? "turbopack" : "webpack"})`,
+    );
     console.log(`> Admin orders WebSocket: ws://${hostname}:${port}${ADMIN_ORDERS_WS_PATH}`);
     console.log(`> Order tracking WebSocket: ws://${hostname}:${port}${ORDER_TRACKING_WS_PATH}?orderId=...`);
     console.log(`> Notifications WebSocket: ws://${hostname}:${port}${NOTIFICATIONS_WS_PATH}?userId=...`);

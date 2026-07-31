@@ -68,6 +68,13 @@ export const CARD_OPTION: PaymentMethodOption = {
   category: "card",
 };
 
+export const LAUNCH_CHECKOUT_PAYMENT = {
+  methodCode: "nmb" as const,
+  title: "Pay via Bank Cards or Mobile Money",
+  description: "Secure checkout powered by NMB",
+  poweredBy: "NMB",
+};
+
 export const SIMPLIFIED_PAYMENT_OPTIONS = [
   {
     code: "mpesa" as const,

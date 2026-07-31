@@ -20,6 +20,8 @@ test("mapAdminApiProductMedia maps is_legacy from API payload", () => {
     {
       id: "019f7a6e-4d46-7376-aca4-aed79f33519b",
       productId: "019f7a6e-1111-7376-aca4-aed79f33519b",
+      productVariantId: null,
+      variantName: null,
       type: "image",
       url: "/storage/demo-products/phone.jpg",
       thumbnailUrl: null,

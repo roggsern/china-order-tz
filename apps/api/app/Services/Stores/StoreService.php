@@ -2,7 +2,9 @@
 
 namespace App\Services\Stores;
 
-use App\Events\Audit\StorePlatformAudit;
+use App\Events\Audit\StoreCreatedAudit;
+use App\Events\Audit\StoreStatusChangedAudit;
+use App\Events\Audit\StoreUpdatedAudit;
 use App\Models\Admin;
 use App\Models\InventoryLocation;
 use App\Models\PosTerminal;
@@ -27,6 +29,7 @@ class StoreService
                 'name' => $name,
                 'slug' => $slug,
                 'description' => $data['description'] ?? null,
+                // Seeders/internal callers may set paths; admin HTTP API prohibits path edits.
                 'logo_path' => $data['logo_path'] ?? null,
                 'banner_path' => $data['banner_path'] ?? null,
                 'theme_color' => $data['theme_color'] ?? null,
@@ -56,22 +59,23 @@ class StoreService
                 'is_active' => true,
             ]);
 
-            event(StorePlatformAudit::storeCreated($store, $actor));
+            $store = $store->fresh(['inventoryLocations', 'terminals']) ?? $store;
 
-            return $store->fresh(['inventoryLocations', 'terminals']);
+            event(StoreCreatedAudit::fromStore($store, $this->identitySnapshot($store), $actor));
+
+            return $store;
         });
     }
 
     public function update(Store $store, array $data, ?Admin $actor = null): Store
     {
-        $wasActive = $store->is_active;
+        $before = $this->identitySnapshot($store);
+        $wasActive = (bool) $store->is_active;
 
         $store->fill([
             'name' => $data['name'] ?? $store->name,
             'slug' => isset($data['slug']) ? Str::slug((string) $data['slug']) : $store->slug,
             'description' => array_key_exists('description', $data) ? $data['description'] : $store->description,
-            'logo_path' => array_key_exists('logo_path', $data) ? $data['logo_path'] : $store->logo_path,
-            'banner_path' => array_key_exists('banner_path', $data) ? $data['banner_path'] : $store->banner_path,
             'theme_color' => array_key_exists('theme_color', $data) ? $data['theme_color'] : $store->theme_color,
             'is_active' => array_key_exists('is_active', $data) ? (bool) $data['is_active'] : $store->is_active,
             'storefront_enabled' => array_key_exists('storefront_enabled', $data)
@@ -87,14 +91,36 @@ class StoreService
                 ? $data['storefront_sort_order']
                 : $store->storefront_sort_order,
             'sort_order' => array_key_exists('sort_order', $data) ? (int) $data['sort_order'] : $store->sort_order,
-            'settings' => array_key_exists('settings', $data) ? $data['settings'] : $store->settings,
         ])->save();
 
-        if ($wasActive !== $store->is_active) {
-            event(StorePlatformAudit::storeStatus($store, $store->is_active, $actor));
+        $store = $store->fresh(['inventoryLocations', 'terminals']) ?? $store;
+        $after = $this->identitySnapshot($store);
+
+        if ($before !== $after) {
+            event(StoreUpdatedAudit::fromChange($store, $before, $after, $actor));
         }
 
-        return $store->fresh(['inventoryLocations', 'terminals']);
+        if ($wasActive !== (bool) $store->is_active) {
+            event(StoreStatusChangedAudit::fromChange($store, $wasActive, (bool) $store->is_active, $actor));
+        }
+
+        return $store;
+    }
+
+    public function updateStatus(Store $store, bool $isActive, ?Admin $actor = null): Store
+    {
+        $wasActive = (bool) $store->is_active;
+        if ($wasActive === $isActive) {
+            return $store->fresh(['inventoryLocations', 'terminals']) ?? $store;
+        }
+
+        $store->is_active = $isActive;
+        $store->save();
+        $store = $store->fresh(['inventoryLocations', 'terminals']) ?? $store;
+
+        event(StoreStatusChangedAudit::fromChange($store, $wasActive, $isActive, $actor));
+
+        return $store;
     }
 
     public function defaultLocation(Store $store): InventoryLocation
@@ -109,5 +135,26 @@ class StoreService
         }
 
         return $location;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function identitySnapshot(Store $store): array
+    {
+        return [
+            'id' => $store->id,
+            'code' => $store->code,
+            'name' => $store->name,
+            'slug' => $store->slug,
+            'description' => $store->description,
+            'theme_color' => $store->theme_color,
+            'is_active' => (bool) $store->is_active,
+            'storefront_enabled' => (bool) $store->storefront_enabled,
+            'storefront_visible' => (bool) $store->storefront_visible,
+            'storefront_featured' => (bool) $store->storefront_featured,
+            'storefront_sort_order' => $store->storefront_sort_order,
+            'sort_order' => (int) $store->sort_order,
+        ];
     }
 }

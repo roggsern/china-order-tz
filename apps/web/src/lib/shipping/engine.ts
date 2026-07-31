@@ -3,9 +3,11 @@ import type { CartLineItem } from "@/lib/types/cart";
 import {
   CATEGORY_DEFAULT_WEIGHT_KG,
   DEFAULT_PRODUCT_WEIGHT_KG,
+  getDefaultFlatShippingDeliveryDays,
   SHIPPING_METHODS,
   SHIPPING_RATES,
 } from "@/lib/shipping/config";
+import { resolveDurationWindow } from "@/lib/shipping/durations";
 import type {
   FulfillmentSource,
   ShippingCalculationInput,
@@ -18,6 +20,17 @@ import { originToFulfillmentSource } from "@/lib/shipping/types";
 import {
   applyLineItemShipping,
 } from "@/lib/shipping/smart-engine";
+
+function withResolvedDeliveryEstimate(method: ShippingMethod): ShippingMethod {
+  const window = resolveDurationWindow(method.code);
+  return {
+    ...method,
+    deliveryEstimate: {
+      minDays: window.min_days,
+      maxDays: window.max_days,
+    },
+  };
+}
 
 type WeightInput = {
   weightKg?: number;
@@ -37,13 +50,14 @@ export function resolveProductWeightKg(input: WeightInput): number {
 }
 
 export function getActiveMethods(): ShippingMethod[] {
-  return SHIPPING_METHODS.filter((method) => method.isActive).sort(
-    (a, b) => a.sortOrder - b.sortOrder,
-  );
+  return SHIPPING_METHODS.filter((method) => method.isActive)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map(withResolvedDeliveryEstimate);
 }
 
 export function getMethodByCode(code: ShippingMethodCode): ShippingMethod | undefined {
-  return SHIPPING_METHODS.find((method) => method.code === code && method.isActive);
+  const method = SHIPPING_METHODS.find((entry) => entry.code === code && entry.isActive);
+  return method ? withResolvedDeliveryEstimate(method) : undefined;
 }
 
 export function getMethodsForOrigin(origin: ProductOrigin): ShippingMethod[] {
@@ -208,16 +222,16 @@ export function hydrateCartLineItems(items: CartLineItem[]): CartLineItem[] {
 export { calculateOrderSummary } from "@/lib/shipping/smart-engine";
 
 export function formatDeliveryEstimate(methodCode: ShippingMethodCode): string {
-  const method = getMethodByCode(methodCode);
-  if (!method) {
+  const configuredDays = getDefaultFlatShippingDeliveryDays(methodCode);
+  if (!configuredDays || configuredDays === "—") {
     return "";
   }
 
-  const { minDays, maxDays } = method.deliveryEstimate;
-  if (minDays === maxDays) {
-    return `${minDays} day${minDays === 1 ? "" : "s"}`;
+  if (/\bday/i.test(configuredDays)) {
+    return configuredDays;
   }
-  return `${minDays}–${maxDays} days`;
+
+  return `${configuredDays} days`;
 }
 
 export function getFulfillmentSourceLabel(source: FulfillmentSource): string {

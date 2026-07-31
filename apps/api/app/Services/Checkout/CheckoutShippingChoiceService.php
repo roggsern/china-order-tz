@@ -13,6 +13,7 @@ use App\Models\CheckoutSession;
 use App\Models\User;
 use App\Services\Cart\CartService;
 use App\Services\Commerce\CommerceChannelResolver;
+use App\Services\Shipping\ShippingDurationResolver;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -26,6 +27,7 @@ class CheckoutShippingChoiceService
         private readonly CartService $cartService,
         private readonly CheckoutOrchestrator $orchestrator,
         private readonly CommerceChannelResolver $commerceChannelResolver,
+        private readonly ShippingDurationResolver $durationResolver,
     ) {}
 
     /**
@@ -214,6 +216,10 @@ class CheckoutShippingChoiceService
     private function applyCompanyFreightToCart(Cart $cart, ShippingMethod $method): void
     {
         $cart->loadMissing(['items.product']);
+        $duration = match ($method) {
+            ShippingMethod::Air => $this->durationResolver->resolveAir(),
+            ShippingMethod::Sea => $this->durationResolver->resolveSea(),
+        };
 
         foreach ($cart->items as $item) {
             $product = $item->product;
@@ -231,17 +237,27 @@ class CheckoutShippingChoiceService
             $item->forceFill([
                 'shipping_method' => $method,
                 'shipping_price' => $price,
+                'estimated_delivery_days' => $duration['typical_days'],
+                'estimated_min_days' => $duration['min_days'],
+                'estimated_max_days' => $duration['max_days'],
             ])->save();
         }
     }
 
     private function clearCompanyFreightFromCart(Cart $cart): void
     {
-        $cart->loadMissing('items');
+        $cart->loadMissing(['items.product']);
         foreach ($cart->items as $item) {
+            $product = $item->product;
+            $isLocal = $product !== null && ! $product->requiresChinaShipping();
+            $localDuration = $isLocal ? $this->durationResolver->resolveLocal() : null;
+
             $item->forceFill([
                 'shipping_method' => null,
                 'shipping_price' => null,
+                'estimated_delivery_days' => $localDuration['typical_days'] ?? null,
+                'estimated_min_days' => $localDuration['min_days'] ?? null,
+                'estimated_max_days' => $localDuration['max_days'] ?? null,
             ])->save();
         }
     }

@@ -9,6 +9,7 @@ use App\Models\DeliveryAddress;
 use App\Models\User;
 use App\Services\Cart\ResolveCartPurchasable;
 use App\Services\Commerce\CommerceChannelResolver;
+use App\Services\Profile\CustomerAddressService;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -21,6 +22,7 @@ class CheckoutService
     public function __construct(
         private readonly ResolveCartPurchasable $resolveCartPurchasable,
         private readonly CommerceChannelResolver $commerceChannelResolver,
+        private readonly CustomerAddressService $customerAddresses,
     ) {}
 
     /**
@@ -161,6 +163,14 @@ class CheckoutService
         $user->unsetRelation('deliveryAddress');
         $user->load('deliveryAddress');
         $address = $user->deliveryAddress;
+
+        if ($address === null) {
+            // Preload from default saved address book entry without changing order snapshot path.
+            $address = $this->customerAddresses->ensureDeliveryAddressFromDefault($user);
+            $user->unsetRelation('deliveryAddress');
+            $user->load('deliveryAddress');
+            $address = $user->deliveryAddress ?? $address;
+        }
 
         if ($address === null) {
             $this->throwValidationError('delivery_address', 'Delivery address is required before checkout.');

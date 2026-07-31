@@ -7,9 +7,17 @@ use App\Models\User;
 
 class DeliveryAddressService
 {
+    public function __construct(
+        private readonly CustomerAddressService $customerAddresses,
+    ) {}
+
     public function show(User $user): DeliveryAddress
     {
         $address = $user->deliveryAddress;
+
+        if ($address === null) {
+            $address = $this->customerAddresses->ensureDeliveryAddressFromDefault($user);
+        }
 
         if ($address === null) {
             abort(404);

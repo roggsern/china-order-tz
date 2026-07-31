@@ -12,7 +12,9 @@ class NmbCheckoutSessionMapper
         $result = isset($response['result']) ? (string) $response['result'] : null;
         $session = is_array($response['session'] ?? null) ? $response['session'] : [];
         $sessionId = isset($session['id']) ? (string) $session['id'] : null;
-        $successIndicator = isset($session['successIndicator']) ? (string) $session['successIndicator'] : null;
+        $successIndicator = isset($response['successIndicator'])
+            ? (string) $response['successIndicator']
+            : (isset($session['successIndicator']) ? (string) $session['successIndicator'] : null);
         $success = strtoupper($result ?? '') === 'SUCCESS' && filled($sessionId);
         $checkoutUrl = $this->resolveCheckoutUrl($response);
 

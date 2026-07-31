@@ -1,3 +1,7 @@
+import {
+  buildCatalogProductConfigurationBffPath,
+  buildCatalogProductQuoteBffPath,
+} from "@/lib/api/catalog-proxy";
 import type { ProductFormSchemaAttribute } from "@/lib/types/catalog";
 
 export type StorefrontConfigurationValue = {
@@ -17,6 +21,7 @@ export type StorefrontConfiguration = {
   price?: string | number | null;
   attribute_value_ids: string[];
   attribute_values: StorefrontConfigurationValue[];
+  display_attributes?: Array<{ attribute: string; value: string }>;
   stock: number;
   in_stock: boolean;
 };
@@ -106,15 +111,11 @@ export async function fetchStorefrontConfiguration(
     params.append(`selections[${attributeId}]`, valueId);
   });
 
-  const query = params.toString();
-  const response = await fetch(
-    `/api/catalog/products/${encodeURIComponent(slug)}/configuration${query ? `?${query}` : ""}`,
-    {
-      method: "GET",
-      headers: { Accept: "application/json" },
-      cache: "no-store",
-    },
-  );
+  const response = await fetch(buildCatalogProductConfigurationBffPath(slug, params), {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  });
 
   return parseJson<StorefrontConfigurationExperience>(response);
 }
@@ -124,21 +125,18 @@ export async function fetchStorefrontQuote(input: {
   configurationId?: string | null;
   quantity: number;
 }): Promise<StorefrontPriceQuote> {
-  const response = await fetch(
-    `/api/catalog/products/${encodeURIComponent(input.slug)}/quote`,
-    {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        configuration_id: input.configurationId ?? null,
-        quantity: input.quantity,
-      }),
-      cache: "no-store",
+  const response = await fetch(buildCatalogProductQuoteBffPath(input.slug), {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
     },
-  );
+    body: JSON.stringify({
+      configuration_id: input.configurationId ?? null,
+      quantity: input.quantity,
+    }),
+    cache: "no-store",
+  });
 
   return parseJson<StorefrontPriceQuote>(response);
 }

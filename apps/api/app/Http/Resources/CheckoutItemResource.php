@@ -30,6 +30,10 @@ class CheckoutItemResource extends JsonResource
             $data['delivery_status'] = 'To Be Negotiated';
         }
 
+        $data['estimated_delivery_days'] = $this->estimated_delivery_days;
+        $data['estimated_min_days'] = $this->estimated_min_days;
+        $data['estimated_max_days'] = $this->estimated_max_days;
+
         return $data;
     }
 }

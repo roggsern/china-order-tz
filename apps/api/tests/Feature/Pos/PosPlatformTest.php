@@ -98,9 +98,8 @@ class PosPlatformTest extends TestCase
         $this->assignments->assign($cashier, $zion, $super);
 
         Sanctum::actingAs($cashier);
-        $this->getJson('/api/v1/admin/stores/'.$peachy->id)
-            ->assertStatus(422)
-            ->assertJsonValidationErrors(['store_id']);
+        // Cashiers lack stores.view; store detail is Store Manager scoped.
+        $this->getJson('/api/v1/admin/stores/'.$peachy->id)->assertForbidden();
     }
 
     public function test_temporary_assignment_allows_then_blocks_after_revoke(): void

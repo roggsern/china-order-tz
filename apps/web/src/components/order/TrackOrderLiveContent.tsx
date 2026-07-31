@@ -6,13 +6,17 @@ import { motion } from "framer-motion";
 import { formatDeliveryEstimate, formatPrice } from "@/lib/catalog/utils";
 import { ORDER_TRACKING_POLL_MS } from "@/lib/order/constants";
 import {
-  buildCustomerTrackingDisplayTimeline,
-  getCurrentDisplayStep,
-} from "@/lib/order/tracking-display";
+  buildCustomerProgressDisplayTimeline,
+  getCustomerProgressWhatHappensNext,
+  isOrderCancelledForProgress,
+  parseCustomerOrderProgress,
+} from "@/lib/order/customer-progress";
+import { splitCustomerTrackingTimeline } from "@/lib/order/customer-tracking-events";
+import { formatTrackingTimestamp } from "@/lib/order/tracking-format";
 import { useOrderTracking } from "@/lib/order/use-order-tracking";
-import { DELIVERY_STATUS_LABELS } from "@/lib/delivery/delivery-labels";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment/constants";
 import { getMethodByCode } from "@/lib/shipping/engine";
+import { AuthInvitationCard } from "@/components/auth/AuthInvitationCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { PaymentStatusBadge } from "@/components/payment/PaymentStatusBadge";
@@ -28,7 +32,7 @@ interface TrackOrderLiveContentProps {
 }
 
 export function TrackOrderLiveContent({ orderId }: TrackOrderLiveContentProps) {
-  const { order, delivery, isLoading, isLive } = useOrderTracking(orderId);
+  const { order, tracking, isLoading, isLive, needsAuth } = useOrderTracking(orderId);
 
   const shippingMethods = useMemo(() => {
     if (!order) return [];
@@ -46,14 +50,36 @@ export function TrackOrderLiveContent({ orderId }: TrackOrderLiveContentProps) {
     ];
   }, [order]);
 
+  const progress = useMemo(
+    () =>
+      parseCustomerOrderProgress(tracking?.progress ?? order?.progress ?? null),
+    [tracking?.progress, order?.progress],
+  );
+
   const displayTimeline = useMemo(() => {
-    if (!order) return [];
-    return buildCustomerTrackingDisplayTimeline(order, delivery);
-  }, [delivery, order]);
+    if (!order || !progress) {
+      return [];
+    }
+
+    return buildCustomerProgressDisplayTimeline(progress, {
+      isCancelled: isOrderCancelledForProgress(order),
+      timestamps: { ORDER_CONFIRMED: order.createdAt },
+    });
+  }, [order, progress]);
+
+  const operationalEvents = useMemo(
+    () => splitCustomerTrackingTimeline(tracking?.timeline ?? []).operationalEvents,
+    [tracking?.timeline],
+  );
 
   const currentStep = useMemo(
-    () => getCurrentDisplayStep(displayTimeline),
+    () => displayTimeline.find((step) => step.state === "current") ?? null,
     [displayTimeline],
+  );
+
+  const whatHappensNext = useMemo(
+    () => (progress ? getCustomerProgressWhatHappensNext(progress) : null),
+    [progress],
   );
 
   const paymentLabel =
@@ -61,12 +87,29 @@ export function TrackOrderLiveContent({ orderId }: TrackOrderLiveContentProps) {
       ? PAYMENT_METHOD_LABELS[order.paymentMethod]
       : order?.paymentMethod || "—";
 
+  const currentStatusLabel =
+    tracking?.current_status_label ??
+    progress?.current_label ??
+    tracking?.current_status ??
+    "Tracking your order";
+
   if (isLoading) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6" aria-busy="true">
         <Skeleton className="h-8 w-48" rounded="lg" />
         <Skeleton className="mt-3 h-4 w-72 max-w-full" />
         <Skeleton className="mt-8 h-[32rem] w-full" rounded="3xl" />
+      </div>
+    );
+  }
+
+  if (needsAuth) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
+        <AuthInvitationCard
+          context="orders"
+          returnUrl={`/track/${encodeURIComponent(orderId)}`}
+        />
       </div>
     );
   }
@@ -85,6 +128,9 @@ export function TrackOrderLiveContent({ orderId }: TrackOrderLiveContentProps) {
     );
   }
 
+  const detailsHref = `/orders/${encodeURIComponent(order.orderNumber)}`;
+  const shipment = tracking?.shipment_summary;
+
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
       <motion.header
@@ -100,7 +146,7 @@ export function TrackOrderLiveContent({ orderId }: TrackOrderLiveContentProps) {
             Order Progress
           </h1>
           <p className="mt-2 text-sm text-zinc-500">
-            {currentStep?.description ?? "Tracking your import order."}
+            {currentStep?.description ?? currentStatusLabel}
           </p>
         </div>
         <div className="flex flex-col items-start gap-2 sm:items-end">
@@ -146,7 +192,90 @@ export function TrackOrderLiveContent({ orderId }: TrackOrderLiveContentProps) {
           </div>
         </section>
 
-        <TrackingWhatHappensNext timeline={displayTimeline} />
+        <TrackingWhatHappensNext guidance={whatHappensNext} />
+
+        {shipment ? (
+          <section
+            aria-labelledby="shipment-info-heading"
+            className="space-y-4 border-t border-zinc-100 pt-8"
+          >
+            <h2
+              id="shipment-info-heading"
+              className="text-xs font-bold uppercase tracking-[0.14em] text-zinc-500"
+            >
+              Shipment
+            </h2>
+            <dl className="grid gap-4 rounded-2xl border border-zinc-100 bg-zinc-50/80 p-4 sm:grid-cols-2 sm:p-5">
+              <div>
+                <dt className="text-xs font-medium text-zinc-500">Shipment number</dt>
+                <dd className="mt-1.5 font-mono text-sm font-semibold text-zinc-900">
+                  {shipment.shipment_number}
+                </dd>
+              </div>
+              {shipment.carrier_name ? (
+                <div>
+                  <dt className="text-xs font-medium text-zinc-500">Carrier</dt>
+                  <dd className="mt-1.5 text-sm font-semibold text-zinc-900">
+                    {shipment.carrier_name}
+                  </dd>
+                </div>
+              ) : null}
+              {shipment.tracking_reference ? (
+                <div>
+                  <dt className="text-xs font-medium text-zinc-500">Tracking reference</dt>
+                  <dd className="mt-1.5 font-mono text-sm font-semibold text-zinc-900">
+                    {shipment.tracking_reference}
+                  </dd>
+                </div>
+              ) : null}
+              {shipment.status_label || shipment.status ? (
+                <div>
+                  <dt className="text-xs font-medium text-zinc-500">Shipment status</dt>
+                  <dd className="mt-1.5 text-sm font-semibold text-zinc-900">
+                    {shipment.status_label ?? shipment.status}
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+          </section>
+        ) : null}
+
+        {operationalEvents.length > 0 ? (
+          <section
+            aria-labelledby="tracking-events-heading"
+            className="space-y-4 border-t border-zinc-100 pt-8"
+          >
+            <h2
+              id="tracking-events-heading"
+              className="text-xs font-bold uppercase tracking-[0.14em] text-zinc-500"
+            >
+              Tracking Updates
+            </h2>
+            <ol className="space-y-3">
+              {operationalEvents.map((event) => (
+                <li
+                  key={event.id}
+                  className="rounded-2xl border border-zinc-100 bg-zinc-50/80 px-4 py-3"
+                >
+                  <p className="text-sm font-semibold text-zinc-900">
+                    {event.event_type_label}
+                  </p>
+                  {event.description ? (
+                    <p className="mt-1 text-sm text-zinc-600">{event.description}</p>
+                  ) : null}
+                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">
+                    {event.location ? <span>{event.location}</span> : null}
+                    {event.event_at ? (
+                      <time dateTime={event.event_at}>
+                        {formatTrackingTimestamp(event.event_at)}
+                      </time>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
+        ) : null}
 
         <section
           aria-labelledby="delivery-info-heading"
@@ -160,42 +289,34 @@ export function TrackOrderLiveContent({ orderId }: TrackOrderLiveContentProps) {
           </h2>
 
           <dl className="grid gap-4 rounded-2xl border border-zinc-100 bg-zinc-50/80 p-4 sm:grid-cols-2 sm:p-5">
-            {delivery ? (
-              <>
-                <div>
-                  <dt className="text-xs font-medium text-zinc-500">Logistics status</dt>
-                  <dd className="mt-1.5">
-                    <span className="inline-flex rounded-full bg-[#c9a227]/15 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-[#8b6914]">
-                      {DELIVERY_STATUS_LABELS[delivery.status]}
-                    </span>
-                  </dd>
-                </div>
-                {delivery.assignedDriver ? (
-                  <div>
-                    <dt className="text-xs font-medium text-zinc-500">Delivery driver</dt>
-                    <dd className="mt-1.5 text-sm font-semibold text-zinc-900">
-                      {delivery.assignedDriver}
-                    </dd>
-                  </div>
-                ) : null}
-              </>
-            ) : null}
+            <div>
+              <dt className="text-xs font-medium text-zinc-500">Current status</dt>
+              <dd className="mt-1.5">
+                <span className="inline-flex rounded-full bg-[#c9a227]/15 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-[#8b6914]">
+                  {currentStatusLabel}
+                </span>
+              </dd>
+            </div>
 
             <div>
               <dt className="text-xs font-medium text-zinc-500">Shipping method</dt>
               <dd className="mt-1.5 flex flex-wrap gap-2">
-                {shippingMethods.map((code) => {
-                  const method = getMethodByCode(code);
-                  return (
-                    <span
-                      key={code}
-                      className="inline-flex items-center gap-1.5 text-sm font-semibold text-zinc-900"
-                    >
-                      <span aria-hidden>{method?.icon}</span>
-                      {method?.name ?? code}
-                    </span>
-                  );
-                })}
+                {shippingMethods.length > 0 ? (
+                  shippingMethods.map((code) => {
+                    const method = getMethodByCode(code);
+                    return (
+                      <span
+                        key={code}
+                        className="inline-flex items-center gap-1.5 text-sm font-semibold text-zinc-900"
+                      >
+                        <span aria-hidden>{method?.icon}</span>
+                        {method?.name ?? code}
+                      </span>
+                    );
+                  })
+                ) : (
+                  <span className="text-sm text-zinc-500">—</span>
+                )}
               </dd>
             </div>
 
@@ -266,10 +387,10 @@ export function TrackOrderLiveContent({ orderId }: TrackOrderLiveContentProps) {
 
         <div className="flex flex-col gap-3 border-t border-zinc-100 pt-8 sm:flex-row">
           <Link
-            href={`/order-success/${order.id}`}
+            href={detailsHref}
             className="inline-flex flex-1 items-center justify-center rounded-xl border border-zinc-200 bg-white px-5 py-3 text-sm font-semibold text-zinc-800 transition hover:border-[#c9a227]/35 hover:bg-zinc-50"
           >
-            View Confirmation
+            View Order Details
           </Link>
           <Link
             href="/orders"
@@ -287,8 +408,7 @@ export function TrackOrderLiveContent({ orderId }: TrackOrderLiveContentProps) {
       </motion.article>
 
       <p className="mt-4 text-center text-xs text-zinc-500">
-        Status updates automatically{isLive ? " in real time" : ""} every{" "}
-        {ORDER_TRACKING_POLL_MS / 1000} seconds.
+        Status updates automatically every {ORDER_TRACKING_POLL_MS / 1000} seconds.
       </p>
     </div>
   );

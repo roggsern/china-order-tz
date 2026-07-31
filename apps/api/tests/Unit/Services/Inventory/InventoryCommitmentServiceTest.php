@@ -3,10 +3,12 @@
 namespace Tests\Unit\Services\Inventory;
 
 use App\Enums\InventoryMovementType;
+use App\Enums\CommerceChannelCode;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentTransactionStatus;
 use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductVisibility;
+use App\Models\CommerceChannel;
 use App\Models\Inventory;
 use App\Models\InventoryStockMovement;
 use App\Models\Order;
@@ -140,13 +142,39 @@ class InventoryCommitmentServiceTest extends TestCase
         $this->assertSame(5, (int) $inventory->fresh()->on_hand);
     }
 
+    public function test_china_import_order_skips_main_inventory_commit(): void
+    {
+        ['order' => $order, 'inventory' => $inventory] = $this->makeVariantOrder(onHand: 20, qty: 2);
+        $channel = CommerceChannel::query()->where('code', CommerceChannelCode::ChinaImport->value)->firstOrFail();
+        $order->forceFill([
+            'commerce_channel_id' => $channel->id,
+            'commerce_channel_snapshot' => [
+                'id' => $channel->id,
+                'code' => CommerceChannelCode::ChinaImport->value,
+                'name' => $channel->name,
+            ],
+        ])->save();
+
+        $result = $this->commitment->commitForOrder(new InventoryCommitmentContext(
+            order: $order->fresh(['items.product', 'items.variant']),
+            source: 'test',
+        ));
+
+        $this->assertFalse($result->committed);
+        $this->assertSame('china_import_commercial_stock', $result->meta['skip_reason']);
+        $this->assertSame(20, (int) $inventory->fresh()->on_hand);
+        $this->assertDatabaseMissing('inventory_stock_movements', [
+            'variant_inventory_id' => $inventory->id,
+        ]);
+    }
+
     /**
      * @return array{order: Order, inventory: Inventory}
      */
     private function makeSimpleOrder(int $onHand, int $qty): array
     {
         $user = User::factory()->create();
-        $product = Product::factory()->create([
+        $product = Product::factory()->tzLocal()->create([
             'name' => 'Simple Commit Product',
             'price' => 10000,
             'is_active' => true,
@@ -162,6 +190,10 @@ class InventoryCommitmentServiceTest extends TestCase
         $order = Order::factory()->create([
             'user_id' => $user->id,
             'status' => OrderStatus::Pending,
+            'commerce_channel_id' => CommerceChannel::query()->where('code', CommerceChannelCode::TzLocal->value)->value('id'),
+            'commerce_channel_snapshot' => [
+                'code' => CommerceChannelCode::TzLocal->value,
+            ],
             'subtotal' => 10000 * $qty,
             'total' => 10000 * $qty,
             'currency' => 'TZS',
@@ -188,7 +220,7 @@ class InventoryCommitmentServiceTest extends TestCase
     private function makeVariantOrder(int $onHand, int $qty): array
     {
         $user = User::factory()->create();
-        $product = Product::factory()->create([
+        $product = Product::factory()->tzLocal()->create([
             'name' => 'Variant Commit Product',
             'price' => 0,
             'is_active' => true,
@@ -212,6 +244,10 @@ class InventoryCommitmentServiceTest extends TestCase
         $order = Order::factory()->create([
             'user_id' => $user->id,
             'status' => OrderStatus::Pending,
+            'commerce_channel_id' => CommerceChannel::query()->where('code', CommerceChannelCode::TzLocal->value)->value('id'),
+            'commerce_channel_snapshot' => [
+                'code' => CommerceChannelCode::TzLocal->value,
+            ],
             'subtotal' => 20000 * $qty,
             'total' => 20000 * $qty,
             'currency' => 'TZS',

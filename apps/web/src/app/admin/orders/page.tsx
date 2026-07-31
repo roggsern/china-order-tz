@@ -3,13 +3,16 @@
 import { useMemo } from "react";
 import { useAdminOrders } from "@/components/admin/AdminOrdersProvider";
 import { AdminOrderTable } from "@/components/admin/AdminOrderTable";
+import { AdminRefreshStatusBar } from "@/components/admin/AdminRefreshStatusBar";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { AdminOrderStatusLegend } from "@/components/admin/AdminOrderStatusLegend";
 import { computeOrderAnalytics } from "@/lib/admin/order-analytics";
+import { formatAdminRefreshPolicyLabel } from "@/lib/admin/admin-refresh-policy";
 import { formatPrice } from "@/lib/catalog/utils";
 
 export default function AdminOrdersPage() {
-  const { orders, isHydrated } = useAdminOrders();
+  const { orders, isHydrated, lastSyncedAt, refreshOrders, wsConnected, realtimeTransport } =
+    useAdminOrders();
   const analytics = useMemo(() => computeOrderAnalytics(orders), [orders]);
 
   return (
@@ -24,6 +27,14 @@ export default function AdminOrdersPage() {
             Live order control — updates via WebSocket or polling as customers checkout and pay.
           </p>
         </div>
+        <AdminRefreshStatusBar
+          lastUpdatedAt={lastSyncedAt}
+          liveConnected={wsConnected}
+          liveLabel={realtimeTransport === "polling" ? "Syncing" : "Live"}
+          policyLabel={formatAdminRefreshPolicyLabel("orders_queue")}
+          onRefresh={refreshOrders}
+          className="w-full sm:w-auto"
+        />
       </header>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

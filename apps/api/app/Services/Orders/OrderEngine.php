@@ -23,6 +23,7 @@ use App\Services\Inventory\DTOs\ReservationContext;
 use App\Services\Notifications\NotificationPlatform;
 use App\Services\Orders\Lifecycle\OrderLifecycleContext;
 use App\Services\Orders\Lifecycle\OrderLifecycleEngine;
+use App\Services\Profile\CustomerAddressService;
 use App\Services\Promotions\PromotionUsageService;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -50,6 +51,8 @@ class OrderEngine
         private readonly PromotionUsageService $promotionUsages,
         private readonly OrderLifecycleEngine $lifecycle,
         private readonly ReservationService $reservationService,
+        private readonly CustomerAddressService $customerAddresses,
+        private readonly OrderShippingAddressSnapshotService $shippingAddressSnapshot,
     ) {}
 
     public function createFromCheckoutSession(User $user, CheckoutSession $session): Order
@@ -93,6 +96,7 @@ class OrderEngine
                     ->first();
                 if ($preexisting !== null) {
                     $this->checkoutOrchestrator->markCompleted($locked);
+                    $this->shippingAddressSnapshot->ensureFromDeliveryAddress($preexisting, $user);
 
                     return $this->loadOrderPayload($preexisting);
                 }
@@ -152,6 +156,8 @@ class OrderEngine
 
                 $order = Order::query()->create([
                     'user_id' => $user->id,
+                    'storefront_visitor_id' => $locked->storefront_visitor_id,
+                    'storefront_session_id' => $locked->storefront_session_id,
                     'commerce_channel_id' => $channel->id,
                     'commerce_channel_snapshot' => $channelSnapshot,
                     'checkout_session_id' => $locked->id,
@@ -166,6 +172,8 @@ class OrderEngine
                     'is_demo' => $cart->items->every(fn (CartItem $item) => (bool) $item->product?->is_demo),
                     'placed_at' => now(),
                 ]);
+
+                $this->shippingAddressSnapshot->ensureFromDeliveryAddress($order, $user);
 
                 foreach ($cart->items as $item) {
                     $order->items()->create(
@@ -256,6 +264,8 @@ class OrderEngine
                 ->first();
 
             if ($existing !== null && $existing->user_id === $user->id) {
+                $this->shippingAddressSnapshot->ensureFromDeliveryAddress($existing, $user);
+
                 return $this->loadOrderPayload($existing);
             }
 
@@ -277,6 +287,11 @@ class OrderEngine
             ]);
         }
 
+        $user = $existing->user;
+        if ($user !== null) {
+            $this->shippingAddressSnapshot->ensureFromDeliveryAddress($existing, $user);
+        }
+
         return $this->loadOrderPayload($existing);
     }
 
@@ -290,6 +305,7 @@ class OrderEngine
             'user',
             'commerceChannel',
             'deliveryOption',
+            'shippingAddress',
         ]);
     }
 
@@ -326,6 +342,12 @@ class OrderEngine
     {
         $user->unsetRelation('deliveryAddress');
         $user->load('deliveryAddress');
+
+        if ($user->deliveryAddress === null) {
+            $this->customerAddresses->ensureDeliveryAddressFromDefault($user);
+            $user->unsetRelation('deliveryAddress');
+            $user->load('deliveryAddress');
+        }
 
         if ($user->deliveryAddress === null) {
             throw ValidationException::withMessages([

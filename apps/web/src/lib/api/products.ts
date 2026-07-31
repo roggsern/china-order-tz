@@ -1,3 +1,4 @@
+import { buildCatalogProductShowBffPath } from "@/lib/api/catalog-proxy";
 import { getApiUrl } from "@/lib/config/env";
 
 export type ApiCatalogCategory = {
@@ -23,6 +24,15 @@ export type ApiCatalogImage = {
   alt_text: string | null;
 };
 
+export type ApiCatalogVideo = {
+  id: string;
+  url: string;
+  thumbnail_url?: string | null;
+  title?: string | null;
+  alt_text?: string | null;
+  sort_order: number;
+};
+
 export type ApiCatalogStockSource = {
   stock?: string | number | null;
   quantity_available?: string | number | null;
@@ -35,6 +45,9 @@ export type ApiCatalogStockSource = {
 };
 
 export type ApiCatalogProductCard = ApiCatalogStockSource & {
+  is_purchasable?: boolean;
+  availability_status?: "available" | "out_of_stock" | "unavailable";
+  unavailability_reason?: string | null;
   id: string;
   slug: string;
   name: string;
@@ -68,6 +81,8 @@ export type ApiCatalogProductVariant = {
   effective_price?: string | number;
   stock?: string | number | null;
   in_stock?: boolean | null;
+  primary_image?: ApiCatalogImage | null;
+  images?: ApiCatalogImage[] | null;
   inventory?: {
     available_quantity?: string | number | null;
     quantity?: string | number | null;
@@ -84,9 +99,16 @@ export type ApiCatalogProductVariant = {
       slug: string;
     };
   }>;
+  display_attributes?: Array<{
+    attribute: string;
+    value: string;
+  }>;
 };
 
 export type ApiCatalogProductDetail = ApiCatalogProductCard & {
+  is_purchasable?: boolean;
+  availability_status?: "available" | "out_of_stock" | "unavailable";
+  unavailability_reason?: string | null;
   description: string | null;
   weight: string | number | null;
   dimensions: string | null;
@@ -97,6 +119,7 @@ export type ApiCatalogProductDetail = ApiCatalogProductCard & {
     quantity?: string | number | null;
   } | null;
   images: ApiCatalogImage[];
+  videos?: ApiCatalogVideo[];
   variants: ApiCatalogProductVariant[];
   shipping_prices: {
     air: string | number | null;
@@ -175,6 +198,11 @@ function buildCatalogUrl(path: string, searchParams?: URLSearchParams): string {
     }
 
     return `${apiUrl}/api/v1${path}${query ? `?${query}` : ""}`;
+  }
+
+  if (path.startsWith("/products/") && !path.includes("/configuration") && !path.includes("/quote")) {
+    const slug = decodeURIComponent(path.slice("/products/".length));
+    return buildCatalogProductShowBffPath(slug);
   }
 
   return `/api/catalog${path}${query ? `?${query}` : ""}`;
@@ -293,11 +321,13 @@ export async function getCategories(params?: {
   origin?: "china" | "tz";
   tree?: boolean;
   withProducts?: boolean;
+  chinaNavigation?: boolean;
 }): Promise<ApiCatalogCategory[]> {
   const search = new URLSearchParams();
   if (params?.origin) search.set("origin", params.origin);
   if (params?.tree === false) search.set("tree", "0");
   if (params?.withProducts) search.set("with_products", "1");
+  if (params?.chinaNavigation) search.set("china_navigation", "1");
   const query = search.toString();
   const payload = await fetchCatalogJson<CatalogListResponse<ApiCatalogCategory>>(
     `/categories${query ? `?${query}` : ""}`,

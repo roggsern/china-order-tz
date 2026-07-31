@@ -9,6 +9,7 @@ import {
   type CustomerNotification,
 } from "@/lib/api/customer-notifications";
 import { normalizeUserId } from "@/lib/notifications/user-id";
+import { resolveNotificationHref } from "@/lib/notifications/resolve-notification-href";
 
 function mapEventToUiType(eventType: string | null | undefined): Notification["type"] {
   const value = (eventType ?? "").toLowerCase();
@@ -37,6 +38,8 @@ function mapLaravelNotification(row: CustomerNotification, userId: string): Noti
         ? row.data.order_number
         : undefined;
 
+  const href = resolveNotificationHref(row) ?? undefined;
+
   return {
     id: row.id,
     userId,
@@ -46,7 +49,7 @@ function mapLaravelNotification(row: CustomerNotification, userId: string): Noti
     isRead: Boolean(row.is_read),
     createdAt: row.created_at ?? new Date().toISOString(),
     orderId,
-    href: orderId ? `/account/orders/${encodeURIComponent(String(orderId))}` : "/account/notifications",
+    href,
   };
 }
 

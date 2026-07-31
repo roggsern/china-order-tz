@@ -2,18 +2,31 @@
 
 import Link from "next/link";
 import { formatPrice } from "@/lib/catalog/utils";
+import { useFeatureAvailability } from "@/hooks/use-feature-availability";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { WishlistPageSkeleton } from "@/components/ui/PageSkeletons";
 import { useWishlist } from "@/lib/wishlist/use-wishlist";
-import { removeWishlistItem } from "@/lib/wishlist/storage";
-import { showWishlistToast } from "@/lib/customer/customer-toast";
 import { ProductImageDisplay } from "@/components/catalog/ProductImageDisplay";
 
 export function WishlistPageContent() {
-  const { items, ready } = useWishlist();
+  const { wishlist: wishlistEnabled, isReady: featuresReady } = useFeatureAvailability();
+  const { items, ready, remove } = useWishlist();
 
-  if (!ready) {
+  if (!featuresReady || !ready) {
     return <WishlistPageSkeleton />;
+  }
+
+  if (!wishlistEnabled) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
+        <EmptyState
+          icon="❤️"
+          title="Wishlist unavailable"
+          description="Saved products are not available right now."
+          primaryAction={{ label: "Browse Products", href: "/products" }}
+        />
+      </div>
+    );
   }
 
   if (items.length === 0) {
@@ -45,7 +58,7 @@ export function WishlistPageContent() {
       <ul className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
         {items.map((item) => (
           <li
-            key={item.productId}
+            key={item.catalogProductId ?? item.productId}
             className="group overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-[0_2px_16px_rgba(0,0,0,0.04)] transition hover:-translate-y-0.5 hover:border-[#c9a227]/30 hover:shadow-[0_8px_28px_rgba(201,162,39,0.12)]"
           >
             <Link href={`/products/${item.slug}`} className="block">
@@ -77,10 +90,7 @@ export function WishlistPageContent() {
             <div className="border-t border-zinc-100 px-3 pb-3 sm:px-4 sm:pb-4">
               <button
                 type="button"
-                onClick={() => {
-                  removeWishlistItem(item.productId);
-                  showWishlistToast(false);
-                }}
+                onClick={() => remove(item.productId, item.catalogProductId)}
                 className="mt-2 w-full rounded-xl border border-zinc-200 py-2 text-xs font-semibold text-zinc-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"
               >
                 Remove

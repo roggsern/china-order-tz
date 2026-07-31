@@ -9,6 +9,13 @@ use Illuminate\Database\Seeder;
 
 /**
  * Idempotent admin permission catalog + role ↔ permission matrix.
+ *
+ * Permission catalog (permissions table) is always upserted from AdminPermissions.
+ *
+ * Role matrix sync() runs only when config admin_rbac.preserve_role_permissions
+ * is false (default in local/testing). Set ADMIN_RBAC_PRESERVE_ROLE_PERMISSIONS=true
+ * in production after go-live so API/manual permission edits are not overwritten
+ * by deploy seeds.
  */
 class AdminPermissionSeeder extends Seeder
 {
@@ -32,6 +39,14 @@ class AdminPermissionSeeder extends Seeder
         $this->ensureRoles();
 
         $matrix = $this->rolePermissionMatrix();
+
+        if (config('admin_rbac.preserve_role_permissions')) {
+            $this->command?->info(
+                'Role permission matrix sync skipped (ADMIN_RBAC_PRESERVE_ROLE_PERMISSIONS=true). Permission catalog was still updated.',
+            );
+
+            return;
+        }
 
         foreach ($matrix as $roleSlug => $permissionSlugs) {
             $role = Role::query()->where('slug', $roleSlug)->first();
@@ -97,6 +112,8 @@ class AdminPermissionSeeder extends Seeder
             AdminPermissions::PROMOTIONS_VIEW,
             AdminPermissions::PROMOTIONS_CREATE,
             AdminPermissions::PROMOTIONS_UPDATE,
+            // Store picker for TZ_LOCAL product/category ownership
+            AdminPermissions::STORES_VIEW,
         ];
 
         $operations = [
@@ -120,7 +137,11 @@ class AdminPermissionSeeder extends Seeder
             AdminPermissions::LOYALTY_VIEW,
             AdminPermissions::GROWTH_VIEW,
             AdminPermissions::NOTIFICATIONS_TEMPLATES_VIEW,
+            AdminPermissions::NOTIFICATIONS_VIEW,
+            AdminPermissions::NOTIFICATIONS_MANAGE,
             AdminPermissions::ACTIVITY_LOGS_VIEW,
+            AdminPermissions::SHIPPING_VIEW,
+            AdminPermissions::SHIPPING_MANAGE,
         ];
 
         $finance = [
@@ -131,8 +152,14 @@ class AdminPermissionSeeder extends Seeder
             AdminPermissions::PAYMENTS_RETRY,
             AdminPermissions::PAYMENTS_REFUND,
             AdminPermissions::PAYMENTS_MANAGE_MANUAL,
+            AdminPermissions::PAYMENTS_CONFIG_VIEW,
+            AdminPermissions::PAYMENTS_CONFIG_MANAGE,
+            AdminPermissions::POS_PAYMENT_METHODS_VIEW,
             AdminPermissions::RETURNS_VIEW,
             AdminPermissions::RETURNS_REFUND,
+            AdminPermissions::REFUNDS_VIEW,
+            AdminPermissions::REFUNDS_MANAGE,
+            AdminPermissions::REFUNDS_APPROVE,
             AdminPermissions::REPORTS_VIEW,
             AdminPermissions::REPORTS_EXPORT,
             AdminPermissions::ANALYTICS_VIEW,
@@ -166,8 +193,14 @@ class AdminPermissionSeeder extends Seeder
             AdminPermissions::CUSTOMERS_MANAGE_NOTES,
             AdminPermissions::ORDERS_VIEW,
             AdminPermissions::RETURNS_VIEW,
+            AdminPermissions::SUPPORT_VIEW,
+            AdminPermissions::SUPPORT_MANAGE,
+            AdminPermissions::SUPPORT_ASSIGN,
+            AdminPermissions::REVIEWS_VIEW,
+            AdminPermissions::REVIEWS_MANAGE,
             AdminPermissions::LOYALTY_VIEW,
             AdminPermissions::NOTIFICATIONS_TEMPLATES_VIEW,
+            AdminPermissions::NOTIFICATIONS_VIEW,
         ];
 
         $cashier = [
@@ -180,12 +213,15 @@ class AdminPermissionSeeder extends Seeder
             AdminPermissions::ANALYTICS_VIEW,
             AdminPermissions::GROWTH_VIEW,
             AdminPermissions::GROWTH_MANAGE,
+            AdminPermissions::POS_PAYMENT_METHODS_VIEW,
         ];
 
         $warehouse = array_values(array_unique(array_merge($inventory, [
             AdminPermissions::ORDERS_VIEW,
             AdminPermissions::ORDERS_FULFILL,
             AdminPermissions::WAREHOUSE_VIEW,
+            AdminPermissions::WAREHOUSE_MANAGE,
+            AdminPermissions::WAREHOUSE_TRANSFER,
             AdminPermissions::WAREHOUSE_JOBS_VIEW,
             AdminPermissions::WAREHOUSE_JOBS_UPDATE,
             AdminPermissions::WAREHOUSE_JOBS_COMPLETE,
@@ -203,6 +239,7 @@ class AdminPermissionSeeder extends Seeder
             AdminPermissions::WAREHOUSE_JOBS_UPDATE,
             AdminPermissions::WAREHOUSE_JOBS_COMPLETE,
             AdminPermissions::PROCUREMENT_VIEW,
+            AdminPermissions::SHIPPING_VIEW,
         ];
 
         $procurement = [
@@ -246,6 +283,20 @@ class AdminPermissionSeeder extends Seeder
                 AdminPermissions::INVENTORY_RECEIVE,
                 AdminPermissions::INVENTORY_ADJUST,
                 AdminPermissions::SETTINGS_VIEW,
+                AdminPermissions::FEATURES_VIEW,
+                AdminPermissions::FEATURES_MANAGE,
+                AdminPermissions::STORES_VIEW,
+                AdminPermissions::STORES_CREATE,
+                AdminPermissions::STORES_UPDATE,
+                AdminPermissions::STORES_MANAGE,
+                AdminPermissions::STORES_ASSIGN,
+                AdminPermissions::STORES_TEAM_VIEW,
+                AdminPermissions::STORES_TEAM_MANAGE,
+                AdminPermissions::SHIPPING_VIEW,
+                AdminPermissions::SHIPPING_MANAGE,
+                AdminPermissions::PAYMENTS_CONFIG_VIEW,
+                AdminPermissions::PAYMENTS_CONFIG_MANAGE,
+                AdminPermissions::POS_PAYMENT_METHODS_VIEW,
                 AdminPermissions::ANALYTICS_VIEW,
                 AdminPermissions::PROFIT_REPORTS_VIEW,
                 AdminPermissions::GROWTH_VIEW,
@@ -266,6 +317,8 @@ class AdminPermissionSeeder extends Seeder
                 AdminPermissions::PROMOTIONS_DELETE,
                 AdminPermissions::LOYALTY_MANAGE,
                 AdminPermissions::NOTIFICATIONS_TEMPLATES_MANAGE,
+                AdminPermissions::NOTIFICATIONS_VIEW,
+                AdminPermissions::NOTIFICATIONS_MANAGE,
             ],
         )));
 

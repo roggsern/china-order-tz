@@ -2,6 +2,7 @@ import type { Order, OrderTimelineEvent } from "@/lib/types/order";
 import { ORDER_STATUS } from "@/lib/types/order";
 import { PAYMENT_STATUS } from "@/lib/types/payment";
 
+/** @deprecated Use `@/lib/order/customer-progress` instead. */
 const TIMELINE_STAGES = [
   {
     id: "placed",

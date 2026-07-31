@@ -1,7 +1,15 @@
 import { getCustomerApiToken } from "@/lib/api/customer-auth";
 import { applyCartItemShipping } from "@/lib/cart/shipping";
+import { resolveCartLineDisplayImage } from "@/lib/catalog/storefront-variant-media";
+import {
+  formatVariantDisplayLabel,
+  mapVariantDisplayAttributes,
+  mapVariantDisplayAttributesToSelected,
+} from "@/lib/catalog/variant-display-attributes";
+import { durationDaysFromSnapshots } from "@/lib/shipping/durations";
 import type { CartLineItem } from "@/lib/types/cart";
 import type { ProductOrigin } from "@/lib/types/catalog";
+import type { ShippingMethodCode } from "@/lib/shipping/types";
 
 type ApiSuccessResponse<T> = {
   success?: boolean;
@@ -52,15 +60,36 @@ export type ServerCartItem = {
   currency?: string;
   available_stock?: number | null;
   subtotal?: string | number;
+  shipping_method?: string | null;
+  shipping_price?: string | number | null;
+  estimated_delivery_days?: number | null;
+  estimated_min_days?: number | null;
+  estimated_max_days?: number | null;
   product?: ServerCartProduct | null;
   variant?: {
     id: string;
     sku?: string | null;
     name?: string | null;
+    primary_image?: {
+      id?: string;
+      url?: string | null;
+      path?: string | null;
+      alt_text?: string | null;
+    } | null;
+    images?: Array<{
+      id?: string;
+      url?: string | null;
+      path?: string | null;
+      alt_text?: string | null;
+    }> | null;
     attribute_values?: Array<{
       attribute?: { name?: string; slug?: string } | null;
       value?: string | null;
       option?: { label?: string; value?: string } | null;
+    }> | null;
+    display_attributes?: Array<{
+      attribute?: string | null;
+      value?: string | null;
     }> | null;
   } | null;
 };
@@ -207,40 +236,23 @@ function resolveShippingCosts(product: ServerCartProduct | null | undefined) {
 }
 
 function resolveImage(item: ServerCartItem) {
-  const images = item.product?.images ?? [];
-  const primary =
-    images.find((image) => image.is_primary) ?? images[0] ?? null;
-
+  const resolved = resolveCartLineDisplayImage(item, item.id);
   return {
-    id: apiIdToNumericId(primary?.id ?? item.id),
-    emoji: "🛒",
-    gradient: "from-zinc-100 to-zinc-200",
-    alt: primary?.alt ?? item.product?.name ?? "Product",
-    url: primary?.url ?? undefined,
-    path: primary?.path ?? undefined,
+    id: apiIdToNumericId(resolved.id),
+    emoji: resolved.emoji,
+    gradient: resolved.gradient,
+    alt: resolved.alt,
+    url: resolved.url,
+    path: resolved.path,
   };
 }
 
 function resolveSelectedAttributes(item: ServerCartItem) {
-  const values = item.variant?.attribute_values ?? [];
-  return values
-    .map((row) => {
-      const name = row.attribute?.name?.trim();
-      const value =
-        row.option?.label?.trim() ||
-        row.option?.value?.trim() ||
-        row.value?.trim() ||
-        "";
-      if (!name || !value) {
-        return null;
-      }
-      return {
-        name,
-        value,
-        slug: row.attribute?.slug ?? null,
-      };
-    })
-    .filter((row): row is { name: string; value: string; slug: string | null } => row !== null);
+  const display = mapVariantDisplayAttributes({
+    display_attributes: item.variant?.display_attributes,
+    attribute_values: item.variant?.attribute_values,
+  });
+  return mapVariantDisplayAttributesToSelected(display);
 }
 
 export function mapServerCartItems(cart: ServerCart): CartLineItem[] {
@@ -249,11 +261,26 @@ export function mapServerCartItems(cart: ServerCart): CartLineItem[] {
       const attributes = resolveSelectedAttributes(item);
       const label =
         item.variant?.name?.trim() ||
-        attributes.map((row) => row.value).join(" / ") ||
+        formatVariantDisplayLabel(
+          mapVariantDisplayAttributes({
+            display_attributes: item.variant?.display_attributes,
+            attribute_values: item.variant?.attribute_values,
+          }),
+        ) ||
         item.variant?.sku ||
         undefined;
 
       const { airCost, seaCost } = resolveShippingCosts(item.product);
+      const serverMethod =
+        item.shipping_method === "air"
+          ? ("air_freight" as ShippingMethodCode)
+          : item.shipping_method === "sea"
+            ? ("sea_freight" as ShippingMethodCode)
+            : undefined;
+      const capturedDays = durationDaysFromSnapshots(
+        item.estimated_min_days,
+        item.estimated_max_days,
+      );
 
       const base: CartLineItem = {
         id: item.id,
@@ -277,13 +304,17 @@ export function mapServerCartItems(cart: ServerCart): CartLineItem[] {
         seaCost,
         quantity: item.quantity,
         addedAt: new Date().toISOString(),
-        shippingMethod: "sea_freight",
+        shippingMethod: serverMethod ?? "sea_freight",
         unitShippingCost: 0,
         shippingCost: 0,
-        estimatedDeliveryDays: "—",
+        estimatedDeliveryDays: capturedDays !== "—" ? capturedDays : "—",
       };
 
-      return applyCartItemShipping(base);
+      const withShipping = applyCartItemShipping(base);
+      if (capturedDays !== "—") {
+        withShipping.estimatedDeliveryDays = capturedDays;
+      }
+      return withShipping;
     });
 }
 

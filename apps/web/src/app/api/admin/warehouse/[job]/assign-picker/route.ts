@@ -7,7 +7,15 @@ type RouteContext = {
 /** PATCH /api/admin/warehouse/[job]/assign-picker */
 export async function PATCH(request: Request, context: RouteContext) {
   const { job } = await context.params;
-  const body = await request.text();
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json(
+      { success: false, message: "Invalid JSON body." },
+      { status: 422 },
+    );
+  }
   return proxyAdminApiRequest(
     `/warehouse/${encodeURIComponent(job)}/assign-picker`,
     {

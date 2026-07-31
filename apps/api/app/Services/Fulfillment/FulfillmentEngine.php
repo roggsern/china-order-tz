@@ -8,6 +8,8 @@ use App\Enums\OrderStatus;
 use App\Models\Fulfillment;
 use App\Models\Order;
 use App\Services\Fulfillment\Contracts\FulfillmentStrategyInterface;
+use App\Services\Fulfillment\FulfillmentStatusHistoryRecorder;
+use App\Services\Fulfillment\FulfillmentStatusUpdateContext;
 use App\Services\Orders\Lifecycle\OrderLifecycleEngine;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -29,6 +31,7 @@ class FulfillmentEngine
     public function __construct(
         iterable $strategies,
         private readonly OrderLifecycleEngine $lifecycle,
+        private readonly FulfillmentStatusHistoryRecorder $historyRecorder,
     ) {
         foreach ($strategies as $strategy) {
             $this->strategies[$strategy->key()->value] = $strategy;
@@ -105,11 +108,22 @@ class FulfillmentEngine
     /**
      * @param  array{status?: string, assigned_to?: string|null, notes?: string|null}  $input
      */
-    public function updateStatus(Fulfillment $fulfillment, array $input): Fulfillment
-    {
-        return DB::transaction(function () use ($fulfillment, $input): Fulfillment {
+    public function updateStatus(
+        Fulfillment $fulfillment,
+        array $input,
+        ?FulfillmentStatusUpdateContext $context = null,
+    ): Fulfillment {
+        $context ??= new FulfillmentStatusUpdateContext();
+
+        return DB::transaction(function () use ($fulfillment, $input, $context): Fulfillment {
             /** @var Fulfillment $locked */
             $locked = Fulfillment::query()->whereKey($fulfillment->id)->lockForUpdate()->firstOrFail();
+
+            $statusChanged = false;
+            $fromStatus = $locked->status instanceof FulfillmentStatus
+                ? $locked->status
+                : FulfillmentStatus::tryFrom((string) $locked->status);
+            $toStatus = $fromStatus;
 
             if (array_key_exists('status', $input) && $input['status'] !== null) {
                 $next = FulfillmentStatus::from((string) $input['status']);
@@ -124,6 +138,9 @@ class FulfillmentEngine
                         'status' => ["Cannot transition fulfillment from [{$current->value}] to [{$next->value}]."],
                     ]);
                 } else {
+                    $fromStatus = $current;
+                    $toStatus = $next;
+                    $statusChanged = true;
                     $locked->status = $next;
 
                     if ($next === FulfillmentStatus::Processing && $locked->started_at === null) {
@@ -150,15 +167,28 @@ class FulfillmentEngine
 
             $locked->save();
 
+            if ($statusChanged && $fromStatus !== null && $toStatus !== null) {
+                $historyNotes = $context->notes;
+                if (array_key_exists('notes', $input) && $input['notes'] !== null) {
+                    $historyNotes = $input['notes'];
+                }
+
+                $this->historyRecorder->record(
+                    $locked,
+                    $fromStatus,
+                    $toStatus,
+                    new FulfillmentStatusUpdateContext(
+                        source: $context->source,
+                        admin: $context->admin,
+                        notes: $historyNotes,
+                    ),
+                );
+            }
+
             $fresh = $locked->fresh(['order.user', 'assignee']) ?? $locked;
 
-            if (array_key_exists('status', $input) && $input['status'] !== null && $fresh->order !== null) {
-                $next = $fresh->status instanceof FulfillmentStatus
-                    ? $fresh->status
-                    : FulfillmentStatus::tryFrom((string) $fresh->status);
-                if ($next !== null) {
-                    $this->lifecycle->syncFromFulfillment($fresh->order, $next);
-                }
+            if ($statusChanged && $fresh->order !== null && $toStatus !== null) {
+                $this->lifecycle->syncFromFulfillment($fresh->order, $toStatus);
             }
 
             return $fresh->fresh(['order.user', 'assignee']) ?? $fresh;

@@ -71,7 +71,11 @@ class CreateProductVariantAction
                 $this->ensureSingleDefault($product);
             }
 
-            return $variant->fresh(['catalogAttributeValues.attribute', 'catalogAttributeValues.option']);
+            return $variant->fresh([
+                'catalogAttributeValues.attribute',
+                'catalogAttributeValues.option',
+                'attributeValues.attribute',
+            ]);
         });
 
         return (new AdminCatalogProductVariantResource($variant))->resolve();

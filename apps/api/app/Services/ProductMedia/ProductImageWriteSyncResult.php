@@ -8,7 +8,8 @@ use App\Models\ProductMedia;
 final class ProductImageWriteSyncResult
 {
     public function __construct(
-        public readonly ProductImage $legacyImage,
+        public readonly ?ProductImage $legacyImage,
         public readonly ProductMedia $catalogMedia,
+        public readonly ?string $storagePath = null,
     ) {}
 }

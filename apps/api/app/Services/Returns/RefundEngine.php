@@ -50,11 +50,11 @@ class RefundEngine
         }
 
         $open = $return->refundTransactions
-            ->first(fn (RefundTransaction $r) => ! in_array(
-                $r->status instanceof RefundTransactionStatus ? $r->status->value : (string) $r->status,
-                ['completed', 'failed'],
-                true,
-            ));
+            ->first(fn (RefundTransaction $r) => ! (
+                $r->status instanceof RefundTransactionStatus
+                    ? $r->status
+                    : RefundTransactionStatus::tryFromMixed($r->status) ?? RefundTransactionStatus::Pending
+            )->isTerminal());
 
         if ($open !== null) {
             throw ValidationException::withMessages([
@@ -76,12 +76,15 @@ class RefundEngine
             return RefundTransaction::query()->create([
                 'return_request_id' => $return->id,
                 'order_id' => $return->order_id,
+                'customer_id' => $return->customer_id ?? $return->order?->user_id,
                 'amount' => $amount,
                 'currency' => strtoupper((string) ($input['currency'] ?? $return->order?->currency ?? 'TZS')),
-                'status' => RefundTransactionStatus::Pending,
+                'status' => RefundTransactionStatus::Requested,
                 'method' => $input['method'] ?? 'manual',
                 'reference' => $input['reference'] ?? null,
                 'notes' => $input['notes'] ?? null,
+                'reason' => $input['reason'] ?? $return->reason,
+                'created_by_admin_id' => $admin?->id,
             ]);
         });
 
@@ -124,8 +127,15 @@ class RefundEngine
 
             $oldAmount = (string) $locked->amount;
 
-            if (array_key_exists('amount', $input) && $input['amount'] !== null && $current === RefundTransactionStatus::Pending) {
-                $locked->amount = $input['amount'];
+            if (array_key_exists('amount', $input) && $input['amount'] !== null) {
+                $editable = in_array($current, [
+                    RefundTransactionStatus::Pending,
+                    RefundTransactionStatus::Requested,
+                    RefundTransactionStatus::UnderReview,
+                ], true);
+                if ($editable) {
+                    $locked->amount = $input['amount'];
+                }
             }
             if (array_key_exists('reference', $input)) {
                 $locked->reference = $input['reference'];
@@ -212,7 +222,9 @@ class RefundEngine
             }
 
             $path = match ($current) {
-                RefundTransactionStatus::Pending => ['approved', 'processing', 'completed'],
+                RefundTransactionStatus::Pending,
+                RefundTransactionStatus::Requested => ['under_review', 'approved', 'processing', 'completed'],
+                RefundTransactionStatus::UnderReview => ['approved', 'processing', 'completed'],
                 RefundTransactionStatus::Approved => ['processing', 'completed'],
                 RefundTransactionStatus::Processing => ['completed'],
                 default => [],
@@ -250,11 +262,11 @@ class RefundEngine
 
         $open = $order->refundTransactions
             ->filter(fn (RefundTransaction $r) => $r->return_request_id === null)
-            ->first(fn (RefundTransaction $r) => ! in_array(
-                $r->status instanceof RefundTransactionStatus ? $r->status->value : (string) $r->status,
-                ['completed', 'failed'],
-                true,
-            ));
+            ->first(fn (RefundTransaction $r) => ! (
+                $r->status instanceof RefundTransactionStatus
+                    ? $r->status
+                    : RefundTransactionStatus::tryFromMixed($r->status) ?? RefundTransactionStatus::Pending
+            )->isTerminal());
 
         if ($open !== null) {
             return $open;
@@ -262,16 +274,19 @@ class RefundEngine
 
         $amount = $this->refundableAmount($order);
 
-        $refund = DB::transaction(function () use ($order, $amount): RefundTransaction {
+        $refund = DB::transaction(function () use ($order, $amount, $admin): RefundTransaction {
             return RefundTransaction::query()->create([
                 'return_request_id' => null,
                 'order_id' => $order->id,
+                'customer_id' => $order->user_id,
                 'amount' => $amount,
                 'currency' => strtoupper((string) ($order->currency ?? 'TZS')),
-                'status' => RefundTransactionStatus::Pending,
+                'status' => RefundTransactionStatus::Requested,
                 'method' => 'manual_cancellation',
                 'reference' => null,
                 'notes' => 'Awaiting manual refund confirmation (cancellation).',
+                'reason' => 'Order cancellation',
+                'created_by_admin_id' => $admin?->id,
             ]);
         });
 
@@ -353,7 +368,7 @@ class RefundEngine
                 $input['notes'] ?? null,
             ])));
 
-            $path = ['approved', 'processing', 'completed'];
+            $path = ['under_review', 'approved', 'processing', 'completed'];
             $current = $lockedRefund;
             foreach ($path as $step) {
                 $current = $this->updateStatus($current, [

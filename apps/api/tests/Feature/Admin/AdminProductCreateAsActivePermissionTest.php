@@ -9,6 +9,7 @@ use App\Models\Category;
 use App\Models\CommerceChannel;
 use App\Models\Department;
 use App\Models\Product;
+use App\Models\Supplier;
 use App\Support\Admin\AdminPermissions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -142,6 +143,7 @@ class AdminProductCreateAsActivePermissionTest extends TestCase
             'category_id' => $subcategory->id,
             'catalog_product_type_id' => $catalogProductType->id,
             'commerce_channel_id' => $chinaChannelId,
+            'supplier_id' => Supplier::factory()->create(['is_active' => true, 'country' => 'CN'])->id,
             'price' => 50000,
             'stock_quantity' => 5,
             'shipping_options' => [

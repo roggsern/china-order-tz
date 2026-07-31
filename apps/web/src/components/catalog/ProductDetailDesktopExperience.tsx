@@ -17,10 +17,15 @@ export function ProductDetailDesktopExperience({
   category,
 }: ProductDetailDesktopExperienceProps) {
   const [selectedColorSlug, setSelectedColorSlug] = useState<string | null>(null);
+  const [configurationId, setConfigurationId] = useState<string | null>(null);
   const shippingContext = pickProductShippingContext(product);
 
   const handleSelectedColorChange = useCallback((colorSlug: string | null) => {
     setSelectedColorSlug(colorSlug);
+  }, []);
+
+  const handleConfigurationIdChange = useCallback((nextId: string | null) => {
+    setConfigurationId(nextId);
   }, []);
 
   return (
@@ -32,9 +37,11 @@ export function ProductDetailDesktopExperience({
           fallbackEmoji={product.emoji}
           fallbackGradient={product.gradient}
           selectedColorSlug={selectedColorSlug}
+          configurationId={configurationId}
         />
 
         <ProductTabs
+          productSlug={product.slug}
           layout="below-gallery"
           description={product.description}
           features={product.features}
@@ -51,6 +58,7 @@ export function ProductDetailDesktopExperience({
         product={product}
         category={category}
         onSelectedColorChange={handleSelectedColorChange}
+        onConfigurationIdChange={handleConfigurationIdChange}
       />
     </div>
   );

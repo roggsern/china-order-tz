@@ -85,17 +85,32 @@ class NmbSandboxIntegrationTest extends TestCase
 
         $session = $mapper->fromResponse([
             'result' => 'SUCCESS',
+            'successIndicator' => 'indicator-root-999',
+            'session' => [
+                'id' => 'SESSION000999',
+            ],
+        ]);
+
+        $this->assertTrue($session->success);
+        $this->assertSame('SESSION000999', $session->sessionId);
+        $this->assertSame('indicator-root-999', $session->successIndicator);
+        $this->assertSame('SESSION000999', $session->gatewayReference);
+        $this->assertNull($session->checkoutUrl);
+    }
+
+    public function test_response_mapping_falls_back_to_session_success_indicator(): void
+    {
+        $mapper = app(NmbCheckoutSessionMapper::class);
+
+        $session = $mapper->fromResponse([
+            'result' => 'SUCCESS',
             'session' => [
                 'id' => 'SESSION000999',
                 'successIndicator' => 'indicator-999',
             ],
         ]);
 
-        $this->assertTrue($session->success);
-        $this->assertSame('SESSION000999', $session->sessionId);
         $this->assertSame('indicator-999', $session->successIndicator);
-        $this->assertSame('SESSION000999', $session->gatewayReference);
-        $this->assertNull($session->checkoutUrl);
     }
 
     public function test_retrieve_order_uses_basic_authentication(): void

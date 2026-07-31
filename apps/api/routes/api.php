@@ -9,12 +9,20 @@ use App\Http\Controllers\Admin\AdminCatalogProductTypeController;
 use App\Http\Controllers\Admin\AdminCategoryController;
 use App\Http\Controllers\Admin\AdminDepartmentController;
 use App\Http\Controllers\Admin\AdminDeliveryOptionController;
+use App\Http\Controllers\Admin\AdminFulfillmentBulkController;
 use App\Http\Controllers\Admin\AdminFulfillmentController;
 use App\Http\Controllers\Admin\AdminWarehouseController;
+use App\Http\Controllers\Admin\AdminWarehouseOperationsController;
+use App\Http\Controllers\Admin\AdminNotificationConfigController;
 use App\Http\Controllers\Admin\AdminNotificationController;
 use App\Http\Controllers\Admin\AdminNotificationTemplateController;
 use App\Http\Controllers\Admin\AdminActivityLogController;
+use App\Http\Controllers\Admin\AdminSettingsController;
+use App\Http\Controllers\Admin\AdminShippingRateController;
 use App\Http\Controllers\Admin\AdminAnalyticsController;
+use App\Http\Controllers\Admin\AdminChinaAnalyticsController;
+use App\Http\Controllers\Admin\AdminChinaProcurementController;
+use App\Http\Controllers\Admin\AdminChinaProcurementReconciliationController;
 use App\Http\Controllers\Admin\AdminReportController;
 use App\Http\Controllers\Admin\AdminCommerceChannelController;
 use App\Http\Controllers\Admin\AdminSupplierController;
@@ -30,12 +38,22 @@ use App\Http\Controllers\Admin\AdminCmsHeroSlideController;
 use App\Http\Controllers\Admin\AdminCmsFeaturedContentController;
 use App\Http\Controllers\Admin\AdminCmsCampaignController;
 use App\Http\Controllers\Admin\AdminCmsNavigationController;
+use App\Http\Controllers\Storefront\StorefrontEventController;
+use App\Http\Controllers\Storefront\StorefrontVisitorController;
 use App\Http\Controllers\Storefront\StorefrontCmsHomepageController;
 use App\Http\Controllers\Storefront\StorefrontCmsNavigationController;
+use App\Http\Controllers\Storefront\StorefrontMaintenanceController;
 use App\Http\Controllers\CustomerLoyaltyController;
 use App\Http\Controllers\CustomerGrowthController;
+use App\Http\Controllers\Admin\AdminPermissionController;
+use App\Http\Controllers\Admin\AdminRoleController;
 use App\Http\Controllers\Admin\AdminStoreController;
+use App\Http\Controllers\Admin\AdminStoreSettingsController;
+use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\AdminStoreAssignmentController;
+use App\Http\Controllers\Admin\AdminStoreTeamController;
+use App\Http\Controllers\Admin\AdminMyStoresController;
+use App\Http\Controllers\Admin\AdminStoreDashboardController;
 use App\Http\Controllers\Admin\AdminPosController;
 use App\Http\Controllers\Admin\AdminPosPaymentMethodController;
 use App\Http\Controllers\Admin\AdminPosReturnController;
@@ -45,11 +63,17 @@ use App\Http\Controllers\Admin\AdminShipmentsController;
 use App\Http\Controllers\Admin\AdminShipmentTrackingController;
 use App\Http\Controllers\Admin\AdminSubcategoryController;
 use App\Http\Controllers\Admin\AdminMockPaymentController;
+use App\Http\Controllers\Admin\AdminConfigurationHealthController;
+use App\Http\Controllers\Admin\AdminFeatureConfigController;
+use App\Http\Controllers\Admin\AdminSettingsDashboardController;
+use App\Http\Controllers\Admin\AdminPaymentConfigController;
 use App\Http\Controllers\Admin\AdminChinaWorkflowController;
 use App\Http\Controllers\Admin\AdminCustomerAgentController;
 use App\Http\Controllers\Admin\AdminOrderTimelineController;
 use App\Http\Controllers\Admin\AdminOrderController;
 use App\Http\Controllers\Admin\AdminPaymentController;
+use App\Http\Controllers\Admin\AdminCatalogHealthController;
+use App\Http\Controllers\Admin\AdminProductBulkController;
 use App\Http\Controllers\Admin\AdminProductController;
 use App\Http\Controllers\Admin\AdminProductImageController;
 use App\Http\Controllers\Admin\AdminProductAttributeController;
@@ -59,23 +83,39 @@ use App\Http\Controllers\Admin\AdminProductVariantController;
 use App\Http\Controllers\Admin\AdminVariantPriceController;
 use App\Http\Controllers\Admin\AdminVariantInventoryController;
 use App\Http\Controllers\Admin\AuthController as AdminAuthController;
+use App\Http\Controllers\Admin\AdminAlertsController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\StorefrontStoreController;
 use App\Http\Controllers\Storefront\TzStorefrontController;
 use App\Http\Controllers\Storefront\ChinaStorefrontController;
+use App\Http\Controllers\Account\CustomerAddressController;
+use App\Http\Controllers\Account\CustomerSupportTicketController;
+use App\Http\Controllers\Account\CustomerChangePasswordController;
+use App\Http\Controllers\Account\CustomerEmailChangeController;
+use App\Http\Controllers\Account\CustomerEmailVerificationController;
+use App\Http\Controllers\Auth\CustomerPasswordResetController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\CheckoutController;
+use App\Http\Controllers\ShippingDurationController;
+use App\Http\Controllers\CompanyShippingReceivingChoiceController;
 use App\Http\Controllers\CustomerOrderController;
 use App\Http\Controllers\CustomerReturnController;
 use App\Http\Controllers\CustomerProductController;
+use App\Http\Controllers\Admin\AdminRefundController;
+use App\Http\Controllers\Admin\AdminReviewController;
 use App\Http\Controllers\Admin\AdminReturnController;
+use App\Http\Controllers\Admin\AdminSupportTicketController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DeliveryOptionController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\NmbPaymentCallbackController;
+use App\Http\Controllers\CheckoutPaymentMethodsController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PaymentOrchestratorController;
+use App\Http\Controllers\PublicFeaturesController;
+use App\Http\Controllers\CustomerWishlistController;
+use App\Http\Controllers\CustomerProductReviewController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Webhooks\NmbWebhookController;
 use App\Support\Ops\OperationalHealth;
@@ -126,17 +166,33 @@ Route::post('/register', [AuthController::class, 'register'])
 Route::post('/login', [AuthController::class, 'login'])
     ->middleware('throttle:customer-login');
 
+Route::prefix('auth')->group(function () {
+    Route::post('/forgot-password', [CustomerPasswordResetController::class, 'forgot'])
+        ->middleware('throttle:customer-forgot-password');
+    Route::post('/reset-password', [CustomerPasswordResetController::class, 'reset'])
+        ->middleware('throttle:customer-reset-password');
+});
+
+Route::get('/account/email/verify/{id}/{hash}', [CustomerEmailVerificationController::class, 'verify'])
+    ->middleware(['signed', 'throttle:customer-email-verify'])
+    ->name('verification.verify');
+
+Route::post('/account/email/verify', [CustomerEmailVerificationController::class, 'confirm'])
+    ->middleware('throttle:customer-email-verify');
+
 Route::post('/admin/login', [AdminAuthController::class, 'login'])
     ->middleware('throttle:admin-login');
 
 Route::get('/products', [CustomerProductController::class, 'index']);
 Route::get('/products/{product:slug}', [CustomerProductController::class, 'show']);
+Route::get('/products/{product:slug}/reviews', [CustomerProductReviewController::class, 'index']);
 Route::get('/products/{product:slug}/configuration', [CustomerProductController::class, 'configuration']);
 Route::post('/products/{product:slug}/quote', [CustomerProductController::class, 'quote'])
     ->middleware('throttle:60,1');
 Route::get('/categories', [CustomerProductController::class, 'categories']);
 Route::get('/categories/{slug}', [CustomerProductController::class, 'showCategory']);
 Route::get('/brands', [CustomerProductController::class, 'brands']);
+Route::get('/shipping/durations', [ShippingDurationController::class, 'index']);
 
 Route::get('/stores', [StorefrontStoreController::class, 'index']);
 Route::get('/stores/{slug}', [StorefrontStoreController::class, 'show']);
@@ -156,8 +212,15 @@ Route::prefix('storefront/china')->group(function () {
     Route::get('/products', [ChinaStorefrontController::class, 'products']);
 });
 
+Route::get('/storefront/maintenance', [StorefrontMaintenanceController::class, 'show']);
+Route::get('/features/public', [PublicFeaturesController::class, 'show']);
+
 Route::get('/storefront/homepage', [StorefrontCmsHomepageController::class, 'show']);
 Route::get('/storefront/navigation', [StorefrontCmsNavigationController::class, 'show']);
+Route::post('/storefront/visitor/identify', [StorefrontVisitorController::class, 'identify'])
+    ->middleware('throttle:60,1');
+Route::post('/storefront/events', [StorefrontEventController::class, 'store'])
+    ->middleware('throttle:120,1');
 
 Route::middleware(['auth:sanctum', 'ensure.user', 'user.active'])->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
@@ -175,6 +238,8 @@ Route::middleware(['auth:sanctum', 'ensure.user', 'user.active'])->group(functio
     Route::post('/orders/{order}/delivery-option', [DeliveryOptionController::class, 'store'])
         ->middleware('throttle:checkout');
     Route::patch('/orders/{order}/delivery-option', [DeliveryOptionController::class, 'update'])
+        ->middleware('throttle:checkout');
+    Route::post('/orders/{order}/receiving-method', [CompanyShippingReceivingChoiceController::class, 'store'])
         ->middleware('throttle:checkout');
     Route::get('/orders/{order}', [CustomerOrderController::class, 'show']);
     Route::post('/orders/{order}/cancel', [CustomerOrderController::class, 'cancel']);
@@ -218,8 +283,10 @@ Route::middleware(['auth:sanctum', 'ensure.user', 'user.active'])->group(functio
     Route::get('/loyalty/redemptions', [CustomerLoyaltyController::class, 'redemptions']);
     Route::get('/growth/offers', [CustomerGrowthController::class, 'offers']);
     Route::get('/growth/history', [CustomerGrowthController::class, 'history']);
+    Route::get('/payments/methods', [CheckoutPaymentMethodsController::class, 'index']);
     Route::post('/payments/start/{order}', [PaymentOrchestratorController::class, 'start'])
         ->middleware('throttle:payments');
+    Route::get('/payments/return-context', [PaymentOrchestratorController::class, 'resolveReturn']);
     Route::get('/payments/{paymentTransaction}', [PaymentOrchestratorController::class, 'show']);
     Route::post('/payments/{paymentTransaction}/refresh', [PaymentOrchestratorController::class, 'refresh'])
         ->middleware('throttle:payments');
@@ -235,19 +302,76 @@ Route::middleware(['auth:sanctum', 'ensure.user', 'user.active'])->group(functio
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::patch('/profile', [ProfileController::class, 'update'])
         ->middleware('throttle:customer-profile');
+    Route::post('/products/{product:slug}/reviews', [CustomerProductReviewController::class, 'store'])
+        ->middleware('throttle:customer-profile');
+    Route::get('/wishlist', [CustomerWishlistController::class, 'index']);
+    Route::post('/wishlist/items', [CustomerWishlistController::class, 'store'])
+        ->middleware('throttle:customer-profile');
+    Route::delete('/wishlist/items/{product}', [CustomerWishlistController::class, 'destroy'])
+        ->middleware('throttle:customer-profile');
+
+    Route::get('/account/addresses', [CustomerAddressController::class, 'index']);
+    Route::post('/account/addresses', [CustomerAddressController::class, 'store'])
+        ->middleware('throttle:customer-profile');
+    Route::put('/account/addresses/{address}', [CustomerAddressController::class, 'update'])
+        ->middleware('throttle:customer-profile');
+    Route::delete('/account/addresses/{address}', [CustomerAddressController::class, 'destroy'])
+        ->middleware('throttle:customer-profile');
+    Route::patch('/account/addresses/{address}/default', [CustomerAddressController::class, 'setDefault'])
+        ->middleware('throttle:customer-profile');
+
+    Route::get('/account/support/tickets', [CustomerSupportTicketController::class, 'index']);
+    Route::post('/account/support/tickets', [CustomerSupportTicketController::class, 'store'])
+        ->middleware('throttle:customer-profile');
+    Route::get('/account/support/tickets/{ticket}', [CustomerSupportTicketController::class, 'show']);
+    Route::post('/account/support/tickets/{ticket}/messages', [CustomerSupportTicketController::class, 'storeMessage'])
+        ->middleware('throttle:customer-profile');
+
+    Route::post('/account/change-password', CustomerChangePasswordController::class)
+        ->middleware('throttle:customer-change-password');
+
+    Route::post('/account/email-change', [CustomerEmailChangeController::class, 'request'])
+        ->middleware('throttle:customer-email-change');
+    Route::get('/account/email-change/pending', [CustomerEmailChangeController::class, 'pending']);
+
+    Route::post('/account/email/verify/resend', [CustomerEmailVerificationController::class, 'resend'])
+        ->middleware('throttle:customer-email-verify-resend');
 });
+
+Route::post('/account/email-change/confirm', [CustomerEmailChangeController::class, 'confirm'])
+    ->middleware('throttle:customer-email-change');
 
 Route::middleware(['auth:sanctum', 'ensure.admin', 'admin.active'])->prefix('admin')->group(function () {
     Route::get('/dashboard', [AdminDashboardController::class, 'index']);
+    Route::get('/alerts', [AdminAlertsController::class, 'index']);
 
-    // Multi-store POS foundation
+    // Multi-store POS foundation + Store Manager
     Route::get('/stores', [AdminStoreController::class, 'index']);
-    Route::post('/stores', [AdminStoreController::class, 'store']);
+    Route::post('/stores', [AdminStoreController::class, 'store'])
+        ->middleware('throttle:admin-mutations');
+    Route::get('/stores/{store}/settings', [AdminStoreSettingsController::class, 'show']);
+    Route::put('/stores/{store}/settings', [AdminStoreSettingsController::class, 'update'])
+        ->middleware('throttle:admin-mutations');
+    Route::get('/stores/{store}/team', [AdminStoreTeamController::class, 'index']);
+    Route::post('/stores/{store}/team', [AdminStoreTeamController::class, 'store'])
+        ->middleware('throttle:admin-mutations');
+    Route::put('/stores/{store}/team/{admin}', [AdminStoreTeamController::class, 'update'])
+        ->middleware('throttle:admin-mutations');
+    Route::delete('/stores/{store}/team/{admin}', [AdminStoreTeamController::class, 'destroy'])
+        ->middleware('throttle:admin-mutations');
+    Route::get('/stores/{store}/dashboard', [AdminStoreDashboardController::class, 'show']);
+    Route::patch('/stores/{store}/status', [AdminStoreController::class, 'updateStatus'])
+        ->middleware('throttle:admin-mutations');
+    Route::post('/stores/{store}/branding', [AdminStoreController::class, 'uploadBranding'])
+        ->middleware('throttle:admin-mutations');
     Route::get('/stores/{store}', [AdminStoreController::class, 'show']);
-    Route::put('/stores/{store}', [AdminStoreController::class, 'update']);
+    Route::put('/stores/{store}', [AdminStoreController::class, 'update'])
+        ->middleware('throttle:admin-mutations');
     Route::get('/stores/{store}/assignments', [AdminStoreAssignmentController::class, 'index']);
     Route::post('/stores/{store}/assignments', [AdminStoreAssignmentController::class, 'store']);
     Route::delete('/stores/{store}/assignments/{admin}', [AdminStoreAssignmentController::class, 'destroy']);
+
+    Route::get('/my-stores', [AdminMyStoresController::class, 'index']);
 
     Route::get('/pos/my-stores', [AdminPosController::class, 'myStores']);
     Route::get('/pos/dashboard', [AdminPosController::class, 'dashboard']);
@@ -307,6 +431,11 @@ Route::middleware(['auth:sanctum', 'ensure.admin', 'admin.active'])->prefix('adm
     Route::get('/analytics/growth', [AdminAnalyticsController::class, 'growth']);
     Route::get('/analytics/stores', [AdminAnalyticsController::class, 'stores']);
     Route::get('/analytics/sessions', [AdminAnalyticsController::class, 'sessions']);
+    Route::get('/analytics/china/overview', [AdminChinaAnalyticsController::class, 'overview']);
+    Route::get('/analytics/china/landed-cost', [AdminChinaAnalyticsController::class, 'landedCost']);
+    Route::get('/analytics/china/suppliers', [AdminChinaAnalyticsController::class, 'suppliers']);
+    Route::get('/analytics/china/categories', [AdminChinaAnalyticsController::class, 'categories']);
+    Route::get('/analytics/china/shipments', [AdminChinaAnalyticsController::class, 'shipments']);
     Route::get('/analytics/{type}/export', [AdminAnalyticsController::class, 'export']);
     Route::get('/commerce-channels', [AdminCommerceChannelController::class, 'index']);
     Route::get('/commerce-channels/{channel}', [AdminCommerceChannelController::class, 'show']);
@@ -327,6 +456,12 @@ Route::middleware(['auth:sanctum', 'ensure.admin', 'admin.active'])->prefix('adm
     Route::post('/orders/{order}/china-workflow/consolidate', [AdminChinaWorkflowController::class, 'consolidate']);
     Route::post('/orders/{order}/china-workflow/export-ready', [AdminChinaWorkflowController::class, 'exportReady']);
     Route::post('/orders/{order}/china-workflow/agent-handoff', [AdminChinaWorkflowController::class, 'agentHandoff']);
+    Route::get('/china/procurement', [AdminChinaProcurementController::class, 'index']);
+    Route::get('/china/procurement/reconciliation', [AdminChinaProcurementReconciliationController::class, 'show']);
+    Route::get('/china/procurement/{requirement}', [AdminChinaProcurementController::class, 'show']);
+    Route::post('/china/procurement/{requirement}/mark-purchased', [AdminChinaProcurementController::class, 'markPurchased']);
+    Route::post('/china/procurement/{requirement}/start-qc', [AdminChinaProcurementController::class, 'startQc']);
+    Route::post('/china/procurement/{requirement}/complete', [AdminChinaProcurementController::class, 'complete']);
     Route::get('/orders/{order}/customer-agent', [AdminCustomerAgentController::class, 'show']);
     Route::post('/orders/{order}/customer-agent/bootstrap', [AdminCustomerAgentController::class, 'bootstrap']);
     Route::post('/orders/{order}/customer-agent/authorize', [AdminCustomerAgentController::class, 'authorizePickup']);
@@ -475,8 +610,11 @@ Route::middleware(['auth:sanctum', 'ensure.admin', 'admin.active'])->prefix('adm
         ->middleware('throttle:admin-mutations');
     Route::patch('/customer-tags/{tag}', [AdminCustomerTagController::class, 'update'])
         ->middleware('throttle:admin-mutations');
+    Route::get('/catalog-health', [AdminCatalogHealthController::class, 'show'])
+        ->middleware('admin.permission:catalog.view');
     Route::get('/products', [AdminProductController::class, 'index']);
     Route::get('/products/trash', [AdminProductController::class, 'trash']);
+    Route::post('/products/bulk-action', [AdminProductBulkController::class, 'execute']);
     Route::post('/products', [AdminProductController::class, 'store']);
     Route::get('/products/{product}', [AdminProductController::class, 'show']);
     Route::get('/products/{product}/images', [AdminProductController::class, 'indexImages']);
@@ -526,6 +664,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin', 'admin.active'])->prefix('adm
     Route::post('/inventory/counts/{count}/submit', [AdminInventoryController::class, 'submitCount']);
     Route::post('/inventory/counts/{count}/approve', [AdminInventoryController::class, 'approveCount']);
     Route::get('/inventory/valuation', [AdminInventoryController::class, 'valuation']);
+    Route::get('/inventory/channel-stock', [AdminInventoryController::class, 'channelStock']);
     Route::get('/inventory/low-stock', [AdminInventoryController::class, 'lowStock']);
     Route::patch('/products/{product}/stock', [AdminProductController::class, 'updateStock']);
     Route::get('/products/{product}/inventory/movements', [AdminProductController::class, 'indexInventoryMovements']);
@@ -594,16 +733,51 @@ Route::middleware(['auth:sanctum', 'ensure.admin', 'admin.active'])->prefix('adm
     Route::patch('/orders/{order}/shipment-status', [AdminShipmentController::class, 'update']);
     Route::get('/orders/{order}', [AdminOrderController::class, 'show']);
     Route::get('/fulfillments', [AdminFulfillmentController::class, 'index']);
+    Route::post('/fulfillments/bulk-action', [AdminFulfillmentBulkController::class, 'execute']);
     Route::post('/fulfillments/create/{order}', [AdminFulfillmentController::class, 'create']);
     Route::get('/fulfillments/{fulfillment}', [AdminFulfillmentController::class, 'show']);
+    Route::get('/fulfillments/{fulfillment}/operational', [AdminFulfillmentController::class, 'operationalView']);
     Route::patch('/fulfillments/{fulfillment}/status', [AdminFulfillmentController::class, 'updateStatus']);
+    Route::post('/fulfillments/{fulfillment}/complete-local', [AdminFulfillmentController::class, 'completeLocal']);
+    Route::post('/fulfillments/{fulfillment}/complete-company-handover-pickup', [AdminFulfillmentController::class, 'completeCompanyHandoverPickup']);
+    Route::post('/fulfillments/{fulfillment}/complete-company-handover-delivery', [AdminFulfillmentController::class, 'completeCompanyHandoverDelivery']);
     Route::get('/fulfillments/{fulfillment}/shipment-eligibility', [AdminShipmentsController::class, 'eligibility']);
     Route::get('/warehouse', [AdminWarehouseController::class, 'index']);
+    Route::get('/warehouse/pick-lists', [AdminWarehouseOperationsController::class, 'indexPickLists']);
+    Route::post('/warehouse/pick-lists', [AdminWarehouseOperationsController::class, 'storePickList']);
+    Route::get('/warehouse/pick-lists/{pickList}', [AdminWarehouseOperationsController::class, 'showPickList']);
+    Route::post('/warehouse/pick-lists/{pickList}/start', [AdminWarehouseOperationsController::class, 'startPickList']);
+    Route::post('/warehouse/pick-lists/{pickList}/complete', [AdminWarehouseOperationsController::class, 'completePickList']);
+    Route::patch('/warehouse/pick-lists/{pickList}/lines/{line}', [AdminWarehouseOperationsController::class, 'updatePickListLine']);
+    Route::get('/warehouse/packing', [AdminWarehouseOperationsController::class, 'indexPacking']);
+    Route::post('/warehouse/packing', [AdminWarehouseOperationsController::class, 'storePacking']);
+    Route::get('/warehouse/packing/{packing}', [AdminWarehouseOperationsController::class, 'showPacking']);
+    Route::post('/warehouse/packing/{packing}/start', [AdminWarehouseOperationsController::class, 'startPacking']);
+    Route::post('/warehouse/packing/{packing}/complete', [AdminWarehouseOperationsController::class, 'completePacking']);
+    Route::patch('/warehouse/packing/{packing}/lines/{line}', [AdminWarehouseOperationsController::class, 'updatePackingLine']);
+    Route::get('/warehouse/locations/facilities', [AdminWarehouseOperationsController::class, 'indexFacilities']);
+    Route::post('/warehouse/locations/facilities', [AdminWarehouseOperationsController::class, 'storeFacility']);
+    Route::get('/warehouse/locations/zones', [AdminWarehouseOperationsController::class, 'indexZones']);
+    Route::post('/warehouse/locations/zones', [AdminWarehouseOperationsController::class, 'storeZone']);
+    Route::get('/warehouse/locations/bins', [AdminWarehouseOperationsController::class, 'indexBins']);
+    Route::post('/warehouse/locations/bins', [AdminWarehouseOperationsController::class, 'storeBin']);
+    Route::get('/warehouse/transfers', [AdminWarehouseOperationsController::class, 'indexTransfers']);
+    Route::post('/warehouse/transfers', [AdminWarehouseOperationsController::class, 'storeTransfer']);
+    Route::get('/warehouse/transfers/{transfer}', [AdminWarehouseOperationsController::class, 'showTransfer']);
+    Route::post('/warehouse/transfers/{transfer}/approve', [AdminWarehouseOperationsController::class, 'approveTransfer']);
+    Route::post('/warehouse/transfers/{transfer}/complete', [AdminWarehouseOperationsController::class, 'completeTransfer']);
+    Route::post('/warehouse/transfers/{transfer}/cancel', [AdminWarehouseOperationsController::class, 'cancelTransfer']);
     Route::get('/warehouse/{job}', [AdminWarehouseController::class, 'show']);
     Route::patch('/warehouse/{job}/status', [AdminWarehouseController::class, 'updateStatus']);
     Route::patch('/warehouse/{job}/assign-picker', [AdminWarehouseController::class, 'assignPicker']);
     Route::patch('/warehouse/{job}/assign-packer', [AdminWarehouseController::class, 'assignPacker']);
     Route::get('/notifications', [AdminNotificationController::class, 'index']);
+    Route::get('/notifications/config', [AdminNotificationConfigController::class, 'show']);
+    Route::put('/notifications/config', [AdminNotificationConfigController::class, 'update'])
+        ->middleware('throttle:admin-mutations');
+    Route::get('/features/config', [AdminFeatureConfigController::class, 'show']);
+    Route::put('/features/config', [AdminFeatureConfigController::class, 'update'])
+        ->middleware('throttle:admin-mutations');
     Route::get('/notification-templates', [AdminNotificationTemplateController::class, 'index']);
     Route::post('/notification-templates', [AdminNotificationTemplateController::class, 'store']);
     Route::get('/notification-templates/{template}', [AdminNotificationTemplateController::class, 'show']);
@@ -611,10 +785,43 @@ Route::middleware(['auth:sanctum', 'ensure.admin', 'admin.active'])->prefix('adm
     Route::post('/notification-templates/{template}/preview', [AdminNotificationTemplateController::class, 'preview']);
     Route::get('/activity-logs', [AdminActivityLogController::class, 'index']);
     Route::get('/activity-logs/{activityLog}', [AdminActivityLogController::class, 'show']);
+    Route::get('/settings', [AdminSettingsController::class, 'index']);
+    Route::get('/settings/dashboard', [AdminSettingsDashboardController::class, 'dashboard']);
+    Route::get('/settings/history', [AdminSettingsDashboardController::class, 'history']);
+    Route::get('/settings/{group}', [AdminSettingsController::class, 'showGroup']);
+    Route::put('/settings/{group}', [AdminSettingsController::class, 'updateGroup'])
+        ->middleware('throttle:admin-mutations');
+    Route::get('/configuration-health', [AdminConfigurationHealthController::class, 'show']);
+    Route::get('/shipping/rates', [AdminShippingRateController::class, 'index']);
+    Route::put('/shipping/rates/{shippingMethod}', [AdminShippingRateController::class, 'update'])
+        ->middleware('throttle:admin-mutations');
     Route::get('/returns', [AdminReturnController::class, 'index']);
     Route::get('/returns/{returnRequest}', [AdminReturnController::class, 'show']);
     Route::patch('/returns/{returnRequest}/status', [AdminReturnController::class, 'updateStatus']);
     Route::post('/returns/{returnRequest}/refund', [AdminReturnController::class, 'createRefund']);
+    Route::get('/support/tickets', [AdminSupportTicketController::class, 'index']);
+    Route::get('/support/tickets/{ticket}', [AdminSupportTicketController::class, 'show']);
+    Route::post('/support/tickets/{ticket}/assign', [AdminSupportTicketController::class, 'assign'])
+        ->middleware('throttle:admin-mutations');
+    Route::patch('/support/tickets/{ticket}/status', [AdminSupportTicketController::class, 'updateStatus'])
+        ->middleware('throttle:admin-mutations');
+    Route::post('/support/tickets/{ticket}/messages', [AdminSupportTicketController::class, 'storeMessage'])
+        ->middleware('throttle:admin-mutations');
+    Route::get('/reviews', [AdminReviewController::class, 'index']);
+    Route::get('/reviews/{review}', [AdminReviewController::class, 'show']);
+    Route::post('/reviews/{review}/approve', [AdminReviewController::class, 'approve'])
+        ->middleware('throttle:admin-mutations');
+    Route::post('/reviews/{review}/reject', [AdminReviewController::class, 'reject'])
+        ->middleware('throttle:admin-mutations');
+    Route::get('/refunds', [AdminRefundController::class, 'index']);
+    Route::post('/refunds', [AdminRefundController::class, 'store']);
+    Route::get('/refunds/{refund}', [AdminRefundController::class, 'show']);
+    Route::post('/refunds/{refund}/approve', [AdminRefundController::class, 'approve'])
+        ->middleware('throttle:admin-mutations');
+    Route::post('/refunds/{refund}/reject', [AdminRefundController::class, 'reject'])
+        ->middleware('throttle:admin-mutations');
+    Route::post('/refunds/{refund}/process', [AdminRefundController::class, 'process'])
+        ->middleware('throttle:admin-mutations');
     Route::get('/shipments', [AdminShipmentsController::class, 'index']);
     Route::post('/shipments/create/{fulfillment}', [AdminShipmentsController::class, 'create']);
     Route::get('/shipments/{shipment}', [AdminShipmentsController::class, 'show']);
@@ -625,11 +832,27 @@ Route::middleware(['auth:sanctum', 'ensure.admin', 'admin.active'])->prefix('adm
         ->middleware('throttle:admin-mutations');
     Route::get('/payments', [AdminPaymentController::class, 'index']);
     Route::post('/payments', [AdminPaymentController::class, 'store']);
+    Route::get('/payments/config', [AdminPaymentConfigController::class, 'show']);
+    Route::put('/payments/config', [AdminPaymentConfigController::class, 'update'])
+        ->middleware('throttle:admin-mutations');
     Route::post('/payments/{payment}/mock', [AdminMockPaymentController::class, 'process']);
     Route::post('/payments/{payment}/simulate-nmb-callback', [AdminSimulateNmbCallbackController::class, 'store']);
     Route::get('/payments/{payment}', [AdminPaymentController::class, 'show']);
     Route::put('/payments/{payment}', [AdminPaymentController::class, 'update']);
     Route::delete('/payments/{payment}', [AdminPaymentController::class, 'destroy']);
+    Route::get('/admins', [AdminUserController::class, 'index']);
+    Route::post('/admins', [AdminUserController::class, 'store']);
+    Route::get('/admins/{admin}', [AdminUserController::class, 'show']);
+    Route::patch('/admins/{admin}', [AdminUserController::class, 'update']);
+    Route::patch('/admins/{admin}/activate', [AdminUserController::class, 'activate']);
+    Route::patch('/admins/{admin}/deactivate', [AdminUserController::class, 'deactivate']);
+    Route::patch('/admins/{admin}/role', [AdminUserController::class, 'assignRole']);
+    Route::get('/permissions', [AdminPermissionController::class, 'index']);
+    Route::get('/roles', [AdminRoleController::class, 'index']);
+    Route::get('/roles/{role}', [AdminRoleController::class, 'show']);
+    Route::post('/roles/{role}/permissions/preview', [AdminRoleController::class, 'previewPermissions']);
+    Route::patch('/roles/{role}/permissions', [AdminRoleController::class, 'updatePermissions']);
+
     Route::get('/me', [AdminAuthController::class, 'me'])
         ->middleware('throttle:admin-profile');
     Route::post('/logout', [AdminAuthController::class, 'logout']);

@@ -1,6 +1,9 @@
 import type { CheckoutFormData } from "@/lib/types/checkout";
 import type { ShippingMethodCode } from "@/lib/shipping/types";
-import type { CheckoutShippingChoice } from "@/lib/checkout/shipping-choice";
+import type {
+  CheckoutShippingChoice,
+  CustomerAgentDetails,
+} from "@/lib/checkout/shipping-choice";
 
 const CHECKOUT_WIZARD_KEY = "china-order-tz-checkout-wizard";
 
@@ -9,6 +12,8 @@ export type CheckoutWizardState = {
   form: CheckoutFormData;
   shippingChoice: CheckoutShippingChoice | null;
   selectedShippingMethod: ShippingMethodCode | null;
+  selectedAddressId?: string | null;
+  customerAgentDetails?: CustomerAgentDetails;
   savedAt: string;
 };
 

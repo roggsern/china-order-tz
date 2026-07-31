@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\Inventory\OrderInventoryRestockService;
 use App\Services\Orders\Lifecycle\OrderLifecycleContext;
 use App\Services\Orders\Lifecycle\OrderLifecycleEngine;
+use App\Services\Orders\OrderCancellationCascadeService;
 use App\Services\Returns\RefundEngine;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -18,6 +19,7 @@ class CancelCustomerOrderAction
         private readonly OrderLifecycleEngine $lifecycle,
         private readonly RefundEngine $refunds,
         private readonly OrderInventoryRestockService $inventoryRestock,
+        private readonly OrderCancellationCascadeService $cancellationCascade,
     ) {}
 
     public function handle(User $user, Order $order, ?string $reason = null): Order
@@ -50,6 +52,13 @@ class CancelCustomerOrderAction
             if ($priorStatus !== null) {
                 $this->inventoryRestock->applyAfterCancel($updated, $priorStatus, null);
             }
+
+            $this->cancellationCascade->cascadeAfterOrderCancellation(
+                $updated,
+                $priorStatus,
+                null,
+                $reason,
+            );
 
             $fresh = $updated->fresh() ?? $updated;
             $status = $fresh->status instanceof OrderStatus

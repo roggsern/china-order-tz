@@ -6,10 +6,16 @@ use App\Enums\CommerceChannelCode;
 use App\Models\Product;
 use App\Services\Catalog\CustomerProductMediaResolver;
 use App\Services\Inventory\CatalogStockPresenter;
+use App\Services\Storefront\CatalogNavigationCrosswalkResolver;
+use App\Support\Catalog\CatalogNavigationCrosswalk;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class ListProductsAction
 {
+    public function __construct(
+        private readonly CatalogNavigationCrosswalkResolver $crosswalkResolver,
+    ) {}
+
     public function handle(): LengthAwarePaginator
     {
         $search = trim((string) request()->query('search', ''));
@@ -54,6 +60,20 @@ class ListProductsAction
                 });
             })
             ->when(filled($category), function ($query) use ($category) {
+                if (CatalogNavigationCrosswalk::forBibleSlug($category) !== null) {
+                    $categoryIds = $this->crosswalkResolver->categoryIdsForBibleSlug($category);
+
+                    if ($categoryIds === []) {
+                        $query->whereRaw('0 = 1');
+
+                        return;
+                    }
+
+                    $query->whereIn('category_id', $categoryIds);
+
+                    return;
+                }
+
                 $query->where(function ($query) use ($category) {
                     $query->where('category_id', $category)
                         ->orWhereHas('category', fn ($categoryQuery) => $categoryQuery->where('slug', $category));

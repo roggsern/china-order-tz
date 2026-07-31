@@ -76,6 +76,34 @@ class AppServiceProvider extends ServiceProvider
             );
         });
 
+        RateLimiter::for('customer-forgot-password', function (Request $request) {
+            return Limit::perMinute(5)->by(
+                $request->ip().'|'.strtolower((string) $request->input('email'))
+            );
+        });
+
+        RateLimiter::for('customer-reset-password', function (Request $request) {
+            return Limit::perMinute(5)->by(
+                $request->ip().'|'.strtolower((string) $request->input('email'))
+            );
+        });
+
+        RateLimiter::for('customer-change-password', function (Request $request) {
+            return Limit::perMinute(5)->by(self::throttleKey($request));
+        });
+
+        RateLimiter::for('customer-email-change', function (Request $request) {
+            return Limit::perMinute(5)->by(self::throttleKey($request));
+        });
+
+        RateLimiter::for('customer-email-verify-resend', function (Request $request) {
+            return Limit::perMinute(3)->by(self::throttleKey($request));
+        });
+
+        RateLimiter::for('customer-email-verify', function (Request $request) {
+            return Limit::perMinute(10)->by($request->ip());
+        });
+
         RateLimiter::for('webhooks', function (Request $request) {
             return Limit::perMinute(60)->by($request->ip());
         });

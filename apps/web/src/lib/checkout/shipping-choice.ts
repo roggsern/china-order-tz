@@ -1,4 +1,5 @@
 import type { ShippingMethodCode } from "@/lib/shipping/types";
+import { isValidPhoneNumber, PHONE_VALIDATION_MESSAGE } from "@/lib/phone";
 
 /** Explicit pre-payment shipping choice (mirrors API DeliveryType). */
 export type CheckoutShippingChoice =
@@ -7,6 +8,17 @@ export type CheckoutShippingChoice =
   | "self_pickup"
   | "negotiated_delivery";
 
+export type CustomerAgentDetails = {
+  name: string;
+  phone: string;
+  address: string;
+};
+
+export const EMPTY_CUSTOMER_AGENT_DETAILS: CustomerAgentDetails = {
+  name: "",
+  phone: "",
+  address: "",
+};
 export function toApiShippingMethod(
   method: ShippingMethodCode | null | undefined,
 ): "air" | "sea" | undefined {
@@ -36,8 +48,25 @@ export function validateShippingChoice(
     return undefined;
   }
 
-  if (choice !== "self_pickup" && choice !== "negotiated_delivery") {
-    return "Select self pickup or negotiated delivery";
+  return undefined;
+}
+
+export function validateCustomerAgentDetails(
+  details: CustomerAgentDetails | null | undefined,
+): string | undefined {
+  const name = details?.name.trim() ?? "";
+  const phone = details?.phone.trim() ?? "";
+
+  if (!name) {
+    return "Agent name is required";
+  }
+
+  if (!phone) {
+    return "Agent phone number is required";
+  }
+
+  if (!isValidPhoneNumber(phone)) {
+    return PHONE_VALIDATION_MESSAGE;
   }
 
   return undefined;

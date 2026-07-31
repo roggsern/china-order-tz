@@ -14,6 +14,7 @@ import {
   mapBackendSummaryToTotals,
   runBackendCheckoutFlow,
 } from "@/lib/api/customer-checkout";
+import { loadVisitorIdentity } from "@/lib/storefront/visitor-identity";
 import { saveLocalOrderFromBackendConfirmation } from "@/lib/checkout/backend-order";
 import {
   getCheckoutWizardState,
@@ -26,18 +27,36 @@ import type { ShippingMethodCode } from "@/lib/shipping/types";
 import {
   EMPTY_CHECKOUT_FORM,
   type CheckoutFormData,
-  type CheckoutFormErrors,
 } from "@/lib/types/checkout";
+import {
+  fetchCustomerAddresses,
+  createCustomerAddress,
+  setDefaultCustomerAddress,
+  type CustomerAddress,
+  type CustomerAddressInput,
+} from "@/lib/api/customer-addresses";
+import { fetchCustomerProfile } from "@/lib/api/customer-profile";
+import {
+  applyCustomerAddressToCheckoutForm,
+  CHECKOUT_DELIVERY_ADDRESS_REQUIRED,
+  isCheckoutDeliveryAddressReady,
+  mergeProfileIntoCheckoutCustomer,
+  resolveInitialCheckoutAddressSelection,
+  shouldSyncDefaultAddressForCheckout,
+} from "@/lib/checkout/address-book";
+import { useCustomerSession } from "@/lib/customer/use-customer-session";
 import {
   hasCheckoutErrors,
   normalizeCheckoutForm,
-  splitFullName,
   validateCheckoutStep1,
 } from "@/lib/checkout/validation";
 import {
   type CheckoutShippingChoice,
+  EMPTY_CUSTOMER_AGENT_DETAILS,
+  validateCustomerAgentDetails,
   validateShippingChoice,
 } from "@/lib/checkout/shipping-choice";
+import { resolveCheckoutDisplayTotals, shouldShowCompanyShippingEstimate } from "@/lib/checkout/display-totals";
 import { validateCartAgainstCatalog, summarizeCartValidationFailures } from "@/lib/cart/validation";
 import { hasBlockingCartSyncError } from "@/lib/cart/sync-errors";
 import { fetchClientCatalogProducts } from "@/lib/catalog/client-catalog";
@@ -45,8 +64,8 @@ import { productService } from "@/lib/services/product-service.client";
 import { CartSyncErrorAlert } from "@/components/cart/CartSyncErrorAlert";
 import { CheckoutSection } from "./CheckoutSection";
 import { CheckoutStepIndicator } from "./CheckoutStepIndicator";
-import { CheckoutCustomerStep } from "./CheckoutCustomerStep";
 import { CheckoutShippingStep } from "./CheckoutShippingStep";
+import { CheckoutAddressStep } from "./CheckoutAddressStep";
 import { CheckoutSidebarSummary } from "./CheckoutSidebarSummary";
 import { CheckoutMobileStickyBar } from "./CheckoutMobileStickyBar";
 import { CheckoutEmptyState } from "./CheckoutEmptyState";
@@ -57,25 +76,48 @@ import {
   toFriendlyAuthMessage,
 } from "@/lib/auth/friendly-auth-messages";
 import { CheckoutPageSkeleton } from "@/components/ui/PageSkeletons";
+import { markCheckoutPendingAuth } from "@/lib/checkout/auth-resume";
+import { useStorefrontTracking } from "@/components/storefront/StorefrontTrackingProvider";
+import { fetchShippingDurations } from "@/lib/shipping/durations";
 
-function getFullNameFromForm(form: CheckoutFormData): string {
-  return `${form.customer.firstName} ${form.customer.lastName}`.trim();
+function buildAgentOrderNotes(
+  baseNotes: string,
+  agentDetails: typeof EMPTY_CUSTOMER_AGENT_DETAILS,
+): string {
+  const address = agentDetails.address.trim();
+  if (!address) {
+    return baseNotes;
+  }
+
+  const agentNote = `Shipping agent address: ${address}`;
+  return baseNotes.trim() ? `${baseNotes.trim()}\n${agentNote}` : agentNote;
 }
 
 export function CheckoutPageContent() {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
+  const { trackCheckoutStarted } = useStorefrontTracking();
+  const checkoutTrackedRef = useRef(false);
   const { items, savedForLater, discount, totals, isHydrated, syncError, clearSyncError, updateShippingMethod } =
     useCart();
 
+  const { session: customerSession, isLoggedIn } = useCustomerSession();
   const [form, setForm] = useState<CheckoutFormData>(EMPTY_CHECKOUT_FORM);
-  const [fullName, setFullName] = useState("");
+  const [savedAddresses, setSavedAddresses] = useState<CustomerAddress[]>([]);
+  const [savedAddressesDefaultId, setSavedAddressesDefaultId] = useState<string | null>(null);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [addressesLoading, setAddressesLoading] = useState(false);
+  const [addressSaving, setAddressSaving] = useState(false);
+  const [showAddAddressForm, setShowAddAddressForm] = useState(false);
+  const [addressBookReady, setAddressBookReady] = useState(false);
+  const [addressError, setAddressError] = useState<string | undefined>();
   const [shippingChoice, setShippingChoice] = useState<CheckoutShippingChoice | null>(null);
+  const [customerAgentDetails, setCustomerAgentDetails] = useState(EMPTY_CUSTOMER_AGENT_DETAILS);
   const [selectedShippingMethod, setSelectedShippingMethod] = useState<ShippingMethodCode | null>(
     null,
   );
-  const [errors, setErrors] = useState<CheckoutFormErrors>({});
   const [shippingError, setShippingError] = useState<string | undefined>();
+  const [agentError, setAgentError] = useState<string | undefined>();
   const [submitError, setSubmitError] = useState<string | undefined>();
   const [needsAuth, setNeedsAuth] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -98,34 +140,95 @@ export function CheckoutPageContent() {
   );
 
   useEffect(() => {
+    void fetchShippingDurations();
+  }, []);
+
+  useEffect(() => {
+    if (checkoutTrackedRef.current) {
+      return;
+    }
+
+    checkoutTrackedRef.current = true;
+    void trackCheckoutStarted();
+  }, [trackCheckoutStarted]);
+
+  useEffect(() => {
     if (!isHydrated || wizardLoaded) return;
 
     const savedWizard = getCheckoutWizardState();
     const savedDraft = getCheckoutDraft();
 
+    let nextForm: CheckoutFormData = EMPTY_CHECKOUT_FORM;
+    let restoredAddressId: string | null = null;
+
     if (savedWizard) {
-      setForm(savedWizard.form);
-      setFullName(getFullNameFromForm(savedWizard.form));
+      nextForm = savedWizard.form;
+      restoredAddressId = savedWizard.selectedAddressId ?? null;
       setShippingChoice(savedWizard.shippingChoice ?? null);
       setSelectedShippingMethod(savedWizard.selectedShippingMethod);
+      setCustomerAgentDetails(savedWizard.customerAgentDetails ?? EMPTY_CUSTOMER_AGENT_DETAILS);
     } else if (savedDraft) {
-      setForm({
+      nextForm = {
         customer: savedDraft.customer,
         shippingAddress: savedDraft.shippingAddress,
         orderNotes: savedDraft.orderNotes,
-      });
-      setFullName(
-        getFullNameFromForm({
-          customer: savedDraft.customer,
-          shippingAddress: savedDraft.shippingAddress,
-          orderNotes: savedDraft.orderNotes,
-        }),
-      );
+      };
       setSelectedShippingMethod(savedDraft.shippingMethod ?? null);
     }
 
+    setForm(nextForm);
     setWizardLoaded(true);
-  }, [isHydrated, wizardLoaded]);
+
+    const token = getCustomerApiToken();
+    if (!token) {
+      setAddressBookReady(true);
+      return;
+    }
+
+    setAddressesLoading(true);
+    void (async () => {
+      try {
+        const [profileResult, addressResult] = await Promise.all([
+          fetchCustomerProfile().catch(() => null),
+          fetchCustomerAddresses(),
+        ]);
+
+        setForm((current) => ({
+          ...current,
+          customer: mergeProfileIntoCheckoutCustomer(
+            current.customer,
+            profileResult,
+            customerSession,
+          ),
+        }));
+
+        const { addresses, defaultId } = addressResult;
+        setSavedAddresses(addresses);
+        setSavedAddressesDefaultId(defaultId);
+
+        const initialId = resolveInitialCheckoutAddressSelection(
+          addresses,
+          defaultId,
+          restoredAddressId,
+        );
+        setSelectedAddressId(initialId);
+        setShowAddAddressForm(addresses.length === 0);
+
+        if (initialId) {
+          const picked = addresses.find((row) => row.id === initialId);
+          if (picked) {
+            setForm((current) => applyCustomerAddressToCheckoutForm(current, picked));
+          }
+        }
+      } catch {
+        setAddressError("Unable to load saved addresses. You can add one below.");
+        setShowAddAddressForm(true);
+      } finally {
+        setAddressesLoading(false);
+        setAddressBookReady(true);
+      }
+    })();
+  }, [isHydrated, wizardLoaded, customerSession]);
 
   useEffect(() => {
     if (!isHydrated || !wizardLoaded) return;
@@ -135,8 +238,10 @@ export function CheckoutPageContent() {
       form,
       shippingChoice,
       selectedShippingMethod,
+      selectedAddressId,
+      customerAgentDetails,
     });
-  }, [form, shippingChoice, selectedShippingMethod, isHydrated, wizardLoaded]);
+  }, [form, shippingChoice, selectedShippingMethod, selectedAddressId, customerAgentDetails, isHydrated, wizardLoaded]);
 
   useEffect(() => {
     if (hasChinaItems) return;
@@ -151,9 +256,14 @@ export function CheckoutPageContent() {
     (choice: CheckoutShippingChoice) => {
       setShippingChoice(choice);
       setShippingError(undefined);
+      setAgentError(undefined);
 
       if (choice !== "company_shipping") {
         setSelectedShippingMethod(null);
+      }
+
+      if (choice !== "customer_agent") {
+        setCustomerAgentDetails(EMPTY_CUSTOMER_AGENT_DETAILS);
       }
     },
     [],
@@ -174,29 +284,56 @@ export function CheckoutPageContent() {
     [items, updateShippingMethod],
   );
 
-  const clearFieldError = useCallback((scope: "customer" | "shippingAddress", field: string) => {
-    setErrors((prev) => {
-      if (scope === "customer") {
-        if (!prev.customer?.[field as keyof CheckoutFormErrors["customer"]]) return prev;
-        const nextCustomer = { ...prev.customer };
-        delete nextCustomer[field as keyof typeof nextCustomer];
-        return {
-          ...prev,
-          customer: Object.keys(nextCustomer).length > 0 ? nextCustomer : undefined,
-        };
+  const handleSelectSavedAddress = useCallback(
+    (addressId: string) => {
+      const picked = savedAddresses.find((row) => row.id === addressId);
+      if (!picked) {
+        return;
       }
 
-      if (!prev.shippingAddress?.[field as keyof CheckoutFormErrors["shippingAddress"]]) {
-        return prev;
+      setSelectedAddressId(addressId);
+      setAddressError(undefined);
+      setForm((current) => applyCustomerAddressToCheckoutForm(current, picked));
+    },
+    [savedAddresses],
+  );
+
+  const handleSaveCheckoutAddress = useCallback(
+    async (input: CustomerAddressInput) => {
+      setAddressSaving(true);
+      try {
+        const created = await createCustomerAddress({ ...input, is_default: true });
+        setSavedAddresses((prev) => {
+          const withoutNew = prev.filter((row) => row.id !== created.id);
+          const demoted = withoutNew.map((row) =>
+            created.is_default ? { ...row, is_default: false } : row,
+          );
+          return [created, ...demoted];
+        });
+        setSavedAddressesDefaultId(created.id);
+        setSelectedAddressId(created.id);
+        setAddressError(undefined);
+        setForm((current) => applyCustomerAddressToCheckoutForm(current, created));
+      } finally {
+        setAddressSaving(false);
       }
-      const nextAddress = { ...prev.shippingAddress };
-      delete nextAddress[field as keyof typeof nextAddress];
-      return {
-        ...prev,
-        shippingAddress: Object.keys(nextAddress).length > 0 ? nextAddress : undefined,
-      };
-    });
-  }, []);
+    },
+    [],
+  );
+
+  const deliveryAddressReady =
+    !isLoggedIn || isCheckoutDeliveryAddressReady(selectedAddressId, savedAddresses);
+
+  const profileContactLabel = useMemo(() => {
+    const name = `${form.customer.firstName} ${form.customer.lastName}`.trim();
+    const parts = [name, form.customer.phone.trim(), form.customer.email.trim()].filter(Boolean);
+    return parts.join(" · ");
+  }, [form.customer]);
+
+  const displayTotals = useMemo(
+    () => resolveCheckoutDisplayTotals(totals, shippingChoice),
+    [totals, shippingChoice],
+  );
 
   const scrollToFirstError = () => {
     requestAnimationFrame(() => {
@@ -206,27 +343,15 @@ export function CheckoutPageContent() {
     });
   };
 
-  const buildFormWithFullName = useCallback(
-    (name: string, currentForm: CheckoutFormData): CheckoutFormData => {
-      const { firstName, lastName } = splitFullName(name);
-      return {
-        ...currentForm,
-        customer: {
-          ...currentForm.customer,
-          firstName,
-          lastName,
-        },
-      };
-    },
-    [],
-  );
-
   const hasBlockingSyncError = hasBlockingCartSyncError(syncError);
 
   const checkoutBlocked =
     hasBlockingSyncError ||
+    (isLoggedIn && !deliveryAddressReady) ||
     !shippingChoice ||
-    (shippingChoice === "company_shipping" && !selectedShippingMethod);
+    (shippingChoice === "company_shipping" && !selectedShippingMethod) ||
+    (shippingChoice === "customer_agent" &&
+      Boolean(validateCustomerAgentDetails(customerAgentDetails)));
 
   const handleContinueToPayment = async () => {
     if (submitInFlightRef.current || isSubmitting) return;
@@ -236,8 +361,7 @@ export function CheckoutPageContent() {
       return;
     }
 
-    const merged = buildFormWithFullName(fullName, form);
-    const normalized = normalizeCheckoutForm(merged);
+    const normalized = normalizeCheckoutForm(form);
     setForm(normalized);
 
     const stepErrors = validateCheckoutStep1(normalized);
@@ -246,13 +370,26 @@ export function CheckoutPageContent() {
       shippingChoice,
       selectedShippingMethod,
     );
+    const nextAgentError =
+      shippingChoice === "customer_agent"
+        ? validateCustomerAgentDetails(customerAgentDetails)
+        : undefined;
 
-    if (hasCheckoutErrors(stepErrors) || methodError) {
-      setErrors(stepErrors);
+    if (hasCheckoutErrors(stepErrors) || methodError || nextAgentError) {
       setShippingError(methodError);
+      setAgentError(nextAgentError);
       scrollToFirstError();
       return;
     }
+
+    if (isLoggedIn && !isCheckoutDeliveryAddressReady(selectedAddressId, savedAddresses)) {
+      setAddressError(CHECKOUT_DELIVERY_ADDRESS_REQUIRED);
+      scrollToFirstError();
+      return;
+    }
+
+    setAddressError(undefined);
+    setAgentError(undefined);
 
     if (shippingChoice === "company_shipping" && selectedShippingMethod) {
       applyShippingMethod(selectedShippingMethod);
@@ -305,6 +442,7 @@ export function CheckoutPageContent() {
       const apiToken = getCustomerApiToken();
 
       if (!apiToken) {
+        markCheckoutPendingAuth();
         setNeedsAuth(true);
         setSubmitError(undefined);
         submitInFlightRef.current = false;
@@ -317,6 +455,19 @@ export function CheckoutPageContent() {
         return;
       }
 
+      const selectedAddress =
+        savedAddresses.find((row) => row.id === selectedAddressId) ?? null;
+      if (selectedAddress && shouldSyncDefaultAddressForCheckout(selectedAddress)) {
+        await setDefaultCustomerAddress(selectedAddress.id);
+        setSavedAddresses((prev) =>
+          prev.map((row) => ({
+            ...row,
+            is_default: row.id === selectedAddress.id,
+          })),
+        );
+        setSavedAddressesDefaultId(selectedAddress.id);
+      }
+
       const confirmation = await runBackendCheckoutFlow({
         customer: normalized.customer,
         shippingAddress: normalized.shippingAddress,
@@ -325,7 +476,11 @@ export function CheckoutPageContent() {
         shippingChoice: shippingChoice!,
         shippingMethod:
           shippingChoice === "company_shipping" ? selectedShippingMethod : null,
+        agentName: customerAgentDetails.name.trim() || null,
+        agentContact: customerAgentDetails.phone.trim() || null,
       });
+
+      const orderNotes = buildAgentOrderNotes(normalized.orderNotes, customerAgentDetails);
 
       const backendTotals = mapBackendSummaryToTotals(confirmation.summary, validatedCart.items);
 
@@ -334,7 +489,7 @@ export function CheckoutPageContent() {
         draftId,
         customer: normalized.customer,
         shippingAddress: normalized.shippingAddress,
-        orderNotes: normalized.orderNotes,
+        orderNotes,
         items: itemsForOrder,
         totals: backendTotals,
         cartSnapshot: validatedCart,
@@ -345,11 +500,13 @@ export function CheckoutPageContent() {
       saveCheckoutDraft({
         customer: normalized.customer,
         shippingAddress: normalized.shippingAddress,
-        orderNotes: normalized.orderNotes,
+        orderNotes,
         cartSnapshot: validatedCart,
         items: itemsForOrder,
         totals: backendTotals,
-        shippingMethod: shippingSnapshot.shippingMethod,
+        shippingChoice: shippingChoice!,
+        shippingMethod:
+          shippingChoice === "company_shipping" ? selectedShippingMethod : null,
         itemShippingBreakdown: shippingSnapshot.itemShippingBreakdown,
         draftId,
         backendOrder: {
@@ -367,6 +524,9 @@ export function CheckoutPageContent() {
         if (isAuthRequiredMessage(error.message) || error.statusCode === 401) {
           setNeedsAuth(true);
           setSubmitError(undefined);
+        } else if (/delivery address/i.test(error.message)) {
+          setAddressError(CHECKOUT_DELIVERY_ADDRESS_REQUIRED);
+          setSubmitError(undefined);
         } else {
           setSubmitError(toFriendlyAuthMessage(error.message, error.message));
         }
@@ -377,7 +537,7 @@ export function CheckoutPageContent() {
     }
   };
 
-  if (!isHydrated || !wizardLoaded) {
+  if (!isHydrated || !wizardLoaded || !addressBookReady) {
     return <CheckoutPageSkeleton />;
   }
 
@@ -400,7 +560,9 @@ export function CheckoutPageContent() {
             Checkout
           </h1>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-500">
-            Confirm delivery, choose shipping, then continue to payment.
+            {hasChinaItems
+              ? "Choose shipping, then continue to secure NMB payment."
+              : "Choose your collection preference, then continue to secure NMB payment."}
           </p>
         </div>
         {!isSubmitting ? (
@@ -428,18 +590,61 @@ export function CheckoutPageContent() {
           <motion.div transition={{ duration: 0.28, ease: "easeOut" }} {...sectionMotion}>
             <CheckoutSection
               title="Delivery Address"
-              description="Where should we deliver your order?"
+              description="Choose a saved address or add one to continue. Your contact details come from your account."
             >
-              <CheckoutCustomerStep
-                form={form}
-                errors={errors}
-                fullName={fullName}
-                onFullNameChange={setFullName}
-                onCustomerChange={(customer) => setForm((prev) => ({ ...prev, customer }))}
-                onAddressChange={(shippingAddress) =>
-                  setForm((prev) => ({ ...prev, shippingAddress }))
-                }
-                onClearError={clearFieldError}
+              {isLoggedIn && profileContactLabel ? (
+                <div className="mb-4 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
+                  <p className="font-semibold text-zinc-900">Delivering to</p>
+                  <p className="mt-1">{profileContactLabel}</p>
+                </div>
+              ) : null}
+
+              {isLoggedIn ? (
+                <CheckoutAddressStep
+                  addresses={savedAddresses}
+                  selectedAddressId={selectedAddressId}
+                  onSelectAddress={handleSelectSavedAddress}
+                  showAddForm={showAddAddressForm}
+                  onShowAddForm={setShowAddAddressForm}
+                  onSaveNewAddress={handleSaveCheckoutAddress}
+                  isLoading={addressesLoading}
+                  isSaving={addressSaving}
+                  error={addressError}
+                  profileDefaults={{
+                    recipient_name: `${form.customer.firstName} ${form.customer.lastName}`.trim(),
+                    phone: form.customer.phone,
+                  }}
+                />
+              ) : (
+                <p className="text-sm text-zinc-600">
+                  Sign in to use saved addresses and continue to payment.
+                </p>
+              )}
+            </CheckoutSection>
+          </motion.div>
+
+          <motion.div transition={{ duration: 0.28, ease: "easeOut" }} {...sectionMotion}>
+            <CheckoutSection
+              title={hasChinaItems ? "Shipping Method" : "Collection Preference"}
+              description={
+                hasChinaItems
+                  ? "Choose shipping before payment. CHINA ORDER TZ freight applies only when you select company shipping."
+                  : "Choose how you would like to receive your order. No freight calculation or courier selection."
+              }
+            >
+              <CheckoutShippingStep
+                items={items}
+                shippingChoice={shippingChoice}
+                selectedMethod={selectedShippingMethod}
+                customerAgentDetails={customerAgentDetails}
+                agentError={agentError}
+                onSelectChoice={applyShippingChoice}
+                onSelectMethod={applyShippingMethod}
+                onAgentDetailsChange={(details) => {
+                  setCustomerAgentDetails(details);
+                  setAgentError(undefined);
+                }}
+                error={shippingError}
               />
             </CheckoutSection>
           </motion.div>
@@ -449,33 +654,13 @@ export function CheckoutPageContent() {
             {...sectionMotion}
           >
             <CheckoutSection
-              title="Shipping Method"
-              description="Choose shipping before payment. Totals include company freight only when you select CHINA ORDER TZ shipping."
-            >
-              <CheckoutShippingStep
-                items={items}
-                shippingChoice={shippingChoice}
-                selectedMethod={selectedShippingMethod}
-                onSelectChoice={applyShippingChoice}
-                onSelectMethod={applyShippingMethod}
-                error={shippingError}
-              />
-            </CheckoutSection>
-          </motion.div>
-
-          <motion.div
-            transition={{ duration: 0.28, ease: "easeOut", delay: reduceMotion ? 0 : 0.1 }}
-            {...sectionMotion}
-          >
-            <CheckoutSection
-              title="Payment Method"
-              description="You'll choose how to pay on the next step — M-Pesa, NMB, Selcom, bank transfer, or cash on delivery."
+              title="Secure Payment"
+              description="Payment is completed securely through NMB on the next step."
             >
               <div className="rounded-2xl border border-dashed border-[#c9a227]/35 bg-[#c9a227]/5 px-4 py-5">
-                <p className="text-sm font-semibold text-zinc-900">Payment comes next</p>
+                <p className="text-sm font-semibold text-zinc-900">Pay via Bank Cards or Mobile Money</p>
                 <p className="mt-1 text-sm leading-relaxed text-zinc-600">
-                  After you confirm this order, you&apos;ll select a secure payment method. Your
-                  cart and shipping details stay saved.
+                  Secure checkout powered by NMB. Your shipping choice stays saved when you continue.
                 </p>
               </div>
             </CheckoutSection>
@@ -511,10 +696,14 @@ export function CheckoutPageContent() {
           />
           <CheckoutSidebarSummary
             items={items}
-            totals={totals}
+            totals={displayTotals}
             shippingMethod={
               shippingChoice === "company_shipping" ? selectedShippingMethod : null
             }
+            showShippingEstimate={shouldShowCompanyShippingEstimate(
+              shippingChoice,
+              selectedShippingMethod,
+            )}
             onSubmit={handleContinueToPayment}
             isSubmitting={isSubmitting}
             submitDisabled={checkoutBlocked}
@@ -522,7 +711,9 @@ export function CheckoutPageContent() {
             submitHint={
               hasBlockingSyncError
                 ? "Resolve the cart issue above before continuing to payment"
-                : "Secure checkout — shipping must be selected before payment"
+                : isLoggedIn && !deliveryAddressReady
+                  ? CHECKOUT_DELIVERY_ADDRESS_REQUIRED
+                  : "Secure checkout — address and shipping must be selected before payment"
             }
             mode="cart"
             className="lg:static"
@@ -531,7 +722,7 @@ export function CheckoutPageContent() {
       </div>
 
       <CheckoutMobileStickyBar
-        totals={totals}
+        totals={displayTotals}
         onSubmit={handleContinueToPayment}
         isSubmitting={isSubmitting}
         submitDisabled={checkoutBlocked}

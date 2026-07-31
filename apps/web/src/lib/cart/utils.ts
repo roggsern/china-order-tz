@@ -7,7 +7,7 @@ import {
   normalizeVariantChoice,
   variantKey,
 } from "@/lib/catalog/variants";
-import { getProductPrimaryImage } from "@/lib/catalog/product-images";
+import { resolveVariantCartImage } from "@/lib/catalog/storefront-variant-media";
 import { calculateOrderSummary } from "@/lib/shipping/smart-engine";
 
 export { createCartItemId };
@@ -30,7 +30,7 @@ export function productToCartSnapshot(
     stockOverride?: number;
   },
 ) {
-  const primaryImage = getProductPrimaryImage(product);
+  const primaryImage = resolveVariantCartImage(product, options?.configurationId);
   const variant = normalizeVariantChoice(options?.variant);
   const selectedSize = hasSizeVariants(product) ? getSelectedSize(variant) : null;
   const configurationId = options?.configurationId ?? null;

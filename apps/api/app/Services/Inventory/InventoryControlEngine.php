@@ -180,6 +180,65 @@ class InventoryControlEngine
         });
     }
 
+    /**
+     * Signed on_hand change for a warehouse_code row (China / transit / MAIN).
+     * Uses InventoryMutationGate via mutateSellable — does not alter the gate.
+     */
+    public function adjustWarehouseCode(
+        ProductVariant $variant,
+        string $warehouseCode,
+        int $quantityChange,
+        ?Admin $actor = null,
+        ?string $reason = null,
+        ?string $referenceType = null,
+        ?string $referenceId = null,
+        ?string $idempotencyKey = null,
+    ): InventoryStockMovement {
+        if ($quantityChange === 0) {
+            throw ValidationException::withMessages([
+                'quantity_change' => ['Quantity change cannot be zero.'],
+            ]);
+        }
+
+        return DB::transaction(function () use (
+            $variant,
+            $warehouseCode,
+            $quantityChange,
+            $actor,
+            $reason,
+            $referenceType,
+            $referenceId,
+            $idempotencyKey,
+        ) {
+            $inventory = $this->canonicalInitializer->ensure($variant, [
+                'warehouse_code' => $warehouseCode,
+                'requested_on_hand' => null,
+                'reorder_level' => 0,
+                'safety_stock' => 0,
+                'is_active' => true,
+                'actor' => $actor,
+                'reason' => 'Inventory control warehouse bootstrap — opening stock from legacy',
+            ]);
+
+            $inventory = VariantInventory::query()->whereKey($inventory->id)->lockForUpdate()->firstOrFail();
+
+            $type = $quantityChange > 0
+                ? InventoryMovementType::Receive
+                : InventoryMovementType::Adjustment;
+
+            return $this->mutateSellable(
+                $inventory,
+                $type,
+                $quantityChange,
+                $actor,
+                $reason ?? 'Warehouse stock adjustment',
+                $referenceType,
+                $referenceId,
+                idempotencyKey: $idempotencyKey,
+            );
+        });
+    }
+
     public function recordSale(
         VariantInventory $inventory,
         int $qty,

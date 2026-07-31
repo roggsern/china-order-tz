@@ -6,13 +6,15 @@ use App\Actions\AdminProductVariants\Concerns\ResolvesVariantDefaults;
 use App\Actions\Concerns\GuardsActiveProductSubResourceIntegrity;
 use App\Enums\CatalogAttributeType;
 use App\Http\Requests\Admin\GenerateProductVariantsRequest;
-use App\Http\Resources\AdminCatalogProductVariantResource;
 use App\Models\CatalogAttribute;
 use App\Models\CatalogAttributeOption;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Services\Catalog\GenerateVariantSku;
 use App\Services\Catalog\SyncVariantCatalogAttributeValues;
+use App\Services\Inventory\CanonicalVariantInventoryInitializer;
+use App\Services\Inventory\StockResolver;
+use App\Services\Pricing\CommercePricingResolver;
 use App\Services\ProductPurchasability\ProductPurchasabilityPolicy;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -27,10 +29,20 @@ class GenerateProductVariantsAction
         private readonly GenerateVariantSku $generateVariantSku,
         private readonly GetProductVariantsAction $getProductVariants,
         private readonly ProductPurchasabilityPolicy $purchasabilityPolicy,
+        private readonly CanonicalVariantInventoryInitializer $inventoryInitializer,
+        private readonly CommercePricingResolver $pricing,
+        private readonly StockResolver $stock,
     ) {}
 
     /**
-     * @return array{variants: list<array<string, mixed>>, attributes: list<array<string, mixed>>, created_count: int}
+     * @return array{
+     *     variants: list<array<string, mixed>>,
+     *     attributes: list<array<string, mixed>>,
+     *     created_count: int,
+     *     generated: int,
+     *     needs_pricing: int,
+     *     needs_inventory_setup: int
+     * }
      */
     public function handle(GenerateProductVariantsRequest $request, Product $product): array
     {
@@ -110,6 +122,8 @@ class GenerateProductVariantsAction
 
         $combinations = $this->cartesian($axes);
         $createdCount = 0;
+        /** @var list<string> $createdVariantIds */
+        $createdVariantIds = [];
 
         $product->load(['variants.prices', 'variants.inventories']);
         $hadSellableVariants = $this->snapshotSellableVariants($this->purchasabilityPolicy, $product);
@@ -121,6 +135,7 @@ class GenerateProductVariantsAction
             $allowedById,
             $hadSellableVariants,
             &$createdCount,
+            &$createdVariantIds,
         ) {
             if ($replaceExisting) {
                 $existing = ProductVariant::query()->where('product_id', $product->id)->get();
@@ -165,7 +180,17 @@ class GenerateProductVariantsAction
                 ], $combo);
 
                 $this->syncAttributeValues->handle($variant, $rows, $allowedById);
+
+                // Inventory foundation only — zero stock, no invented quantity.
+                $this->inventoryInitializer->ensure($variant, [
+                    'warehouse_code' => 'MAIN',
+                    'requested_on_hand' => 0,
+                    'reason' => 'Variant generation — MAIN inventory foundation (zero stock)',
+                    'idempotency_key' => 'variant-generate:'.$variant->id.':MAIN',
+                ]);
+
                 $existingSignatures[$signature] = true;
+                $createdVariantIds[] = $variant->id;
                 $createdCount++;
             }
 
@@ -180,10 +205,70 @@ class GenerateProductVariantsAction
             }
         });
 
+        $summary = $this->summarizeCreatedVariants($product, $createdVariantIds);
+
         $payload = $this->getProductVariants->handle($product);
         $payload['created_count'] = $createdCount;
+        $payload['generated'] = $createdCount;
+        $payload['needs_pricing'] = $summary['needs_pricing'];
+        $payload['needs_inventory_setup'] = $summary['needs_inventory_setup'];
 
         return $payload;
+    }
+
+    /**
+     * @param  list<string>  $createdVariantIds
+     * @return array{needs_pricing: int, needs_inventory_setup: int}
+     */
+    private function summarizeCreatedVariants(Product $product, array $createdVariantIds): array
+    {
+        if ($createdVariantIds === []) {
+            return [
+                'needs_pricing' => 0,
+                'needs_inventory_setup' => 0,
+            ];
+        }
+
+        $variants = ProductVariant::query()
+            ->whereIn('id', $createdVariantIds)
+            ->with(['prices', 'inventories', 'product'])
+            ->get();
+
+        $needsPricing = 0;
+        $needsInventorySetup = 0;
+
+        foreach ($variants as $variant) {
+            if ($this->variantNeedsPricing($variant, $product)) {
+                $needsPricing++;
+            }
+
+            if ($this->variantNeedsInventorySetup($variant)) {
+                $needsInventorySetup++;
+            }
+        }
+
+        return [
+            'needs_pricing' => $needsPricing,
+            'needs_inventory_setup' => $needsInventorySetup,
+        ];
+    }
+
+    private function variantNeedsPricing(ProductVariant $variant, Product $product): bool
+    {
+        $result = $this->pricing->resolveVariantProductPrice($variant, null, $product);
+
+        return ! ($result->resolved && (float) $result->unitPrice > 0);
+    }
+
+    private function variantNeedsInventorySetup(ProductVariant $variant): bool
+    {
+        if (! $this->stock->hasVariantInventoryPolicy($variant)) {
+            return true;
+        }
+
+        $resolved = $this->stock->resolveVariantProduct($variant);
+
+        return ! $resolved->resolved || $resolved->quantityAvailable <= 0;
     }
 
     /**

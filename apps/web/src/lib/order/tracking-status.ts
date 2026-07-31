@@ -4,7 +4,7 @@ import type { Order, OrderStatus } from "@/lib/types/order";
 import { ORDER_STATUS } from "@/lib/types/order";
 import { PAYMENT_STATUS } from "@/lib/types/payment";
 
-/** Canonical logistics tracking statuses shown to customers. */
+/** @deprecated Use `@/lib/order/customer-progress` instead. */
 export const ORDER_TRACKING_STATUS = {
   ORDER_PLACED: "ORDER_PLACED",
   PAYMENT_CONFIRMED: "PAYMENT_CONFIRMED",

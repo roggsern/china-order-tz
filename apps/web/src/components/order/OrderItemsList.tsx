@@ -4,6 +4,7 @@ import type { OrderLineItem } from "@/lib/types/order";
 import { formatPrice } from "@/lib/catalog/utils";
 import { getMethodByCode } from "@/lib/shipping/engine";
 import { ProductImageDisplay } from "@/components/catalog/ProductImageDisplay";
+import { resolveOrderLineItemImage } from "@/lib/order/resolve-order-item-image";
 import { VariantLabel } from "@/components/catalog/VariantLabel";
 
 interface OrderItemsListProps {
@@ -22,6 +23,7 @@ export function OrderItemsList({ items, showShipping = true }: OrderItemsListPro
           <li key={item.id} className="flex gap-3 py-4 first:pt-0 last:pb-0">
             <div className="shrink-0 overflow-hidden rounded-xl border border-zinc-100 bg-white">
               <ProductImageDisplay
+                src={resolveOrderLineItemImage(item)}
                 image={item.image}
                 fallbackEmoji={item.image.emoji}
                 fallbackGradient={item.image.gradient}

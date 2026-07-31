@@ -1,21 +1,24 @@
 "use client";
 
-import type { CustomerTrackingDisplayStep } from "@/lib/order/tracking-display";
-import { getTrackingWhatHappensNext } from "@/lib/order/tracking-display";
-
 interface TrackingWhatHappensNextProps {
-  timeline: CustomerTrackingDisplayStep[];
+  guidance: {
+    title: string;
+    body: string;
+  } | null;
   tone?: "light" | "dark";
   className?: string;
 }
 
 export function TrackingWhatHappensNext({
-  timeline,
+  guidance,
   tone = "light",
   className = "",
 }: TrackingWhatHappensNextProps) {
-  const guidance = getTrackingWhatHappensNext(timeline);
   const isDark = tone === "dark";
+
+  if (!guidance) {
+    return null;
+  }
 
   return (
     <section
@@ -45,14 +48,6 @@ export function TrackingWhatHappensNext({
         }`}
       >
         {guidance.body}
-      </p>
-      <p
-        className={`mt-4 text-sm ${isDark ? "text-zinc-400" : "text-zinc-500"}`}
-      >
-        Estimated duration:{" "}
-        <span className={`font-semibold ${isDark ? "text-[#e8c547]" : "text-zinc-900"}`}>
-          {guidance.estimatedDuration}
-        </span>
       </p>
     </section>
   );

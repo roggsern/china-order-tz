@@ -50,7 +50,8 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction --no-script
 COPY apps/api/ ./
 
 COPY docker/php/entrypoint.prod.sh /usr/local/bin/entrypoint.prod.sh
-RUN chmod +x /usr/local/bin/entrypoint.prod.sh \
+RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.prod.sh \
+    && chmod +x /usr/local/bin/entrypoint.prod.sh \
     && composer dump-autoload --optimize \
     && php artisan package:discover --ansi \
     && mkdir -p storage/app/public storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \

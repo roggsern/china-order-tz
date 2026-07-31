@@ -4,10 +4,14 @@ import type {
   ApiCatalogProductDetail,
   ApiCatalogProductVariant,
   ApiCatalogStockSource,
+  ApiCatalogVideo,
 } from "@/lib/api/products";
 import { resolveProductBadges } from "@/lib/catalog/badges";
-import { getDefaultFlatShippingDeliveryDays } from "@/lib/shipping/config";
-import type { Product, ProductImage, ProductOrigin, ProductSpecification } from "@/lib/types/catalog";
+import type {
+  ProductAvailabilityStatus,
+  ProductUnavailabilityReason,
+} from "@/lib/catalog/product-availability";
+import type { Product, ProductImage, ProductOrigin, ProductSpecification, ProductVideo } from "@/lib/types/catalog";
 
 const DEFAULT_GRADIENT = "from-zinc-800 via-zinc-700 to-zinc-900";
 const DEFAULT_EMOJI = "🛍️";
@@ -32,19 +36,27 @@ function resolveVariantStockFromApi(
     return undefined;
   }
 
-  const stocks = variants
-    .map(
-      (variant) =>
-        parseApiStockQuantity(variant.stock) ??
-        parseApiStockQuantity(variant.inventory?.available_quantity),
-    )
-    .filter((value): value is number => value !== undefined);
+  let total = 0;
+  let hasSignal = false;
 
-  if (stocks.length === 0) {
-    return undefined;
+  for (const variant of variants) {
+    const numeric =
+      parseApiStockQuantity(variant.stock) ??
+      parseApiStockQuantity(variant.inventory?.available_quantity);
+
+    if (numeric !== undefined) {
+      total += numeric;
+      hasSignal = true;
+      continue;
+    }
+
+    if (variant.in_stock === true) {
+      total += 1;
+      hasSignal = true;
+    }
   }
 
-  return stocks.reduce((total, value) => total + value, 0);
+  return hasSignal ? total : undefined;
 }
 
 export function resolveApiProductStock(input: ApiCatalogStockSource): number {
@@ -58,7 +70,16 @@ export function resolveApiProductStock(input: ApiCatalogStockSource): number {
     return direct;
   }
 
-  return resolveVariantStockFromApi(input.variants) ?? 0;
+  const variantStock = resolveVariantStockFromApi(input.variants);
+  if (variantStock !== undefined) {
+    return variantStock;
+  }
+
+  if (input.in_stock === true) {
+    return 1;
+  }
+
+  return 0;
 }
 
 function apiIdToNumericId(id: string): number {
@@ -145,6 +166,23 @@ export function inferProductOrigin(input: {
   return "tz";
 }
 
+function mapApiVideo(
+  video: ApiCatalogVideo | null | undefined,
+): ProductVideo | undefined {
+  if (!video?.id || !video.url?.trim()) {
+    return undefined;
+  }
+
+  return {
+    id: video.id,
+    url: video.url.trim(),
+    thumbnail_url: video.thumbnail_url ?? null,
+    title: video.title ?? null,
+    alt_text: video.alt_text ?? null,
+    sort_order: Number.isFinite(video.sort_order) ? video.sort_order : 0,
+  };
+}
+
 export function mapApiProductCardToCatalogProduct(product: ApiCatalogProductCard): Product {
   const price = parseMoney(product.price);
   const oldPrice = parseOptionalMoney(product.compare_at_price) ?? 0;
@@ -188,12 +226,6 @@ export function mapApiProductCardToCatalogProduct(product: ApiCatalogProductCard
     airCost,
     seaCost,
     shippingOptions: shippingOptions.length > 0 ? shippingOptions : undefined,
-    airDeliveryDays: airCost
-      ? getDefaultFlatShippingDeliveryDays("air_freight")
-      : undefined,
-    seaDeliveryDays: seaCost
-      ? getDefaultFlatShippingDeliveryDays("sea_freight")
-      : undefined,
     primary_image: primaryImage,
     images: primaryImage ? [primaryImage] : [],
     image: primaryImage?.url ?? primaryImage?.path,
@@ -202,6 +234,9 @@ export function mapApiProductCardToCatalogProduct(product: ApiCatalogProductCard
     customerReviews: [],
     featured: product.is_featured,
     status: "active",
+    isPurchasable: product.is_purchasable,
+    availabilityStatus: product.availability_status as ProductAvailabilityStatus | undefined,
+    unavailabilityReason: product.unavailability_reason as ProductUnavailabilityReason | undefined,
   };
 }
 
@@ -211,6 +246,22 @@ export function mapApiProductDetailToCatalogProduct(product: ApiCatalogProductDe
   const images = (product.images ?? [])
     .map((image, index) => mapApiImage(image, product.name, index))
     .filter((image): image is ProductImage => Boolean(image));
+  const videos = (product.videos ?? [])
+    .map((video) => mapApiVideo(video))
+    .filter((video): video is ProductVideo => Boolean(video));
+
+  const variantGalleries: Record<string, ProductImage[]> = {};
+  for (const variant of product.variants ?? []) {
+    const variantImages = (variant.images ?? [])
+      .map((image, index) => mapApiImage(image, product.name, index))
+      .filter((image): image is ProductImage => Boolean(image));
+    const primary = mapApiImage(variant.primary_image, product.name);
+    const gallery =
+      variantImages.length > 0 ? variantImages : primary ? [primary] : [];
+    if (gallery.length > 0) {
+      variantGalleries[variant.id] = gallery;
+    }
+  }
 
   const airCost = parseOptionalMoney(product.shipping_prices?.air) ?? card.airCost;
   const seaCost = parseOptionalMoney(product.shipping_prices?.sea) ?? card.seaCost;
@@ -239,17 +290,17 @@ export function mapApiProductDetailToCatalogProduct(product: ApiCatalogProductDe
     airCost,
     seaCost,
     shippingOptions: shippingOptions.length > 0 ? shippingOptions : undefined,
-    airDeliveryDays: airCost
-      ? getDefaultFlatShippingDeliveryDays("air_freight")
-      : undefined,
-    seaDeliveryDays: seaCost
-      ? getDefaultFlatShippingDeliveryDays("sea_freight")
-      : undefined,
     primary_image: images[0] ?? card.primary_image,
     images: images.length > 0 ? images : card.images,
     image: images[0]?.url ?? images[0]?.path ?? card.image,
+    videos: videos.length > 0 ? videos : undefined,
+    variantGalleries:
+      Object.keys(variantGalleries).length > 0 ? variantGalleries : undefined,
     specifications: product.dimensions
       ? [{ label: "Dimensions", value: product.dimensions }]
       : [],
+    isPurchasable: product.is_purchasable,
+    availabilityStatus: product.availability_status as ProductAvailabilityStatus | undefined,
+    unavailabilityReason: product.unavailability_reason as ProductUnavailabilityReason | undefined,
   };
 }

@@ -12,6 +12,7 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Services\Catalog\CustomerProductMediaResolver;
 use App\Services\Inventory\CatalogStockPresenter;
+use App\Support\Catalog\CatalogNavigationCrosswalk;
 use Database\Support\CatalogBible;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -23,6 +24,10 @@ use Illuminate\Database\Eloquent\Collection;
  */
 class ChinaStorefrontCatalog
 {
+    public function __construct(
+        private readonly CatalogNavigationCrosswalkResolver $crosswalkResolver,
+    ) {}
+
     /**
      * Navigation category tree for the ORDER FROM CHINA mega menu.
      *
@@ -30,35 +35,37 @@ class ChinaStorefrontCatalog
      */
     public function navigationCategories(): Collection
     {
-        // Catalog Bible roots only — excludes department flat roots, store categories,
-        // and faker sample categories created by product factories.
-        $bibleRootSlugs = collect(CatalogBible::categories())->pluck('slug')->all();
-        $bibleChildSlugs = collect(CatalogBible::categories())
-            ->flatMap(fn (array $root) => collect($root['children'] ?? [])->pluck('slug'))
-            ->all();
+        $bibleRoots = collect(CatalogBible::categories());
 
-        return Category::query()
+        $roots = Category::query()
             ->where('is_active', true)
             ->where('origin', CatalogOrigin::China)
             ->whereNull('store_id')
             ->whereNull('parent_id')
-            ->whereIn('slug', $bibleRootSlugs)
-            ->with([
-                'children' => function ($q) use ($bibleChildSlugs) {
-                    $q->where('is_active', true)
-                        ->whereNull('store_id')
-                        ->where('origin', CatalogOrigin::China)
-                        ->where(function (Builder $child) use ($bibleChildSlugs) {
-                            $child->whereIn('slug', $bibleChildSlugs)
-                                ->orWhereHas('products', fn (Builder $p) => $this->chinaPublishedProductQuery($p));
-                        })
-                        ->orderBy('sort_order')
-                        ->orderBy('name');
-                },
-            ])
+            ->whereIn('slug', $bibleRoots->pluck('slug')->all())
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
+
+        return $roots
+            ->map(function (Category $root) use ($bibleRoots) {
+                $definition = $bibleRoots->firstWhere('slug', $root->slug);
+                $childDefinitions = $definition['children'] ?? [];
+
+                $visibleChildren = $this->crosswalkResolver->visibleBibleChildCategories(
+                    $root->slug,
+                    $childDefinitions,
+                );
+
+                $root->setRelation('children', $visibleChildren);
+
+                return $root;
+            })
+            ->filter(function (Category $root) {
+                return $this->crosswalkResolver->isBibleNodeVisible($root->slug)
+                    || $root->children->isNotEmpty();
+            })
+            ->values();
     }
 
     /**
@@ -69,16 +76,7 @@ class ChinaStorefrontCatalog
         $query = Brand::query()
             ->where('is_active', true)
             ->whereHas('products', fn (Builder $p) => $this->chinaPublishedProductQuery($p)
-                ->when(filled($categorySlug), function (Builder $p) use ($categorySlug) {
-                    $p->whereHas('category', function (Builder $c) use ($categorySlug) {
-                        $c->whereNull('store_id')
-                            ->where(function (Builder $inner) use ($categorySlug) {
-                                $inner->where('slug', $categorySlug)
-                                    ->orWhereHas('parent', fn (Builder $parent) => $parent->where('slug', $categorySlug))
-                                    ->orWhereHas('parent.parent', fn (Builder $grand) => $grand->where('slug', $categorySlug));
-                            });
-                    });
-                }))
+                ->when(filled($categorySlug), fn (Builder $p) => $this->applyDiscoveryCategoryFilter($p, $categorySlug)))
             ->orderByDesc('is_featured')
             ->orderBy('sort_order')
             ->orderBy('name')
@@ -109,19 +107,7 @@ class ChinaStorefrontCatalog
             ->withCount(
                 ['reviews as review_count' => fn ($query) => $query->where('is_approved', true)],
             )
-            ->when(filled($category), function (Builder $query) use ($category) {
-                $query->where(function (Builder $q) use ($category) {
-                    $q->where('category_id', $category)
-                        ->orWhereHas('category', function (Builder $c) use ($category) {
-                            $c->whereNull('store_id')
-                                ->where(function (Builder $inner) use ($category) {
-                                    $inner->where('slug', $category)
-                                        ->orWhere('id', $category)
-                                        ->orWhereHas('parent', fn (Builder $p) => $p->where('slug', $category));
-                                });
-                        });
-                });
-            })
+            ->when(filled($category), fn (Builder $query) => $this->applyDiscoveryCategoryFilter($query, $category))
             ->when(filled($brand), function (Builder $query) use ($brand) {
                 $query->where(function (Builder $q) use ($brand) {
                     $q->where('brand_id', $brand)
@@ -132,6 +118,31 @@ class ChinaStorefrontCatalog
             ->latest()
             ->paginate($perPage)
             ->withQueryString();
+    }
+
+    private function applyDiscoveryCategoryFilter(Builder $query, string $category): Builder
+    {
+        if (CatalogNavigationCrosswalk::forBibleSlug($category) !== null) {
+            $categoryIds = $this->crosswalkResolver->categoryIdsForBibleSlug($category);
+
+            if ($categoryIds === []) {
+                return $query->whereRaw('0 = 1');
+            }
+
+            return $query->whereIn('category_id', $categoryIds);
+        }
+
+        return $query->where(function (Builder $q) use ($category) {
+            $q->where('category_id', $category)
+                ->orWhereHas('category', function (Builder $c) use ($category) {
+                    $c->whereNull('store_id')
+                        ->where(function (Builder $inner) use ($category) {
+                            $inner->where('slug', $category)
+                                ->orWhere('id', $category)
+                                ->orWhereHas('parent', fn (Builder $p) => $p->where('slug', $category));
+                        });
+                });
+        });
     }
 
     private function chinaPublishedProductQuery(Builder $query): Builder
@@ -148,7 +159,13 @@ class ChinaStorefrontCatalog
                 $q->whereHas('variants', fn (Builder $variant) => $this->applySellableVariantConstraints($variant))
                     ->orWhere(function (Builder $simple) {
                         $simple->where('price', '>', 0)
-                            ->whereHas('inventory', fn (Builder $inventory) => $inventory->whereNull('product_variant_id'))
+                            ->where(function (Builder $stock) {
+                                $stock->whereHas('inventory', fn (Builder $inventory) => $inventory->whereNull('product_variant_id'))
+                                    ->orWhereHas('chinaCommercialStocks', function (Builder $commercial) {
+                                        $commercial->whereNull('product_variant_id')
+                                            ->where('available_quantity', '>', 0);
+                                    });
+                            })
                             ->whereDoesntHave('variants', fn (Builder $variant) => $this->applySellableVariantConstraints($variant));
                     });
             });
@@ -173,7 +190,11 @@ class ChinaStorefrontCatalog
             ->where(function (Builder $variant) {
                 $variant->whereHas('inventories', function (Builder $inventory) {
                     $inventory->where('warehouse_code', 'MAIN')->where('is_active', true);
-                })->orWhereHas('inventory');
+                })
+                    ->orWhereHas('inventory')
+                    ->orWhereHas('chinaCommercialStock', function (Builder $commercial) {
+                        $commercial->where('available_quantity', '>', 0);
+                    });
             });
     }
 }

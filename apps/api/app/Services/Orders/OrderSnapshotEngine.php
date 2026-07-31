@@ -5,9 +5,9 @@ namespace App\Services\Orders;
 use App\Enums\ShippingMethod;
 use App\Models\CartItem;
 use App\Models\Product;
-use App\Models\ProductImage;
 use App\Models\ProductShippingOption;
 use App\Models\ProductVariant;
+use App\Services\Shipping\ShippingDurationResolver;
 
 /**
  * Order Snapshot Engine — captures immutable commercial data at checkout.
@@ -15,6 +15,11 @@ use App\Models\ProductVariant;
  */
 class OrderSnapshotEngine
 {
+    public function __construct(
+        private readonly OrderSnapshotResolver $snapshotResolver,
+        private readonly ShippingDurationResolver $durationResolver,
+    ) {}
+
     /**
      * Build an order_items create payload from a cart line.
      *
@@ -25,49 +30,51 @@ class OrderSnapshotEngine
         $item->loadMissing([
             'product.brand',
             'product.images',
+            'product.media',
             'product.shippingOptions',
             'product.supplier',
             'variant.attributeValues.attribute',
+            'variant.catalogAttributeValues.attribute',
+            'variant.catalogAttributeValues.option',
+            'variant.media',
+            'variant.product',
         ]);
 
         $product = $item->product;
         $variant = $item->variant;
+        $resolved = $this->snapshotResolver->resolveLine($product, $variant);
 
         $currency = strtoupper((string) ($item->currency ?: $fallbackCurrency ?: 'TZS'));
         $unitPrice = (string) ($item->price_snapshot ?? $item->unit_price ?? '0.00');
         $quantity = (int) $item->quantity;
         $lineTotal = bcmul($unitPrice, (string) $quantity, 2);
 
-        $productName = (string) ($product?->name ?? 'Product');
-        $productSlug = $product?->slug;
-        $brandName = $product?->brand?->name;
-        $variantName = $variant?->name;
-        $variantSku = $variant?->sku;
-        $sku = $variantSku ?? $product?->sku;
-        $image = $this->resolveImagePath($product);
-
         $shipping = $this->resolveShippingSnapshot($item, $product);
 
         return $this->assemblePayload(
             productId: $item->product_id,
             productVariantId: $item->product_variant_id,
-            productName: $productName,
-            productSlug: $productSlug,
-            brandName: $brandName,
-            variantName: $variantName,
-            variantSku: $variantSku,
-            sku: $sku,
-            image: $image,
+            productName: (string) ($product?->name ?? 'Product'),
+            productSlug: $product?->slug,
+            brandName: $product?->brand?->name,
+            variantName: $resolved['variant_name'],
+            variantSku: $resolved['variant_sku'],
+            sku: $resolved['sku'],
+            barcode: $resolved['barcode'],
+            image: $resolved['image'],
             quantity: $quantity,
             unitPrice: $unitPrice,
             lineTotal: $lineTotal,
             currency: $currency,
-            attributes: $this->resolveAttributes($variant),
+            attributes: $resolved['attributes'],
             shippingMode: $shipping['mode'],
             shippingPrice: $shipping['price'],
             shippingNotes: $shipping['notes'],
             shippingSubtotal: $shipping['subtotal'],
             deliveryStatus: $shipping['delivery_status'],
+            estimatedMinDays: $shipping['estimated_min_days'],
+            estimatedMaxDays: $shipping['estimated_max_days'],
+            estimatedDeliveryDays: $shipping['estimated_delivery_days'],
         );
     }
 
@@ -85,15 +92,20 @@ class OrderSnapshotEngine
         ?string $shippingMode = null,
         ?string $shippingPrice = null,
     ): array {
-        $product->loadMissing(['brand', 'images', 'shippingOptions']);
-        $variant?->loadMissing(['attributeValues.attribute']);
+        $product->loadMissing(['brand', 'images', 'media', 'shippingOptions']);
+        $variant?->loadMissing([
+            'attributeValues.attribute',
+            'catalogAttributeValues.attribute',
+            'catalogAttributeValues.option',
+            'media',
+            'product',
+        ]);
+
+        $resolved = $this->snapshotResolver->resolveLine($product, $variant);
 
         $currency = strtoupper($currency);
         $unitPrice = (string) $unitPrice;
         $lineTotal = bcmul($unitPrice, (string) $quantity, 2);
-        $variantSku = $variant?->sku;
-        $sku = $variantSku ?? $product->sku;
-        $image = $this->resolveImagePath($product);
 
         $notes = null;
         if ($shippingMode !== null) {
@@ -104,26 +116,38 @@ class OrderSnapshotEngine
             ? bcmul((string) $shippingPrice, (string) $quantity, 2)
             : null;
 
+        $duration = $this->resolveDurationWindow(
+            shippingMode: $shippingMode,
+            isChina: $product->requiresChinaShipping(),
+            cartMin: null,
+            cartMax: null,
+            cartTypical: null,
+        );
+
         return $this->assemblePayload(
             productId: $product->id,
             productVariantId: $variant?->id,
             productName: (string) $product->name,
             productSlug: $product->slug,
             brandName: $product->brand?->name,
-            variantName: $variant?->name,
-            variantSku: $variantSku,
-            sku: $sku,
-            image: $image,
+            variantName: $resolved['variant_name'],
+            variantSku: $resolved['variant_sku'],
+            sku: $resolved['sku'],
+            barcode: $resolved['barcode'],
+            image: $resolved['image'],
             quantity: $quantity,
             unitPrice: $unitPrice,
             lineTotal: $lineTotal,
             currency: $currency,
-            attributes: $this->resolveAttributes($variant),
+            attributes: $resolved['attributes'],
             shippingMode: $shippingMode,
             shippingPrice: $shippingPrice,
             shippingNotes: $notes,
             shippingSubtotal: $shippingSubtotal,
             deliveryStatus: null,
+            estimatedMinDays: $duration['min_days'],
+            estimatedMaxDays: $duration['max_days'],
+            estimatedDeliveryDays: $duration['typical_days'],
         );
     }
 
@@ -139,6 +163,7 @@ class OrderSnapshotEngine
         ?string $variantName,
         ?string $variantSku,
         ?string $sku,
+        ?string $barcode,
         ?string $image,
         int $quantity,
         string $unitPrice,
@@ -150,6 +175,9 @@ class OrderSnapshotEngine
         ?string $shippingNotes,
         ?string $shippingSubtotal,
         ?string $deliveryStatus,
+        ?int $estimatedMinDays,
+        ?int $estimatedMaxDays,
+        ?int $estimatedDeliveryDays,
     ): array {
         return [
             'product_id' => $productId,
@@ -160,11 +188,14 @@ class OrderSnapshotEngine
             'brand_name_snapshot' => $brandName,
             'variant_name_snapshot' => $variantName,
             'variant_sku_snapshot' => $variantSku,
+            'barcode_snapshot' => $barcode,
             'currency_snapshot' => $currency,
             'unit_price_snapshot' => $unitPrice,
             'shipping_mode_snapshot' => $shippingMode,
             'shipping_price_snapshot' => $shippingPrice,
             'shipping_notes_snapshot' => $shippingNotes,
+            'estimated_min_days_snapshot' => $estimatedMinDays,
+            'estimated_max_days_snapshot' => $estimatedMaxDays,
             'attributes_snapshot' => $attributes,
             'product_image_snapshot' => $image,
             'image_snapshot' => $image,
@@ -180,6 +211,7 @@ class OrderSnapshotEngine
             'shipping_method' => $shippingMode,
             'shipping_price' => $shippingPrice,
             'shipping_subtotal' => $shippingSubtotal,
+            'estimated_delivery_days' => $estimatedDeliveryDays,
             'delivery_status' => $deliveryStatus,
         ];
     }
@@ -190,7 +222,10 @@ class OrderSnapshotEngine
      *     price: string|null,
      *     notes: string|null,
      *     subtotal: string|null,
-     *     delivery_status: string|null
+     *     delivery_status: string|null,
+     *     estimated_min_days: int|null,
+     *     estimated_max_days: int|null,
+     *     estimated_delivery_days: int|null
      * }
      */
     private function resolveShippingSnapshot(CartItem $item, ?Product $product): array
@@ -202,16 +237,30 @@ class OrderSnapshotEngine
                 'notes' => null,
                 'subtotal' => null,
                 'delivery_status' => null,
+                'estimated_min_days' => null,
+                'estimated_max_days' => null,
+                'estimated_delivery_days' => null,
             ];
         }
 
         if (! $product->requiresChinaShipping()) {
+            $duration = $this->resolveDurationWindow(
+                shippingMode: null,
+                isChina: false,
+                cartMin: $item->estimated_min_days !== null ? (int) $item->estimated_min_days : null,
+                cartMax: $item->estimated_max_days !== null ? (int) $item->estimated_max_days : null,
+                cartTypical: $item->estimated_delivery_days !== null ? (int) $item->estimated_delivery_days : null,
+            );
+
             return [
                 'mode' => null,
                 'price' => null,
                 'notes' => null,
                 'subtotal' => null,
                 'delivery_status' => 'To Be Negotiated',
+                'estimated_min_days' => $duration['min_days'],
+                'estimated_max_days' => $duration['max_days'],
+                'estimated_delivery_days' => $duration['typical_days'],
             ];
         }
 
@@ -229,12 +278,63 @@ class OrderSnapshotEngine
             ? bcmul($price, (string) $item->quantity, 2)
             : null;
 
+        $duration = $this->resolveDurationWindow(
+            shippingMode: $mode,
+            isChina: true,
+            cartMin: $item->estimated_min_days !== null ? (int) $item->estimated_min_days : null,
+            cartMax: $item->estimated_max_days !== null ? (int) $item->estimated_max_days : null,
+            cartTypical: $item->estimated_delivery_days !== null ? (int) $item->estimated_delivery_days : null,
+        );
+
         return [
             'mode' => $mode,
             'price' => $price,
             'notes' => $notes,
             'subtotal' => $subtotal,
             'delivery_status' => null,
+            'estimated_min_days' => $duration['min_days'],
+            'estimated_max_days' => $duration['max_days'],
+            'estimated_delivery_days' => $duration['typical_days'],
+        ];
+    }
+
+    /**
+     * Prefer cart-captured windows; otherwise resolve from selected mode / local default.
+     *
+     * @return array{min_days: int|null, max_days: int|null, typical_days: int|null}
+     */
+    private function resolveDurationWindow(
+        ?string $shippingMode,
+        bool $isChina,
+        ?int $cartMin,
+        ?int $cartMax,
+        ?int $cartTypical,
+    ): array {
+        if ($cartMin !== null && $cartMax !== null) {
+            return [
+                'min_days' => $cartMin,
+                'max_days' => $cartMax,
+                'typical_days' => $cartTypical ?? (int) round(($cartMin + $cartMax) / 2),
+            ];
+        }
+
+        $resolved = $this->durationResolver->resolveForShippingMode($shippingMode);
+        if ($resolved === null && ! $isChina) {
+            $resolved = $this->durationResolver->resolveLocal();
+        }
+
+        if ($resolved === null) {
+            return [
+                'min_days' => null,
+                'max_days' => null,
+                'typical_days' => null,
+            ];
+        }
+
+        return [
+            'min_days' => $resolved['min_days'],
+            'max_days' => $resolved['max_days'],
+            'typical_days' => $resolved['typical_days'],
         ];
     }
 
@@ -257,50 +357,5 @@ class OrderSnapshotEngine
             ->available()
             ->where('transport_mode', $mode)
             ->value('notes');
-    }
-
-    /**
-     * @return list<array{attribute: string, value: string}>|null
-     */
-    private function resolveAttributes(?ProductVariant $variant): ?array
-    {
-        if ($variant === null) {
-            return null;
-        }
-
-        if (! $variant->relationLoaded('attributeValues')) {
-            $variant->loadMissing('attributeValues.attribute');
-        }
-
-        $rows = $variant->attributeValues
-            ->map(fn ($value) => [
-                'attribute' => (string) ($value->attribute?->name ?? $value->attribute?->slug ?? 'Attribute'),
-                'value' => (string) ($value->value ?? ''),
-            ])
-            ->filter(fn (array $row) => $row['value'] !== '')
-            ->values()
-            ->all();
-
-        return $rows === [] ? null : $rows;
-    }
-
-    private function resolveImagePath(?Product $product): ?string
-    {
-        if ($product === null) {
-            return null;
-        }
-
-        $images = $product->relationLoaded('images')
-            ? $product->images
-            : $product->images()->orderBy('sort_order')->get();
-
-        if ($images->isEmpty()) {
-            return null;
-        }
-
-        /** @var ProductImage|null $primary */
-        $primary = $images->firstWhere('is_primary', true) ?? $images->sortBy('sort_order')->first();
-
-        return $primary?->path ?? $primary?->url ?? null;
     }
 }

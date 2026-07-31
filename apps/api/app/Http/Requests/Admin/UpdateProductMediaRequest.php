@@ -2,16 +2,19 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Enums\ProductMediaType;
+use App\Http\Requests\Admin\Concerns\ValidatesProductVariantMediaBinding;
 use App\Http\Requests\Concerns\AuthorizesAdminPermission;
 use App\Support\Admin\AdminPermissions;
-use App\Enums\ProductMediaType;
 use App\Support\Security\SafePublicUrl;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class UpdateProductMediaRequest extends FormRequest
 {
     use AuthorizesAdminPermission;
+    use ValidatesProductVariantMediaBinding;
 
     protected function requiredPermission(): string
     {
@@ -25,6 +28,7 @@ class UpdateProductMediaRequest extends FormRequest
     {
         return [
             'type' => ['sometimes', 'string', Rule::in(array_column(ProductMediaType::cases(), 'value'))],
+            'product_variant_id' => ['sometimes', 'nullable', 'uuid'],
             'url' => ['sometimes', 'nullable', 'string', 'max:2048', SafePublicUrl::rule()],
             'thumbnail_url' => ['sometimes', 'nullable', 'string', 'max:2048', SafePublicUrl::rule()],
             'alt_text' => ['sometimes', 'nullable', 'string', 'max:255'],
@@ -36,6 +40,11 @@ class UpdateProductMediaRequest extends FormRequest
         ];
     }
 
+    public function withValidator(Validator $validator): void
+    {
+        $this->validateProductVariantMediaBinding($validator);
+    }
+
     protected function prepareForValidation(): void
     {
         foreach (['is_primary', 'is_active'] as $field) {
@@ -44,6 +53,10 @@ class UpdateProductMediaRequest extends FormRequest
                     $field => filter_var($this->input($field), FILTER_VALIDATE_BOOLEAN),
                 ]);
             }
+        }
+
+        if ($this->has('product_variant_id') && $this->input('product_variant_id') === '') {
+            $this->merge(['product_variant_id' => null]);
         }
     }
 }

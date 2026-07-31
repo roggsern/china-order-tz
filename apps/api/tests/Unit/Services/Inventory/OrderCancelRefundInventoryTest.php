@@ -3,12 +3,14 @@
 namespace Tests\Unit\Services\Inventory;
 
 use App\Actions\AdminOrders\CancelOrderAction;
+use App\Enums\CommerceChannelCode;
 use App\Enums\InventoryMovementType;
 use App\Enums\OrderStatus;
 use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductVisibility;
 use App\Enums\RefundTransactionStatus;
 use App\Models\Admin;
+use App\Models\CommerceChannel;
 use App\Models\Inventory;
 use App\Models\InventoryMovement;
 use App\Models\InventoryStockMovement;
@@ -186,7 +188,7 @@ class OrderCancelRefundInventoryTest extends TestCase
     public function test_unpaid_cancel_releases_reservation_holds(): void
     {
         $user = User::factory()->create();
-        $product = Product::factory()->create([
+        $product = Product::factory()->tzLocal()->create([
             'name' => 'Hold Release Product',
             'price' => 5000,
             'is_active' => true,
@@ -250,7 +252,7 @@ class OrderCancelRefundInventoryTest extends TestCase
     private function makePaidSimpleOrder(int $onHand, int $qty): array
     {
         $user = User::factory()->create();
-        $product = Product::factory()->create([
+        $product = Product::factory()->tzLocal()->create([
             'name' => 'Simple Cancel Product',
             'price' => 10000,
             'is_active' => true,
@@ -267,6 +269,8 @@ class OrderCancelRefundInventoryTest extends TestCase
             'user_id' => $user->id,
             'status' => OrderStatus::Paid,
             'paid_at' => now(),
+            'commerce_channel_id' => CommerceChannel::query()->where('code', CommerceChannelCode::TzLocal->value)->value('id'),
+            'commerce_channel_snapshot' => ['code' => CommerceChannelCode::TzLocal->value],
             'subtotal' => 10000 * $qty,
             'total' => 10000 * $qty,
             'currency' => 'TZS',
@@ -295,7 +299,7 @@ class OrderCancelRefundInventoryTest extends TestCase
     private function makePaidVariantOrder(int $onHand, int $qty): array
     {
         $user = User::factory()->create();
-        $product = Product::factory()->create([
+        $product = Product::factory()->tzLocal()->create([
             'name' => 'Variant Cancel Product',
             'price' => 0,
             'is_active' => true,
@@ -320,6 +324,8 @@ class OrderCancelRefundInventoryTest extends TestCase
             'user_id' => $user->id,
             'status' => OrderStatus::Paid,
             'paid_at' => now(),
+            'commerce_channel_id' => CommerceChannel::query()->where('code', CommerceChannelCode::TzLocal->value)->value('id'),
+            'commerce_channel_snapshot' => ['code' => CommerceChannelCode::TzLocal->value],
             'subtotal' => 20000 * $qty,
             'total' => 20000 * $qty,
             'currency' => 'TZS',

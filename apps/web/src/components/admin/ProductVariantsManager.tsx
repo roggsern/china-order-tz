@@ -2,17 +2,26 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { VariantInventoryManager } from "@/components/admin/VariantInventoryManager";
+import { VariantMediaManager } from "@/components/admin/VariantMediaManager";
 import { VariantPricingManager } from "@/components/admin/VariantPricingManager";
+import { useAdminPermissions } from "@/hooks/use-admin-permissions";
+import {
+  canManageVariantMedia,
+  formatVariantImageCount,
+  resolveVariantMediaListLabel,
+} from "@/lib/admin/variant-media";
 import {
   AdminCatalogApiError,
   createAdminProductVariant,
   deleteAdminProductVariant,
+  fetchAdminProductMedia,
   fetchAdminProductVariants,
   generateAdminProductVariants,
   updateAdminProductVariant,
   type AdminProductVariant,
   type AdminVariantAttribute,
 } from "@/lib/api/admin-catalog";
+import { formatVariantDisplayLabel } from "@/lib/catalog/variant-display-attributes";
 
 type ProductVariantsManagerProps = {
   productId: string;
@@ -37,8 +46,11 @@ const emptyForm = (): ManualForm => ({
 });
 
 export function ProductVariantsManager({ productId }: ProductVariantsManagerProps) {
+  const { permissions } = useAdminPermissions();
+  const canUpdateMedia = canManageVariantMedia(permissions);
   const [variants, setVariants] = useState<AdminProductVariant[]>([]);
   const [attributes, setAttributes] = useState<AdminVariantAttribute[]>([]);
+  const [imageCounts, setImageCounts] = useState<Record<string, number>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +61,23 @@ export function ProductVariantsManager({ productId }: ProductVariantsManagerProp
   const [replaceExisting, setReplaceExisting] = useState(false);
   const [pricingVariantId, setPricingVariantId] = useState<string | null>(null);
   const [inventoryVariantId, setInventoryVariantId] = useState<string | null>(null);
+  const [mediaVariantId, setMediaVariantId] = useState<string | null>(null);
+
+  const loadImageCounts = useCallback(async (variantRows: AdminProductVariant[]) => {
+    const entries = await Promise.all(
+      variantRows.map(async (variant) => {
+        try {
+          const media = await fetchAdminProductMedia(productId, {
+            productVariantId: variant.id,
+          });
+          return [variant.id, media.filter((item) => item.type === "image").length] as const;
+        } catch {
+          return [variant.id, 0] as const;
+        }
+      }),
+    );
+    setImageCounts(Object.fromEntries(entries));
+  }, [productId]);
 
   const reload = useCallback(async () => {
     setIsLoading(true);
@@ -64,9 +93,11 @@ export function ProductVariantsManager({ productId }: ProductVariantsManagerProp
         }
         return next;
       });
+      void loadImageCounts(payload.variants);
     } catch (err) {
       setVariants([]);
       setAttributes([]);
+      setImageCounts({});
       setError(
         err instanceof AdminCatalogApiError
           ? err.message
@@ -75,7 +106,7 @@ export function ProductVariantsManager({ productId }: ProductVariantsManagerProp
     } finally {
       setIsLoading(false);
     }
-  }, [productId]);
+  }, [loadImageCounts, productId]);
 
   useEffect(() => {
     void reload();
@@ -176,6 +207,15 @@ export function ProductVariantsManager({ productId }: ProductVariantsManagerProp
         setEditingId(null);
         setForm(emptyForm());
       }
+      if (mediaVariantId === variant.id) {
+        setMediaVariantId(null);
+      }
+      if (pricingVariantId === variant.id) {
+        setPricingVariantId(null);
+      }
+      if (inventoryVariantId === variant.id) {
+        setInventoryVariantId(null);
+      }
       await reload();
     } catch (err) {
       setError(
@@ -239,10 +279,13 @@ export function ProductVariantsManager({ productId }: ProductVariantsManagerProp
       });
       setVariants(result.variants);
       setAttributes(result.attributes);
+      const generated = result.generated ?? result.createdCount ?? 0;
+      const needsPricing = result.needsPricing ?? 0;
+      const needsInventory = result.needsInventorySetup ?? 0;
       setSuccess(
-        `Generated ${result.createdCount ?? 0} new variant${
-          (result.createdCount ?? 0) === 1 ? "" : "s"
-        }.`,
+        generated === 0
+          ? "No new variants generated (combinations already exist)."
+          : `Generated ${generated} new variant${generated === 1 ? "" : "s"}. ${needsPricing} need pricing, ${needsInventory} need inventory stock.`,
       );
     } catch (err) {
       setError(
@@ -283,6 +326,7 @@ export function ProductVariantsManager({ productId }: ProductVariantsManagerProp
             <tr>
               <th className="px-3 py-2 font-medium">Name</th>
               <th className="px-3 py-2 font-medium">SKU</th>
+              <th className="px-3 py-2 font-medium">Images</th>
               <th className="px-3 py-2 font-medium">Attributes</th>
               <th className="px-3 py-2 font-medium">Pricing</th>
               <th className="px-3 py-2 font-medium">Inventory</th>
@@ -294,7 +338,7 @@ export function ProductVariantsManager({ productId }: ProductVariantsManagerProp
           <tbody>
             {variants.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-3 py-6 text-center text-zinc-500">
+                <td colSpan={9} className="px-3 py-6 text-center text-zinc-500">
                   No variants yet. Create manually or generate combinations below.
                 </td>
               </tr>
@@ -305,13 +349,17 @@ export function ProductVariantsManager({ productId }: ProductVariantsManagerProp
                     {variant.name || "—"}
                   </td>
                   <td className="px-3 py-2 font-mono text-xs text-zinc-700">{variant.sku}</td>
+                  <td className="px-3 py-2 text-xs text-zinc-600">
+                    {formatVariantImageCount(imageCounts[variant.id] ?? 0)}
+                  </td>
                   <td className="px-3 py-2 text-zinc-600">
-                    {variant.attributeValues.length > 0
-                      ? variant.attributeValues
-                          .map((row) => row.display || row.optionValue || row.valueText)
-                          .filter(Boolean)
-                          .join(" / ")
-                      : "—"}
+                    {formatVariantDisplayLabel(
+                      variant.displayAttributes,
+                      variant.attributeValues
+                        .map((row) => row.display || row.optionValue || row.valueText)
+                        .filter(Boolean)
+                        .join(" / "),
+                    ) || "—"}
                   </td>
                   <td className="px-3 py-2 text-xs text-zinc-600">
                     {variant.pricesCount} price{variant.pricesCount === 1 ? "" : "s"}
@@ -360,7 +408,20 @@ export function ProductVariantsManager({ productId }: ProductVariantsManagerProp
                         className="text-xs font-medium text-zinc-700 hover:underline"
                         disabled={busy}
                         onClick={() => {
+                          setPricingVariantId(null);
                           setInventoryVariantId(null);
+                          setMediaVariantId(variant.id);
+                        }}
+                      >
+                        Images
+                      </button>
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-zinc-700 hover:underline"
+                        disabled={busy}
+                        onClick={() => {
+                          setInventoryVariantId(null);
+                          setMediaVariantId(null);
                           setPricingVariantId(variant.id);
                         }}
                       >
@@ -372,6 +433,7 @@ export function ProductVariantsManager({ productId }: ProductVariantsManagerProp
                         disabled={busy}
                         onClick={() => {
                           setPricingVariantId(null);
+                          setMediaVariantId(null);
                           setInventoryVariantId(variant.id);
                         }}
                       >
@@ -393,6 +455,27 @@ export function ProductVariantsManager({ productId }: ProductVariantsManagerProp
           </tbody>
         </table>
       </div>
+
+      {mediaVariantId ? (
+        <VariantMediaManager
+          productId={productId}
+          variantId={mediaVariantId}
+          variantLabel={resolveVariantMediaListLabel(
+            variants.find((variant) => variant.id === mediaVariantId) ?? {
+              name: null,
+              sku: "Variant",
+            },
+          )}
+          canUpdate={canUpdateMedia}
+          onClose={() => setMediaVariantId(null)}
+          onChanged={(imageCount) =>
+            setImageCounts((current) => ({
+              ...current,
+              [mediaVariantId]: imageCount,
+            }))
+          }
+        />
+      ) : null}
 
       {pricingVariantId ? (
         <VariantPricingManager

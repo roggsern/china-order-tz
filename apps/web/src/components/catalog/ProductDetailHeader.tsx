@@ -1,7 +1,7 @@
 import type { Category } from "@/lib/types/catalog";
 import type { Product } from "@/lib/types/catalog";
 import { ProductBadges } from "./ProductBadge";
-import { RatingStars } from "./RatingStars";
+import { FeatureGatedRatingStars } from "./FeatureGatedRatingStars";
 import { StockStatus } from "./StockStatus";
 import { ProductOriginBadge } from "./ProductOriginBadge";
 
@@ -60,7 +60,7 @@ export function ProductDetailHeader({ product, category, className = "" }: Produ
       </div>
 
       <div className="mt-4">
-        <RatingStars rating={product.rating} size="md" showValue reviewCount={product.reviews} />
+        <FeatureGatedRatingStars rating={product.rating} size="md" showValue reviewCount={product.reviews} />
       </div>
     </header>
   );

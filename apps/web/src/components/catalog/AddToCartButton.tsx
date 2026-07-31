@@ -8,6 +8,11 @@ import { useAddToCart } from "@/components/cart/CartProvider";
 import { useCartDrawer } from "@/lib/cart/drawer-context";
 import { showProductAddedToast } from "@/lib/customer/customer-toast";
 import { getCatalogProductImageSrc } from "@/lib/catalog/product-images";
+import {
+  isProductPurchaseUnavailable,
+  resolvePurchaseDisabledLabel,
+  type ProductAvailabilityStatus,
+} from "@/lib/catalog/product-availability";
 
 interface AddToCartButtonProps {
   product: Product;
@@ -24,6 +29,8 @@ interface AddToCartButtonProps {
   quotedUnitPrice?: number;
   compareAtUnitPrice?: number;
   stockOverride?: number;
+  purchaseUnavailable?: boolean;
+  availabilityStatus?: ProductAvailabilityStatus;
 }
 
 export function AddToCartButton({
@@ -39,7 +46,12 @@ export function AddToCartButton({
   quotedUnitPrice,
   compareAtUnitPrice,
   stockOverride,
+  purchaseUnavailable: purchaseUnavailableProp,
+  availabilityStatus,
 }: AddToCartButtonProps) {
+  const purchaseUnavailable =
+    purchaseUnavailableProp ?? isProductPurchaseUnavailable(product);
+  const resolvedAvailabilityStatus = availabilityStatus ?? product.availabilityStatus;
   const isDisabled = disabled;
   const reduceMotion = useReducedMotion();
 
@@ -77,9 +89,13 @@ export function AddToCartButton({
       : "relative inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl border-2 border-zinc-900 bg-white py-3.5 text-sm font-semibold text-zinc-900 transition-all duration-200 hover:bg-zinc-900 hover:text-white active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white disabled:hover:text-zinc-900";
 
   const label = disabled
-    ? configurationId === null && variant === "detail"
-      ? "Select options"
-      : "Out of Stock"
+    ? resolvePurchaseDisabledLabel({
+        disabled: true,
+        purchaseUnavailable,
+        availabilityStatus: resolvedAvailabilityStatus,
+        configurationId,
+        variant,
+      })
     : added
       ? "Added to cart"
       : "Add to Cart";

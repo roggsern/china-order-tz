@@ -25,6 +25,7 @@ class ReviewFactory extends Factory
             'title' => fake()->optional()->sentence(4),
             'comment' => fake()->optional()->paragraph(),
             'is_approved' => fake()->boolean(80),
+            'status' => fake()->randomElement(['pending', 'approved', 'rejected']),
             'is_verified_purchase' => fake()->boolean(60),
         ];
     }
@@ -35,6 +36,15 @@ class ReviewFactory extends Factory
             'order_id' => $order->id,
             'is_verified_purchase' => true,
             'is_approved' => true,
+            'status' => 'approved',
+        ]);
+    }
+
+    public function pending(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_approved' => false,
+            'status' => 'pending',
         ]);
     }
 }

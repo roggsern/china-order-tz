@@ -1,4 +1,5 @@
 import { getCustomerApiToken } from "@/lib/api/customer-auth";
+import type { StorefrontVisitorIdentity } from "@/lib/storefront/visitor-identity";
 
 type ApiSuccessResponse<T> = {
   success?: boolean;
@@ -146,12 +147,22 @@ export function parseSessionMoney(value: string | number | null | undefined): nu
 
 export async function startCheckoutSession(
   token?: string | null,
+  identity?: StorefrontVisitorIdentity | null,
 ): Promise<CheckoutSessionPayload> {
+  const body =
+    identity !== undefined && identity !== null
+      ? {
+          visitor_uuid: identity.visitorUuid,
+          session_id: identity.sessionId,
+        }
+      : undefined;
+
   return sessionApiFetch<CheckoutSessionPayload>(
     "/api/checkout/start",
     {
       method: "POST",
       headers: getAuthHeaders(token),
+      body: body ? JSON.stringify(body) : undefined,
     },
     "Unable to start checkout.",
   );

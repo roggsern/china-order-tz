@@ -32,16 +32,18 @@ class ProductPrimarySyncService
     public function setPrimaryFromCatalogMedia(ProductMedia $media): ProductMedia
     {
         return DB::transaction(function () use ($media) {
-            $this->clearPrimaryFlags($media->product_id);
+            $this->clearPrimaryFlags($media->product_id, $media->product_variant_id);
 
             $media->update([
                 'is_primary' => true,
                 'is_active' => true,
             ]);
 
-            $pairedImage = $this->findLegacyImageForMedia($media);
-            if ($pairedImage !== null) {
-                $pairedImage->update(['is_primary' => true]);
+            if ($media->product_variant_id === null) {
+                $pairedImage = $this->findLegacyImageForMedia($media);
+                if ($pairedImage !== null) {
+                    $pairedImage->update(['is_primary' => true]);
+                }
             }
 
             return $media->fresh();
@@ -53,23 +55,36 @@ class ProductPrimarySyncService
         return DB::transaction(function () use ($media) {
             $media->update(['is_primary' => false]);
 
-            $pairedImage = $this->findLegacyImageForMedia($media);
-            if ($pairedImage !== null) {
-                $pairedImage->update(['is_primary' => false]);
+            if ($media->product_variant_id === null) {
+                $pairedImage = $this->findLegacyImageForMedia($media);
+                if ($pairedImage !== null) {
+                    $pairedImage->update(['is_primary' => false]);
+                }
             }
 
             return $media->fresh();
         });
     }
 
-    private function clearPrimaryFlags(string $productId): void
+    private function clearPrimaryFlags(string $productId, ?string $variantId = null): void
     {
-        ProductImage::query()
-            ->where('product_id', $productId)
-            ->update(['is_primary' => false]);
+        if ($variantId === null) {
+            ProductImage::query()
+                ->where('product_id', $productId)
+                ->update(['is_primary' => false]);
+
+            ProductMedia::query()
+                ->where('product_id', $productId)
+                ->whereNull('product_variant_id')
+                ->where('type', ProductMediaType::Image)
+                ->update(['is_primary' => false]);
+
+            return;
+        }
 
         ProductMedia::query()
             ->where('product_id', $productId)
+            ->where('product_variant_id', $variantId)
             ->where('type', ProductMediaType::Image)
             ->update(['is_primary' => false]);
     }
@@ -84,6 +99,7 @@ class ProductPrimarySyncService
 
         return ProductMedia::query()
             ->where('product_id', $image->product_id)
+            ->whereNull('product_variant_id')
             ->where('type', ProductMediaType::Image)
             ->where('url', $url)
             ->first();
@@ -91,7 +107,7 @@ class ProductPrimarySyncService
 
     private function findLegacyImageForMedia(ProductMedia $media): ?ProductImage
     {
-        if (! $media->url) {
+        if (! $media->url || $media->product_variant_id !== null) {
             return null;
         }
 

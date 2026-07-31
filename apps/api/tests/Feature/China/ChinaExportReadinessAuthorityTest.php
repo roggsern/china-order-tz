@@ -486,13 +486,14 @@ class ChinaExportReadinessAuthorityTest extends TestCase
         );
         $this->assertTrue($eligibility['eligible']);
 
-        // Source-level guarantee: eligibility never imports/recalculates export prerequisites.
+        // Source-level guarantee: company shipment eligibility only consumes export_ready_at.
+        // Customer agent handover reads persisted QC + warehouse flags separately.
         $source = file_get_contents((new ReflectionClass(ShipmentEligibilityService::class))->getFileName());
         $this->assertStringNotContainsString('evaluateExportReadinessBlockers', $source);
-        $this->assertStringNotContainsString('ChinaQcStatus', $source);
         $this->assertStringNotContainsString('completeConsolidation', $source);
         $this->assertStringNotContainsString('markExportReady', $source);
         $this->assertStringContainsString('isExportReadyForShipment', $source);
+        $this->assertStringContainsString('evaluateCustomerAgentPickup', $source);
     }
 
     public function test_legacy_china_fulfillment_without_workflow_record_remains_eligible(): void

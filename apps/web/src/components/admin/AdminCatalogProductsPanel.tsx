@@ -6,6 +6,7 @@ import {
   calculateProductPublishReadiness,
   formatPublishReadinessMissingLabels,
   isLeafCategoryId,
+  isSellableVariant,
 } from "@/lib/admin/product-publish-readiness";
 import { isChinaImportCommerceChannel, hasPublishableShippingOption } from "@/lib/admin/product-shipping-sync";
 import {
@@ -14,12 +15,38 @@ import {
   shouldShowProductStoreSelector,
   validateProductStoreAssignment,
 } from "@/lib/admin/product-store-assignment";
+import {
+  mergeProductSupplierIdIntoPayload,
+  resolveProductSupplierIdForReadiness,
+  shouldShowProductSupplierSelector,
+  validateProductSupplierAssignment,
+} from "@/lib/admin/product-supplier-assignment";
+import { fetchAdminSuppliers, type AdminSupplier } from "@/lib/api/admin-procurement";
 import { PublishReadinessChecklist } from "@/components/admin/PublishReadinessChecklist";
+import { AdminProductBulkActionBar } from "@/components/admin/AdminProductBulkActionBar";
+import { AdminProductCreationWizard } from "@/components/admin/AdminProductCreationWizard";
+import { AdminBrandAsyncSelect } from "@/components/admin/AdminBrandAsyncSelect";
+import { AdminCategoryTreeSelect } from "@/components/admin/AdminCategoryTreeSelect";
+import { AdminSupplierAsyncSelect } from "@/components/admin/AdminSupplierAsyncSelect";
 import { ProductMediaManager } from "@/components/admin/ProductMediaManager";
 import { ProductShippingManager } from "@/components/admin/ProductShippingManager";
 import { ProductStockManager } from "@/components/admin/ProductStockManager";
 import { ProductSpecificationsManager } from "@/components/admin/ProductSpecificationsManager";
 import { ProductVariantsManager } from "@/components/admin/ProductVariantsManager";
+import {
+  adminProductThumbnailUrl,
+  formatAdminChannelBadge,
+  formatAdminPriceRange,
+  formatAdminStockSummary,
+} from "@/lib/admin/admin-product-list";
+import {
+  clearTableSelection,
+  createEmptySelection,
+  pruneSelectionToVisible,
+  resolveTableSelectionState,
+  toggleSelectAllVisible,
+  toggleTableSelection,
+} from "@/lib/admin/table-selection";
 import {
   AdminCatalogApiError,
   commerceJourneyToChannelCode,
@@ -49,6 +76,10 @@ import {
   type AdminStoreOption,
   type CommerceJourney,
 } from "@/lib/api/admin-catalog";
+import { useAdminPermissions } from "@/hooks/use-admin-permissions";
+import { hasAdminPermission } from "@/lib/api/admin-me";
+import { resolveBrandLeafCategoryId } from "@/lib/admin/catalog-selector-utils";
+import { shouldUseProductCreationWizard } from "@/lib/admin/product-creation-wizard";
 
 type ProductFormState = {
   id?: string;
@@ -64,6 +95,7 @@ type ProductFormState = {
   subcategoryId: string;
   catalogProductTypeId: string;
   brandId: string;
+  supplierId: string;
   status: "draft" | "active" | "archived";
   visibility: "public" | "private" | "hidden";
   sortOrder: number;
@@ -83,6 +115,7 @@ const emptyForm = (): ProductFormState => ({
   subcategoryId: "",
   catalogProductTypeId: "",
   brandId: "",
+  supplierId: "",
   status: "draft",
   visibility: "public",
   sortOrder: 0,
@@ -118,12 +151,16 @@ function productTypeMatchesCategoryScope(
 const PAGE_SIZE = 15;
 
 export function AdminCatalogProductsPanel() {
+  const { permissions } = useAdminPermissions();
+  const canCreateBrand = hasAdminPermission(permissions, "catalog.create");
   const [products, setProducts] = useState<AdminCatalogProduct[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => createEmptySelection());
   const [trashed, setTrashed] = useState<AdminCatalogProduct[]>([]);
   const [departments, setDepartments] = useState<AdminDepartment[]>([]);
   const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [productTypes, setProductTypes] = useState<AdminCatalogProductType[]>([]);
   const [brands, setBrands] = useState<AdminBrand[]>([]);
+  const [suppliers, setSuppliers] = useState<AdminSupplier[]>([]);
   const [commerceChannels, setCommerceChannels] = useState<AdminApiCommerceChannel[]>([]);
   const [stores, setStores] = useState<AdminStoreOption[]>([]);
   const [storesLoading, setStoresLoading] = useState(false);
@@ -177,12 +214,13 @@ export function AdminCatalogProductsPanel() {
   const reloadLookups = useCallback(async () => {
     setStoresLoading(true);
     setStoresError(null);
-    const [nextDepartments, nextCategories, nextTypes, nextBrands, nextChannels, nextStores] =
+    const [nextDepartments, nextCategories, nextTypes, nextBrands, nextSuppliers, nextChannels, nextStores] =
       await Promise.all([
         fetchAdminDepartments(),
         fetchAdminCategories(),
         fetchAdminCatalogProductTypes(),
         fetchAdminBrands(),
+        fetchAdminSuppliers({ isActive: true }).catch(() => [] as AdminSupplier[]),
         fetchAdminCommerceChannels().catch(() => [] as AdminApiCommerceChannel[]),
         fetchAdminStores().catch((err: unknown) => {
           setStoresError(
@@ -197,6 +235,7 @@ export function AdminCatalogProductsPanel() {
     setCategories(nextCategories);
     setProductTypes(nextTypes);
     setBrands(nextBrands);
+    setSuppliers(nextSuppliers);
     setCommerceChannels(nextChannels);
     setStores(nextStores);
     setStoresLoading(false);
@@ -264,6 +303,13 @@ export function AdminCatalogProductsPanel() {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  const visibleIds = useMemo(() => products.map((product) => product.id), [products]);
+  const selection = resolveTableSelectionState(selectedIds, visibleIds);
+
+  useEffect(() => {
+    setSelectedIds((current) => pruneSelectionToVisible(current, visibleIds));
+  }, [visibleIds]);
 
   const rootCategories = useMemo(
     () => categories.filter((item) => !item.parentId),
@@ -389,13 +435,19 @@ export function AdminCatalogProductsPanel() {
         price: product.price,
         shortDescription: product.shortDescription,
         description: product.description,
-        commerceJourney: "",
+        commerceJourney:
+          product.commerceChannelCode === "TZ_LOCAL"
+            ? "tz"
+            : product.commerceChannelCode === "CHINA_IMPORT"
+              ? "china"
+              : "",
         storeId: product.storeId ?? "",
         departmentId: product.departmentId ?? category?.departmentId ?? "",
         categoryId: category?.id ?? "",
         subcategoryId: subcategory?.id ?? product.categoryId ?? "",
         catalogProductTypeId: product.catalogProductTypeId ?? "",
         brandId: product.brandId ?? "",
+        supplierId: product.supplierId ?? "",
         status:
           product.status === "active" || product.status === "archived" ? product.status : "draft",
         visibility: product.visibility,
@@ -463,6 +515,26 @@ export function AdminCatalogProductsPanel() {
   }, [form?.id, form?.storeId, publishContext?.storeId, publishContext?.commerceChannelCode]);
 
   useEffect(() => {
+    if (!form?.id || !publishContext?.supplierId || form.supplierId.trim()) {
+      return;
+    }
+
+    if (
+      !shouldShowProductSupplierSelector({
+        isNewProduct: false,
+        commerceJourney: "",
+        commerceChannelCode: publishContext.commerceChannelCode,
+      })
+    ) {
+      return;
+    }
+
+    setForm((previous) =>
+      previous ? { ...previous, supplierId: publishContext.supplierId ?? "" } : previous,
+    );
+  }, [form?.id, form?.supplierId, publishContext?.supplierId, publishContext?.commerceChannelCode]);
+
+  useEffect(() => {
     if (!form?.id) {
       setPublishShippingOptions(null);
       return;
@@ -506,6 +578,18 @@ export function AdminCatalogProductsPanel() {
     });
   }, [form, publishContext?.commerceChannelCode]);
 
+  const showProductSupplierSelector = useMemo(() => {
+    if (!form) {
+      return false;
+    }
+
+    return shouldShowProductSupplierSelector({
+      isNewProduct: !form.id,
+      commerceJourney: form.commerceJourney,
+      commerceChannelCode: publishContext?.commerceChannelCode ?? null,
+    });
+  }, [form, publishContext?.commerceChannelCode]);
+
   const publishReadiness = useMemo(() => {
     if (!form) {
       return null;
@@ -533,6 +617,13 @@ export function AdminCatalogProductsPanel() {
       storeId: resolveProductStoreIdForReadiness({
         formStoreId: form.storeId,
         publishContextStoreId: publishContext?.storeId ?? null,
+        commerceChannelCode,
+        commerceJourney: form.commerceJourney,
+        isNewProduct: !form.id,
+      }),
+      supplierId: resolveProductSupplierIdForReadiness({
+        formSupplierId: form.supplierId,
+        publishContextSupplierId: publishContext?.supplierId ?? null,
         commerceChannelCode,
         commerceJourney: form.commerceJourney,
         isNewProduct: !form.id,
@@ -667,28 +758,38 @@ export function AdminCatalogProductsPanel() {
     }
   };
 
-  const handleSave = async () => {
+  const useWizardFlow = Boolean(
+    form &&
+      shouldUseProductCreationWizard({
+        isNewProduct: !form.id,
+        status: form.status,
+      }),
+  );
+
+  const saveProductDraft = async (options?: {
+    strictStepValidation?: boolean;
+  }): Promise<boolean> => {
     if (!form || !form.name.trim()) {
       setActionError("Product name is required.");
-      return;
+      return false;
     }
     if (!form.catalogProductTypeId) {
       setActionError("Catalog product type is required.");
-      return;
+      return false;
     }
 
     if (form.id && form.status === "active" && publishReadiness && !publishReadiness.ready) {
       setActionError(
         `Cannot activate yet. Missing: ${formatPublishReadinessMissingLabels(publishReadiness)}.`,
       );
-      return;
+      return false;
     }
 
     if (!form.id && form.status !== "draft") {
       setActionError(
         "New products must be created as draft. Complete Media, Specs, Variants, and Pricing before activating.",
       );
-      return;
+      return false;
     }
 
     let createChannelId: string | null = null;
@@ -696,7 +797,7 @@ export function AdminCatalogProductsPanel() {
     if (!form.id) {
       if (form.commerceJourney !== "china" && form.commerceJourney !== "tz") {
         setActionError("Select a commerce journey.");
-        return;
+        return false;
       }
 
       createChannelId = resolveAdminCommerceChannelId(
@@ -705,26 +806,119 @@ export function AdminCatalogProductsPanel() {
       );
       if (!createChannelId) {
         setActionError("Unable to resolve commerce channel. Refresh and try again.");
-        return;
+        return false;
       }
     }
+
+    const requireChannelFields = options?.strictStepValidation !== false && !useWizardFlow;
 
     const storeValidationError = validateProductStoreAssignment({
       isNewProduct: !form.id,
       commerceJourney: form.commerceJourney,
       commerceChannelCode: publishContext?.commerceChannelCode ?? null,
       storeId: form.storeId,
+      requireAssignment: requireChannelFields,
     });
     if (storeValidationError) {
       setActionError(storeValidationError);
-      return;
+      return false;
+    }
+
+    const supplierValidationError = validateProductSupplierAssignment({
+      isNewProduct: !form.id,
+      commerceJourney: form.commerceJourney,
+      commerceChannelCode: publishContext?.commerceChannelCode ?? null,
+      supplierId: form.supplierId,
+      requireAssignment: requireChannelFields,
+    });
+    if (supplierValidationError) {
+      setActionError(supplierValidationError);
+      return false;
     }
 
     setSaving(true);
     setActionError(null);
 
-    const payload = mergeProductStoreIdIntoPayload(
+    const payload = mergeProductSupplierIdIntoPayload(
+      mergeProductStoreIdIntoPayload(
+        {
+          name: form.name.trim(),
+          catalog_product_type_id: form.catalogProductTypeId,
+          brand_id: form.brandId || null,
+          sku: form.sku.trim() || null,
+          price: form.price,
+          short_description: form.shortDescription.trim() || null,
+          description: form.description.trim() || null,
+          status: form.id ? form.status : "draft",
+          visibility: form.visibility,
+          is_featured: form.isFeatured,
+          sort_order: form.sortOrder,
+          ...(!form.id
+            ? {
+                commerce_channel_id: createChannelId,
+              }
+            : {}),
+        },
+        {
+          isNewProduct: !form.id,
+          commerceJourney: form.commerceJourney,
+          commerceChannelCode: publishContext?.commerceChannelCode ?? null,
+          storeId: form.storeId,
+        },
+      ),
       {
+        isNewProduct: !form.id,
+        commerceJourney: form.commerceJourney,
+        commerceChannelCode: publishContext?.commerceChannelCode ?? null,
+        supplierId: form.supplierId,
+      },
+    );
+
+    try {
+      if (form.id) {
+        await updateAdminCatalogProduct(form.id, payload);
+        if (!useWizardFlow) {
+          setForm(null);
+        }
+      } else {
+        const created = await createAdminCatalogProduct(payload);
+        setForm({ ...form, id: created.id });
+        if (!useWizardFlow) {
+          setFormTab("media");
+        }
+      }
+      await reload();
+      return true;
+    } catch (err) {
+      setActionError(
+        err instanceof AdminCatalogApiError ? err.message : "Unable to save product.",
+      );
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSave = async () => {
+    await saveProductDraft({ strictStepValidation: true });
+  };
+
+  const handleWizardPublish = async () => {
+    if (!form?.id) {
+      setActionError("Save the product draft before publishing.");
+      return;
+    }
+    if (!publishReadiness?.ready) {
+      setActionError(
+        `Cannot publish yet. Missing: ${formatPublishReadinessMissingLabels(publishReadiness!)}.`,
+      );
+      return;
+    }
+
+    setSaving(true);
+    setActionError(null);
+    try {
+      await updateAdminCatalogProduct(form.id, {
         name: form.name.trim(),
         catalog_product_type_id: form.catalogProductTypeId,
         brand_id: form.brandId || null,
@@ -732,37 +926,34 @@ export function AdminCatalogProductsPanel() {
         price: form.price,
         short_description: form.shortDescription.trim() || null,
         description: form.description.trim() || null,
-        status: form.id ? form.status : "draft",
+        status: "active",
         visibility: form.visibility,
         is_featured: form.isFeatured,
         sort_order: form.sortOrder,
-        ...(!form.id
-          ? {
-              commerce_channel_id: createChannelId,
-            }
-          : {}),
-      },
-      {
-        isNewProduct: !form.id,
-        commerceJourney: form.commerceJourney,
-        commerceChannelCode: publishContext?.commerceChannelCode ?? null,
-        storeId: form.storeId,
-      },
-    );
-
-    try {
-      if (form.id) {
-        await updateAdminCatalogProduct(form.id, payload);
-        setForm(null);
-      } else {
-        const created = await createAdminCatalogProduct(payload);
-        setForm({ ...form, id: created.id });
-        setFormTab("media");
-      }
+        ...mergeProductStoreIdIntoPayload(
+          {},
+          {
+            isNewProduct: false,
+            commerceJourney: form.commerceJourney,
+            commerceChannelCode: publishContext?.commerceChannelCode ?? null,
+            storeId: form.storeId,
+          },
+        ),
+        ...mergeProductSupplierIdIntoPayload(
+          {},
+          {
+            isNewProduct: false,
+            commerceJourney: form.commerceJourney,
+            commerceChannelCode: publishContext?.commerceChannelCode ?? null,
+            supplierId: form.supplierId,
+          },
+        ),
+      });
+      setForm(null);
       await reload();
     } catch (err) {
       setActionError(
-        err instanceof AdminCatalogApiError ? err.message : "Unable to save product.",
+        err instanceof AdminCatalogApiError ? err.message : "Unable to publish product.",
       );
     } finally {
       setSaving(false);
@@ -804,9 +995,9 @@ export function AdminCatalogProductsPanel() {
         <div className="admin-card mb-4 p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-zinc-900">
-              {form.id ? "Edit product" : "New product"}
+              {useWizardFlow ? "Create product (draft wizard)" : form.id ? "Edit product" : "New product"}
             </h2>
-            {form.id ? (
+            {form.id && !useWizardFlow ? (
               <div className="flex gap-1 rounded-lg border border-zinc-200 p-0.5">
                 <button
                   type="button"
@@ -894,7 +1085,38 @@ export function AdminCatalogProductsPanel() {
             </div>
           ) : null}
 
-          {form.id && formTab === "media" ? (
+          {useWizardFlow ? (
+            <div className="mt-4">
+              <AdminProductCreationWizard
+                form={form}
+                setForm={(updater) => setForm((current) => (current ? updater(current) : current))}
+                departments={departments}
+                categories={categories}
+                productTypes={productTypes}
+                brands={brands}
+                suppliers={suppliers}
+                stores={stores}
+                storesLoading={storesLoading}
+                storesError={storesError}
+                canCreateBrand={canCreateBrand}
+                saving={saving}
+                actionError={actionError}
+                publishReadiness={publishReadiness}
+                publishVariantCount={publishVariants.length}
+                publishSellableVariantCount={publishVariants.filter(isSellableVariant).length}
+                hasPublishableShipping={hasPublishableShippingOption(publishShippingOptions ?? [])}
+                onSaveDraft={saveProductDraft}
+                onPublish={handleWizardPublish}
+                onCancel={() => setForm(null)}
+                onRefreshPublishContext={() => {
+                  void refreshPublishContext();
+                }}
+                onRefreshShipping={() => {
+                  void refreshPublishShippingOptions();
+                }}
+              />
+            </div>
+          ) : form.id && formTab === "media" ? (
             <div className="mt-4">
               <ProductMediaManager productId={form.id} productName={form.name || "Product"} />
               <div className="mt-4">
@@ -1064,20 +1286,33 @@ export function AdminCatalogProductsPanel() {
               <label className="admin-label" htmlFor="product-brand">
                 Brand
               </label>
-              <select
+              <AdminBrandAsyncSelect
                 id="product-brand"
-                className="admin-input mt-1.5"
                 value={form.brandId}
-                onChange={(event) => setForm({ ...form, brandId: event.target.value })}
-              >
-                <option value="">Select brand</option>
-                {brands.map((brand) => (
-                  <option key={brand.id} value={brand.id}>
-                    {brand.name}
-                  </option>
-                ))}
-              </select>
+                selectedLabel={brands.find((brand) => brand.id === form.brandId)?.name}
+                categoryId={resolveBrandLeafCategoryId(form.categoryId, form.subcategoryId)}
+                canCreate={canCreateBrand}
+                onChange={(brandId) => setForm({ ...form, brandId })}
+              />
             </div>
+            {showProductSupplierSelector ? (
+              <div>
+                <label className="admin-label" htmlFor="product-supplier">
+                  Supplier *
+                </label>
+                <AdminSupplierAsyncSelect
+                  id="product-supplier"
+                  value={form.supplierId}
+                  selectedLabel={
+                    suppliers.find((supplier) => supplier.id === form.supplierId)?.name
+                  }
+                  onChange={(supplierId) => setForm({ ...form, supplierId })}
+                />
+                <p className="mt-1 text-xs text-zinc-500">
+                  Required for China import procurement. Used when creating supplier purchase orders.
+                </p>
+              </div>
+            ) : null}
             <div>
               <label className="admin-label" htmlFor="product-price">
                 Base price (TZS)
@@ -1128,52 +1363,29 @@ export function AdminCatalogProductsPanel() {
               <label className="admin-label" htmlFor="form-category">
                 Category *
               </label>
-              <select
+              <AdminCategoryTreeSelect
                 id="form-category"
-                className="admin-input mt-1.5"
-                value={form.categoryId}
+                categories={categories}
+                departmentId={form.departmentId}
+                categoryId={form.categoryId}
+                subcategoryId={form.subcategoryId}
                 disabled={!form.departmentId}
-                onChange={(event) =>
+                onChange={(selection) =>
                   setForm({
                     ...form,
-                    categoryId: event.target.value,
-                    subcategoryId: "",
+                    categoryId: selection.categoryId,
+                    subcategoryId: selection.subcategoryId,
                     catalogProductTypeId: "",
                   })
                 }
-              >
-                <option value="">Select category</option>
-                {formCategories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="admin-label" htmlFor="form-subcategory">
-                Subcategory *
-              </label>
-              <select
-                id="form-subcategory"
-                className="admin-input mt-1.5"
-                value={form.subcategoryId}
-                disabled={!form.categoryId}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    subcategoryId: event.target.value,
-                    catalogProductTypeId: "",
-                  })
-                }
-              >
-                <option value="">Select subcategory</option>
-                {formSubcategories.map((subcategory) => (
-                  <option key={subcategory.id} value={subcategory.id}>
-                    {subcategory.name}
-                  </option>
-                ))}
-              </select>
+              />
+              {!form.departmentId ? (
+                <p className="mt-1 text-xs text-zinc-500">Select a department first.</p>
+              ) : (
+                <p className="mt-1 text-xs text-zinc-500">
+                  Search and pick a parent category or subcategory (shown as a tree).
+                </p>
+              )}
             </div>
             <div>
               <label className="admin-label" htmlFor="form-type">
@@ -1360,6 +1572,16 @@ export function AdminCatalogProductsPanel() {
         </div>
       ) : null}
 
+      <AdminProductBulkActionBar
+        selectedCount={selection.selectedCount}
+        selectedIds={[...selectedIds]}
+        permissions={permissions}
+        onClearSelection={() => setSelectedIds(clearTableSelection())}
+        onCompleted={() => {
+          void reload();
+        }}
+      />
+
       <div className="admin-card overflow-hidden">
         <div className="flex flex-wrap gap-3 border-b border-zinc-200 px-4 py-3">
           <input
@@ -1479,9 +1701,56 @@ export function AdminCatalogProductsPanel() {
           </div>
         ) : (
           <>
+            <div className="flex items-center gap-3 border-b border-zinc-100 bg-zinc-50/60 px-5 py-2">
+              <input
+                type="checkbox"
+                checked={selection.allVisibleSelected}
+                onChange={() =>
+                  setSelectedIds((current) => toggleSelectAllVisible(current, visibleIds))
+                }
+                aria-label="Select all products on this page"
+                className="h-4 w-4 rounded border-zinc-300 text-zinc-900"
+              />
+              <span className="text-xs text-zinc-500">
+                Select all on this page
+                {selection.selectedCount > 0
+                  ? ` · ${selection.selectedCount} selected`
+                  : ""}
+              </span>
+            </div>
             <ul className="divide-y divide-zinc-100">
-              {products.map((product) => (
+              {products.map((product) => {
+                const thumb = adminProductThumbnailUrl(product.image);
+                const channel = formatAdminChannelBadge(
+                  product.commerceChannelCode,
+                  product.commerceChannelLabel,
+                );
+
+                return (
                 <li key={product.id} className="flex flex-wrap items-start gap-3 px-5 py-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(product.id)}
+                    onChange={() =>
+                      setSelectedIds((current) => toggleTableSelection(current, product.id))
+                    }
+                    aria-label={`Select product ${product.name}`}
+                    className="mt-5 h-4 w-4 shrink-0 rounded border-zinc-300 text-zinc-900"
+                  />
+                  <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50">
+                    {thumb ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={thumb}
+                        alt={product.image?.altText || product.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+                        No img
+                      </div>
+                    )}
+                  </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-zinc-900">
                       {product.name}
@@ -1496,6 +1765,13 @@ export function AdminCatalogProductsPanel() {
                       >
                         {product.status}
                       </span>
+                      {channel ? (
+                        <span
+                          className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${channel.className}`}
+                        >
+                          {channel.label}
+                        </span>
+                      ) : null}
                       {product.isFeatured ? (
                         <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-700">
                           Featured
@@ -1509,7 +1785,17 @@ export function AdminCatalogProductsPanel() {
                       {product.catalogProductTypeName
                         ? ` · ${product.catalogProductTypeName}`
                         : ""}
+                      {product.storeName ? ` · ${product.storeName}` : ""}
                     </p>
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-600">
+                      <span>{formatAdminPriceRange(product.priceRange)}</span>
+                      <span>
+                        {product.variantsCount} variant{product.variantsCount === 1 ? "" : "s"}
+                      </span>
+                      <span>
+                        {formatAdminStockSummary(product.stockSummary, product.variantsCount)}
+                      </span>
+                    </div>
                     {product.shortDescription ? (
                       <p className="mt-1 text-xs text-zinc-600">{product.shortDescription}</p>
                     ) : null}
@@ -1552,7 +1838,8 @@ export function AdminCatalogProductsPanel() {
                     </button>
                   </div>
                 </li>
-              ))}
+                );
+              })}
             </ul>
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-200 px-4 py-3">
               <p className="text-xs text-zinc-500">

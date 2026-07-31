@@ -5,6 +5,7 @@ import {
   formatAdminOrderProductTooltip,
   getAdminOrderListSummary,
 } from "@/lib/admin/order-list-summary";
+import { resolveOrderLineItemImage } from "@/lib/order/resolve-order-item-image";
 
 interface AdminOrderProductCellProps {
   order: Order;
@@ -19,6 +20,8 @@ export function AdminOrderProductCell({
 }: AdminOrderProductCellProps) {
   const summary = getAdminOrderListSummary(order);
   const tooltip = formatAdminOrderProductTooltip(order);
+  const primaryItem = order.items[0];
+  const imageUrl = primaryItem ? resolveOrderLineItemImage(primaryItem) : undefined;
 
   return (
     <div
@@ -32,17 +35,30 @@ export function AdminOrderProductCell({
         }`}
       >
         <ProductImageDisplay
+          src={imageUrl}
           image={summary.primaryProductImage}
           className="h-full w-full"
           emojiClassName={compact ? "text-base" : "text-lg"}
         />
       </div>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p
-          className={`truncate font-medium text-zinc-900 ${compact ? "max-w-[160px] text-xs" : "max-w-[200px] text-sm"}`}
+          className={`font-medium text-zinc-900 ${compact ? "text-xs" : "text-sm"} ${
+            compact ? "line-clamp-2" : "truncate max-w-[220px]"
+          }`}
         >
           {summary.primaryProductName}
         </p>
+        {summary.primaryVariantLabel && (
+          <p className={`mt-0.5 text-zinc-500 ${compact ? "text-[11px] line-clamp-2" : "text-xs truncate max-w-[220px]"}`}>
+            {summary.primaryVariantLabel}
+          </p>
+        )}
+        {summary.primaryQuantity > 0 && (
+          <p className={`mt-0.5 font-medium text-zinc-600 ${compact ? "text-[11px]" : "text-xs"}`}>
+            Qty {summary.primaryQuantity}
+          </p>
+        )}
         {showSource && (
           <div className="mt-1">
             <AdminOrderTypeBadge orderType={summary.orderType} />

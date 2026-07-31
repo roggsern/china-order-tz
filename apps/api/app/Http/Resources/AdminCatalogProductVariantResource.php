@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use App\Enums\CatalogAttributeType;
 use App\Models\ProductVariant;
 use App\Models\ProductVariantAttributeValue;
+use App\Services\Catalog\ProductVariantAttributeResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -19,6 +20,8 @@ class AdminCatalogProductVariantResource extends JsonResource
         $values = $this->relationLoaded('catalogAttributeValues')
             ? $this->catalogAttributeValues
             : collect();
+
+        $displayAttributes = app(ProductVariantAttributeResolver::class)->resolve($this->resource);
 
         return [
             'id' => $this->id,
@@ -35,6 +38,7 @@ class AdminCatalogProductVariantResource extends JsonResource
             'stock' => null,
             'prices_count' => $this->whenCounted('prices'),
             'inventories_count' => $this->whenCounted('inventories'),
+            'display_attributes' => $displayAttributes,
             'attribute_values' => $values->map(function (ProductVariantAttributeValue $row) {
                 $type = $row->attribute?->type instanceof CatalogAttributeType
                     ? $row->attribute->type

@@ -18,6 +18,8 @@ class CheckoutSession extends Model
 
     protected $fillable = [
         'user_id',
+        'storefront_visitor_id',
+        'storefront_session_id',
         'cart_id',
         'promotion_id',
         'applied_promotion_code',

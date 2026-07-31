@@ -20,6 +20,9 @@ class CreateProductMediaAction
     {
         $validated = $request->validated();
         $type = ProductMediaType::from($validated['type']);
+        $variantId = array_key_exists('product_variant_id', $validated)
+            ? $validated['product_variant_id']
+            : null;
 
         if ($type === ProductMediaType::Image && $request->hasFile('file')) {
             return $this->imageWriteSync->storeUploadedImage(
@@ -30,14 +33,15 @@ class CreateProductMediaAction
                     'title' => $validated['title'] ?? null,
                     'sort_order' => isset($validated['sort_order'])
                         ? (int) $validated['sort_order']
-                        : (int) $product->media()->max('sort_order') + 1,
+                        : $this->nextSortOrder($product, $variantId),
                     'is_primary' => (bool) ($validated['is_primary'] ?? false),
                     'is_active' => $validated['is_active'] ?? true,
+                    'product_variant_id' => $variantId,
                 ],
-            )->catalogMedia;
+            )->catalogMedia->load('variant');
         }
 
-        return DB::transaction(function () use ($validated, $type, $product) {
+        return DB::transaction(function () use ($validated, $type, $product, $variantId) {
             $url = $validated['url'] ?? null;
             $thumbnail = $validated['thumbnail_url'] ?? null;
 
@@ -46,17 +50,18 @@ class CreateProductMediaAction
                 $thumbnail = $thumbnail ?? ProductMediaUrl::youtubeThumbnail((string) $url);
             }
 
-            $sortOrder = (int) ($validated['sort_order'] ?? (
-                (int) $product->media()->max('sort_order') + 1
-            ));
+            $sortOrder = (int) ($validated['sort_order'] ?? $this->nextSortOrder($product, $variantId));
 
             $isPrimary = (bool) ($validated['is_primary'] ?? false);
-            if ($type === ProductMediaType::Image && ! $product->media()->images()->exists()) {
+            if (
+                $type === ProductMediaType::Image
+                && ! $this->mediaScope($product, $variantId)->images()->exists()
+            ) {
                 $isPrimary = true;
             }
 
             if ($isPrimary && $type === ProductMediaType::Image) {
-                $product->media()->images()->update(['is_primary' => false]);
+                $this->mediaScope($product, $variantId)->images()->update(['is_primary' => false]);
             }
 
             if ($type === ProductMediaType::Video) {
@@ -65,6 +70,7 @@ class CreateProductMediaAction
 
             return ProductMedia::query()->create([
                 'product_id' => $product->id,
+                'product_variant_id' => $variantId,
                 'type' => $type,
                 'url' => $url,
                 'thumbnail_url' => $thumbnail,
@@ -73,7 +79,26 @@ class CreateProductMediaAction
                 'sort_order' => $sortOrder,
                 'is_primary' => $isPrimary,
                 'is_active' => $validated['is_active'] ?? true,
-            ]);
+            ])->load('variant');
         });
+    }
+
+    private function nextSortOrder(Product $product, ?string $variantId): int
+    {
+        return (int) $this->mediaScope($product, $variantId)->max('sort_order') + 1;
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany<\App\Models\ProductMedia, \App\Models\Product>|\Illuminate\Database\Eloquent\Builder<\App\Models\ProductMedia>
+     */
+    private function mediaScope(Product $product, ?string $variantId)
+    {
+        if ($variantId === null) {
+            return $product->media();
+        }
+
+        return ProductMedia::query()
+            ->where('product_id', $product->id)
+            ->where('product_variant_id', $variantId);
     }
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { AdminRefreshStatusBar } from "@/components/admin/AdminRefreshStatusBar";
 import {
   AdminWarehouseApiError,
   assignAdminWarehousePacker,
@@ -10,6 +11,23 @@ import {
   updateAdminWarehouseStatus,
   type AdminWarehouseJob,
 } from "@/lib/api/admin-warehouse";
+import {
+  AdminWarehouseOpsApiError,
+  canManageWarehouse,
+  createWarehousePacking,
+  createWarehousePickList,
+} from "@/lib/api/admin-warehouse-operations";
+import {
+  canCreatePackingForJob,
+  canCreatePickListForJob,
+  canOpenPackingForJob,
+  canOpenPickListForJob,
+  getPackingIdForJob,
+  getPickListIdForJob,
+  type WarehouseOperationalMaps,
+} from "@/lib/api/admin-warehouse-job-operations";
+import { useAdminAutoRefresh } from "@/hooks/use-admin-auto-refresh";
+import { useAdminPermissions } from "@/hooks/use-admin-permissions";
 
 const STATUS_STYLES: Record<string, string> = {
   pending: "bg-amber-50 text-amber-800 ring-amber-600/20",
@@ -21,15 +39,36 @@ const STATUS_STYLES: Record<string, string> = {
   cancelled: "bg-zinc-100 text-zinc-600 ring-zinc-300/40",
 };
 
-export function AdminWarehouseQueuePanel() {
+export function AdminWarehouseQueuePanel({
+  embedded = false,
+  operationalMaps = { pickListByJobId: {}, packingByJobId: {} },
+  onOperationalMapsChange,
+  onPickListCreated,
+  onOpenPickList,
+  onPackingCreated,
+  onOpenPacking,
+}: {
+  embedded?: boolean;
+  operationalMaps?: WarehouseOperationalMaps;
+  onOperationalMapsChange?: () => Promise<void>;
+  onPickListCreated?: (pickList: Awaited<ReturnType<typeof createWarehousePickList>>) => void;
+  onOpenPickList?: (pickListId: string) => void;
+  onPackingCreated?: (record: Awaited<ReturnType<typeof createWarehousePacking>>) => void;
+  onOpenPacking?: (packingId: string) => void;
+}) {
+  const { permissions } = useAdminPermissions();
+  const canManage = canManageWarehouse(permissions);
   const [rows, setRows] = useState<AdminWarehouseJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
 
-  const reload = useCallback(async () => {
-    setLoading(true);
+  const reload = useCallback(async (options?: { background?: boolean }) => {
+    if (!options?.background) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const data = await fetchAdminWarehouseJobs({
@@ -37,19 +76,37 @@ export function AdminWarehouseQueuePanel() {
       });
       setRows(data);
     } catch (err) {
-      setRows([]);
+      if (!options?.background) {
+        setRows([]);
+      }
       setError(
         err instanceof AdminWarehouseApiError
           ? err.message
           : "Unable to load warehouse queue.",
       );
     } finally {
-      setLoading(false);
+      if (!options?.background) {
+        setLoading(false);
+      }
     }
   }, [statusFilter]);
 
+  const markSyncedRef = useRef<() => void>(() => {});
+
+  const autoRefresh = useAdminAutoRefresh({
+    page: "warehouse_queue",
+    enabled: !loading,
+    onRefresh: async (options) => {
+      await reload(options);
+      markSyncedRef.current();
+    },
+  });
+  markSyncedRef.current = autoRefresh.markSynced;
+
   useEffect(() => {
-    void reload();
+    void reload().then(() => {
+      markSyncedRef.current();
+    });
   }, [reload]);
 
   const counts = useMemo(
@@ -65,6 +122,7 @@ export function AdminWarehouseQueuePanel() {
     const next = row.next_status;
     if (!next || busyId) return;
     setBusyId(row.id);
+    setBusyAction("advance");
     setError(null);
     try {
       const updated = await updateAdminWarehouseStatus(row.id, { status: next });
@@ -77,12 +135,14 @@ export function AdminWarehouseQueuePanel() {
       );
     } finally {
       setBusyId(null);
+      setBusyAction(null);
     }
   };
 
   const assignPicker = async (row: AdminWarehouseJob) => {
     if (busyId) return;
     setBusyId(row.id);
+    setBusyAction("assign-picker");
     setError(null);
     try {
       const updated = await assignAdminWarehousePicker(row.id);
@@ -93,12 +153,14 @@ export function AdminWarehouseQueuePanel() {
       );
     } finally {
       setBusyId(null);
+      setBusyAction(null);
     }
   };
 
   const assignPacker = async (row: AdminWarehouseJob) => {
     if (busyId) return;
     setBusyId(row.id);
+    setBusyAction("assign-packer");
     setError(null);
     try {
       const updated = await assignAdminWarehousePacker(row.id);
@@ -109,11 +171,57 @@ export function AdminWarehouseQueuePanel() {
       );
     } finally {
       setBusyId(null);
+      setBusyAction(null);
     }
   };
 
+  const createPickList = async (row: AdminWarehouseJob) => {
+    if (busyId || !canManage) return;
+    setBusyId(row.id);
+    setBusyAction("create-pick-list");
+    setError(null);
+    try {
+      const pickList = await createWarehousePickList(row.id);
+      await onOperationalMapsChange?.();
+      onPickListCreated?.(pickList);
+    } catch (err) {
+      setError(
+        err instanceof AdminWarehouseOpsApiError
+          ? err.message
+          : "Unable to create pick list.",
+      );
+    } finally {
+      setBusyId(null);
+      setBusyAction(null);
+    }
+  };
+
+  const createPacking = async (row: AdminWarehouseJob) => {
+    if (busyId || !canManage) return;
+    setBusyId(row.id);
+    setBusyAction("create-packing");
+    setError(null);
+    try {
+      const record = await createWarehousePacking(row.id);
+      await onOperationalMapsChange?.();
+      onPackingCreated?.(record);
+    } catch (err) {
+      setError(
+        err instanceof AdminWarehouseOpsApiError
+          ? err.message
+          : "Unable to create packing record.",
+      );
+    } finally {
+      setBusyId(null);
+      setBusyAction(null);
+    }
+  };
+
+  const isBusy = (rowId: string, action: string) => busyId === rowId && busyAction === action;
+
   return (
-    <div className="p-4 sm:p-6 lg:p-8">
+    <div className={embedded ? "p-4 sm:p-6 lg:p-8" : "p-4 sm:p-6 lg:p-8"}>
+      {!embedded ? (
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#8b6914]">
@@ -126,20 +234,30 @@ export function AdminWarehouseQueuePanel() {
             Pick and pack after payment. Shipments require ready_to_ship.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 text-xs font-semibold text-zinc-600">
-          <span className="rounded-lg bg-white px-3 py-1.5 ring-1 ring-zinc-200">
-            {counts.total} jobs
-          </span>
-          <span className="rounded-lg bg-white px-3 py-1.5 ring-1 ring-zinc-200">
-            {counts.pending} pending
-          </span>
-          <span className="rounded-lg bg-white px-3 py-1.5 ring-1 ring-zinc-200">
-            {counts.ready} ready
-          </span>
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:items-end">
+          <AdminRefreshStatusBar
+            lastUpdatedAt={autoRefresh.lastUpdatedAt}
+            isRefreshing={autoRefresh.isRefreshing || loading}
+            policyLabel={autoRefresh.policyLabel}
+            onRefresh={() => void autoRefresh.refreshNow({ manual: true })}
+            className="w-full sm:w-auto"
+          />
+          <div className="flex flex-wrap gap-2 text-xs font-semibold text-zinc-600">
+            <span className="rounded-lg bg-white px-3 py-1.5 ring-1 ring-zinc-200">
+              {counts.total} jobs
+            </span>
+            <span className="rounded-lg bg-white px-3 py-1.5 ring-1 ring-zinc-200">
+              {counts.pending} pending
+            </span>
+            <span className="rounded-lg bg-white px-3 py-1.5 ring-1 ring-zinc-200">
+              {counts.ready} ready
+            </span>
+          </div>
         </div>
       </header>
+      ) : null}
 
-      <div className="mt-5 flex flex-wrap gap-2">
+      <div className={`flex flex-wrap gap-2 ${embedded ? "mt-0" : "mt-5"}`}>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
@@ -239,6 +357,52 @@ export function AdminWarehouseQueuePanel() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1.5">
+                        {canCreatePickListForJob(row, operationalMaps, canManage) ? (
+                          <button
+                            type="button"
+                            disabled={busyId === row.id}
+                            onClick={() => void createPickList(row)}
+                            className="rounded-lg border border-[#c9a227]/40 bg-[#fffbeb] px-2.5 py-1 text-xs font-semibold text-[#8b6914] hover:border-[#c9a227] disabled:opacity-50"
+                          >
+                            {isBusy(row.id, "create-pick-list") ? "Creating…" : "Create pick list"}
+                          </button>
+                        ) : null}
+                        {canOpenPickListForJob(row, operationalMaps) ? (
+                          <button
+                            type="button"
+                            disabled={busyId === row.id}
+                            onClick={() => {
+                              const pickListId = getPickListIdForJob(row, operationalMaps);
+                              if (pickListId) onOpenPickList?.(pickListId);
+                            }}
+                            className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-800 hover:border-[#c9a227]/40 disabled:opacity-50"
+                          >
+                            Open pick list
+                          </button>
+                        ) : null}
+                        {canCreatePackingForJob(row, operationalMaps, canManage) ? (
+                          <button
+                            type="button"
+                            disabled={busyId === row.id}
+                            onClick={() => void createPacking(row)}
+                            className="rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-800 hover:border-indigo-300 disabled:opacity-50"
+                          >
+                            {isBusy(row.id, "create-packing") ? "Creating…" : "Create packing"}
+                          </button>
+                        ) : null}
+                        {canOpenPackingForJob(row, operationalMaps) ? (
+                          <button
+                            type="button"
+                            disabled={busyId === row.id}
+                            onClick={() => {
+                              const packingId = getPackingIdForJob(row, operationalMaps);
+                              if (packingId) onOpenPacking?.(packingId);
+                            }}
+                            className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-800 hover:border-indigo-300 disabled:opacity-50"
+                          >
+                            Open packing
+                          </button>
+                        ) : null}
                         {!row.picker_id &&
                         row.status !== "cancelled" &&
                         row.status !== "ready_to_ship" ? (
@@ -269,7 +433,7 @@ export function AdminWarehouseQueuePanel() {
                             onClick={() => void advance(row)}
                             className="rounded-lg bg-zinc-900 px-2.5 py-1 text-xs font-semibold text-white hover:bg-zinc-800 disabled:opacity-50"
                           >
-                            {busyId === row.id
+                            {isBusy(row.id, "advance")
                               ? "…"
                               : `→ ${row.next_status.replaceAll("_", " ")}`}
                           </button>

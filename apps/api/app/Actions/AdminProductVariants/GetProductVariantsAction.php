@@ -16,7 +16,11 @@ class GetProductVariantsAction
         $product->loadMissing(['catalogProductType.attributes.options']);
 
         $variants = $product->variants()
-            ->with(['catalogAttributeValues.attribute', 'catalogAttributeValues.option'])
+            ->with([
+                'catalogAttributeValues.attribute',
+                'catalogAttributeValues.option',
+                'attributeValues.attribute',
+            ])
             ->withCount(['prices', 'inventories'])
             ->orderByDesc('is_default')
             ->orderBy('sort_order')

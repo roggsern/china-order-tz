@@ -24,6 +24,7 @@ test("calculateProductPublishReadiness marks simple product ready when requireme
     storeId: null,
     hasSimpleInventoryPolicy: true,
     variants: [],
+    supplierId: "supplier-1",
     hasPublishableShippingOption: true,
   });
 
@@ -50,7 +51,7 @@ test("calculateProductPublishReadiness flags missing simple price and inventory"
   assert.equal(result.ready, false);
   assert.deepEqual(
     result.missing.map((item) => item.id).sort(),
-    ["china-shipping", "simple-inventory", "simple-price"].sort(),
+    ["china-shipping", "china-supplier", "simple-inventory", "simple-price"].sort(),
   );
 });
 
@@ -110,6 +111,7 @@ test("Case 3: CHINA_IMPORT without store does not include store check", () => {
     storeId: null,
     hasSimpleInventoryPolicy: true,
     variants: [],
+    supplierId: "supplier-1",
     hasPublishableShippingOption: true,
   });
 
@@ -137,6 +139,7 @@ test("calculateProductPublishReadiness uses variant path when sellable variants 
         inventoriesCount: 1,
       },
     ],
+    supplierId: "supplier-1",
     hasPublishableShippingOption: true,
   });
 
@@ -176,6 +179,7 @@ test("publish readiness blocks active lifecycle until requirements are complete"
     storeId: null,
     hasSimpleInventoryPolicy: true,
     variants: [],
+    supplierId: "supplier-1",
     hasPublishableShippingOption: true,
   });
 
@@ -216,6 +220,7 @@ test("China shipping Case 1: product with valid shipping is ready", () => {
     storeId: null,
     hasSimpleInventoryPolicy: true,
     variants: [],
+    supplierId: "supplier-1",
     hasPublishableShippingOption: true,
   });
 
@@ -241,8 +246,8 @@ test("China shipping Case 2: product without shipping marks shipping missing", (
 
   assert.equal(result.ready, false);
   assert.deepEqual(
-    result.missing.map((item) => item.id),
-    ["china-shipping"],
+    result.missing.map((item) => item.id).sort(),
+    ["china-shipping", "china-supplier"].sort(),
   );
 });
 

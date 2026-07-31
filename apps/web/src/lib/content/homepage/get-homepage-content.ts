@@ -2,6 +2,7 @@ import { cache } from "react";
 import { getCmsHomepage } from "@/lib/api/cms-homepage";
 import type { TzStorefrontStore } from "@/lib/api/tz-stores";
 import type { Product } from "@/lib/types/catalog";
+import { applyStorefrontLaunchPresentation } from "./apply-storefront-launch";
 import { mapCmsHomepageResponse, mergeCmsMappedIntoSeed } from "./map-cms-homepage";
 import type { HomepageCampaignMeta } from "./map-cms-homepage";
 import { homepageContentSeed } from "./seed";
@@ -81,17 +82,18 @@ const getHomepageContentCached = cache(async (nowIso: string): Promise<ResolvedH
     });
 
     const mapped = mapCmsHomepageResponse(cms, seedBase);
+
     if (!mapped.appliedCmsSections) {
-      return {
+      return applyStorefrontLaunchPresentation({
         ...seedBase,
         campaign: mapped.campaign,
         source: "fallback",
-      };
+      });
     }
 
-    return mergeCmsMappedIntoSeed(seedBase, mapped);
+    return applyStorefrontLaunchPresentation(mergeCmsMappedIntoSeed(seedBase, mapped));
   } catch {
-    return seedBase;
+    return applyStorefrontLaunchPresentation(seedBase);
   }
 });
 

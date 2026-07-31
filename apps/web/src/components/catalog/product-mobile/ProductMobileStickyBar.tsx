@@ -20,6 +20,7 @@ interface ProductMobileStickyBarProps {
   stockOverride?: number;
   needsConfiguration?: boolean;
   isOutOfStock?: boolean;
+  purchaseUnavailable?: boolean;
 }
 
 export function ProductMobileStickyBar({
@@ -36,6 +37,7 @@ export function ProductMobileStickyBar({
   stockOverride,
   needsConfiguration = false,
   isOutOfStock = false,
+  purchaseUnavailable = false,
 }: ProductMobileStickyBarProps) {
   const reduceMotion = useReducedMotion();
   const displayPrice =
@@ -71,11 +73,13 @@ export function ProductMobileStickyBar({
             <p className="mt-1 truncate text-[11px] text-zinc-500">
               {needsConfiguration
                 ? "Select options to continue"
-                : isOutOfStock
-                  ? "Out of stock for this configuration"
-                  : configurationLabel
-                    ? `${configurationLabel} · Qty ${quantity}`
-                    : `Qty ${quantity}`}
+                : purchaseUnavailable
+                  ? "Currently unavailable for purchase"
+                  : isOutOfStock
+                    ? "Out of stock for this configuration"
+                    : configurationLabel
+                      ? `${configurationLabel} · Qty ${quantity}`
+                      : `Qty ${quantity}`}
             </p>
           </div>
           {!needsConfiguration && !isOutOfStock ? (
@@ -105,6 +109,7 @@ export function ProductMobileStickyBar({
             quantity={quantity}
             variant="detail"
             disabled={disabled}
+            purchaseUnavailable={purchaseUnavailable}
             configurationId={configurationId}
             configurationLabel={configurationLabel}
             configurationSku={configurationSku}

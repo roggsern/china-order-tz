@@ -24,6 +24,7 @@ class PaymentPreparationService
 
     public function __construct(
         private readonly PaymentReferenceGenerator $paymentReferenceGenerator,
+        private readonly PaymentConfigurationResolver $paymentConfiguration,
     ) {}
 
     public function prepare(Order $order, User $user, PaymentMethod $method): Payment
@@ -34,6 +35,11 @@ class PaymentPreparationService
                 'NMB payments must use POST /api/v1/payments/start/{order}.',
             );
         }
+
+        $this->paymentConfiguration->assertCheckoutMethodAllowed(
+            $method->value,
+            'payment_method',
+        );
 
         $this->authorizeOrder($order, $user);
         $this->validateOrderNotPaid($order);

@@ -106,8 +106,25 @@ export type AdminPurchaseOrder = {
 export async function fetchAdminSuppliers(params?: {
   search?: string;
   isActive?: boolean;
+  page?: number;
+  perPage?: number;
 }): Promise<AdminSupplier[]> {
-  const search = new URLSearchParams({ per_page: "100" });
+  const page = await fetchAdminSuppliersPage(params);
+  return page.items;
+}
+
+export async function fetchAdminSuppliersPage(params?: {
+  search?: string;
+  isActive?: boolean;
+  page?: number;
+  perPage?: number;
+}): Promise<{ items: AdminSupplier[]; total: number; lastPage: number; page: number }> {
+  const page = params?.page && params.page > 0 ? params.page : 1;
+  const perPage = params?.perPage && params.perPage > 0 ? params.perPage : 20;
+  const search = new URLSearchParams({
+    page: String(page),
+    per_page: String(perPage),
+  });
   if (params?.search) search.set("search", params.search);
   if (params?.isActive !== undefined) search.set("is_active", params.isActive ? "1" : "0");
 
@@ -119,13 +136,19 @@ export async function fetchAdminSuppliers(params?: {
     success?: boolean;
     message?: string;
     data?: AdminSupplier[];
+    meta?: { total?: number; last_page?: number; current_page?: number };
   }>(response);
 
   if (!response.ok || payload.success === false) {
     throwFromPayload(response, payload, "Unable to load suppliers.");
   }
 
-  return Array.isArray(payload.data) ? payload.data : [];
+  return {
+    items: Array.isArray(payload.data) ? payload.data : [],
+    total: payload.meta?.total ?? 0,
+    lastPage: payload.meta?.last_page ?? 1,
+    page: payload.meta?.current_page ?? page,
+  };
 }
 
 export async function createAdminSupplier(body: Record<string, unknown>): Promise<AdminSupplier> {

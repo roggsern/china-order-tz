@@ -1,5 +1,5 @@
-import { AdminWarehouseQueuePanel } from "@/components/admin/AdminWarehouseQueuePanel";
+import { AdminWarehouseOperationsPanel } from "@/components/admin/AdminWarehouseOperationsPanel";
 
 export default function AdminWarehousePage() {
-  return <AdminWarehouseQueuePanel />;
+  return <AdminWarehouseOperationsPanel />;
 }

@@ -15,7 +15,7 @@ enum DeliveryType: string
             self::CompanyShipping => 'Company Shipping',
             self::CustomerAgent => 'Customer Agent',
             self::SelfPickup => 'Self Pickup',
-            self::NegotiatedDelivery => 'Negotiated Delivery',
+            self::NegotiatedDelivery => 'Delivery Arrangement',
         };
     }
 

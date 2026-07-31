@@ -5,4 +5,11 @@ export {
   setNmbPendingPaymentId,
 } from "@/lib/nmb/checkout-context";
 export { initiateNmbPaymentSession } from "@/lib/nmb/payment-session-api";
+export {
+  buildNmbHostedCheckoutLauncherPath,
+  isNmbWebsiteHostedCheckout,
+  navigateAfterPaymentStart,
+  prepareNmbHostedCheckoutLaunch,
+  resolvePaymentStartNavigation,
+} from "@/lib/nmb/orchestrator-checkout";
 export type { NmbCheckoutContext, NmbPaymentSessionResponse } from "@/lib/nmb/types";

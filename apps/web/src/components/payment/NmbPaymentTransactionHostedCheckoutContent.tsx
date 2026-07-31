@@ -1,0 +1,206 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { getCustomerApiToken } from "@/lib/api/customer-auth";
+import {
+  fetchPaymentTransaction,
+  PaymentOrchestratorApiError,
+} from "@/lib/api/customer-payment-orchestrator";
+import {
+  patchNmbCheckoutContext,
+  readNmbCheckoutContext,
+  saveNmbCheckoutContext,
+} from "@/lib/nmb/checkout-context";
+import { getNmbReturnUrl } from "@/lib/nmb/config";
+import {
+  describeHostedCheckoutError,
+  launchMpgsHostedCheckout,
+} from "@/lib/nmb/hosted-checkout";
+import { prepareNmbHostedCheckoutLaunch } from "@/lib/nmb/orchestrator-checkout";
+
+type NmbPaymentTransactionHostedCheckoutContentProps = {
+  paymentTransactionId: string;
+  sessionId?: string;
+  successIndicator?: string | null;
+};
+
+type CheckoutPhase = "loading" | "redirecting" | "error";
+
+export function NmbPaymentTransactionHostedCheckoutContent({
+  paymentTransactionId,
+  sessionId: sessionIdProp,
+  successIndicator: successIndicatorProp,
+}: NmbPaymentTransactionHostedCheckoutContentProps) {
+  const router = useRouter();
+  const launchedRef = useRef(false);
+  const [phase, setPhase] = useState<CheckoutPhase>("loading");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const redirectToReturn = useCallback(
+    (resultIndicator?: string) => {
+      const returnUrl = new URL(getNmbReturnUrl());
+
+      if (resultIndicator) {
+        returnUrl.searchParams.set("resultIndicator", resultIndicator);
+      }
+
+      const context = readNmbCheckoutContext();
+      if (context?.orderId) {
+        returnUrl.searchParams.set("orderId", context.orderId);
+      }
+      if (context?.localOrderId) {
+        returnUrl.searchParams.set("localOrderId", context.localOrderId);
+      }
+      if (context?.paymentTransactionId ?? context?.paymentId) {
+        returnUrl.searchParams.set(
+          "paymentTransactionId",
+          context.paymentTransactionId ?? context.paymentId,
+        );
+      }
+
+      router.replace(`${returnUrl.pathname}${returnUrl.search}`);
+    },
+    [router],
+  );
+
+  useEffect(() => {
+    if (launchedRef.current) {
+      return;
+    }
+
+    launchedRef.current = true;
+
+    async function startHostedCheckout() {
+      try {
+        const token = getCustomerApiToken();
+        if (!token) {
+          throw new PaymentOrchestratorApiError("Please sign in to continue with payment.", 401);
+        }
+
+        let sessionId = sessionIdProp?.trim() || readNmbCheckoutContext()?.gatewaySessionId?.trim();
+        let successIndicator =
+          successIndicatorProp ?? readNmbCheckoutContext()?.successIndicator ?? null;
+
+        if (!sessionId) {
+          const transaction = await fetchPaymentTransaction(paymentTransactionId, token);
+
+          if (transaction.provider !== "nmb") {
+            throw new PaymentOrchestratorApiError("This payment is not an NMB transaction.");
+          }
+
+          sessionId = transaction.provider_reference?.trim() || undefined;
+          successIndicator = transaction.success_indicator ?? successIndicator;
+
+          if (!sessionId) {
+            throw new PaymentOrchestratorApiError("NMB did not return a checkout session id.");
+          }
+
+          prepareNmbHostedCheckoutLaunch(transaction);
+        } else {
+          saveNmbCheckoutContext({
+            ...(readNmbCheckoutContext() ?? {}),
+            paymentId: paymentTransactionId,
+            paymentTransactionId,
+            gatewaySessionId: sessionId,
+            successIndicator,
+          });
+        }
+
+        patchNmbCheckoutContext({
+          paymentId: paymentTransactionId,
+          paymentTransactionId,
+          gatewaySessionId: sessionId,
+          successIndicator,
+        });
+
+        setPhase("redirecting");
+
+        await launchMpgsHostedCheckout({
+          sessionId,
+          callbacks: {
+            onComplete: (resultIndicator) => {
+              patchNmbCheckoutContext({
+                resultIndicator,
+              });
+              redirectToReturn(resultIndicator);
+            },
+            onCancel: () => {
+              setPhase("error");
+              setErrorMessage("Payment was cancelled. You can try again when ready.");
+            },
+            onError: (error) => {
+              setPhase("error");
+              setErrorMessage(describeHostedCheckoutError(error));
+            },
+            onTimeout: () => {
+              setPhase("error");
+              setErrorMessage("The payment session timed out. Please try again.");
+            },
+          },
+        });
+      } catch (error) {
+        launchedRef.current = false;
+        setPhase("error");
+        setErrorMessage(
+          error instanceof PaymentOrchestratorApiError
+            ? error.message
+            : error instanceof Error
+              ? error.message
+              : "Unable to start NMB Hosted Checkout.",
+        );
+      }
+    }
+
+    void startHostedCheckout();
+  }, [
+    paymentTransactionId,
+    redirectToReturn,
+    sessionIdProp,
+    successIndicatorProp,
+  ]);
+
+  if (phase === "error") {
+    return (
+      <div className="mx-auto max-w-lg rounded-2xl border border-red-200 bg-white p-8 shadow-sm">
+        <h1 className="text-xl font-semibold text-zinc-900">NMB payment unavailable</h1>
+        <p className="mt-3 text-sm leading-6 text-zinc-600">{errorMessage}</p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              launchedRef.current = false;
+              setPhase("loading");
+              setErrorMessage(null);
+              window.location.reload();
+            }}
+            className="rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white"
+          >
+            Try again
+          </button>
+          <Link
+            href={`/payments/${encodeURIComponent(paymentTransactionId)}`}
+            className="rounded-full border border-zinc-300 px-5 py-2.5 text-sm font-medium text-zinc-700"
+          >
+            Back to payment status
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-lg rounded-2xl border border-zinc-200 bg-white p-8 text-center shadow-sm">
+      <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900" />
+      <h1 className="text-xl font-semibold text-zinc-900">
+        {phase === "redirecting" ? "Opening secure payment page" : "Preparing NMB checkout"}
+      </h1>
+      <p className="mt-3 text-sm leading-6 text-zinc-600">
+        {phase === "redirecting"
+          ? "You will be redirected to the NMB hosted payment page shortly."
+          : "We are loading your NMB payment session. Do not close this window."}
+      </p>
+    </div>
+  );
+}

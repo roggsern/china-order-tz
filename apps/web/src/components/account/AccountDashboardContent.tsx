@@ -4,7 +4,6 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import {
-  AddressSummaryIcon,
   HelpIcon,
   NotificationSummaryIcon,
   OrdersSummaryIcon,
@@ -19,11 +18,16 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { AccountPageSkeleton } from "@/components/ui/PageSkeletons";
 import { Skeleton } from "@/components/ui/Skeleton";
 import {
-  fetchCustomerOrder,
   fetchCustomerOrders,
   type CustomerOrderListItem,
 } from "@/lib/api/customer-orders";
+import { fetchCustomerUnreadCount } from "@/lib/api/customer-notifications";
 import { getCustomerApiToken } from "@/lib/api/customer-auth";
+import {
+  consumeCustomerJustRegistered,
+  resolveAccountGreetingPrefix,
+} from "@/lib/customer/arrival-signal";
+import { useFeatureAvailability } from "@/hooks/use-feature-availability";
 import { useCustomerSession } from "@/lib/customer/use-customer-session";
 import { useWishlist } from "@/lib/wishlist/use-wishlist";
 
@@ -52,45 +56,11 @@ function toOverviewCard(order: CustomerOrderListItem): OrderOverviewCardData {
     grandTotal: order.grandTotal,
     productName: order.itemPreview,
     quantity: order.itemCount,
+    source: order.source,
+    imageUrl: order.imageUrl,
     imageEmoji: "📦",
     imageGradient: "from-[#c9a227]/15 to-zinc-100",
   };
-}
-
-async function enrichRecentOrders(
-  orders: CustomerOrderListItem[],
-): Promise<OrderOverviewCardData[]> {
-  const enriched = await Promise.all(
-    orders.map(async (order) => {
-      const base = toOverviewCard(order);
-      try {
-        const detail = await fetchCustomerOrder(order.orderNumber);
-        const first = detail.items[0];
-        if (!first) {
-          return base;
-        }
-
-        const totalQty = detail.items.reduce((sum, item) => sum + item.quantity, 0);
-        const extraCount = detail.items.length - 1;
-
-        return {
-          ...base,
-          productName:
-            extraCount > 0
-              ? `${first.name} +${extraCount} more`
-              : first.name,
-          quantity: totalQty,
-          imageUrl: first.image?.url ?? null,
-          imageEmoji: first.image?.emoji ?? "📦",
-          imageGradient: first.image?.gradient ?? "from-[#c9a227]/15 to-zinc-100",
-        };
-      } catch {
-        return base;
-      }
-    }),
-  );
-
-  return enriched;
 }
 
 type SummaryCard = {
@@ -99,6 +69,7 @@ type SummaryCard = {
   description: string;
   href: string;
   icon: ReactNode;
+  isLoading?: boolean;
 };
 
 type QuickAction = {
@@ -122,7 +93,11 @@ function SummaryMetricCard({ card }: { card: SummaryCard }) {
         {card.icon}
       </span>
       <p className="mt-4 text-2xl font-bold tabular-nums tracking-tight text-zinc-900">
-        {card.value}
+        {card.isLoading ? (
+          <Skeleton className="h-8 w-12" rounded="lg" />
+        ) : (
+          card.value
+        )}
       </p>
       <h3 className="mt-1 text-sm font-bold text-zinc-900 group-hover:text-[#8b6914]">
         {card.title}
@@ -178,28 +153,30 @@ function RecentOrdersSkeleton() {
 
 export function AccountDashboardContent() {
   const { session, isReady, isLoggedIn } = useCustomerSession();
+  const { wishlist: wishlistEnabled, isReady: featuresReady } = useFeatureAvailability();
   const { items: wishlistItems, ready: wishlistReady } = useWishlist();
   const displayName = resolveDisplayName(session?.name, session?.email);
+  const [isFirstArrival] = useState(() => consumeCustomerJustRegistered());
 
   const [recentOrders, setRecentOrders] = useState<OrderOverviewCardData[]>([]);
-  const [orderCount, setOrderCount] = useState(0);
+  const [orderCount, setOrderCount] = useState<number | null>(null);
   const [ordersLoading, setOrdersLoading] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState<number | null>(null);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
 
   const loadRecentOrders = useCallback(async () => {
     if (!isLoggedIn || !getCustomerApiToken()) {
       setRecentOrders([]);
-      setOrderCount(0);
+      setOrderCount(null);
       setOrdersLoading(false);
       return;
     }
 
     setOrdersLoading(true);
     try {
-      const all = await fetchCustomerOrders();
-      setOrderCount(all.length);
-      const slice = all.slice(0, 3);
-      const cards = await enrichRecentOrders(slice);
-      setRecentOrders(cards);
+      const { orders, total } = await fetchCustomerOrders();
+      setOrderCount(total);
+      setRecentOrders(orders.slice(0, 3).map(toOverviewCard));
     } catch {
       setRecentOrders([]);
       setOrderCount(0);
@@ -208,47 +185,76 @@ export function AccountDashboardContent() {
     }
   }, [isLoggedIn]);
 
+  const loadUnreadNotifications = useCallback(async () => {
+    if (!isLoggedIn || !getCustomerApiToken()) {
+      setUnreadNotifications(null);
+      setNotificationsLoading(false);
+      return;
+    }
+
+    setNotificationsLoading(true);
+    try {
+      const count = await fetchCustomerUnreadCount();
+      setUnreadNotifications(count);
+    } catch {
+      setUnreadNotifications(0);
+    } finally {
+      setNotificationsLoading(false);
+    }
+  }, [isLoggedIn]);
+
   useEffect(() => {
     if (!isReady) {
       return;
     }
     void loadRecentOrders();
-  }, [isReady, loadRecentOrders]);
+    void loadUnreadNotifications();
+  }, [isReady, loadRecentOrders, loadUnreadNotifications]);
 
   if (!isReady) {
     return <AccountPageSkeleton />;
   }
 
-  const wishlistCount = wishlistReady ? String(wishlistItems.length) : "—";
+  const greetingPrefix = resolveAccountGreetingPrefix({
+    isLoggedIn,
+    isFirstArrival,
+  });
+
+  const wishlistCount = wishlistReady ? String(wishlistItems.length) : null;
 
   const summaryCards: SummaryCard[] = [
     {
       title: "Orders",
-      value: isLoggedIn ? String(orderCount) : "—",
+      value: orderCount === null ? "—" : String(orderCount),
       description: "Track purchases and delivery",
       href: "/orders",
       icon: <OrdersSummaryIcon className="h-5 w-5" />,
+      isLoading: isLoggedIn && ordersLoading,
     },
-    {
-      title: "Wishlist",
-      value: wishlistCount,
-      description: "Saved products you love",
-      href: "/wishlist",
-      icon: <WishlistSummaryIcon className="h-5 w-5" />,
-    },
-    {
-      title: "Addresses",
-      value: "—",
-      description: "Checkout faster next time",
-      href: "/account/addresses",
-      icon: <AddressSummaryIcon className="h-5 w-5" />,
-    },
+    ...(featuresReady && wishlistEnabled
+      ? [
+          {
+            title: "Wishlist",
+            value: wishlistCount ?? "—",
+            description: "Saved products you love",
+            href: "/wishlist",
+            icon: <WishlistSummaryIcon className="h-5 w-5" />,
+            isLoading: !wishlistReady,
+          } satisfies SummaryCard,
+        ]
+      : []),
     {
       title: "Notifications",
-      value: "—",
-      description: "Order and delivery alerts",
+      value: unreadNotifications === null ? "—" : String(unreadNotifications),
+      description:
+        unreadNotifications === null
+          ? "Order and delivery alerts"
+          : unreadNotifications === 1
+            ? "1 unread alert"
+            : `${unreadNotifications} unread alerts`,
       href: "/account/notifications",
       icon: <NotificationSummaryIcon className="h-5 w-5" />,
+      isLoading: isLoggedIn && notificationsLoading,
     },
     {
       title: "Loyalty",
@@ -272,22 +278,20 @@ export function AccountDashboardContent() {
       href: "/track",
       icon: <TrackOrdersIcon className="h-5 w-5" />,
     },
-    {
-      title: "Saved Addresses",
-      description: "Manage delivery locations soon.",
-      href: "/account/addresses",
-      icon: <AddressSummaryIcon className="h-5 w-5" />,
-    },
-    {
-      title: "Wishlist",
-      description: "Revisit products you saved.",
-      href: "/wishlist",
-      icon: <WishlistSummaryIcon className="h-5 w-5" />,
-    },
+    ...(featuresReady && wishlistEnabled
+      ? [
+          {
+            title: "Wishlist",
+            description: "Revisit products you saved.",
+            href: "/wishlist",
+            icon: <WishlistSummaryIcon className="h-5 w-5" />,
+          } satisfies QuickAction,
+        ]
+      : []),
     {
       title: "Need Help",
       description: "Get support with orders or delivery.",
-      href: "/#contact",
+      href: "/account/support",
       icon: <HelpIcon className="h-5 w-5" />,
     },
   ];
@@ -314,10 +318,17 @@ export function AccountDashboardContent() {
           </p>
           <h1 className="mt-2 text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl lg:text-4xl">
             {isLoggedIn ? (
-              <>
-                Welcome back, {displayName}{" "}
-                <span aria-hidden>👋</span>
-              </>
+              greetingPrefix === "welcome" ? (
+                <>
+                  Welcome, {displayName}{" "}
+                  <span aria-hidden>👋</span>
+                </>
+              ) : (
+                <>
+                  Welcome back, {displayName}{" "}
+                  <span aria-hidden>👋</span>
+                </>
+              )
             ) : (
               "You're one step away!"
             )}
@@ -436,11 +447,16 @@ export function AccountDashboardContent() {
               </div>
               <div className="rounded-2xl border border-zinc-100 bg-zinc-50/80 p-4">
                 <dt className="text-[11px] font-bold uppercase tracking-[0.12em] text-zinc-500">
-                  Preferences
+                  Security
                 </dt>
-                <dd className="mt-2 text-sm font-semibold text-zinc-900">Notifications & privacy</dd>
+                <dd className="mt-2 text-sm font-semibold text-zinc-900">Password & sessions</dd>
                 <dd className="mt-1 text-sm text-zinc-500">
-                  Advanced preference controls are on the way.
+                  <Link
+                    href="/account/security"
+                    className="font-semibold text-[#8b6914] transition hover:text-[#c9a227]"
+                  >
+                    Change password
+                  </Link>
                 </dd>
               </div>
             </dl>

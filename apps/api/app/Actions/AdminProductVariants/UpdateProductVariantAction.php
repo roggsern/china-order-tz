@@ -79,7 +79,11 @@ class UpdateProductVariantAction
 
             $this->ensureSingleDefault($product);
 
-            $fresh = $variant->fresh(['catalogAttributeValues.attribute', 'catalogAttributeValues.option']);
+            $fresh = $variant->fresh([
+                'catalogAttributeValues.attribute',
+                'catalogAttributeValues.option',
+                'attributeValues.attribute',
+            ]);
 
             $this->assertActiveProductIntegrityAfterMutation(
                 $this->purchasabilityPolicy,

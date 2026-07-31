@@ -2,7 +2,15 @@
 
 namespace Tests\Feature\Catalog;
 
+use App\Enums\CatalogAttributeType;
+use App\Enums\ProductLifecycleStatus;
+use App\Enums\ProductVisibility;
 use App\Enums\VariantPriceType;
+use App\Models\CatalogAttribute;
+use App\Models\CatalogAttributeOption;
+use App\Models\CatalogProductType;
+use App\Models\Category;
+use App\Models\Department;
 use App\Models\Inventory;
 use App\Models\Product;
 use App\Models\ProductAttribute;
@@ -235,5 +243,381 @@ class CustomerProductConfigurationTest extends TestCase
         $allowedSizesForBlack = $withBlack->json("data.allowed_value_ids.{$size->id}");
         $this->assertContains($m->id, $allowedSizesForBlack);
         $this->assertContains($xl->id, $allowedSizesForBlack);
+    }
+
+    public function test_customer_catalog_variant_configuration_maps_attributes_and_variant_prices(): void
+    {
+        $department = Department::factory()->create();
+        $category = Category::factory()->forDepartment($department)->create(['parent_id' => null]);
+        $subcategory = Category::factory()->forDepartment($department)->create([
+            'parent_id' => $category->id,
+        ]);
+        $catalogType = CatalogProductType::factory()->create([
+            'subcategory_id' => $subcategory->id,
+            'name' => 'iPhone Style Phone',
+            'slug' => 'iphone-style-phone',
+            'is_active' => true,
+        ]);
+
+        $color = CatalogAttribute::factory()->create([
+            'name' => 'Color',
+            'slug' => 'color',
+            'type' => CatalogAttributeType::Select,
+        ]);
+        $storage = CatalogAttribute::factory()->create([
+            'name' => 'Storage',
+            'slug' => 'storage',
+            'type' => CatalogAttributeType::Select,
+        ]);
+
+        $black = CatalogAttributeOption::factory()->create([
+            'catalog_attribute_id' => $color->id,
+            'value' => 'Black',
+            'slug' => 'black',
+        ]);
+        $white = CatalogAttributeOption::factory()->create([
+            'catalog_attribute_id' => $color->id,
+            'value' => 'White',
+            'slug' => 'white',
+        ]);
+        $storage128 = CatalogAttributeOption::factory()->create([
+            'catalog_attribute_id' => $storage->id,
+            'value' => '128GB',
+            'slug' => '128gb',
+        ]);
+        $storage256 = CatalogAttributeOption::factory()->create([
+            'catalog_attribute_id' => $storage->id,
+            'value' => '256GB',
+            'slug' => '256gb',
+        ]);
+
+        $catalogType->attributes()->sync([
+            $color->id => ['is_required' => true, 'sort_order' => 1],
+            $storage->id => ['is_required' => true, 'sort_order' => 2],
+        ]);
+
+        $product = Product::factory()->chinaImport()->create([
+            'category_id' => $subcategory->id,
+            'catalog_product_type_id' => $catalogType->id,
+            'slug' => 'iphone-15-pro-max',
+            'lifecycle_status' => ProductLifecycleStatus::Active,
+            'is_active' => true,
+            'visibility' => ProductVisibility::Public,
+            'price' => 1500000,
+        ]);
+
+        $black128 = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'sku' => 'IPH15-BLK-128',
+            'name' => 'OEM Black Metal 16GB 128GB',
+            'price' => null,
+            'is_active' => true,
+        ]);
+        $black128->catalogAttributeValues()->createMany([
+            [
+                'catalog_attribute_id' => $color->id,
+                'option_id' => $black->id,
+                'value_text' => $black->value,
+            ],
+            [
+                'catalog_attribute_id' => $storage->id,
+                'option_id' => $storage128->id,
+                'value_text' => $storage128->value,
+            ],
+        ]);
+        VariantPrice::query()->create([
+            'product_variant_id' => $black128->id,
+            'price_type' => VariantPriceType::Retail,
+            'currency' => 'TZS',
+            'amount' => 1800000,
+            'minimum_quantity' => 1,
+            'is_active' => true,
+        ]);
+        VariantInventory::query()->create([
+            'product_variant_id' => $black128->id,
+            'warehouse_code' => 'MAIN',
+            'on_hand' => 5,
+            'reserved' => 0,
+            'reorder_level' => 1,
+            'safety_stock' => 0,
+            'is_active' => true,
+        ]);
+
+        $white256 = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'sku' => 'IPH15-WHT-256',
+            'name' => 'OEM White Metal 16GB 256GB',
+            'price' => null,
+            'is_active' => true,
+        ]);
+        $white256->catalogAttributeValues()->createMany([
+            [
+                'catalog_attribute_id' => $color->id,
+                'option_id' => $white->id,
+                'value_text' => $white->value,
+            ],
+            [
+                'catalog_attribute_id' => $storage->id,
+                'option_id' => $storage256->id,
+                'value_text' => $storage256->value,
+            ],
+        ]);
+        VariantPrice::query()->create([
+            'product_variant_id' => $white256->id,
+            'price_type' => VariantPriceType::Retail,
+            'currency' => 'TZS',
+            'amount' => 2000000,
+            'minimum_quantity' => 1,
+            'is_active' => true,
+        ]);
+        VariantInventory::query()->create([
+            'product_variant_id' => $white256->id,
+            'warehouse_code' => 'MAIN',
+            'on_hand' => 3,
+            'reserved' => 0,
+            'reorder_level' => 1,
+            'safety_stock' => 0,
+            'is_active' => true,
+        ]);
+
+        $schema = $this->getJson("/api/v1/products/{$product->slug}/configuration");
+
+        $schema->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.has_configurations', true)
+            ->assertJsonPath('data.product_type.slug', 'iphone-style-phone');
+
+        $attributeIds = collect($schema->json('data.attributes'))->pluck('id', 'slug');
+        $this->assertTrue($attributeIds->has('color'));
+        $this->assertTrue($attributeIds->has('storage'));
+
+        $configurations = $schema->json('data.configurations');
+        $this->assertCount(2, $configurations);
+
+        $black128Row = collect($configurations)->firstWhere('id', $black128->id);
+        $this->assertNotNull($black128Row);
+        $this->assertSame('1800000.00', (string) $black128Row['price']);
+        $this->assertNotEmpty($black128Row['attribute_value_ids']);
+        $this->assertCount(2, $black128Row['attribute_values']);
+
+        $attributeValuesByName = collect($black128Row['attribute_values'])
+            ->keyBy('attribute_name');
+        $this->assertSame('Black', $attributeValuesByName->get('Color')['value']);
+        $this->assertSame('128GB', $attributeValuesByName->get('Storage')['value']);
+        $this->assertSame([
+            ['attribute' => 'Color', 'value' => 'Black'],
+            ['attribute' => 'Storage', 'value' => '128GB'],
+        ], $black128Row['display_attributes']);
+
+        $allowedColors = $schema->json("data.allowed_value_ids.{$color->id}");
+        $this->assertContains($black->id, $allowedColors);
+        $this->assertContains($white->id, $allowedColors);
+
+        $matched = $this->getJson(
+            "/api/v1/products/{$product->slug}/configuration?selections[{$color->id}]={$black->id}&selections[{$storage->id}]={$storage128->id}",
+        );
+        $matched->assertOk()
+            ->assertJsonPath('data.matched_configuration_id', $black128->id)
+            ->assertJsonPath('data.is_complete', true)
+            ->assertJsonPath('data.is_in_stock', true);
+
+        $quote = $this->postJson("/api/v1/products/{$product->slug}/quote", [
+            'configuration_id' => $black128->id,
+            'quantity' => 1,
+        ]);
+
+        $quote->assertOk()
+            ->assertJsonPath('data.configuration_id', $black128->id)
+            ->assertJsonPath('data.unit_price', '1800000.00')
+            ->assertJsonPath('data.line_total', '1800000.00');
+    }
+
+    public function test_catalog_variant_matching_ignores_non_configuration_attributes(): void
+    {
+        $department = Department::factory()->create();
+        $category = Category::factory()->forDepartment($department)->create(['parent_id' => null]);
+        $subcategory = Category::factory()->forDepartment($department)->create([
+            'parent_id' => $category->id,
+        ]);
+        $catalogType = CatalogProductType::factory()->create([
+            'subcategory_id' => $subcategory->id,
+            'is_active' => true,
+        ]);
+
+        $brand = CatalogAttribute::factory()->create([
+            'name' => 'Brand',
+            'slug' => 'brand',
+            'type' => CatalogAttributeType::Select,
+        ]);
+        $color = CatalogAttribute::factory()->create([
+            'name' => 'Color',
+            'slug' => 'color',
+            'type' => CatalogAttributeType::Select,
+        ]);
+        $material = CatalogAttribute::factory()->create([
+            'name' => 'Material',
+            'slug' => 'material',
+            'type' => CatalogAttributeType::Select,
+        ]);
+        $ram = CatalogAttribute::factory()->create([
+            'name' => 'RAM',
+            'slug' => 'ram',
+            'type' => CatalogAttributeType::Select,
+        ]);
+        $storage = CatalogAttribute::factory()->create([
+            'name' => 'Storage',
+            'slug' => 'storage',
+            'type' => CatalogAttributeType::Select,
+        ]);
+
+        $oem = CatalogAttributeOption::factory()->create([
+            'catalog_attribute_id' => $brand->id,
+            'value' => 'OEM',
+            'slug' => 'oem',
+        ]);
+        $black = CatalogAttributeOption::factory()->create([
+            'catalog_attribute_id' => $color->id,
+            'value' => 'Black',
+            'slug' => 'black',
+        ]);
+        $white = CatalogAttributeOption::factory()->create([
+            'catalog_attribute_id' => $color->id,
+            'value' => 'White',
+            'slug' => 'white',
+        ]);
+        $metal = CatalogAttributeOption::factory()->create([
+            'catalog_attribute_id' => $material->id,
+            'value' => 'Metal',
+            'slug' => 'metal',
+        ]);
+        $ram16 = CatalogAttributeOption::factory()->create([
+            'catalog_attribute_id' => $ram->id,
+            'value' => '16GB',
+            'slug' => '16gb',
+        ]);
+        $storage128 = CatalogAttributeOption::factory()->create([
+            'catalog_attribute_id' => $storage->id,
+            'value' => '128GB',
+            'slug' => '128gb',
+        ]);
+        $storage256 = CatalogAttributeOption::factory()->create([
+            'catalog_attribute_id' => $storage->id,
+            'value' => '256GB',
+            'slug' => '256gb',
+        ]);
+
+        $catalogType->attributes()->sync([
+            $brand->id => ['is_required' => false, 'sort_order' => 1],
+            $color->id => ['is_required' => true, 'sort_order' => 2],
+            $material->id => ['is_required' => false, 'sort_order' => 3],
+            $ram->id => ['is_required' => false, 'sort_order' => 4],
+            $storage->id => ['is_required' => true, 'sort_order' => 5],
+        ]);
+
+        $product = Product::factory()->chinaImport()->create([
+            'category_id' => $subcategory->id,
+            'catalog_product_type_id' => $catalogType->id,
+            'slug' => 'oem-metal-phone',
+            'lifecycle_status' => ProductLifecycleStatus::Active,
+            'is_active' => true,
+            'visibility' => ProductVisibility::Public,
+            'price' => 1500000,
+        ]);
+
+        $black256 = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'sku' => 'OEM-BLK-256',
+            'name' => 'OEM Black Metal 16GB 256GB',
+            'price' => null,
+            'is_active' => true,
+        ]);
+        $black256->catalogAttributeValues()->createMany([
+            ['catalog_attribute_id' => $brand->id, 'option_id' => $oem->id, 'value_text' => $oem->value],
+            ['catalog_attribute_id' => $color->id, 'option_id' => $black->id, 'value_text' => $black->value],
+            ['catalog_attribute_id' => $material->id, 'option_id' => $metal->id, 'value_text' => $metal->value],
+            ['catalog_attribute_id' => $ram->id, 'option_id' => $ram16->id, 'value_text' => $ram16->value],
+            ['catalog_attribute_id' => $storage->id, 'option_id' => $storage256->id, 'value_text' => $storage256->value],
+        ]);
+        VariantPrice::query()->create([
+            'product_variant_id' => $black256->id,
+            'price_type' => VariantPriceType::Retail,
+            'currency' => 'TZS',
+            'amount' => 2000000,
+            'minimum_quantity' => 1,
+            'is_active' => true,
+        ]);
+        VariantInventory::query()->create([
+            'product_variant_id' => $black256->id,
+            'warehouse_code' => 'MAIN',
+            'on_hand' => 4,
+            'reserved' => 0,
+            'reorder_level' => 1,
+            'safety_stock' => 0,
+            'is_active' => true,
+        ]);
+
+        $white128 = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'sku' => 'OEM-WHT-128',
+            'name' => 'OEM White Metal 16GB 128GB',
+            'price' => null,
+            'is_active' => true,
+        ]);
+        $white128->catalogAttributeValues()->createMany([
+            ['catalog_attribute_id' => $brand->id, 'option_id' => $oem->id, 'value_text' => $oem->value],
+            ['catalog_attribute_id' => $color->id, 'option_id' => $white->id, 'value_text' => $white->value],
+            ['catalog_attribute_id' => $material->id, 'option_id' => $metal->id, 'value_text' => $metal->value],
+            ['catalog_attribute_id' => $ram->id, 'option_id' => $ram16->id, 'value_text' => $ram16->value],
+            ['catalog_attribute_id' => $storage->id, 'option_id' => $storage128->id, 'value_text' => $storage128->value],
+        ]);
+        VariantPrice::query()->create([
+            'product_variant_id' => $white128->id,
+            'price_type' => VariantPriceType::Retail,
+            'currency' => 'TZS',
+            'amount' => 1800000,
+            'minimum_quantity' => 1,
+            'is_active' => true,
+        ]);
+        VariantInventory::query()->create([
+            'product_variant_id' => $white128->id,
+            'warehouse_code' => 'MAIN',
+            'on_hand' => 2,
+            'reserved' => 0,
+            'reorder_level' => 1,
+            'safety_stock' => 0,
+            'is_active' => true,
+        ]);
+
+        $schema = $this->getJson("/api/v1/products/{$product->slug}/configuration");
+        $schema->assertOk();
+
+        $attributes = collect($schema->json('data.attributes'))->keyBy('slug');
+        $this->assertFalse($attributes->get('brand')['participates_in_configuration']);
+        $this->assertTrue($attributes->get('color')['participates_in_configuration']);
+        $this->assertFalse($attributes->get('material')['participates_in_configuration']);
+        $this->assertFalse($attributes->get('ram')['participates_in_configuration']);
+        $this->assertTrue($attributes->get('storage')['participates_in_configuration']);
+
+        $matched = $this->getJson(
+            "/api/v1/products/{$product->slug}/configuration?selections[{$color->id}]={$black->id}&selections[{$storage->id}]={$storage256->id}",
+        );
+
+        $matched->assertOk()
+            ->assertJsonPath('data.matched_configuration_id', $black256->id)
+            ->assertJsonPath('data.is_complete', true)
+            ->assertJsonPath('data.is_in_stock', true);
+
+        $matchedConfiguration = collect($matched->json('data.configurations'))
+            ->firstWhere('id', $black256->id);
+        $this->assertSame('2000000.00', (string) $matchedConfiguration['price']);
+
+        $quote = $this->postJson("/api/v1/products/{$product->slug}/quote", [
+            'configuration_id' => $black256->id,
+            'quantity' => 1,
+        ]);
+
+        $quote->assertOk()
+            ->assertJsonPath('data.configuration_id', $black256->id)
+            ->assertJsonPath('data.unit_price', '2000000.00');
     }
 }

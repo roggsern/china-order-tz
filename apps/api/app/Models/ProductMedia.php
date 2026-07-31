@@ -20,6 +20,7 @@ class ProductMedia extends Model
 
     protected $fillable = [
         'product_id',
+        'product_variant_id',
         'type',
         'url',
         'thumbnail_url',
@@ -45,9 +46,24 @@ class ProductMedia extends Model
         return $this->belongsTo(Product::class);
     }
 
+    public function variant(): BelongsTo
+    {
+        return $this->belongsTo(ProductVariant::class, 'product_variant_id');
+    }
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
+    }
+
+    public function scopeProductLevel(Builder $query): Builder
+    {
+        return $query->whereNull('product_variant_id');
+    }
+
+    public function scopeForVariant(Builder $query, string $variantId): Builder
+    {
+        return $query->where('product_variant_id', $variantId);
     }
 
     public function scopeImages(Builder $query): Builder

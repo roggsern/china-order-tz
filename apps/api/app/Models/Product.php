@@ -134,21 +134,30 @@ class Product extends Model
     }
 
     /**
-     * Catalog Product Media module (images + videos).
+     * Catalog Product Media module (images + videos) — product-level only.
+     * Variant-bound rows are excluded so storefront gallery behavior stays unchanged.
      */
     public function media(): HasMany
     {
-        return $this->hasMany(ProductMedia::class)->ordered();
+        return $this->hasMany(ProductMedia::class)
+            ->whereNull('product_media.product_variant_id')
+            ->ordered();
     }
 
     public function mediaImages(): HasMany
     {
-        return $this->hasMany(ProductMedia::class)->images()->ordered();
+        return $this->hasMany(ProductMedia::class)
+            ->whereNull('product_media.product_variant_id')
+            ->images()
+            ->ordered();
     }
 
     public function videos(): HasMany
     {
-        return $this->hasMany(ProductMedia::class)->videos()->ordered();
+        return $this->hasMany(ProductMedia::class)
+            ->whereNull('product_media.product_variant_id')
+            ->videos()
+            ->ordered();
     }
 
     public function variants(): HasMany
@@ -180,6 +189,12 @@ class Product extends Model
     public function inventory(): HasMany
     {
         return $this->hasMany(Inventory::class);
+    }
+
+    /** CHINA_IMPORT commercial availability rows (read path for catalog filters). */
+    public function chinaCommercialStocks(): HasMany
+    {
+        return $this->hasMany(ChinaCommercialStock::class);
     }
 
     public function cartItems(): HasMany

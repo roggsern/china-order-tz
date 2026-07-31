@@ -2,14 +2,21 @@
 
 namespace App\Listeners\Returns;
 
+use App\Events\Audit\RefundApprovedAudit;
 use App\Events\Audit\RefundCompletedAudit;
 use App\Events\Audit\RefundCreatedAudit;
+use App\Events\Audit\RefundFailedAudit;
+use App\Events\Audit\RefundProcessedAudit;
+use App\Events\Audit\RefundRejectedAudit;
 use App\Events\Audit\ReturnApprovedAudit;
 use App\Events\Audit\ReturnCompletedAudit;
 use App\Events\Audit\ReturnRejectedAudit;
 use App\Events\Audit\ReturnRequestedAudit;
+use App\Events\Returns\RefundApproved;
 use App\Events\Returns\RefundCompleted;
 use App\Events\Returns\RefundCreated;
+use App\Events\Returns\RefundFailed;
+use App\Events\Returns\RefundRejected;
 use App\Events\Returns\ReturnApproved;
 use App\Events\Returns\ReturnCompleted;
 use App\Events\Returns\ReturnRejected;
@@ -70,6 +77,69 @@ class HandleReturnLifecycle
     public function onRefundCreated(RefundCreated $event): void
     {
         event(RefundCreatedAudit::fromRefund($event->refund, $event->admin));
+
+        $refund = $event->refund->loadMissing(['order.user', 'customer']);
+        $customer = $refund->customer ?? $refund->order?->user;
+
+        if ($customer !== null) {
+            $this->notifyRefundCustomer(
+                $customer,
+                NotificationEventType::RefundRequested,
+                $refund,
+                'refund-requested:'.$refund->id,
+            );
+        }
+    }
+
+    public function onRefundApproved(RefundApproved $event): void
+    {
+        event(RefundApprovedAudit::fromRefund($event->refund, $event->admin));
+
+        $refund = $event->refund->loadMissing(['order.user', 'customer']);
+        $customer = $refund->customer ?? $refund->order?->user;
+
+        if ($customer !== null) {
+            $this->notifyRefundCustomer(
+                $customer,
+                NotificationEventType::RefundApproved,
+                $refund,
+                'refund-approved:'.$refund->id,
+            );
+        }
+    }
+
+    public function onRefundRejected(RefundRejected $event): void
+    {
+        event(RefundRejectedAudit::fromRefund($event->refund, $event->admin, $event->reason));
+
+        $refund = $event->refund->loadMissing(['order.user', 'customer']);
+        $customer = $refund->customer ?? $refund->order?->user;
+
+        if ($customer !== null) {
+            $this->notifyRefundCustomer(
+                $customer,
+                NotificationEventType::RefundRejected,
+                $refund,
+                'refund-rejected:'.$refund->id,
+            );
+        }
+    }
+
+    public function onRefundFailed(RefundFailed $event): void
+    {
+        event(RefundFailedAudit::fromRefund($event->refund, $event->admin, $event->reason));
+
+        $refund = $event->refund->loadMissing(['order.user', 'customer']);
+        $customer = $refund->customer ?? $refund->order?->user;
+
+        if ($customer !== null) {
+            $this->notifyRefundCustomer(
+                $customer,
+                NotificationEventType::RefundFailed,
+                $refund,
+                'refund-failed:'.$refund->id,
+            );
+        }
     }
 
     public function onRefundCompleted(RefundCompleted $event): void
@@ -103,24 +173,41 @@ class HandleReturnLifecycle
 
         $customer = $refund->returnRequest?->customer ?? $refund->order?->user;
         if ($customer !== null) {
-            try {
-                $this->notifications->notifyCustomer(
-                    NotificationEventType::RefundCompleted,
-                    $customer,
-                    [
-                        'customer_name' => $customer->name,
-                        'order_number' => $refund->order?->order_number,
-                        'order_id' => $refund->order_id,
-                        'refund_amount' => (string) $refund->amount,
-                        'currency' => $refund->currency,
-                    ],
-                );
-            } catch (\Throwable $e) {
-                Log::warning('returns.notify_refund_completed_failed', [
+            $this->notifyRefundCustomer(
+                $customer,
+                NotificationEventType::RefundCompleted,
+                $refund,
+                'refund-completed:'.$refund->id,
+            );
+        }
+    }
+
+    private function notifyRefundCustomer(
+        \App\Models\User $customer,
+        NotificationEventType $type,
+        \App\Models\RefundTransaction $refund,
+        string $idempotencyKey,
+    ): void {
+        try {
+            $this->notifications->notifyCustomer(
+                $type,
+                $customer,
+                [
+                    'customer_name' => $customer->name,
+                    'order_number' => $refund->order?->order_number,
+                    'order_id' => $refund->order_id,
+                    'refund_amount' => (string) $refund->amount,
+                    'currency' => $refund->currency,
                     'refund_id' => $refund->id,
-                    'message' => $e->getMessage(),
-                ]);
-            }
+                ],
+                idempotencyKey: $idempotencyKey,
+            );
+        } catch (\Throwable $e) {
+            Log::warning('returns.notify_refund_failed', [
+                'refund_id' => $refund->id,
+                'type' => $type->value,
+                'message' => $e->getMessage(),
+            ]);
         }
     }
 

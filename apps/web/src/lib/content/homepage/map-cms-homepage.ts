@@ -293,8 +293,12 @@ function storesFromFeatured(
       code: stringField(data, "code") ?? slug,
       name,
       slug,
+      description: stringField(data, "description"),
       theme_color: stringField(data, "theme_color"),
+      logo_path: stringField(data, "logo_path"),
       logo_url: stringField(data, "logo_url"),
+      banner_path: stringField(data, "banner_path"),
+      banner_url: stringField(data, "banner_url"),
       storefront_featured: Boolean(data.storefront_featured),
     });
   }

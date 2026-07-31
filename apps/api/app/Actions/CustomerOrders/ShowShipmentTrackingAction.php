@@ -3,27 +3,26 @@
 namespace App\Actions\CustomerOrders;
 
 use App\Enums\DeliveryType;
-use App\Enums\TimelineVisibility;
 use App\Models\Order;
 use App\Models\Shipment;
 use App\Models\User;
 use App\Services\CustomerAgent\CustomerAgentWorkflowEngine;
+use App\Services\Orders\CustomerOrderProgressResolver;
+use App\Services\Orders\CustomerOrderProgressTimelineBuilder;
 use App\Services\Tracking\TrackingEngine;
-use App\Shipments\OrderShipmentStatusResolver;
-use App\Shipments\ShipmentTimelineBuilder;
 
 class ShowShipmentTrackingAction
 {
     public function __construct(
-        private readonly OrderShipmentStatusResolver $statusResolver,
-        private readonly ShipmentTimelineBuilder $timelineBuilder,
         private readonly TrackingEngine $trackingEngine,
         private readonly CustomerAgentWorkflowEngine $customerAgent,
+        private readonly CustomerOrderProgressResolver $progressResolver,
+        private readonly CustomerOrderProgressTimelineBuilder $progressTimeline,
     ) {}
 
     /**
      * Authoritative customer tracking endpoint payload.
-     * Includes legacy source-specific timeline plus unified composed timeline.
+     * Progress projection is the sole customer-facing journey source.
      *
      * @return array<string, mixed>
      */
@@ -34,7 +33,7 @@ class ShowShipmentTrackingAction
         }
 
         $order->loadMissing([
-            'shipmentStatusHistories',
+            'payments',
             'shipments.trackingEvents.creator',
             'fulfillment.shipment.trackingEvents.creator',
             'fulfillment.warehouseJob',
@@ -42,7 +41,18 @@ class ShowShipmentTrackingAction
             'warehouseJob',
         ]);
 
-        $unified = $this->trackingEngine->composeOrderTimeline($order, TimelineVisibility::Customer);
+        $progress = $this->progressResolver->resolve($order);
+        $timeline = $this->progressTimeline->build($progress);
+
+        $envelope = [
+            'order_number' => $order->order_number,
+            'current_status' => $progress['current_key'],
+            'current_status_label' => $progress['current_label'],
+            'timeline' => $timeline,
+            'unified_timeline' => $this->progressTimeline->buildUnified($progress),
+            'progress' => $progress,
+            'source' => 'customer_progress',
+        ];
 
         $deliveryType = $order->deliveryOption?->delivery_type instanceof DeliveryType
             ? $order->deliveryOption->delivery_type
@@ -56,48 +66,29 @@ class ShowShipmentTrackingAction
         if ($deliveryType === DeliveryType::CustomerAgent) {
             $payload = $this->customerAgent->trackingPayload($order);
 
-            return [
-                'order_number' => $order->order_number,
-                'current_status' => $payload['current_status'],
-                'current_status_label' => $payload['current_status_label'],
+            return array_merge($envelope, [
                 'shipment' => null,
-                'timeline' => $payload['timeline'],
-                'unified_timeline' => $unified['timeline'],
                 'source' => 'customer_agent_pickup',
                 'tracking_ownership' => 'customer_agent',
                 'company_transport_tracking' => false,
                 'pickup' => $payload['pickup'],
                 'authorization_status' => $payload['authorization_status'] ?? null,
                 'release_status' => $payload['release_status'] ?? null,
-            ];
+            ]);
         }
 
         if ($shipment !== null) {
             $payload = $this->trackingEngine->buildTrackingPayload($shipment);
 
-            return [
-                'order_number' => $order->order_number,
-                'current_status' => $payload['current_status'],
-                'current_status_label' => $payload['current_status_label'],
+            return array_merge($envelope, [
                 'shipment' => $payload['shipment'],
-                'timeline' => $payload['timeline'],
-                'unified_timeline' => $unified['timeline'],
-                'source' => 'shipment_tracking_events',
                 'tracking_ownership' => 'company_shipment',
-            ];
+            ]);
         }
 
-        $currentStatus = $this->statusResolver->resolve($order);
-
-        return [
-            'order_number' => $order->order_number,
-            'current_status' => $currentStatus->value,
-            'current_status_label' => $currentStatus->label(),
+        return array_merge($envelope, [
             'shipment' => null,
-            'timeline' => $this->timelineBuilder->build($currentStatus, $order),
-            'unified_timeline' => $unified['timeline'],
-            'source' => 'order_shipment_status',
             'tracking_ownership' => 'company_shipment',
-        ];
+        ]);
     }
 }

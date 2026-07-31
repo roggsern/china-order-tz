@@ -57,6 +57,15 @@ export type ProductImage = {
   path?: string;
 };
 
+export type ProductVideo = {
+  id: string;
+  url: string;
+  thumbnail_url?: string | null;
+  title?: string | null;
+  alt_text?: string | null;
+  sort_order: number;
+};
+
 export type ProductSpecification = {
   label: string;
   value: string;
@@ -205,6 +214,10 @@ export type Product = {
   emoji: string;
   categorySlug: string;
   stock: number;
+  /** Policy-level purchase eligibility from customer product detail API. */
+  isPurchasable?: boolean;
+  availabilityStatus?: import("@/lib/catalog/product-availability").ProductAvailabilityStatus;
+  unavailabilityReason?: import("@/lib/catalog/product-availability").ProductUnavailabilityReason;
   weightKg?: number;
   sku?: string;
 } & ProductShippingFields & {
@@ -214,6 +227,13 @@ export type Product = {
   /** Legacy single-image field; prefer `primary_image` or `images[0]`. */
   image?: string;
   images: ProductImage[];
+  /**
+   * Per-variant galleries from the customer product detail API.
+   * Keyed by variant/configuration UUID; already includes product-media fallback.
+   */
+  variantGalleries?: Record<string, ProductImage[]>;
+  /** Product detail videos from catalog media — not merged into `images`. */
+  videos?: ProductVideo[];
   thumbnailImageId?: number;
   features: string[];
   specifications: ProductSpecification[];

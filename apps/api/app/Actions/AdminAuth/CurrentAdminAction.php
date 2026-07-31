@@ -16,6 +16,6 @@ class CurrentAdminAction
             throw new AuthenticationException('Unauthenticated.');
         }
 
-        return $admin->load('role');
+        return $admin->load(['role.permissions']);
     }
 }

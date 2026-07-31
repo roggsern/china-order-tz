@@ -25,18 +25,25 @@ case "${APP_ENV:-local}" in
     ;;
 esac
 
-# Demo / identity seeding is LOCAL DEVELOPMENT ONLY.
-# Never inject demo admins, customers, or catalog into production/staging.
-# Seeders are idempotent for identities (updateOrCreate) — safe on every local restart.
-# Do NOT use SEED_DATABASE_ON_BOOT to seed production; it is ignored outside local/development.
+# Seeding policy:
+# - Core seeds (roles, taxonomy, catalog scaffold, admin login) run on local boot.
+# - Demo transactional data (carts, COT-FUL-* orders, fulfillments, etc.) is opt-in
+#   via RUN_DEMO_SEEDS=true only. Production never auto-seeds.
 case "${APP_ENV:-local}" in
   local|development)
-    echo "Ensuring development database is seeded..."
-    php artisan db:seed --force --no-interaction || true
+    echo "Ensuring core development database seeds..."
+    php artisan db:seed --class=CoreDatabaseSeeder --force --no-interaction || true
+
+    if [ "${RUN_DEMO_SEEDS:-false}" = "true" ]; then
+      echo "RUN_DEMO_SEEDS=true — applying demo transactional seeds..."
+      php artisan db:seed --class=DemoDatabaseSeeder --force --no-interaction || true
+    else
+      echo "Demo seeds skipped (RUN_DEMO_SEEDS is not true). Set RUN_DEMO_SEEDS=true for demo carts/orders/fulfillment data."
+    fi
     ;;
   *)
-    if [ "${SEED_DATABASE_ON_BOOT:-false}" = "true" ]; then
-      echo "REFUSING auto-seed: APP_ENV=${APP_ENV} (demo seed blocked outside local/development)"
+    if [ "${SEED_DATABASE_ON_BOOT:-false}" = "true" ] || [ "${RUN_DEMO_SEEDS:-false}" = "true" ]; then
+      echo "REFUSING auto-seed: APP_ENV=${APP_ENV} (seeding blocked outside local/development)"
     fi
     ;;
 esac

@@ -10,6 +10,7 @@ use App\Models\ProductAttribute;
 use App\Models\ProductAttributeValue;
 use App\Models\ProductType;
 use App\Models\ProductVariant;
+use App\Models\Supplier;
 use Database\Seeders\ProductTypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -112,6 +113,7 @@ class AdminProductConfigurationGridTest extends TestCase
             'category_id' => $category->id,
             'catalog_product_type_id' => $cpt->id,
             'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
+            'supplier_id' => Supplier::factory()->create(['is_active' => true, 'country' => 'CN'])->id,
             'sku' => 'PHONE-BASE-1',
             'price' => 500000,
             'air_shipping_price' => 8000,
@@ -169,6 +171,7 @@ class AdminProductConfigurationGridTest extends TestCase
             'name' => 'Bad Fashion Combo',
             'category_id' => $category->id,
             'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
+            'supplier_id' => Supplier::factory()->create(['is_active' => true, 'country' => 'CN'])->id,
             'sku' => 'FASH-BAD-1',
             'price' => 20000,
             'status' => 'draft',

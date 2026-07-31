@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Order } from "@/lib/types/order";
 import { ORDER_TRACKING_POLL_MS } from "@/lib/order/constants";
+import { resolveOrderSuccessOrder } from "@/lib/order/order-success-order";
 import { ORDERS_STORAGE_KEY, ORDERS_UPDATED_EVENT } from "@/lib/payment/order-storage";
 import { paymentService } from "@/lib/payment/PaymentService";
 
@@ -67,4 +68,38 @@ export function useOrderById(orderId: string, options: UseOrderByIdOptions = {})
 /** Loads an order snapshot once — for order confirmation (no polling or subscriptions). */
 export function useOrderSnapshot(orderId: string) {
   return useOrderById(orderId, { subscribe: false });
+}
+
+/** Loads order success view from customer API with localStorage fallback. */
+export function useOrderSuccessOrder(orderId: string) {
+  const [order, setOrder] = useState<Order | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const orderIdRef = useRef(orderId);
+
+  orderIdRef.current = orderId;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setIsLoading(true);
+
+      const loaded = await resolveOrderSuccessOrder(orderIdRef.current);
+
+      if (cancelled) {
+        return;
+      }
+
+      setOrder(loaded);
+      setIsLoading(false);
+    }
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [orderId]);
+
+  return { order, isLoading };
 }

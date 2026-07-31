@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\CustomerOrders;
 
+use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
 use App\Models\Admin;
@@ -150,16 +151,27 @@ class CustomerOrderDetailsTest extends TestCase
             ->assertJsonPath('data.payment.payment_method', PaymentMethod::Mpesa->value);
     }
 
-    public function test_response_includes_shipment_placeholder(): void
+    public function test_response_includes_projected_shipment_status(): void
     {
         $user = User::factory()->create();
-        $order = Order::factory()->create(['user_id' => $user->id]);
+        $order = Order::factory()->create([
+            'user_id' => $user->id,
+            'status' => OrderStatus::PendingPayment,
+        ]);
+
+        Payment::factory()->create([
+            'order_id' => $order->id,
+            'user_id' => $user->id,
+            'status' => PaymentStatus::Pending,
+        ]);
 
         Sanctum::actingAs($user);
 
         $response = $this->getJson("/api/v1/orders/{$order->id}");
 
         $response->assertOk()
-            ->assertJsonPath('data.shipment.status', 'Preparing');
+            ->assertJsonPath('data.shipment.status', 'Awaiting payment')
+            ->assertJsonPath('data.progress.current_key', 'AWAITING_PAYMENT')
+            ->assertJsonCount(5, 'data.progress.steps');
     }
 }

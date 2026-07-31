@@ -10,6 +10,7 @@ use App\Actions\Checkout\ShowCheckoutAction;
 use App\Actions\Checkout\ShowCheckoutSessionAction;
 use App\Actions\Checkout\StartCheckoutSessionAction;
 use App\Http\Requests\Checkout\ApplyCheckoutShippingChoiceRequest;
+use App\Http\Requests\Checkout\StartCheckoutSessionRequest;
 use App\Http\Resources\CheckoutResource;
 use App\Http\Resources\CheckoutSessionResource;
 use App\Models\CheckoutSession;
@@ -43,7 +44,7 @@ class CheckoutController extends Controller
         ]);
     }
 
-    public function start(StartCheckoutSessionAction $action): JsonResponse
+    public function start(StartCheckoutSessionRequest $request, StartCheckoutSessionAction $action): JsonResponse
     {
         /** @var User $user */
         $user = auth()->user();
@@ -51,7 +52,7 @@ class CheckoutController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Checkout session started.',
-            'data' => new CheckoutSessionResource($action->handle($user)),
+            'data' => new CheckoutSessionResource($action->handle($user, $request->validated())),
         ], 201);
     }
 

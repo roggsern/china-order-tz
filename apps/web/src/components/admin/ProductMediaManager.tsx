@@ -17,6 +17,12 @@ import {
   LEGACY_MEDIA_HELPER_TEXT,
   supportsCatalogMediaActions,
 } from "@/lib/admin/product-media-legacy";
+import {
+  ADMIN_PRODUCT_MEDIA_ACCEPT,
+  filterAcceptedProductMediaFiles,
+  productMediaDropActiveClass,
+  validateProductMediaUpload,
+} from "@/lib/admin/product-media-upload";
 
 type ProductMediaManagerProps = {
   productId: string;
@@ -38,6 +44,7 @@ export function ProductMediaManager({ productId, productName }: ProductMediaMana
   const [busy, setBusy] = useState(false);
   const [videoUrl, setVideoUrl] = useState("");
   const [videoTitle, setVideoTitle] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
 
   const reload = useCallback(async () => {
     setIsLoading(true);
@@ -86,19 +93,29 @@ export function ProductMediaManager({ productId, productName }: ProductMediaMana
     }
   };
 
-  const handleUpload = async (fileList: FileList | null) => {
-    if (!fileList || fileList.length === 0) return;
+  const uploadFiles = async (incoming: File[]) => {
+    const { accepted, error: validationError } = validateProductMediaUpload(incoming);
+    if (validationError) {
+      setError(validationError);
+    }
+    if (accepted.length === 0) {
+      return;
+    }
+
     await run(async () => {
-      const files = Array.from(fileList);
       const catalogImages = images.filter((item) => supportsCatalogMediaActions(item));
-      for (let index = 0; index < files.length; index += 1) {
-        await uploadAdminProductMediaImage(productId, files[index], {
+      for (let index = 0; index < accepted.length; index += 1) {
+        await uploadAdminProductMediaImage(productId, accepted[index], {
           title: `${productName} image`,
           isPrimary: catalogImages.length === 0 && index === 0,
           sortOrder: catalogImages.length + index,
         });
       }
     });
+  };
+
+  const handleUpload = async (fileList: FileList | null) => {
+    await uploadFiles(filterAcceptedProductMediaFiles(fileList));
   };
 
   const handleAddVideo = async () => {
@@ -154,20 +171,55 @@ export function ProductMediaManager({ productId, productName }: ProductMediaMana
         </div>
       ) : null}
 
-      <div className="rounded-lg border border-zinc-200 p-4">
-        <h3 className="text-sm font-semibold text-zinc-900">Upload images</h3>
-        <p className="mt-1 text-xs text-zinc-500">JPG, JPEG, PNG, WEBP — max 5MB each.</p>
-        <input
-          type="file"
-          accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
-          multiple
-          disabled={busy}
-          className="mt-3 block w-full text-xs text-zinc-600"
-          onChange={(event) => {
-            void handleUpload(event.target.files);
-            event.target.value = "";
-          }}
-        />
+      <div
+        className={`rounded-xl border-2 border-dashed p-5 transition ${productMediaDropActiveClass(isDragging)}`}
+        onDragEnter={(event) => {
+          event.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragLeave={(event) => {
+          event.preventDefault();
+          if (event.currentTarget.contains(event.relatedTarget as Node)) {
+            return;
+          }
+          setIsDragging(false);
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          setIsDragging(false);
+          if (busy) return;
+          void uploadFiles(filterAcceptedProductMediaFiles(event.dataTransfer.files));
+        }}
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-900">Upload images</h3>
+            <p className="mt-1 text-xs text-zinc-500">
+              Drag and drop images here, or choose files. JPG, PNG, WEBP — max 5MB each.
+            </p>
+          </div>
+          <label className="admin-btn-primary cursor-pointer">
+            <span>{busy ? "Uploading…" : "Choose images"}</span>
+            <input
+              type="file"
+              accept={ADMIN_PRODUCT_MEDIA_ACCEPT}
+              multiple
+              disabled={busy}
+              className="sr-only"
+              onChange={(event) => {
+                void handleUpload(event.target.files);
+                event.target.value = "";
+              }}
+            />
+          </label>
+        </div>
+        <p className="mt-4 text-center text-xs font-medium text-zinc-500">
+          {isDragging ? "Drop images to upload" : "Drop zone ready"}
+        </p>
       </div>
 
       <div className="rounded-lg border border-zinc-200 p-4">
@@ -198,7 +250,10 @@ export function ProductMediaManager({ productId, productName }: ProductMediaMana
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-zinc-500">Loading media…</p>
+        <div className="space-y-3">
+          <div className="h-28 animate-pulse rounded-xl bg-zinc-100" />
+          <div className="h-20 animate-pulse rounded-xl bg-zinc-100" />
+        </div>
       ) : (
         <>
           <section>
@@ -227,7 +282,7 @@ export function ProductMediaManager({ productId, productName }: ProductMediaMana
                     ) : null}
                     {isLegacyMediaItem(primary) ? <LegacyImageBadge /> : null}
                   </p>
-                  <p className="text-xs text-zinc-500 truncate">{primary.url}</p>
+                  <p className="truncate text-xs text-zinc-500">{primary.url}</p>
                   {isLegacyMediaItem(primary) ? (
                     <p className="mt-2 text-xs text-sky-800">{LEGACY_MEDIA_HELPER_TEXT}</p>
                   ) : null}
@@ -243,7 +298,7 @@ export function ProductMediaManager({ productId, productName }: ProductMediaMana
             {images.length === 0 ? (
               <p className="mt-2 text-sm text-zinc-500">No gallery images.</p>
             ) : (
-              <ul className="mt-2 divide-y divide-zinc-100 rounded-lg border border-zinc-200">
+              <ul className="mt-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {images.map((image, index) => {
                   const legacy = isLegacyMediaItem(image);
                   const actionsDisabled = busy || legacy;
@@ -251,18 +306,18 @@ export function ProductMediaManager({ productId, productName }: ProductMediaMana
                   return (
                     <li
                       key={image.id}
-                      className={`flex flex-wrap items-center gap-3 px-3 py-2 ${
-                        legacy ? "bg-sky-50/40" : ""
+                      className={`overflow-hidden rounded-xl border ${
+                        legacy ? "border-sky-200 bg-sky-50/40" : "border-zinc-200 bg-white"
                       }`}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={image.thumbnailUrl || image.url}
                         alt={image.altText || ""}
-                        className="h-14 w-14 rounded object-cover"
+                        className="h-36 w-full object-cover"
                       />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm text-zinc-900">
+                      <div className="space-y-2 p-3">
+                        <p className="text-sm font-medium text-zinc-900">
                           {image.title || `Image ${index + 1}`}
                           {image.isPrimary ? (
                             <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-700">
@@ -276,70 +331,70 @@ export function ProductMediaManager({ productId, productName }: ProductMediaMana
                             </span>
                           ) : null}
                         </p>
-                        <p className="text-[11px] text-zinc-500">sort {image.sortOrder}</p>
+                        <p className="text-[11px] text-zinc-500">Order {image.sortOrder + 1}</p>
                         {legacy ? (
-                          <p className="mt-1 text-[11px] text-sky-800">{LEGACY_MEDIA_HELPER_TEXT}</p>
+                          <p className="text-[11px] text-sky-800">{LEGACY_MEDIA_HELPER_TEXT}</p>
                         ) : null}
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        <button
-                          type="button"
-                          className="rounded px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
-                          disabled={actionsDisabled || index === 0}
-                          onClick={() => void moveImage(image, -1)}
-                        >
-                          Up
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
-                          disabled={actionsDisabled || index === images.length - 1}
-                          onClick={() => void moveImage(image, 1)}
-                        >
-                          Down
-                        </button>
-                        {!image.isPrimary ? (
+                        <div className="flex flex-wrap gap-1">
                           <button
                             type="button"
                             className="rounded px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={actionsDisabled || index === 0}
+                            onClick={() => void moveImage(image, -1)}
+                          >
+                            Earlier
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={actionsDisabled || index === images.length - 1}
+                            onClick={() => void moveImage(image, 1)}
+                          >
+                            Later
+                          </button>
+                          {!image.isPrimary ? (
+                            <button
+                              type="button"
+                              className="rounded px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              disabled={actionsDisabled}
+                              onClick={() =>
+                                void run(async () => {
+                                  await setAdminProductMediaPrimary(productId, image.id);
+                                })
+                              }
+                            >
+                              Set primary
+                            </button>
+                          ) : null}
+                          {!legacy ? (
+                            <button
+                              type="button"
+                              className="rounded px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              disabled={busy}
+                              onClick={() =>
+                                void run(async () => {
+                                  await updateAdminProductMedia(productId, image.id, {
+                                    is_active: !image.isActive,
+                                  });
+                                })
+                              }
+                            >
+                              {image.isActive ? "Deactivate" : "Activate"}
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="rounded px-2 py-1 text-[11px] font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
                             disabled={actionsDisabled}
                             onClick={() =>
                               void run(async () => {
-                                await setAdminProductMediaPrimary(productId, image.id);
+                                await deleteAdminProductMedia(productId, image.id);
                               })
                             }
                           >
-                            Set primary
+                            Delete
                           </button>
-                        ) : null}
-                        {!legacy ? (
-                          <button
-                            type="button"
-                            className="rounded px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
-                            disabled={busy}
-                            onClick={() =>
-                              void run(async () => {
-                                await updateAdminProductMedia(productId, image.id, {
-                                  is_active: !image.isActive,
-                                });
-                              })
-                            }
-                          >
-                            {image.isActive ? "Deactivate" : "Activate"}
-                          </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="rounded px-2 py-1 text-[11px] font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-                          disabled={actionsDisabled}
-                          onClick={() =>
-                            void run(async () => {
-                              await deleteAdminProductMedia(productId, image.id);
-                            })
-                          }
-                        >
-                          Delete
-                        </button>
+                        </div>
                       </div>
                     </li>
                   );

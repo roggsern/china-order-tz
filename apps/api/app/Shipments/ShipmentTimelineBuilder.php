@@ -6,6 +6,12 @@ use App\Enums\ShipmentStatus;
 use App\Models\Order;
 use Illuminate\Support\Carbon;
 
+/**
+ * Builds the legacy 12-step order journey timeline from ShipmentStatus.
+ *
+ * Internal/admin read paths only — customer tracking APIs must use
+ * CustomerOrderProgressResolver + CustomerOrderProgressTimelineBuilder instead.
+ */
 class ShipmentTimelineBuilder
 {
     /**

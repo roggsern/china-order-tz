@@ -2,85 +2,39 @@
 
 import type { Order } from "@/lib/types/order";
 import { ORDER_STATUS } from "@/lib/types/order";
-import { PAYMENT_STATUS } from "@/lib/types/payment";
-
-type StepState = "completed" | "current" | "upcoming" | "cancelled";
-
-type FulfillmentStep = {
-  id: string;
-  label: string;
-};
-
-const ADMIN_FULFILLMENT_STEPS: FulfillmentStep[] = [
-  { id: "pending", label: "Pending" },
-  { id: "paid", label: "Paid" },
-  { id: "processing", label: "Processing" },
-  { id: "shipped", label: "Shipped" },
-  { id: "delivered", label: "Delivered" },
-];
-
-function isPaid(order: Order): boolean {
-  return order.paymentStatus === PAYMENT_STATUS.PAID;
-}
-
-function getActiveStepIndex(order: Order): number {
-  if (order.status === ORDER_STATUS.DELIVERED) {
-    return ADMIN_FULFILLMENT_STEPS.length;
-  }
-  if (
-    order.status === ORDER_STATUS.SHIPPED ||
-    order.status === ORDER_STATUS.IN_TRANSIT
-  ) {
-    return 3;
-  }
-  if (order.status === ORDER_STATUS.PROCESSING || order.status === ORDER_STATUS.PACKED) {
-    return 2;
-  }
-  if (isPaid(order)) {
-    return 1;
-  }
-  return 0;
-}
-
-function resolveStepStates(order: Order): StepState[] {
-  if (order.status === ORDER_STATUS.CANCELLED) {
-    return ADMIN_FULFILLMENT_STEPS.map(() => "cancelled");
-  }
-
-  const activeIndex = getActiveStepIndex(order);
-  if (activeIndex >= ADMIN_FULFILLMENT_STEPS.length) {
-    return ADMIN_FULFILLMENT_STEPS.map(() => "completed");
-  }
-
-  return ADMIN_FULFILLMENT_STEPS.map((_, index) => {
-    if (index < activeIndex) {
-      return "completed";
-    }
-    if (index === activeIndex) {
-      return "current";
-    }
-    return "upcoming";
-  });
-}
+import {
+  ADMIN_FULFILMENT_STATUS_STEPS,
+  resolveAdminFulfilmentStatusStep,
+  resolveStatusTrackStates,
+} from "@/lib/admin/order-detail-display";
 
 interface AdminOrderFulfillmentTimelineProps {
   order: Order;
   className?: string;
 }
 
+/** Read-only fulfilment progress — payment is shown separately. */
 export function AdminOrderFulfillmentTimeline({ order, className = "" }: AdminOrderFulfillmentTimelineProps) {
-  const states = resolveStepStates(order);
+  const activeStep = resolveAdminFulfilmentStatusStep(order);
+  const states = resolveStatusTrackStates(
+    ADMIN_FULFILMENT_STATUS_STEPS,
+    activeStep,
+    order.status === ORDER_STATUS.CANCELLED,
+  );
   const isCancelled = order.status === ORDER_STATUS.CANCELLED;
 
   return (
-    <div className={className} aria-label="Order fulfillment progress">
+    <div className={className} aria-label="Fulfilment progress">
       <ol className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
-        {ADMIN_FULFILLMENT_STEPS.map((step, index) => {
+        {ADMIN_FULFILMENT_STATUS_STEPS.map((step, index) => {
           const state = states[index]!;
-          const isLast = index === ADMIN_FULFILLMENT_STEPS.length - 1;
+          const isLast = index === ADMIN_FULFILMENT_STATUS_STEPS.length - 1;
 
           return (
-            <li key={step.id} className="relative flex flex-1 items-center gap-3 sm:flex-col sm:gap-2 sm:text-center">
+            <li
+              key={step.id}
+              className="relative flex flex-1 items-center gap-3 sm:flex-col sm:gap-2 sm:text-center"
+            >
               {!isLast && (
                 <span
                   className="absolute left-4 top-8 hidden h-px w-[calc(100%-2rem)] bg-zinc-200 sm:left-[calc(50%+1rem)] sm:top-4 sm:block sm:h-0.5 sm:w-[calc(100%-2rem)]"
@@ -116,9 +70,6 @@ export function AdminOrderFulfillmentTimeline({ order, className = "" }: AdminOr
                 >
                   {step.label}
                 </p>
-                {state === "current" && !isCancelled && (
-                  <p className="mt-0.5 text-[10px] font-medium text-zinc-500 sm:hidden">Current step</p>
-                )}
               </div>
             </li>
           );

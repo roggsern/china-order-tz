@@ -79,23 +79,30 @@ class CustomerProductMediaResolutionTest extends TestCase
             ->assertJsonCount(2, 'data.images');
     }
 
-    public function test_dual_write_product_prefers_catalog_media_over_legacy_images(): void
+    public function test_new_upload_creates_product_media_not_legacy_images(): void
     {
         Storage::fake('public');
 
         $product = $this->createPurchasableProduct([
-            'slug' => 'dual-write-product',
+            'slug' => 'catalog-upload-only',
         ]);
 
         $sync = app(ProductImageWriteSyncService::class)->storeUploadedImage(
-            MinimalTestImage::jpeg('dual.jpg'),
+            MinimalTestImage::jpeg('upload-only.jpg'),
             $product,
             [
-                'alt_text' => 'Dual write image',
+                'alt_text' => 'Upload only image',
                 'is_primary' => true,
                 'sort_order' => 0,
             ],
         );
+
+        $this->assertDatabaseCount('product_images', 0);
+        $this->assertDatabaseHas('product_media', [
+            'id' => $sync->catalogMedia->id,
+            'product_id' => $product->id,
+            'alt_text' => 'Upload only image',
+        ]);
 
         ProductImage::factory()->create([
             'product_id' => $product->id,
@@ -104,7 +111,7 @@ class CustomerProductMediaResolutionTest extends TestCase
             'sort_order' => 99,
         ]);
 
-        $this->getJson('/api/v1/products/dual-write-product')
+        $this->getJson('/api/v1/products/catalog-upload-only')
             ->assertOk()
             ->assertJsonPath('data.primary_image.id', $sync->catalogMedia->id)
             ->assertJsonPath('data.primary_image.url', $sync->catalogMedia->url)
@@ -145,11 +152,13 @@ class CustomerProductMediaResolutionTest extends TestCase
         $this->getJson('/api/v1/products/no-media-product')
             ->assertOk()
             ->assertJsonPath('data.primary_image', null)
-            ->assertJsonCount(0, 'data.images');
+            ->assertJsonCount(0, 'data.images')
+            ->assertJsonCount(0, 'data.videos');
 
         $resolver = app(CustomerProductMediaResolver::class);
         $this->assertNull($resolver->resolvePrimary($product));
         $this->assertSame([], $resolver->resolveGallery($product));
+        $this->assertSame([], $resolver->resolveVideos($product));
     }
 
     public function test_product_list_card_uses_catalog_media_primary_image(): void
@@ -167,5 +176,104 @@ class CustomerProductMediaResolutionTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.0.primary_image.id', $media->id)
             ->assertJsonPath('data.0.primary_image.url', 'https://cdn.example.com/list-card.jpg');
+    }
+
+    public function test_active_video_appears_on_product_detail(): void
+    {
+        $product = $this->createPurchasableProduct([
+            'slug' => 'product-with-video',
+        ]);
+
+        $video = ProductMedia::factory()->video()->create([
+            'product_id' => $product->id,
+            'title' => 'Demo walkthrough',
+            'alt_text' => 'See it in action',
+        ]);
+
+        $this->getJson('/api/v1/products/product-with-video')
+            ->assertOk()
+            ->assertJsonPath('data.videos.0.id', $video->id)
+            ->assertJsonPath('data.videos.0.url', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ')
+            ->assertJsonPath('data.videos.0.thumbnail_url', 'https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg')
+            ->assertJsonPath('data.videos.0.title', 'Demo walkthrough')
+            ->assertJsonPath('data.videos.0.alt_text', 'See it in action');
+    }
+
+    public function test_inactive_video_is_hidden_from_product_detail(): void
+    {
+        $product = $this->createPurchasableProduct([
+            'slug' => 'product-with-inactive-video',
+        ]);
+
+        ProductMedia::factory()->video()->create([
+            'product_id' => $product->id,
+            'is_active' => false,
+        ]);
+
+        $this->getJson('/api/v1/products/product-with-inactive-video')
+            ->assertOk()
+            ->assertJsonCount(0, 'data.videos');
+    }
+
+    public function test_images_remain_unchanged_when_videos_exist(): void
+    {
+        $product = $this->createPurchasableProduct([
+            'slug' => 'product-with-image-and-video',
+        ]);
+
+        $image = ProductMedia::factory()->primary()->create([
+            'product_id' => $product->id,
+            'url' => 'https://cdn.example.com/hero.jpg',
+            'alt_text' => 'Hero image',
+        ]);
+        ProductMedia::factory()->video()->create([
+            'product_id' => $product->id,
+        ]);
+
+        $this->getJson('/api/v1/products/product-with-image-and-video')
+            ->assertOk()
+            ->assertJsonPath('data.primary_image.id', $image->id)
+            ->assertJsonCount(1, 'data.images')
+            ->assertJsonPath('data.images.0.id', $image->id)
+            ->assertJsonCount(1, 'data.videos');
+    }
+
+    public function test_product_without_videos_returns_empty_videos_array(): void
+    {
+        $this->createPurchasableProduct([
+            'slug' => 'image-only-product',
+        ]);
+
+        ProductMedia::factory()->primary()->create([
+            'product_id' => Product::query()->where('slug', 'image-only-product')->value('id'),
+            'url' => 'https://cdn.example.com/only-image.jpg',
+        ]);
+
+        $this->getJson('/api/v1/products/image-only-product')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.images')
+            ->assertJsonCount(0, 'data.videos');
+    }
+
+    public function test_tz_local_product_detail_exposes_videos_with_same_shape(): void
+    {
+        $product = Product::factory()->tzLocal()->create([
+            'slug' => 'tz-local-video-product',
+        ]);
+
+        Inventory::query()->updateOrCreate(
+            ['product_id' => $product->id, 'product_variant_id' => null],
+            ['quantity' => 5, 'reserved_quantity' => 0, 'low_stock_threshold' => 1],
+        );
+
+        $video = ProductMedia::factory()->video()->create([
+            'product_id' => $product->id,
+            'title' => 'TZ product video',
+        ]);
+
+        $this->getJson('/api/v1/products/tz-local-video-product')
+            ->assertOk()
+            ->assertJsonPath('data.videos.0.id', $video->id)
+            ->assertJsonPath('data.videos.0.title', 'TZ product video');
     }
 }

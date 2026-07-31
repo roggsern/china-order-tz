@@ -185,7 +185,7 @@ class ReservationServiceTest extends TestCase
     private function makeSimpleCheckout(int $onHand, int $qty): array
     {
         $user = User::factory()->create();
-        $product = Product::factory()->create([
+        $product = Product::factory()->tzLocal()->create([
             'name' => 'Simple Reserve Product',
             'price' => 10000,
             'is_active' => true,
@@ -226,7 +226,7 @@ class ReservationServiceTest extends TestCase
     private function makeVariantCheckout(int $onHand, int $qty): array
     {
         $user = User::factory()->create();
-        $product = Product::factory()->create([
+        $product = Product::factory()->tzLocal()->create([
             'name' => 'Variant Reserve Product',
             'price' => 0,
             'is_active' => true,

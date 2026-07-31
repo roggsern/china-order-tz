@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Enums\ActivityEventType;
+use App\Models\ActivityLog;
 use App\Models\Admin;
 use App\Models\Role;
 use App\Models\User;
@@ -138,9 +140,62 @@ class CustomerAuthenticationTest extends TestCase
 
         $this->assertSame(0, $user->fresh()->tokens()->count());
 
+        $this->assertTrue(
+            ActivityLog::query()
+                ->where('event_type', ActivityEventType::CustomerLogout->value)
+                ->where('subject_id', $user->id)
+                ->exists(),
+        );
+
         Auth::forgetGuards();
 
         $this->withToken($token)->getJson('/api/v1/me')->assertUnauthorized();
+    }
+
+    public function test_unauthenticated_logout_is_safe(): void
+    {
+        $this->postJson('/api/v1/logout')->assertUnauthorized();
+    }
+
+    public function test_customer_logout_revokes_only_current_token(): void
+    {
+        $user = User::factory()->create();
+        $current = $user->createToken('customer-api-current')->plainTextToken;
+        $otherDevice = $user->createToken('customer-api-other')->plainTextToken;
+
+        $this->assertSame(2, $user->fresh()->tokens()->count());
+
+        $this->withToken($current)->postJson('/api/v1/logout')
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $this->assertSame(1, $user->fresh()->tokens()->count());
+
+        Auth::forgetGuards();
+
+        $this->withToken($current)->getJson('/api/v1/me')->assertUnauthorized();
+        $this->withToken($otherDevice)->getJson('/api/v1/me')
+            ->assertOk()
+            ->assertJsonPath('data.id', $user->id);
+    }
+
+    public function test_customer_logout_does_not_affect_other_users(): void
+    {
+        $userA = User::factory()->create();
+        $userB = User::factory()->create();
+        $tokenA = $userA->createToken('customer-api')->plainTextToken;
+        $tokenB = $userB->createToken('customer-api')->plainTextToken;
+
+        $this->withToken($tokenA)->postJson('/api/v1/logout')->assertOk();
+
+        $this->assertSame(0, $userA->fresh()->tokens()->count());
+        $this->assertSame(1, $userB->fresh()->tokens()->count());
+
+        Auth::forgetGuards();
+
+        $this->withToken($tokenB)->getJson('/api/v1/me')
+            ->assertOk()
+            ->assertJsonPath('data.id', $userB->id);
     }
 
     public function test_unauthenticated_me_returns_401(): void

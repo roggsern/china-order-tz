@@ -117,7 +117,7 @@ class Store extends Model
     public function admins(): BelongsToMany
     {
         return $this->belongsToMany(Admin::class, 'store_user_assignments')
-            ->withPivot(['assignment_type', 'starts_at', 'ends_at', 'is_active', 'assigned_by'])
+            ->withPivot(['assignment_type', 'operational_scope', 'starts_at', 'ends_at', 'is_active', 'assigned_by'])
             ->withTimestamps();
     }
 

@@ -4,7 +4,9 @@ import type { CartTotals } from "@/lib/types/cart";
 import type { PaymentMethodCode, PaymentStatus } from "@/lib/types/payment";
 import { formatPrice } from "@/lib/catalog/utils";
 import { OrderSummaryTotals } from "@/components/cart/OrderSummaryTotals";
-import { PAYMENT_METHOD_LABELS } from "@/lib/payment/constants";
+import {
+  buildOrderPaymentSummaryFields,
+} from "@/lib/payment/order-payment-summary-fields";
 import { PaymentStatusBadge } from "./PaymentStatusBadge";
 
 interface OrderSummaryPaymentProps {
@@ -12,6 +14,10 @@ interface OrderSummaryPaymentProps {
   paymentStatus?: PaymentStatus;
   paymentMethod?: PaymentMethodCode;
   paymentReference?: string | null;
+  paymentProvider?: string | null;
+  paymentAmount?: number | null;
+  paymentCurrency?: string | null;
+  paymentPaidAt?: string | null;
   showPaymentDetails?: boolean;
 }
 
@@ -20,8 +26,21 @@ export function OrderSummaryPayment({
   paymentStatus,
   paymentMethod,
   paymentReference,
+  paymentProvider,
+  paymentAmount,
+  paymentCurrency,
+  paymentPaidAt,
   showPaymentDetails = true,
 }: OrderSummaryPaymentProps) {
+  const paymentFields = buildOrderPaymentSummaryFields({
+    paymentMethod,
+    paymentReference,
+    paymentProvider,
+    paymentAmount,
+    paymentCurrency,
+    paymentPaidAt,
+  });
+
   return (
     <div className="space-y-4">
       <OrderSummaryTotals totals={totals} hideZeroDiscount />
@@ -38,23 +57,20 @@ export function OrderSummaryPayment({
               <PaymentStatusBadge status={paymentStatus} size="sm" />
             </div>
 
-            {paymentMethod && (
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="text-zinc-600">Method</span>
-                <span className="font-semibold text-zinc-900">
-                  {PAYMENT_METHOD_LABELS[paymentMethod] ?? paymentMethod}
+            {paymentFields.map((field) => (
+              <div key={field.label} className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-zinc-600">{field.label}</span>
+                <span
+                  className={
+                    field.label === "Reference"
+                      ? "font-mono text-xs font-semibold text-zinc-800"
+                      : "font-semibold text-zinc-900"
+                  }
+                >
+                  {field.value}
                 </span>
               </div>
-            )}
-
-            {paymentReference && (
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="text-zinc-600">Reference</span>
-                <span className="font-mono text-xs font-semibold text-zinc-800">
-                  {paymentReference}
-                </span>
-              </div>
-            )}
+            ))}
           </div>
         </div>
       )}

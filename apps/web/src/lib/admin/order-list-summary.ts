@@ -6,6 +6,7 @@ import {
 import { getCategoryBySlug } from "@/lib/catalog/categories";
 import type { ProductImage } from "@/lib/types/catalog";
 import type { Order, OrderLineItem, AdminOrderListSummary, AdminOrderType } from "@/lib/types/order";
+import { applyResolvedImageToOrderLineItem } from "@/lib/order/resolve-order-item-image";
 
 export type { AdminOrderListSummary, AdminOrderType } from "@/lib/types/order";
 
@@ -81,7 +82,32 @@ export function resolveAdminOrderSource(order: Order): "china" | "local" {
 }
 
 export function getAdminOrderTypeLabel(orderType: AdminOrderType): string {
-  return orderType === "china" ? "China Order" : "Buy from Dar";
+  return orderType === "china" ? "Order from China" : "Buy From TZ";
+}
+
+export function formatOrderLineVariantDisplay(item: OrderLineItem): string | undefined {
+  if (item.configurationLabel?.trim()) {
+    return item.configurationLabel.trim();
+  }
+
+  if (item.selectedAttributes?.length) {
+    const values = item.selectedAttributes
+      .map((attribute) => attribute.value?.trim())
+      .filter(Boolean);
+    if (values.length > 0) {
+      return values.join(" • ");
+    }
+  }
+
+  const variantParts = [item.variant?.color, item.variant?.storage, item.variant?.size]
+    .map((part) => part?.trim())
+    .filter(Boolean);
+
+  if (variantParts.length > 0) {
+    return variantParts.join(" • ");
+  }
+
+  return undefined;
 }
 
 export function buildAdminOrderListSummary(order: Order): AdminOrderListSummary {
@@ -109,12 +135,15 @@ export function buildAdminOrderListSummary(order: Order): AdminOrderListSummary 
   }
 
   const source = resolveAdminOrderSource(order);
+  const resolvedPrimary = primary ? applyResolvedImageToOrderLineItem(primary) : undefined;
 
   return {
     orderType: source === "china" ? "china" : "dar",
     source,
     primaryProductName: primary?.name ?? "No products",
-    primaryProductImage: primary?.image ?? FALLBACK_IMAGE,
+    primaryProductImage: resolvedPrimary?.image ?? FALLBACK_IMAGE,
+    primaryVariantLabel: primary ? formatOrderLineVariantDisplay(primary) : undefined,
+    primaryQuantity: primary?.quantity ?? 0,
     productNames,
     categorySlugs: [...categorySlugs],
     categoryNames: [...categoryNames],

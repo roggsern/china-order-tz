@@ -1,5 +1,8 @@
+"use client";
+
 import type { ProductOrigin } from "@/lib/types/catalog";
 import { getDeliveryOptions } from "@/lib/catalog/delivery";
+import { useShippingDurations } from "@/hooks/use-shipping-durations";
 
 interface DeliveryEstimatorProps {
   origin: ProductOrigin;
@@ -12,6 +15,7 @@ export function DeliveryEstimator({
   variant = "detail",
   className = "",
 }: DeliveryEstimatorProps) {
+  useShippingDurations();
   const options = getDeliveryOptions(origin);
 
   if (variant === "card") {

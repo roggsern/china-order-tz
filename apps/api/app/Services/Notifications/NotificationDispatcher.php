@@ -21,6 +21,7 @@ class NotificationDispatcher
         private readonly NotificationTemplateEngine $templates,
         private readonly NotificationRenderer $renderer,
         private readonly ChannelProviderRegistry $providers,
+        private readonly NotificationConfigurationResolver $configuration,
     ) {}
 
     /**
@@ -147,13 +148,9 @@ class NotificationDispatcher
             return $event->channels;
         }
 
-        $configured = config('notifications.event_channels.'.$event->type->value, ['in_app']);
-
-        return collect($configured)
-            ->map(fn (string $value) => NotificationChannel::tryFrom($value))
-            ->filter()
-            ->values()
-            ->all();
+        // Managed admin settings events use Settings SSoT + safe provider fallback.
+        // All other events keep config/notifications.php defaults (no platform rebuild).
+        return $this->configuration->resolveEventChannels($event->type);
     }
 
     private function channelAllowed(NotificationEvent $event, NotificationChannel $channel): bool

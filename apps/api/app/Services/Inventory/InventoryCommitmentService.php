@@ -10,6 +10,7 @@ use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\VariantInventory;
+use App\Services\Commerce\CommerceChannelResolver;
 use App\Services\Inventory\DTOs\InventoryCommitmentContext;
 use App\Services\Inventory\DTOs\InventoryCommitmentResult;
 use App\Services\Inventory\DTOs\InventoryMutationResult;
@@ -30,6 +31,7 @@ final class InventoryCommitmentService
         private readonly InventoryMutationGate $mutationGate,
         private readonly StockResolver $stockResolver,
         private readonly ReservationService $reservationService,
+        private readonly CommerceChannelResolver $commerceChannels,
     ) {}
 
     public function commitForOrder(InventoryCommitmentContext $context): InventoryCommitmentResult
@@ -37,6 +39,24 @@ final class InventoryCommitmentService
         return DB::transaction(function () use ($context): InventoryCommitmentResult {
             $order = $context->order;
             $order->loadMissing(['items.product', 'items.variant', 'checkoutSession']);
+
+            if ($this->commerceChannels->isChinaImportOrder($order)) {
+                return new InventoryCommitmentResult(
+                    committed: false,
+                    order: $order,
+                    itemsCommitted: 0,
+                    itemsSkippedIdempotent: 0,
+                    itemResults: [],
+                    meta: [
+                        'source' => $context->source,
+                        'payment_transaction_id' => $context->payment?->id,
+                        'skipped' => true,
+                        'skip_reason' => 'china_import_commercial_stock',
+                        'inventory_source' => 'commercial',
+                        'fulfillment_source' => 'china_import',
+                    ],
+                );
+            }
 
             if ($this->reservationService->hasConvertibleHolds($order)) {
                 return $this->commitViaReservationConvert($order, $context);

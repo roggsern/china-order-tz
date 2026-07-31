@@ -22,6 +22,8 @@ class Order extends Model
 
     protected $fillable = [
         'user_id',
+        'storefront_visitor_id',
+        'storefront_session_id',
         'store_id',
         'sales_origin',
         'commerce_channel_id',

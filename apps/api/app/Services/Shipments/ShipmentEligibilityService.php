@@ -2,6 +2,8 @@
 
 namespace App\Services\Shipments;
 
+use App\Enums\ChinaQcStatus;
+use App\Enums\ChinaWorkflowStage;
 use App\Enums\DeliveryOptionStatus;
 use App\Enums\DeliveryShippingMethod;
 use App\Enums\DeliveryType;
@@ -9,6 +11,7 @@ use App\Enums\FulfillmentStatus;
 use App\Enums\FulfillmentStrategy;
 use App\Enums\TransportMode;
 use App\Enums\WarehouseJobStatus;
+use App\Models\ChinaWorkflowRecord;
 use App\Models\DeliveryOption;
 use App\Models\Fulfillment;
 use App\Services\China\ChinaWorkflowEngine;
@@ -22,9 +25,10 @@ use App\Services\China\ChinaWorkflowEngine;
  * - This service ONLY consumes isExportReadyForShipment() for China fulfillments.
  * - It never recalculates QC, consolidation, packing, or document checklist rules.
  *
- * Customer Agent pickup:
+ * Customer Agent handover:
  * - Never creates a company shipment.
- * - Consumes Export Ready + warehouse readiness + (optionally) pickup authorization.
+ * - Requires China QC + warehouse packing readiness for China fulfillments.
+ * - Does NOT require export readiness, shipment creation, or ready_for_shipping.
  */
 class ShipmentEligibilityService
 {
@@ -179,8 +183,11 @@ class ShipmentEligibilityService
     }
 
     /**
-     * Customer Agent pickup gate — does NOT enable company shipment.
-     * Consumes Export Ready; never recalculates it.
+     * Customer Agent handover gate — does NOT enable company shipment.
+     *
+     * China fulfillments: QC passed + warehouse packed or ready_to_ship.
+     * Local fulfillments: warehouse packed or ready_to_ship.
+     * Optional valid pickup authorization when $requireAuthorization is true.
      *
      * @return array{eligible: bool, reason: string|null, delivery_type: string|null}
      */
@@ -205,12 +212,24 @@ class ShipmentEligibilityService
             ? $fulfillment->status
             : FulfillmentStatus::tryFrom((string) $fulfillment->status);
 
-        if ($status !== FulfillmentStatus::ReadyForShipping
-            && $status !== FulfillmentStatus::Shipped
+        if ($status === FulfillmentStatus::Cancelled) {
+            return [
+                'eligible' => false,
+                'reason' => 'Cannot continue Customer Agent workflow on a cancelled fulfillment.',
+                'delivery_type' => $type->value,
+            ];
+        }
+
+        $strategy = $fulfillment->strategy instanceof FulfillmentStrategy
+            ? $fulfillment->strategy
+            : FulfillmentStrategy::tryFrom((string) $fulfillment->strategy);
+
+        if ($strategy === FulfillmentStrategy::China
+            && ! $this->isChinaPreparationCompleteForAgentHandover($fulfillment)
         ) {
             return [
                 'eligible' => false,
-                'reason' => 'Fulfillment must be ready_for_shipping before Customer Agent pickup.',
+                'reason' => 'China QC must pass before Customer Agent handover.',
                 'delivery_type' => $type->value,
             ];
         }
@@ -222,24 +241,10 @@ class ShipmentEligibilityService
                 ? WarehouseJobStatus::tryFrom((string) $warehouseJob->status)
                 : null);
 
-        if ($warehouseStatus !== WarehouseJobStatus::ReadyToShip) {
+        if (! $this->isWarehouseReadyForAgentHandover($warehouseStatus)) {
             return [
                 'eligible' => false,
-                'reason' => 'Warehouse must be ready_to_ship before Customer Agent pickup.',
-                'delivery_type' => $type->value,
-            ];
-        }
-
-        $strategy = $fulfillment->strategy instanceof FulfillmentStrategy
-            ? $fulfillment->strategy
-            : FulfillmentStrategy::tryFrom((string) $fulfillment->strategy);
-
-        if ($strategy === FulfillmentStrategy::China
-            && ! $this->chinaWorkflow->isExportReadyForShipment($fulfillment)
-        ) {
-            return [
-                'eligible' => false,
-                'reason' => 'China export readiness is required before Customer Agent pickup.',
+                'reason' => 'Warehouse must be packed before Customer Agent handover.',
                 'delivery_type' => $type->value,
             ];
         }
@@ -252,7 +257,7 @@ class ShipmentEligibilityService
             if ($pickup === null || ! $pickup->hasValidAuthorization()) {
                 return [
                     'eligible' => false,
-                    'reason' => 'Valid pickup authorization is required before Customer Agent pickup.',
+                    'reason' => 'Valid pickup authorization is required before Customer Agent handover.',
                     'delivery_type' => $type->value,
                 ];
             }
@@ -263,6 +268,40 @@ class ShipmentEligibilityService
             'reason' => null,
             'delivery_type' => $type->value,
         ];
+    }
+
+    private function isWarehouseReadyForAgentHandover(?WarehouseJobStatus $warehouseStatus): bool
+    {
+        return in_array($warehouseStatus, [
+            WarehouseJobStatus::Packed,
+            WarehouseJobStatus::ReadyToShip,
+        ], true);
+    }
+
+    private function isChinaPreparationCompleteForAgentHandover(Fulfillment $fulfillment): bool
+    {
+        $record = ChinaWorkflowRecord::query()->where('order_id', $fulfillment->order_id)->first();
+
+        if ($record === null || $record->qc_status !== ChinaQcStatus::Passed) {
+            return false;
+        }
+
+        $stage = $record->stage instanceof ChinaWorkflowStage
+            ? $record->stage
+            : ChinaWorkflowStage::tryFrom((string) $record->stage);
+
+        if ($stage === null) {
+            return false;
+        }
+
+        return in_array($stage, [
+            ChinaWorkflowStage::QcPassed,
+            ChinaWorkflowStage::Consolidated,
+            ChinaWorkflowStage::Consolidating,
+            ChinaWorkflowStage::ExportReady,
+            ChinaWorkflowStage::CompanyShippingReady,
+            ChinaWorkflowStage::AgentHandedOff,
+        ], true);
     }
 
     /**

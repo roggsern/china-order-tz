@@ -56,4 +56,14 @@ class WarehouseJob extends Model
     {
         return $this->belongsTo(Admin::class, 'packer_id');
     }
+
+    public function pickList(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(WarehousePickList::class);
+    }
+
+    public function packingRecord(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(WarehousePackingRecord::class);
+    }
 }

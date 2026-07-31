@@ -8,6 +8,7 @@ use App\Actions\AdminProductMedia\GetProductMediaAction;
 use App\Actions\AdminProductMedia\SetPrimaryProductMediaAction;
 use App\Actions\AdminProductMedia\UpdateProductMediaAction;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\IndexProductMediaRequest;
 use App\Http\Requests\Admin\StoreProductMediaRequest;
 use App\Http\Requests\Admin\UpdateProductMediaRequest;
 use App\Http\Resources\ProductMediaResource;
@@ -19,12 +20,16 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class AdminProductMediaController extends Controller
 {
-    public function index(Product $product, GetProductMediaAction $action): AnonymousResourceCollection
-    {
-        $this->authorize(AdminPermissions::CATALOG_VIEW);
+    public function index(
+        IndexProductMediaRequest $request,
+        Product $product,
+        GetProductMediaAction $action,
+    ): AnonymousResourceCollection {
+        $variantId = $request->validated('product_variant_id');
 
-        return ProductMediaResource::collection($action->handle($product))
-            ->additional(['success' => true]);
+        return ProductMediaResource::collection(
+            $action->handle($product, is_string($variantId) ? $variantId : null),
+        )->additional(['success' => true]);
     }
 
     public function store(

@@ -7,15 +7,19 @@ import { formatPrice } from "@/lib/catalog/utils";
 import { LOCAL_DELIVERY_NEGOTIATED_LABEL } from "@/lib/catalog/product-type";
 import { formatDeliveryEstimate, getMethodByCode } from "@/lib/shipping/engine";
 import { getShippingQuote } from "@/lib/cart/shipping";
-import type { CheckoutShippingChoice } from "@/lib/checkout/shipping-choice";
-import { CheckoutShippingSummary } from "./CheckoutShippingSummary";
+import type { CheckoutShippingChoice, CustomerAgentDetails } from "@/lib/checkout/shipping-choice";
+import { TZ_LOCAL_DELIVERY_OPTIONS } from "@/lib/checkout/local-delivery-options";
+import { CheckoutField, checkoutInputClassName } from "./CheckoutField";
 
 interface CheckoutShippingStepProps {
   items: CartLineItem[];
   shippingChoice: CheckoutShippingChoice | null;
   selectedMethod: ShippingMethodCode | null;
+  customerAgentDetails: CustomerAgentDetails;
+  agentError?: string;
   onSelectChoice: (choice: CheckoutShippingChoice) => void;
   onSelectMethod: (method: ShippingMethodCode) => void;
+  onAgentDetailsChange: (details: CustomerAgentDetails) => void;
   error?: string;
 }
 
@@ -30,8 +34,11 @@ export function CheckoutShippingStep({
   items,
   shippingChoice,
   selectedMethod,
+  customerAgentDetails,
+  agentError,
   onSelectChoice,
   onSelectMethod,
+  onAgentDetailsChange,
   error,
 }: CheckoutShippingStepProps) {
   const chinaItems = items.filter((item) => item.origin === "china");
@@ -42,23 +49,11 @@ export function CheckoutShippingStep({
     return (
       <div className="space-y-4">
         <p className="text-sm text-zinc-600">
-          Choose how you will collect or receive your Tanzania local order.
+          Choose how you would like to receive your order. This is your collection preference — not
+          a shipping quote or courier selection.
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
-          {(
-            [
-              {
-                value: "self_pickup" as const,
-                title: "Self pickup",
-                description: "Collect from our warehouse. No company shipping charge.",
-              },
-              {
-                value: "negotiated_delivery" as const,
-                title: "Negotiated delivery",
-                description: LOCAL_DELIVERY_NEGOTIATED_LABEL,
-              },
-            ] as const
-          ).map((option, index) => {
+          {TZ_LOCAL_DELIVERY_OPTIONS.map((option, index) => {
             const isSelected = shippingChoice === option.value;
             return (
               <motion.button
@@ -77,14 +72,10 @@ export function CheckoutShippingStep({
               >
                 <h3 className="text-base font-bold text-zinc-900">{option.title}</h3>
                 <p className="mt-1 text-sm text-zinc-500">{option.description}</p>
-                <p className="mt-3 text-lg font-bold tabular-nums text-zinc-900">
-                  {formatPrice(0)}
-                </p>
               </motion.button>
             );
           })}
         </div>
-        {shippingChoice ? <CheckoutShippingSummary method="local_delivery" /> : null}
         {error ? (
           <p
             role="alert"
@@ -138,7 +129,7 @@ export function CheckoutShippingStep({
         >
           <h3 className="text-base font-bold text-zinc-900">My own shipping agent</h3>
           <p className="mt-1 text-sm text-zinc-500">
-            No company freight charge. Agent details can be completed after payment if needed.
+            No company freight charge. Provide your agent details below.
           </p>
           <p className="mt-3 text-lg font-bold tabular-nums text-zinc-900">{formatPrice(0)}</p>
         </motion.button>
@@ -186,7 +177,9 @@ export function CheckoutShippingStep({
                 <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
                   Estimated delivery
                 </p>
-                <p className="text-sm font-semibold text-[#8b6914]">{estimate}</p>
+                <p className="text-sm font-semibold text-[#8b6914]">
+                  {estimate ? `Estimated delivery: ${estimate}` : "Delivery estimate unavailable"}
+                </p>
 
                 <p className="mt-3 text-lg font-bold tabular-nums text-zinc-900">
                   {formatPrice(shippingTotal)}
@@ -194,6 +187,83 @@ export function CheckoutShippingStep({
               </motion.button>
             );
           })}
+        </div>
+      ) : null}
+
+      {shippingChoice === "customer_agent" ? (
+        <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4 sm:p-5">
+          <h4 className="text-sm font-bold text-zinc-900">Shipping agent details</h4>
+          <p className="mt-1 text-sm text-zinc-500">
+            Required for your own agent. Address is optional.
+          </p>
+
+          <div className="mt-4 space-y-4">
+            <CheckoutField
+              id="checkout-agent-name"
+              label="Agent name"
+              required
+            >
+              <input
+                id="checkout-agent-name"
+                type="text"
+                autoComplete="name"
+                value={customerAgentDetails.name}
+                onChange={(event) =>
+                  onAgentDetailsChange({ ...customerAgentDetails, name: event.target.value })
+                }
+                placeholder="Agent or company name"
+                className={checkoutInputClassName(false)}
+                aria-invalid={Boolean(agentError && !customerAgentDetails.name.trim())}
+              />
+            </CheckoutField>
+
+            <CheckoutField
+              id="checkout-agent-phone"
+              label="Agent phone number"
+              required
+            >
+              <input
+                id="checkout-agent-phone"
+                type="tel"
+                autoComplete="tel"
+                inputMode="tel"
+                value={customerAgentDetails.phone}
+                onChange={(event) =>
+                  onAgentDetailsChange({ ...customerAgentDetails, phone: event.target.value })
+                }
+                placeholder="0712345678 or +255712345678"
+                className={checkoutInputClassName(false)}
+                aria-invalid={Boolean(agentError && !customerAgentDetails.phone.trim())}
+              />
+            </CheckoutField>
+
+            <CheckoutField
+              id="checkout-agent-address"
+              label="Agent address"
+              hint="Optional"
+            >
+              <input
+                id="checkout-agent-address"
+                type="text"
+                autoComplete="street-address"
+                value={customerAgentDetails.address}
+                onChange={(event) =>
+                  onAgentDetailsChange({ ...customerAgentDetails, address: event.target.value })
+                }
+                placeholder="Office or warehouse location"
+                className={checkoutInputClassName(false)}
+              />
+            </CheckoutField>
+          </div>
+
+          {agentError ? (
+            <p
+              role="alert"
+              className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+            >
+              {agentError}
+            </p>
+          ) : null}
         </div>
       ) : null}
 

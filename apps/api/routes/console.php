@@ -9,6 +9,12 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
+Artisan::command('ops:health-check {--json : Output JSON}', function () {
+    return $this->call('ops:health', [
+        '--json' => (bool) $this->option('json'),
+    ]);
+})->purpose('Alias for ops:health (Docker healthcheck compatibility).');
+
 /*
 |--------------------------------------------------------------------------
 | RC1-G4C1 — Production scheduler

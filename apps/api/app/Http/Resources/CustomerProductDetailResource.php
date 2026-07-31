@@ -2,7 +2,9 @@
 
 namespace App\Http\Resources;
 
+use App\Http\Resources\Concerns\PresentsCustomerCatalogAvailability;
 use App\Http\Resources\Concerns\PresentsCustomerCatalogStock;
+use App\Http\Resources\Concerns\PresentsCustomerCatalogPrice;
 use App\Models\Product;
 use App\Services\Catalog\CustomerProductMediaResolver;
 use Illuminate\Http\Request;
@@ -11,17 +13,20 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /** @mixin Product */
 class CustomerProductDetailResource extends JsonResource
 {
+    use PresentsCustomerCatalogAvailability;
+    use PresentsCustomerCatalogPrice;
     use PresentsCustomerCatalogStock;
 
     public function toArray(Request $request): array
     {
         return [
+            ...$this->customerCatalogAvailability(),
             'id' => $this->id,
             'slug' => $this->slug,
             'name' => $this->name,
             'description' => $this->description,
             'short_description' => $this->short_description,
-            'price' => $this->price,
+            'price' => $this->resolvedCatalogDisplayPrice(),
             'compare_at_price' => $this->compare_at_price,
             'weight' => $this->weight,
             'dimensions' => $this->dimensions,
@@ -29,6 +34,7 @@ class CustomerProductDetailResource extends JsonResource
             'brand' => new CustomerBrandResource($this->whenLoaded('brand')),
             'primary_image' => app(CustomerProductMediaResolver::class)->resolvePrimary($this->resource),
             'images' => app(CustomerProductMediaResolver::class)->resolveGallery($this->resource),
+            'videos' => app(CustomerProductMediaResolver::class)->resolveVideos($this->resource),
             'variants' => CustomerProductVariantResource::collection($this->whenLoaded('variants')),
             'configurations' => CustomerProductVariantResource::collection($this->whenLoaded('variants')),
             'product_type_id' => $this->product_type_id,

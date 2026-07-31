@@ -58,4 +58,54 @@ class CustomerProductMediaResolverTest extends TestCase
         $this->assertCount(1, $gallery);
         $this->assertSame(DemoProductImageLibrary::publicPath('phone.jpg'), $gallery[0]['path']);
     }
+
+    public function test_resolve_videos_returns_active_catalog_videos(): void
+    {
+        $product = Product::factory()->create();
+
+        $video = ProductMedia::factory()->video()->create([
+            'product_id' => $product->id,
+            'title' => 'Product walkthrough',
+            'sort_order' => 1,
+        ]);
+
+        $videos = $this->resolver->resolveVideos($product->fresh(['videos']));
+
+        $this->assertCount(1, $videos);
+        $this->assertSame($video->id, $videos[0]['id']);
+        $this->assertSame('https://www.youtube.com/watch?v=dQw4w9WgXcQ', $videos[0]['url']);
+        $this->assertSame('https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg', $videos[0]['thumbnail_url']);
+        $this->assertSame('Product walkthrough', $videos[0]['title']);
+        $this->assertSame(1, $videos[0]['sort_order']);
+    }
+
+    public function test_resolve_videos_excludes_inactive_catalog_videos(): void
+    {
+        $product = Product::factory()->create();
+
+        ProductMedia::factory()->video()->create([
+            'product_id' => $product->id,
+            'is_active' => false,
+        ]);
+
+        $this->assertSame([], $this->resolver->resolveVideos($product->fresh(['videos'])));
+    }
+
+    public function test_resolve_gallery_excludes_videos(): void
+    {
+        $product = Product::factory()->create();
+
+        $image = ProductMedia::factory()->primary()->create([
+            'product_id' => $product->id,
+            'url' => 'https://cdn.example.com/primary.jpg',
+        ]);
+        ProductMedia::factory()->video()->create([
+            'product_id' => $product->id,
+        ]);
+
+        $gallery = $this->resolver->resolveGallery($product->fresh(['media', 'images', 'videos']));
+
+        $this->assertCount(1, $gallery);
+        $this->assertSame($image->id, $gallery[0]['id']);
+    }
 }

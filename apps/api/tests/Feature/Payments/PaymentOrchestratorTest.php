@@ -147,6 +147,67 @@ class PaymentOrchestratorTest extends TestCase
         $this->assertNull($order->fresh()->paid_at);
     }
 
+    public function test_duplicate_payment_start_reuses_active_transaction(): void
+    {
+        $user = User::factory()->create();
+        $order = $this->createPayableOrder($user, [
+            'total' => 45000,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $first = $this->postJson("/api/v1/payments/start/{$order->id}")->assertCreated();
+        $second = $this->postJson("/api/v1/payments/start/{$order->id}")->assertCreated();
+
+        $this->assertSame($first->json('data.id'), $second->json('data.id'));
+        $this->assertSame($first->json('data.merchant_reference'), $second->json('data.merchant_reference'));
+        $this->assertDatabaseCount('payment_transactions', 1);
+    }
+
+    public function test_double_click_start_creates_single_transaction(): void
+    {
+        $user = User::factory()->create();
+        $order = $this->createPayableOrder($user, [
+            'total' => 32000,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $responses = collect([
+            $this->postJson("/api/v1/payments/start/{$order->id}"),
+            $this->postJson("/api/v1/payments/start/{$order->id}"),
+            $this->postJson("/api/v1/payments/start/{$order->id}"),
+        ])->each(fn ($response) => $response->assertCreated());
+
+        $transactionIds = $responses->pluck('data.id')->unique();
+
+        $this->assertCount(1, $transactionIds);
+        $this->assertDatabaseCount('payment_transactions', 1);
+    }
+
+    public function test_new_start_allowed_after_failed_transaction(): void
+    {
+        $user = User::factory()->create();
+        $order = $this->createPayableOrder($user, [
+            'total' => 28000,
+        ]);
+
+        PaymentTransaction::factory()->create([
+            'order_id' => $order->id,
+            'provider' => PaymentProvider::Nmb,
+            'status' => PaymentTransactionStatus::Failed,
+            'amount' => 28000,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/v1/payments/start/{$order->id}")
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'processing');
+
+        $this->assertDatabaseCount('payment_transactions', 2);
+    }
+
     public function test_merchant_reference_is_unique(): void
     {
         $user = User::factory()->create();

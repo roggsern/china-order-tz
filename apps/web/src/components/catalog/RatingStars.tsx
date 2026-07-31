@@ -1,6 +1,6 @@
 import { StarIcon } from "@/components/home/icons";
 
-interface RatingStarsProps {
+export interface RatingStarsProps {
   rating: number;
   size?: "sm" | "md" | "lg";
   showValue?: boolean;

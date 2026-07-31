@@ -91,6 +91,16 @@ test("validateProductStoreAssignment requires store for TZ_LOCAL", () => {
   );
   assert.equal(
     validateProductStoreAssignment({
+      isNewProduct: true,
+      commerceJourney: "tz",
+      commerceChannelCode: null,
+      storeId: "",
+      requireAssignment: false,
+    }),
+    null,
+  );
+  assert.equal(
+    validateProductStoreAssignment({
       isNewProduct: false,
       commerceJourney: "",
       commerceChannelCode: "CHINA_IMPORT",

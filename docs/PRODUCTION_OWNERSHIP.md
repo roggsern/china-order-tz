@@ -1,86 +1,161 @@
 # CHINA ORDER TZ — Production ownership
 
-Infrastructure Audit #1. Authoritative answers for operators. VPS host inspection is deferred to Audit #2.
+Who deploys what, and how to operate production. For runbooks see [OPERATIONS.md](./OPERATIONS.md).
 
-## 1. Authoritative production frontend
+---
 
-**DigitalOcean VPS** path `/root/china-order-tz`, process **PM2** app `china-order-tz` (`ecosystem.config.js` → `apps/web`).
+## Deployment ownership matrix
 
-Deploy initiator: **GitHub Actions** workflow `Deploy Next.js to VPS` (`deploy.yml`), **manual `workflow_dispatch` only** (type `deploy` to confirm). Does **not** run on push.
+| Component | Owner / method | Command / workflow |
+|-----------|----------------|----------------------|
+| **Web (Next.js)** | DevOps / release operator via GitHub Actions | Actions → **Deploy Next.js to VPS** → `confirm=deploy` |
+| **API (Laravel)** | DevOps / backend operator — **manual** | `bash scripts/deploy-api-compose.sh` or Compose up (see below) |
+| **Database migrations** | Backend operator — runs on **API container start only** | `php artisan migrate --force` (entrypoint.prod.sh; queue/scheduler skip via `SKIP_MIGRATIONS`) |
+| **Queue workers** | Compose `queue` service (auto-restart) | `docker compose ... up -d queue` |
+| **Scheduler** | Compose `scheduler` service (auto-restart) | `docker compose ... up -d scheduler` |
+| **Worker restart after API deploy** | Automatic when `QUEUE_RESTART_ON_BOOT=true` | `php artisan queue:restart` in API entrypoint |
+| **Web rollback** | Release operator | Redeploy previous SHA via GitHub Actions |
+| **API rollback** | Backend operator | Redeploy previous image/git ref via Compose — **no automatic DB rollback** |
+| **Database restore** | DBA / senior operator | Manual restore from backup — see [OPERATIONS.md §7](./OPERATIONS.md#7-database-backups) |
 
-## 2. Vercel role
+---
 
-**Preview / legacy surface only.** Repo homepage may still list `china-order-tz-web.vercel.app`. Vercel is **not** the authoritative production frontend. Do not treat Vercel promotions as production releases unless ownership is explicitly changed in a later audit.
+## Authoritative production surfaces
 
-## 3. What is hosted on the DigitalOcean VPS
+| Surface | Location |
+|---------|----------|
+| Storefront | DigitalOcean VPS — PM2 `china-order-tz` at `/root/china-order-tz` |
+| API | Docker Compose production stack (documented path) — **confirm live host in ops audit** |
+| Vercel | Preview/legacy only — **not** production |
 
-**Confirmed from repository deploy workflow (not from live VPS inspection):**
+---
 
-- Git working copy at `/root/china-order-tz`
-- Next.js production build + PM2 process `china-order-tz`
+## Web deployment (automatic path)
 
-**Pending Infrastructure Audit #2:** whether Laravel, MySQL, Nginx, Redis, queue, and scheduler also run on the same Droplet, sibling hosts, or Docker Compose on that host.
+1. Merge to `main` with green CI
+2. GitHub → Actions → **Deploy Next.js to VPS**
+3. Inputs: `confirm=deploy`, optional `ref` (tag/SHA; default `main`)
+4. Workflow SSHs to VPS, pulls ref, builds `apps/web`, reloads PM2
 
-## 4. How is Laravel API deployed?
+**Secrets required:** `HOST`, `USERNAME`, `SSH_KEY`
 
-**Not deployed by GitHub Actions today.** Documented Compose production path:
+---
+
+## API deployment (manual path)
+
+```bash
+# On deployment host with Docker
+cp apps/api/.env.production.example .env   # first time only — then edit secrets
+bash scripts/validate-production-deploy.sh  # optional — static .env gate (no containers)
+bash scripts/deploy-api-compose.sh
+```
+
+Optional pre-deploy backup before migrations on **existing** hosts:
+
+```bash
+PRE_DEPLOY_BACKUP=true bash scripts/deploy-api-compose.sh   # always backup first
+PRE_DEPLOY_BACKUP=auto bash scripts/deploy-api-compose.sh # backup when mysql volume exists
+```
+
+Greenfield (`PRE_DEPLOY_BACKUP=false`, default): no backup step.
+
+Equivalent:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+docker compose exec api php artisan ops:health
+docker compose exec api php artisan ops:production-env-check
+docker compose exec api php artisan queue:restart
 ```
 
-Actual host procedure: **Pending Infrastructure Audit #2.**
+### What the API entrypoint does (`docker/php/entrypoint.prod.sh`)
 
-## 5. How are migrations applied?
+1. Ensures storage directories exist and are writable
+2. `php artisan storage:link`
+3. `php artisan migrate --force` (**API only** — queue/scheduler set `SKIP_MIGRATIONS=true`)
+4. Config/route/view cache (skipped when `SKIP_OPTIMIZE=true` on workers)
+5. Optional `queue:restart` when `QUEUE_RESTART_ON_BOOT=true`
 
-Repository documents Compose/Makefile migrate flows for local/prod Compose. Live production migration command and timing: **Pending Infrastructure Audit #2.**
+---
 
-## 6. How is the queue worker deployed/restarted?
+## Migrations
 
-`docker-compose.prod.yml` defines a `queue` service (`php artisan queue:work database ...`, `restart: always`, shared `api_storage`).
+| Environment | When | Who |
+|-------------|------|-----|
+| Compose production | API container boot | Automatic (entrypoint; workers skip migrations) |
+| Manual / non-Compose | Before or during deploy window | Backend operator: `php artisan migrate --force` |
 
-After API deploy: `php artisan queue:restart` (also optional via `QUEUE_RESTART_ON_BOOT=true` on API entrypoint). Helper: `scripts/deploy-api-compose.sh`.
+**Policy:** Never run `migrate:fresh` or `db:wipe` in production. Set `ALLOW_DESTRUCTIVE_DB=false`.
 
-Live VPS process confirmation: **Pending Infrastructure Audit #2.**
+---
 
-## 7. How is the scheduler operated?
+## Queue and scheduler
 
-`docker-compose.prod.yml` defines a **`scheduler`** service (`php artisan schedule:work`, `restart: always`). Schedules include `nmb:reconcile-payments` every 5 minutes and daily prune jobs. See [OPERATIONS.md](./OPERATIONS.md).
+| Process | Production operation |
+|---------|---------------------|
+| Queue worker | Compose service `queue` — always running, `restart: always` |
+| Scheduler | Compose service `scheduler` — `schedule:work` |
+| Health | `php artisan ops:queue-health`, scheduler via `ops:health` |
+| After code deploy | `php artisan queue:restart` (automatic on API boot) |
 
-Host cron alternative (only if not using the scheduler container):
+If not using Compose, operators must run equivalent systemd/supervisor units — see [OPERATIONS.md](./OPERATIONS.md).
 
-```cron
-* * * * * cd /var/www/html && php artisan schedule:run >> /dev/null 2>&1
-```
+---
 
-Live VPS confirmation: **Pending Infrastructure Audit #2.**
+## Health monitoring
 
-## 8. Which parts are automatic?
+| Probe | URL / command |
+|-------|---------------|
+| Public API health | `GET /api/v1/health` |
+| CLI (Docker healthcheck) | `php artisan ops:health` |
+| Env validation | `php artisan ops:production-env-check` |
+| Queue | `php artisan ops:queue-health` |
 
-| Part | Automatic? |
-| --- | --- |
-| CI on PR / push to `main` | Yes (`ci.yml`) |
-| Retail smoke (path-filtered) | Yes (`retail-smoke.yml`) |
-| Web production deploy | **No** — manual `workflow_dispatch` + confirm |
-| API / migrate / queue / scheduler | **No** (pending Audit #2) |
+Docker Compose healthchecks:
 
-## 9. Which parts are manual pending Audit #2?
+- **api:** `ops:health` (critical: database + storage)
+- **queue:** `ops:queue-health`
+- **scheduler:** `ops:health` (includes scheduler heartbeat)
 
-- Laravel API code deploy / image rebuild
-- `php artisan migrate` (and rollback policy)
-- Queue worker restart
-- Scheduler/cron
-- Host secrets, TLS, DNS, health checks on the live VPS
-- Confirming whether API and web share one Droplet
+---
 
-## 10. Frontend / API version compatibility
+## Rollback procedures
 
-**Policy:** ship API-compatible changes in the same SemVer release tag when contracts change. Frontend deploy and API deploy are **separate** until Audit #2 unifies them. Operators must not advance web-only to a tag that requires unmigrated API schema. Compatibility verification on the live stack: **Pending Infrastructure Audit #2.**
+### Web only
 
-## Rollback (web only)
+1. Find previous SHA from deploy log or `/tmp/china-order-tz-web.prev_sha` on VPS
+2. Re-run deploy workflow with `ref=<previous SHA>`
 
-1. Note `PREV_SHA` from the last deploy log or `/tmp/china-order-tz-web.prev_sha` on the VPS (Audit #2 to confirm file presence).
-2. GitHub → Actions → **Deploy Next.js to VPS** → `confirm=deploy`, `ref=<previous tag or SHA>`.
-3. Do **not** roll back databases via this workflow.
+### API
 
-API/database rollback: **Pending Infrastructure Audit #2.**
+1. Check out / deploy previous git tag or image digest
+2. `docker compose ... up -d --build`
+3. **Do not** downgrade database schema without a planned migration rollback
+
+### Database
+
+1. Stop queue + scheduler
+2. Restore from `BACKUP_ROOT` daily artifact — see [OPERATIONS.md](./OPERATIONS.md)
+3. Restart services and verify `ops:health`
+
+---
+
+## Version compatibility
+
+Web and API deploy independently today. When API contracts change:
+
+1. Deploy API + run migrations first
+2. Deploy web that expects the new schema
+3. Tag releases together (`vX.Y.Z`) for traceability
+
+---
+
+## Pending confirmation (Infrastructure Audit #2)
+
+Live VPS inspection still needed to confirm:
+
+- Whether API runs on the same Droplet as PM2 web or a separate host
+- TLS termination and DNS
+- Whether production uses Compose or a custom layout
+
+Until confirmed, treat this document as the **repository-intended** ownership model.

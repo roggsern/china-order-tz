@@ -57,7 +57,22 @@ final class CatalogStockPresenter
         StockResolutionResult $stock,
         bool $includeWarehouseLocation = true,
     ): ?array {
-        if (! $stock->resolved || $stock->inventory === null) {
+        if (! $stock->resolved) {
+            return null;
+        }
+
+        if ($stock->inventory === null && $stock->inventoryType === 'commercial') {
+            return [
+                'id' => $stock->meta['china_commercial_stock_id'] ?? null,
+                'quantity' => $stock->quantityOnHand,
+                'reserved_quantity' => $stock->quantityReserved,
+                'available_quantity' => $stock->quantityAvailable,
+                'low_stock_threshold' => 0,
+                'is_low_stock' => false,
+            ];
+        }
+
+        if ($stock->inventory === null) {
             return null;
         }
 

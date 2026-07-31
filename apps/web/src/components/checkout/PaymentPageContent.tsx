@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/lib/cart/context";
@@ -13,11 +13,10 @@ import {
   releaseDraftSubmissionLock,
 } from "@/lib/checkout/idempotency";
 import type { Order } from "@/lib/types/order";
-import type { PaymentMethodCode } from "@/lib/types/payment";
 import { PAYMENT_METHOD_CODES, PAYMENT_STATUS } from "@/lib/types/payment";
-import { PAYMENT_METHOD_LABELS } from "@/lib/payment/constants";
+import type { PaymentMethodCode } from "@/lib/types/payment";
 import { paymentService } from "@/lib/payments/checkout-service";
-import { saveNmbCheckoutContext } from "@/lib/nmb";
+import { navigateAfterPaymentStart } from "@/lib/nmb";
 import {
   CustomerPaymentApiError,
   prepareOrderPayment,
@@ -27,22 +26,27 @@ import {
   PaymentOrchestratorApiError,
   startPaymentTransaction,
 } from "@/lib/api/customer-payment-orchestrator";
-import { getOrderById as getStoredOrderById } from "@/lib/payment/order-storage";
 import {
-  getPaymentTransaction,
-} from "@/lib/payment/payment-session";
+  CheckoutPaymentMethodsApiError,
+  fetchCheckoutPaymentMethods,
+} from "@/lib/api/checkout-payment-methods";
+import {
+  buildCheckoutPaymentOptions,
+  resolveDefaultCheckoutPaymentCode,
+  type CheckoutPaymentOption,
+} from "@/lib/checkout/payment-availability";
+import { getOrderById as getStoredOrderById } from "@/lib/payment/order-storage";
+import { getPaymentTransaction } from "@/lib/payment/payment-session";
 import { redirectToPaymentProcessing } from "@/lib/payment/stk-flow";
 import { shouldRedirectToOrderSuccess, isAwaitingPaymentSelection } from "@/lib/order/placement";
 import { isGatewayPaymentMethod } from "@/lib/payment/payment-outcome";
-import { usePaymentTestMode } from "@/hooks/use-payment-test-mode";
 import { CheckoutSection } from "./CheckoutSection";
 import { CheckoutOrderSummary } from "./CheckoutOrderSummary";
 import { CheckoutStepIndicator } from "./CheckoutStepIndicator";
 import { CheckoutMobileStickyBar } from "./CheckoutMobileStickyBar";
 import { SimplifiedPaymentMethodSelector } from "@/components/payment/SimplifiedPaymentMethodSelector";
-import { TestModeBanner } from "@/components/payment/TestModeBanner";
-import { SimulatePaymentButton } from "@/components/payment/SimulatePaymentButton";
 import { CheckoutPageSkeleton } from "@/components/ui/PageSkeletons";
+import { useStorefrontTracking } from "@/components/storefront/StorefrontTrackingProvider";
 
 function redirectToOrderSuccess(router: ReturnType<typeof useRouter>, orderId: string): void {
   clearCheckoutDraft();
@@ -58,20 +62,49 @@ function finishOrder(
   redirectToOrderSuccess(router, order.id);
 }
 
+function submitLabelForMethod(
+  method: PaymentMethodCode | null,
+  isProcessing: boolean,
+  hasFailedOrder: boolean,
+): string {
+  if (isProcessing) {
+    if (method === PAYMENT_METHOD_CODES.NMB) return "Redirecting to secure checkout…";
+    return "Placing order…";
+  }
+  if (hasFailedOrder) {
+    return method === PAYMENT_METHOD_CODES.NMB ? "Retry payment" : "Retry order payment";
+  }
+  if (method === PAYMENT_METHOD_CODES.NMB) return "Pay securely";
+  if (method === PAYMENT_METHOD_CODES.COD) return "Place order (pay on delivery)";
+  if (method === PAYMENT_METHOD_CODES.BANK_TRANSFER) return "Place order (bank transfer)";
+  return "Continue to payment";
+}
+
 export function PaymentPageContent() {
   const router = useRouter();
   const { clearPurchasedItems } = useCart();
+  const { trackPaymentStarted } = useStorefrontTracking();
+  const paymentTrackedRef = useRef(false);
   const [draft, setDraft] = useState<CheckoutDraft | null>(null);
   const [isReady, setIsReady] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode | null>(null);
-  const [paymentError, setPaymentError] = useState<string | undefined>();
   const [submitError, setSubmitError] = useState<string | undefined>();
   const [failedOrder, setFailedOrder] = useState<Order | null>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [isSimulating, setIsSimulating] = useState(false);
   const paymentLockRef = useRef(false);
   const mountedRef = useRef(false);
-  const { simulateEnabled, testMode } = usePaymentTestMode();
+  const [paymentOptions, setPaymentOptions] = useState<CheckoutPaymentOption[]>([]);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode | null>(null);
+  const [methodsLoading, setMethodsLoading] = useState(true);
+  const [methodsError, setMethodsError] = useState<string | undefined>();
+
+  useEffect(() => {
+    if (paymentTrackedRef.current) {
+      return;
+    }
+
+    paymentTrackedRef.current = true;
+    void trackPaymentStarted();
+  }, [trackPaymentStarted]);
 
   useEffect(() => {
     if (mountedRef.current) {
@@ -92,7 +125,6 @@ export function PaymentPageContent() {
         const waitingForPayment =
           savedDraft.awaitingPayment === true || isAwaitingPaymentSelection(existing);
 
-        // Never skip the payment method step after Laravel order confirm.
         if (!waitingForPayment && shouldRedirectToOrderSuccess(existing)) {
           finishOrder(existing, clearPurchasedItems, router);
           return;
@@ -112,7 +144,6 @@ export function PaymentPageContent() {
           }
         }
 
-        // Only surface retry UI for real payment failures — not orders awaiting method selection.
         if (existing.paymentStatus === PAYMENT_STATUS.FAILED) {
           lockCartForOrder(existing.id, clearPurchasedItems);
           setFailedOrder(existing);
@@ -124,13 +155,56 @@ export function PaymentPageContent() {
     setIsReady(true);
   }, [clearPurchasedItems, router]);
 
-  const handleSubmit = useCallback(async () => {
-    if (paymentLockRef.current || isProcessingPayment || !draft) {
+  useEffect(() => {
+    if (!isReady) {
       return;
     }
 
-    if (!paymentMethod) {
-      setPaymentError("Please select a payment method.");
+    let cancelled = false;
+
+    void (async () => {
+      setMethodsLoading(true);
+      setMethodsError(undefined);
+      try {
+        const availability = await fetchCheckoutPaymentMethods();
+        if (cancelled) return;
+        const options = buildCheckoutPaymentOptions(availability);
+        setPaymentOptions(options);
+        setPaymentMethod(resolveDefaultCheckoutPaymentCode(availability, options));
+      } catch (error) {
+        if (cancelled) return;
+        setPaymentOptions([]);
+        setPaymentMethod(null);
+        setMethodsError(
+          error instanceof CheckoutPaymentMethodsApiError
+            ? error.message
+            : "Unable to load payment methods.",
+        );
+      } finally {
+        if (!cancelled) {
+          setMethodsLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isReady]);
+
+  const selectorOptions = useMemo(
+    () =>
+      paymentOptions.map((option) => ({
+        code: option.code,
+        label: option.label,
+        description: option.description,
+        icon: option.icon,
+      })),
+    [paymentOptions],
+  );
+
+  const handleSubmit = useCallback(async () => {
+    if (paymentLockRef.current || isProcessingPayment || !draft || !paymentMethod) {
       return;
     }
 
@@ -169,7 +243,6 @@ export function PaymentPageContent() {
       return;
     }
 
-    setPaymentError(undefined);
     setFailedOrder(null);
     paymentLockRef.current = true;
     setIsProcessingPayment(true);
@@ -195,20 +268,15 @@ export function PaymentPageContent() {
       const backendMethod = toBackendPaymentMethod(paymentMethod);
 
       if (paymentMethod === PAYMENT_METHOD_CODES.NMB) {
-        const transaction = await startPaymentTransaction(backendOrderId, "nmb");
-        saveNmbCheckoutContext({
-          paymentId: transaction.id,
-          localOrderId: order.id,
-          orderId: backendOrderId,
-        });
+        const transaction = await startPaymentTransaction(
+          backendOrderId,
+          backendMethod ?? undefined,
+        );
         clearCheckoutDraft();
-
-        if (transaction.checkout_url) {
-          window.location.assign(transaction.checkout_url);
-          return;
-        }
-
-        router.push(`/payments/${encodeURIComponent(transaction.id)}`);
+        navigateAfterPaymentStart(router, transaction, {
+          localOrderId: order.id,
+          replace: false,
+        });
         return;
       }
 
@@ -254,7 +322,9 @@ export function PaymentPageContent() {
       }
 
       const message =
-        error instanceof CustomerPaymentApiError || error instanceof PaymentOrchestratorApiError
+        error instanceof CustomerPaymentApiError ||
+        error instanceof PaymentOrchestratorApiError ||
+        error instanceof CheckoutPaymentMethodsApiError
           ? error.message
           : error instanceof Error
             ? error.message
@@ -264,121 +334,17 @@ export function PaymentPageContent() {
     }
   }, [clearPurchasedItems, draft, isProcessingPayment, paymentMethod, router]);
 
-  const handleSimulatePayment = useCallback(async () => {
-    if (paymentLockRef.current || isProcessingPayment || isSimulating || !draft) {
-      return;
-    }
-
-    if (draft.items.length === 0) {
-      setSubmitError("Your cart is empty. Add items before placing an order.");
-      return;
-    }
-
-    const existingOrderId = getOrderIdForDraft(draft.draftId);
-    if (existingOrderId) {
-      const existing = getStoredOrderById(existingOrderId);
-      if (
-        existing &&
-        !draft.awaitingPayment &&
-        !isAwaitingPaymentSelection(existing) &&
-        shouldRedirectToOrderSuccess(existing)
-      ) {
-        finishOrder(existing, clearPurchasedItems, router);
-        return;
-      }
-    }
-
-    if (!acquireDraftSubmissionLock(draft.draftId)) {
-      return;
-    }
-
-    setPaymentError(undefined);
-    setFailedOrder(null);
-    setSubmitError(undefined);
-    paymentLockRef.current = true;
-    setIsSimulating(true);
-
-    try {
-      const order = await paymentService.createOrder({
-        customer: draft.customer,
-        shippingAddress: draft.shippingAddress,
-        orderNotes: draft.orderNotes,
-        items: draft.items,
-        totals: draft.totals,
-        paymentMethod: PAYMENT_METHOD_CODES.MPESA,
-        cartSnapshot: draft.cartSnapshot,
-        shippingMethod: draft.shippingMethod,
-        itemShippingBreakdown: draft.itemShippingBreakdown,
-        idempotencyKey: draft.draftId,
-      });
-
-      lockCartForOrder(order.id, clearPurchasedItems);
-
-      const { transactionId } = await paymentService.beginStkPaymentProcessing(order);
-      clearCheckoutDraft();
-      redirectToPaymentProcessing(router, order.id, transactionId, { simulated: true });
-    } catch (error) {
-      releaseDraftSubmissionLock(draft.draftId);
-      paymentLockRef.current = false;
-
-      const linkedOrderId = getOrderIdForDraft(draft.draftId);
-      if (linkedOrderId) {
-        const linkedOrder = getStoredOrderById(linkedOrderId);
-        if (linkedOrder) {
-          lockCartForOrder(linkedOrder.id, clearPurchasedItems);
-          setFailedOrder(linkedOrder);
-        }
-      }
-
-      const message =
-        error instanceof Error ? error.message : "Simulated payment failed. Please try again.";
-      setSubmitError(message);
-      setIsSimulating(false);
-    }
-  }, [clearPurchasedItems, draft, isProcessingPayment, isSimulating, router]);
-
-  const handlePaymentChange = (code: PaymentMethodCode) => {
-    if (isProcessingPayment) {
-      return;
-    }
-    setPaymentMethod(code);
-    setPaymentError(undefined);
-  };
-
   if (!isReady || !draft) {
     return <CheckoutPageSkeleton />;
   }
 
-  const submitLabel = (() => {
-    if (isGatewayPaymentMethod(paymentMethod)) {
-      if (isProcessingPayment) {
-        return "Processing payment…";
-      }
-      if (failedOrder) {
-        return `Retry ${PAYMENT_METHOD_LABELS[paymentMethod ?? ""] ?? "Payment"}`;
-      }
-      const labels: Record<string, string> = {
-        mpesa: "Pay with M-Pesa",
-        nmb: "Pay with NMB",
-        selcom: "Pay with Selcom",
-      };
-      return labels[paymentMethod ?? ""] ?? "Pay now";
-    }
-
-    if (paymentMethod === PAYMENT_METHOD_CODES.COD) {
-      return isProcessingPayment
-        ? "Placing order…"
-        : failedOrder
-          ? "Retry Order (COD)"
-          : "Place Order (COD)";
-    }
-
-    return isProcessingPayment
-      ? "Placing order…"
-      : failedOrder
-        ? "Retry Order"
-        : "Place Order";
-  })();
+  const submitLabel = submitLabelForMethod(
+    paymentMethod,
+    isProcessingPayment,
+    Boolean(failedOrder),
+  );
+  const submitDisabled =
+    isProcessingPayment || methodsLoading || !paymentMethod || paymentOptions.length === 0;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
@@ -391,8 +357,7 @@ export function PaymentPageContent() {
             Payment
           </h1>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-500">
-            Review your total and choose how you&apos;d like to pay. Shipping details are already
-            saved.
+            Choose an available payment method and complete your order.
           </p>
         </div>
         {!isProcessingPayment ? (
@@ -407,8 +372,6 @@ export function PaymentPageContent() {
 
       <CheckoutStepIndicator current="payment" />
 
-      {testMode && simulateEnabled ? <TestModeBanner className="mt-6" /> : null}
-
       {failedOrder ? (
         <div
           role="alert"
@@ -417,8 +380,8 @@ export function PaymentPageContent() {
           <p className="text-sm font-semibold text-red-800">Previous payment attempt failed</p>
           <p className="mt-1 text-sm text-red-700">
             Order <span className="font-mono font-semibold">[{failedOrder.orderNumber}]</span> was
-            created but payment did not go through. Your cart is locked — select a payment method
-            and try again.
+            created but payment did not go through. Your cart is locked — choose a method below to
+            try again.
           </p>
         </div>
       ) : null}
@@ -426,15 +389,20 @@ export function PaymentPageContent() {
       <div className="mt-8 grid gap-8 pb-28 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start lg:pb-0">
         <fieldset disabled={isProcessingPayment} className="space-y-6 border-0 p-0">
           <CheckoutSection
-            title="Payment Method"
-            description="Select how you want to pay for this order."
+            title="Payment method"
+            description="Only methods enabled for this store are shown."
           >
-            <SimplifiedPaymentMethodSelector
-              value={paymentMethod}
-              onChange={handlePaymentChange}
-              error={paymentError}
-              disabled={isProcessingPayment}
-            />
+            {methodsLoading ? (
+              <p className="text-sm text-zinc-500">Loading available payment methods…</p>
+            ) : (
+              <SimplifiedPaymentMethodSelector
+                value={paymentMethod}
+                onChange={setPaymentMethod}
+                options={selectorOptions}
+                disabled={isProcessingPayment}
+                error={methodsError}
+              />
+            )}
           </CheckoutSection>
 
           {submitError ? (
@@ -445,41 +413,23 @@ export function PaymentPageContent() {
               {submitError}
             </p>
           ) : null}
-
-          {simulateEnabled ? (
-            <CheckoutSection
-              title="Developer Test Tools"
-              description="Skip real payment and complete checkout instantly."
-            >
-              <SimulatePaymentButton
-                onClick={handleSimulatePayment}
-                disabled={isProcessingPayment}
-                isLoading={isSimulating}
-              />
-              <p className="mt-2 text-xs leading-relaxed text-zinc-500">
-                Marks the order as processing, simulates STK Push timing (~2.5s), then confirms
-                payment — safe for local testing only.
-              </p>
-            </CheckoutSection>
-          ) : null}
         </fieldset>
 
         <CheckoutOrderSummary
           items={draft.items}
           totals={draft.totals}
-          shippingMethod={draft.shippingMethod}
+          shippingChoice={draft.shippingChoice ?? null}
+          shippingMethod={draft.shippingMethod ?? null}
           onSubmit={handleSubmit}
-          isSubmitting={isProcessingPayment || isSimulating}
-          submitDisabled={isProcessingPayment || isSimulating}
+          isSubmitting={isProcessingPayment}
+          submitDisabled={submitDisabled}
           submitLabel={submitLabel}
           submitHint={
-            isProcessingPayment || isSimulating
-              ? isGatewayPaymentMethod(paymentMethod) || isSimulating
-                ? "Redirecting to payment processing…"
-                : "Processing — please do not refresh or click again"
+            isProcessingPayment
+              ? "Processing your payment…"
               : failedOrder
                 ? "Retry payment — your order is already saved"
-                : "Review products, shipping, and total — then place your order"
+                : "Review products, shipping, and total — then continue"
           }
           backHref="/checkout"
           backLabel="← Back to checkout"
@@ -489,8 +439,8 @@ export function PaymentPageContent() {
       <CheckoutMobileStickyBar
         totals={draft.totals}
         onSubmit={handleSubmit}
-        isSubmitting={isProcessingPayment || isSimulating}
-        submitDisabled={isProcessingPayment || isSimulating || !paymentMethod}
+        isSubmitting={isProcessingPayment}
+        submitDisabled={submitDisabled}
         submitLabel={submitLabel}
         itemCount={draft.items.length}
       />

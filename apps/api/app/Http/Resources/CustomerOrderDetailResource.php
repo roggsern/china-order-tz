@@ -2,6 +2,9 @@
 
 namespace App\Http\Resources;
 
+use App\Services\Orders\CompanyShippingReceivingChoiceService;
+use App\Services\Orders\CustomerOrderPaymentSnapshotBuilder;
+use App\Services\Orders\CustomerOrderProgressResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -10,8 +13,11 @@ class CustomerOrderDetailResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $payment = $this->relationLoaded('payments')
-            ? $this->payments->sortByDesc('created_at')->first()
+        $payment = app(CustomerOrderPaymentSnapshotBuilder::class)->build($this->resource);
+
+        $progress = app(CustomerOrderProgressResolver::class)->resolve($this->resource);
+        $receivingChoice = $request->user() !== null
+            ? app(CompanyShippingReceivingChoiceService::class)->snapshot($this->resource, $request->user())
             : null;
 
         return [
@@ -35,12 +41,15 @@ class CustomerOrderDetailResource extends JsonResource
                 'brand_name_snapshot' => $item->brand_name_snapshot,
                 'variant_name_snapshot' => $item->variant_name_snapshot,
                 'variant_sku_snapshot' => $item->variant_sku_snapshot,
+                'barcode_snapshot' => $item->barcode_snapshot,
                 'sku_snapshot' => $item->sku_snapshot,
                 'currency_snapshot' => $item->currency_snapshot ?? $item->currency,
                 'unit_price_snapshot' => $item->unit_price_snapshot ?? $item->unit_price,
                 'shipping_mode_snapshot' => $item->shipping_mode_snapshot,
                 'shipping_price_snapshot' => $item->shipping_price_snapshot,
                 'shipping_notes_snapshot' => $item->shipping_notes_snapshot,
+                'estimated_min_days_snapshot' => $item->estimated_min_days_snapshot,
+                'estimated_max_days_snapshot' => $item->estimated_max_days_snapshot,
                 'attributes_snapshot' => $item->attributes_snapshot,
                 'product_image_snapshot' => $item->product_image_snapshot ?? $item->image_snapshot,
                 'image_snapshot' => $item->product_image_snapshot ?? $item->image_snapshot,
@@ -64,18 +73,23 @@ class CustomerOrderDetailResource extends JsonResource
                 'grand_total' => $this->grand_total,
                 'total' => $this->grand_total,
             ],
-            'payment' => [
-                'payment_status' => $payment?->status?->value,
-                'payment_method' => $payment?->method?->value,
-            ],
+            'payment' => $payment,
+            'shipping_address' => $this->when(
+                $this->relationLoaded('shippingAddress'),
+                fn () => $this->shippingAddress
+                    ? new ShippingAddressResource($this->shippingAddress)
+                    : null,
+            ),
             'delivery_option' => $this->when(
                 $this->relationLoaded('deliveryOption'),
                 fn () => $this->deliveryOption
                     ? new DeliveryOptionResource($this->deliveryOption)
                     : null,
             ),
+            'progress' => new CustomerOrderProgressResource($progress),
+            'receiving_choice' => $receivingChoice,
             'shipment' => [
-                'status' => 'Preparing',
+                'status' => $progress['current_label'],
             ],
         ];
     }

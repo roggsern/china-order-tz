@@ -92,6 +92,8 @@ class TrackingNotificationClosureTest extends TestCase
         $customerCodes = collect($customer['timeline'])->pluck('code')->all();
         $this->assertContains('payment_confirmed', $customerCodes);
         $this->assertNotContains('qc_internal', $customerCodes);
+        $this->assertNotContains('procurement_started', $customerCodes);
+        $this->assertNotContains('journey_supplier_processing', $customerCodes);
 
         foreach ($customer['timeline'] as $entry) {
             $this->assertSame(TimelineVisibility::Customer->value, $entry['visibility']);

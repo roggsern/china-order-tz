@@ -23,6 +23,7 @@ class FulfillmentServiceProvider extends ServiceProvider
                     $app->make(ChinaFulfillmentStrategy::class),
                 ],
                 $app->make(\App\Services\Orders\Lifecycle\OrderLifecycleEngine::class),
+                $app->make(\App\Services\Fulfillment\FulfillmentStatusHistoryRecorder::class),
             );
         });
     }

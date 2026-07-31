@@ -14,6 +14,7 @@ class ShowProductAction
             'category.department',
             'category.parent',
             'brand',
+            'supplier',
             'catalogProductType.subcategory',
             'productType',
             'inventory',

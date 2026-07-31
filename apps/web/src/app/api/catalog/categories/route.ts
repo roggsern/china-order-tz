@@ -1,7 +1,7 @@
 import { getApiUrl } from "@/lib/config/env";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const apiUrl = getApiUrl();
 
   if (!apiUrl) {
@@ -11,7 +11,8 @@ export async function GET() {
     );
   }
 
-  const upstream = await fetch(`${apiUrl}/api/v1/categories`, {
+  const query = request.nextUrl.searchParams.toString();
+  const upstream = await fetch(`${apiUrl}/api/v1/categories${query ? `?${query}` : ""}`, {
     method: "GET",
     headers: { Accept: "application/json" },
     cache: "no-store",

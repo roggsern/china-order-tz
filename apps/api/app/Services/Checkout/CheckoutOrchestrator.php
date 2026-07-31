@@ -15,6 +15,7 @@ use App\Services\Inventory\DTOs\ReservationContext;
 use App\Services\Inventory\ReservationService;
 use App\Services\Promotions\DiscountResolver;
 use App\Services\Promotions\DTOs\DiscountResolution;
+use App\Services\Storefront\VisitorIdentityService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -34,18 +35,25 @@ class CheckoutOrchestrator
         private readonly CommerceChannelResolver $commerceChannelResolver,
         private readonly DiscountResolver $discountResolver,
         private readonly ReservationService $reservationService,
+        private readonly VisitorIdentityService $visitorIdentity,
     ) {}
 
-    public function start(User $user): CheckoutSession
+    /**
+     * @param  array{visitor_uuid?: string|null, session_id?: string|null}  $attribution
+     */
+    public function start(User $user, array $attribution = []): CheckoutSession
     {
         $cart = $this->resolveCart($user);
         $totals = $this->validateCart($cart, $user);
+        $storefrontAttribution = $this->resolveStorefrontAttribution($user, $attribution);
 
-        return DB::transaction(function () use ($user, $cart, $totals): CheckoutSession {
+        return DB::transaction(function () use ($user, $cart, $totals, $storefrontAttribution): CheckoutSession {
             $this->expireOpenSessionsForCart($user, $cart);
 
             $session = CheckoutSession::query()->create([
                 'user_id' => $user->id,
+                'storefront_visitor_id' => $storefrontAttribution['visitor_id'] ?? null,
+                'storefront_session_id' => $storefrontAttribution['session_id'] ?? null,
                 'cart_id' => $cart->id,
                 'status' => CheckoutSessionStatus::Draft,
                 'expires_at' => now()->addMinutes(self::SESSION_TTL_MINUTES),
@@ -362,6 +370,8 @@ class CheckoutOrchestrator
             'cart.items.product.category',
             'cart.items.product.images',
             'cart.items.variant.attributeValues.attribute',
+            'cart.items.variant.catalogAttributeValues.attribute',
+            'cart.items.variant.catalogAttributeValues.option',
             'cart.items.variant.inventories',
             'cart.items.variant.prices',
             'user',
@@ -476,5 +486,26 @@ class CheckoutOrchestrator
                 'expires_at' => now(),
             ])->save();
         }
+    }
+
+    /**
+     * @param  array{visitor_uuid?: string|null, session_id?: string|null}  $attribution
+     * @return array{visitor_id?: string, session_id?: string}
+     */
+    private function resolveStorefrontAttribution(User $user, array $attribution): array
+    {
+        $visitorUuid = $attribution['visitor_uuid'] ?? null;
+        $sessionId = $attribution['session_id'] ?? null;
+
+        if (! is_string($visitorUuid) || trim($visitorUuid) === '') {
+            return [];
+        }
+
+        $identity = $this->visitorIdentity->identify($visitorUuid, $sessionId, $user);
+
+        return [
+            'visitor_id' => $identity['visitor_id'],
+            'session_id' => $identity['session_id'],
+        ];
     }
 }

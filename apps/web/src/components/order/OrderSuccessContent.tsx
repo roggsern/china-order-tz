@@ -13,8 +13,12 @@ import {
   isOrderPaymentFailed,
   isOrderPaymentPending,
 } from "@/lib/order/placement";
-import { useOrderSnapshot } from "@/lib/order/use-order-by-id";
-import { buildCustomerTrackingDisplayTimeline } from "@/lib/order/tracking-display";
+import { useOrderSuccessOrder } from "@/lib/order/use-order-by-id";
+import {
+  buildCustomerProgressDisplayTimeline,
+  getCustomerProgressWhatHappensNext,
+  resolveCustomerOrderProgress,
+} from "@/lib/order/customer-progress";
 import { getMethodByCode } from "@/lib/shipping/engine";
 import { OrderSummaryTotals } from "@/components/cart/OrderSummaryTotals";
 import { PaymentStatusBadge } from "@/components/payment/PaymentStatusBadge";
@@ -105,7 +109,7 @@ function ConfirmationHeader({ order }: { order: Order }) {
 
 export function OrderSuccessContent({ orderId }: OrderSuccessContentProps) {
   const { clearPurchasedItems } = useCart();
-  const { order, isLoading } = useOrderSnapshot(orderId);
+  const { order, isLoading } = useOrderSuccessOrder(orderId);
 
   useEffect(() => {
     if (!order) {
@@ -130,10 +134,19 @@ export function OrderSuccessContent({ orderId }: OrderSuccessContentProps) {
     return formatOrderDeliveryEstimate(order);
   }, [order]);
 
+  const progress = useMemo(() => (order ? resolveCustomerOrderProgress(order) : null), [order]);
+
   const displayTimeline = useMemo(() => {
-    if (!order) return [];
-    return buildCustomerTrackingDisplayTimeline(order, null);
-  }, [order]);
+    if (!order || !progress) return [];
+    return buildCustomerProgressDisplayTimeline(progress, {
+      timestamps: { ORDER_CONFIRMED: order.createdAt },
+    });
+  }, [order, progress]);
+
+  const whatHappensNext = useMemo(
+    () => (progress ? getCustomerProgressWhatHappensNext(progress) : null),
+    [progress],
+  );
 
   const trackOrderHref = `/track/${orderId}`;
 
@@ -222,7 +235,7 @@ export function OrderSuccessContent({ orderId }: OrderSuccessContentProps) {
           <section aria-labelledby="progress-heading" className="space-y-5">
             <SectionHeading id="progress-heading">Order Progress</SectionHeading>
             <OrderTrackingStepper timeline={displayTimeline} tone="light" />
-            <TrackingWhatHappensNext timeline={displayTimeline} />
+            <TrackingWhatHappensNext guidance={whatHappensNext} />
           </section>
         ) : null}
 

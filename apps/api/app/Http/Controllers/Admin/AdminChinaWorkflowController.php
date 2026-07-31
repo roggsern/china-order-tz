@@ -9,6 +9,7 @@ use App\Models\Admin;
 use App\Models\Order;
 use App\Models\PurchaseOrder;
 use App\Services\China\ChinaWorkflowEngine;
+use App\Services\CustomerAgent\CustomerAgentWorkflowEngine;
 use App\Support\Admin\AdminPermissions;
 use App\Support\China\ChinaWorkflowPermissions;
 use Illuminate\Http\JsonResponse;
@@ -19,6 +20,7 @@ class AdminChinaWorkflowController extends Controller
 {
     public function __construct(
         private readonly ChinaWorkflowEngine $workflow,
+        private readonly CustomerAgentWorkflowEngine $customerAgentWorkflow,
     ) {}
 
     public function show(Order $order): JsonResponse
@@ -165,18 +167,16 @@ class AdminChinaWorkflowController extends Controller
             'evidence' => ['sometimes', 'nullable', 'string', 'max:2000'],
         ]);
 
-        $record = $this->workflow->recordAgentHandoff(
-            $order,
-            $admin,
-            $data['agent_name'],
-            $data['agent_contact'] ?? null,
-            $data['evidence'] ?? null,
-        );
+        $pickup = $this->customerAgentWorkflow->completeHandover($order, $admin, [
+            'agent_name' => $data['agent_name'],
+            'agent_contact' => $data['agent_contact'] ?? null,
+            'notes' => $data['evidence'] ?? null,
+        ]);
 
         return response()->json([
             'success' => true,
-            'message' => 'Customer agent handoff recorded.',
-            'data' => $record,
+            'message' => 'Customer agent handover completed.',
+            'data' => $pickup,
         ]);
     }
 

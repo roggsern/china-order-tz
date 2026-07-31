@@ -8,6 +8,9 @@ import type { PaymentMethodCode, PaymentStatus } from "@/lib/types/payment";
 import type { ShippingMethodCode } from "@/lib/shipping/types";
 import type { ProductImage } from "@/lib/types/catalog";
 import type { OrderStatusHistoryEntry } from "@/lib/order/tracking-status";
+import type { CustomerOrderProgress } from "@/lib/order/customer-progress";
+import type { ReceivingChoiceSnapshot } from "@/lib/api/customer-receiving-choice";
+import { parseCustomerOrderProgress } from "@/lib/order/customer-progress";
 import { ensureStatusHistory } from "@/lib/order/status-history";
 
 export type AdminOrderType = "china" | "dar";
@@ -18,6 +21,8 @@ export type AdminOrderListSummary = {
   source: "china" | "local";
   primaryProductName: string;
   primaryProductImage: ProductImage;
+  primaryVariantLabel?: string;
+  primaryQuantity: number;
   productNames: string[];
   categorySlugs: string[];
   categoryNames: string[];
@@ -113,6 +118,8 @@ export type OrderLineItem = {
     gradient: string;
     alt: string;
     url?: string;
+    /** Current catalog primary image when order snapshot is missing. */
+    fallbackProductUrl?: string;
   };
 };
 
@@ -130,6 +137,14 @@ export type Order = {
   paymentStatus: PaymentStatus;
   paymentMethod: PaymentMethodCode | null;
   paymentReference: string | null;
+  /** ISO timestamp when payment completed, when available from API. */
+  paymentPaidAt?: string | null;
+  /** Payment gateway/provider code from API snapshot (e.g. nmb, mpesa). */
+  paymentProvider?: string | null;
+  /** Paid amount from API snapshot, when available. */
+  paymentAmount?: number | null;
+  /** Currency code from API snapshot (e.g. TZS). */
+  paymentCurrency?: string | null;
   /** Active gateway transaction while M-Pesa STK push is pending */
   paymentTransactionId?: string | null;
   status: OrderStatus;
@@ -150,6 +165,10 @@ export type Order = {
   /** Full totals breakdown — derived from frozen snapshot */
   totals: CartTotals;
   timeline: OrderTimelineEvent[];
+  /** Canonical customer progress projection from backend. */
+  progress?: CustomerOrderProgress | null;
+  /** China company shipping Tanzania handover choice state. */
+  receivingChoice?: ReceivingChoiceSnapshot | null;
   /** Logistics status audit trail — source of truth for customer tracking. */
   statusHistory?: OrderStatusHistoryEntry[];
   /** Lightweight list metadata for admin tables — optional, computed when missing. */
@@ -275,6 +294,10 @@ export function normalizeOrder(raw: Partial<Order> & Pick<Order, "orderNumber">)
     paymentStatus: (raw.paymentStatus ?? "pending") as PaymentStatus,
     paymentMethod: raw.paymentMethod ?? null,
     paymentReference: raw.paymentReference ?? null,
+    paymentPaidAt: raw.paymentPaidAt ?? null,
+    paymentProvider: raw.paymentProvider ?? null,
+    paymentAmount: raw.paymentAmount ?? null,
+    paymentCurrency: raw.paymentCurrency ?? null,
     paymentTransactionId: raw.paymentTransactionId ?? null,
     status: raw.status ?? ORDER_STATUS.PENDING,
     createdAt: raw.createdAt ?? new Date().toISOString(),
@@ -307,6 +330,7 @@ export function normalizeOrder(raw: Partial<Order> & Pick<Order, "orderNumber">)
       grandTotal: totals.grandTotal,
     },
     timeline: raw.timeline ?? [],
+    progress: parseCustomerOrderProgress(raw.progress),
     statusHistory: ensureStatusHistory({
       ...(raw as Order),
       timeline: raw.timeline ?? [],

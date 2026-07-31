@@ -16,7 +16,8 @@ class ProductPrimarySyncServiceTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_catalog_set_primary_updates_product_media_and_product_images(): void
+    /** Existing historical pairs: setting catalog primary may sync a paired legacy row when URLs match. */
+    public function test_catalog_set_primary_updates_existing_paired_legacy_row_when_present(): void
     {
         Storage::fake('public');
 
@@ -64,7 +65,8 @@ class ProductPrimarySyncServiceTest extends TestCase
         $this->assertFalse($otherMedia->fresh()->is_primary);
     }
 
-    public function test_legacy_set_primary_updates_product_images_and_product_media(): void
+    /** Existing historical pairs: setting legacy primary may sync a paired catalog row when URLs match. */
+    public function test_legacy_set_primary_updates_existing_paired_catalog_row_when_present(): void
     {
         Storage::fake('public');
 

@@ -20,6 +20,7 @@ export type NmbPaymentSessionResponse = {
 
 export type NmbCheckoutContext = {
   paymentId: string;
+  paymentTransactionId?: string | null;
   orderId?: string | null;
   localOrderId?: string | null;
   gatewaySessionId?: string | null;

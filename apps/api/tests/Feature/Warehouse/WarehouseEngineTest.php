@@ -186,4 +186,127 @@ class WarehouseEngineTest extends TestCase
 
         $this->assertSame(WarehouseJobStatus::Cancelled, $job->status);
     }
+
+    public function test_ready_to_ship_notifies_self_pickup_customers(): void
+    {
+        $user = User::factory()->create();
+        $product = Product::factory()->create(['fulfillment_source' => 'buy_from_tz']);
+        $order = Order::factory()->create([
+            'user_id' => $user->id,
+            'status' => OrderStatus::Paid,
+            'paid_at' => now(),
+        ]);
+        OrderItem::factory()->create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'quantity' => 1,
+        ]);
+        \App\Models\DeliveryOption::factory()->create([
+            'order_id' => $order->id,
+            'delivery_type' => \App\Enums\DeliveryType::SelfPickup,
+        ]);
+
+        $fulfillment = app(FulfillmentEngine::class)->createForOrder($order->fresh(['items.product']));
+        $job = $fulfillment->fresh('warehouseJob')->warehouseJob;
+        $this->assertNotNull($job);
+
+        foreach ([
+            WarehouseJobStatus::Picking,
+            WarehouseJobStatus::Picked,
+            WarehouseJobStatus::Packing,
+            WarehouseJobStatus::Packed,
+        ] as $status) {
+            $job = app(WarehouseEngine::class)->updateStatus($job, ['status' => $status->value]);
+        }
+
+        app(WarehouseEngine::class)->updateStatus($job, ['status' => WarehouseJobStatus::ReadyToShip->value]);
+
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $user->id,
+            'event_type' => \App\Enums\NotificationEventType::WarehouseReadyForPickup->value,
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'user_id' => $user->id,
+            'event_type' => \App\Enums\NotificationEventType::WarehousePickingStarted->value,
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'user_id' => $user->id,
+            'event_type' => \App\Enums\NotificationEventType::WarehousePacked->value,
+        ]);
+    }
+
+    public function test_ready_to_ship_notifies_delivery_arrangement_customers(): void
+    {
+        $user = User::factory()->create();
+        $product = Product::factory()->create(['fulfillment_source' => 'buy_from_tz']);
+        $order = Order::factory()->create([
+            'user_id' => $user->id,
+            'status' => OrderStatus::Paid,
+            'paid_at' => now(),
+        ]);
+        OrderItem::factory()->create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'quantity' => 1,
+        ]);
+        \App\Models\DeliveryOption::factory()->create([
+            'order_id' => $order->id,
+            'delivery_type' => \App\Enums\DeliveryType::NegotiatedDelivery,
+        ]);
+
+        $fulfillment = app(FulfillmentEngine::class)->createForOrder($order->fresh(['items.product']));
+        $job = $fulfillment->fresh('warehouseJob')->warehouseJob;
+        $this->assertNotNull($job);
+
+        foreach ([
+            WarehouseJobStatus::Picking,
+            WarehouseJobStatus::Picked,
+            WarehouseJobStatus::Packing,
+            WarehouseJobStatus::Packed,
+        ] as $status) {
+            $job = app(WarehouseEngine::class)->updateStatus($job, ['status' => $status->value]);
+        }
+
+        app(WarehouseEngine::class)->updateStatus($job, ['status' => WarehouseJobStatus::ReadyToShip->value]);
+
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $user->id,
+            'event_type' => \App\Enums\NotificationEventType::WarehouseReadyForDeliveryArrangement->value,
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'user_id' => $user->id,
+            'event_type' => \App\Enums\NotificationEventType::WarehousePickingStarted->value,
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'user_id' => $user->id,
+            'event_type' => \App\Enums\NotificationEventType::WarehousePacked->value,
+        ]);
+    }
+
+    public function test_china_import_warehouse_still_notifies_picking_and_packed(): void
+    {
+        [$order, , $job] = $this->makePaidFulfillmentWithJob();
+        $user = $order->user;
+        $this->assertNotNull($user);
+
+        $engine = app(WarehouseEngine::class);
+        $job = $engine->updateStatus($job, ['status' => WarehouseJobStatus::Picking->value]);
+        $job = $engine->updateStatus($job, ['status' => WarehouseJobStatus::Picked->value]);
+        $job = $engine->updateStatus($job, ['status' => WarehouseJobStatus::Packing->value]);
+        $job = $engine->updateStatus($job, ['status' => WarehouseJobStatus::Packed->value]);
+        $engine->updateStatus($job, ['status' => WarehouseJobStatus::ReadyToShip->value]);
+
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $user->id,
+            'event_type' => \App\Enums\NotificationEventType::WarehousePickingStarted->value,
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $user->id,
+            'event_type' => \App\Enums\NotificationEventType::WarehousePacked->value,
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $user->id,
+            'event_type' => \App\Enums\NotificationEventType::WarehouseReadyToShip->value,
+        ]);
+    }
 }

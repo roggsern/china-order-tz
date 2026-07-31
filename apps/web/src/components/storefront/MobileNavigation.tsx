@@ -74,8 +74,9 @@ export function MobileNavigation({
 
   const handleSignOut = () => {
     onClose();
-    logoutCustomer();
-    router.push("/");
+    void logoutCustomer().finally(() => {
+      router.push("/");
+    });
   };
 
   const items = navigation.mobile;

@@ -23,6 +23,7 @@ use App\Models\ProductShippingOption;
 use App\Models\ProductType;
 use App\Models\ProductVariant;
 use App\Models\ProductVariantAttributeValue;
+use App\Models\Supplier;
 use Database\Seeders\ProductTypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
@@ -449,6 +450,7 @@ class AdminCatalogManagementTest extends TestCase
             'name' => 'Core Galaxy Phone',
             'catalog_product_type_id' => $catalogType->id,
             'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
+            'supplier_id' => $this->chinaSupplierId(),
             'brand_id' => $brand->id,
             'short_description' => 'Product core sample',
             'description' => 'Full description',
@@ -535,6 +537,7 @@ class AdminCatalogManagementTest extends TestCase
             'name' => 'Stock Galaxy Phone',
             'catalog_product_type_id' => $catalogType->id,
             'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
+            'supplier_id' => $this->chinaSupplierId(),
             'price' => 250000,
             'stock_quantity' => 3,
             'status' => 'draft',
@@ -592,6 +595,7 @@ class AdminCatalogManagementTest extends TestCase
             'name' => 'Simple Catalog Phone',
             'catalog_product_type_id' => $catalogType->id,
             'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
+            'supplier_id' => $this->chinaSupplierId(),
             'price' => 250000,
             'stock_quantity' => 5,
             'status' => 'draft',
@@ -638,6 +642,7 @@ class AdminCatalogManagementTest extends TestCase
             'category_id' => $legacyCategory->id,
             'catalog_product_type_id' => $legacyCatalogType->id,
             'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
+            'supplier_id' => $this->chinaSupplierId(),
             'sku' => 'LEGACY-FLAG-1',
             'price' => 500000,
             'air_shipping_price' => 8000,
@@ -696,6 +701,7 @@ class AdminCatalogManagementTest extends TestCase
             'name' => 'Canonical Pricing Phone',
             'catalog_product_type_id' => $catalogType->id,
             'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
+            'supplier_id' => $this->chinaSupplierId(),
             'status' => 'draft',
             'visibility' => 'public',
         ]);
@@ -754,6 +760,7 @@ class AdminCatalogManagementTest extends TestCase
             'name' => 'Lifecycle Alignment Phone',
             'catalog_product_type_id' => $catalogType->id,
             'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
+            'supplier_id' => $this->chinaSupplierId(),
             'price' => 200000,
             'air_shipping_price' => 8000,
             'stock_quantity' => 3,
@@ -997,14 +1004,14 @@ class AdminCatalogManagementTest extends TestCase
         $this->assertSame(2, $product->fresh()->images()->count());
     }
 
-    public function test_catalog_file_upload_creates_product_media_and_product_images(): void
+    public function test_catalog_file_upload_creates_product_media_only(): void
     {
         Storage::fake('public');
         Sanctum::actingAs(Admin::factory()->create());
 
         $product = Product::factory()->create([
-            'name' => 'Dual Write Product',
-            'slug' => 'dual-write-product',
+            'name' => 'Catalog Upload Product',
+            'slug' => 'catalog-upload-product',
         ]);
 
         $response = $this->post('/api/v1/admin/products/'.$product->id.'/media', [
@@ -1021,20 +1028,18 @@ class AdminCatalogManagementTest extends TestCase
             ->assertJsonPath('data.alt_text', 'Catalog upload')
             ->assertJsonPath('data.is_legacy', false);
 
-        $this->assertSame(1, ProductImage::query()->count());
+        $this->assertSame(0, ProductImage::query()->count());
         $this->assertSame(1, ProductMedia::query()->count());
 
-        $legacy = ProductImage::query()->firstOrFail();
         $media = ProductMedia::query()->firstOrFail();
 
-        $this->assertSame($product->id, $legacy->product_id);
         $this->assertSame($product->id, $media->product_id);
-        $this->assertSame('Catalog upload', $legacy->alt_text);
-        $this->assertSame(Storage::disk('public')->url($legacy->path), $media->url);
-        $this->assertTrue(Storage::disk('public')->exists($legacy->path));
+        $this->assertSame('Catalog upload', $media->alt_text);
+        $this->assertSame($response->json('data.url'), $media->url);
+        $this->assertNotEmpty($media->url);
     }
 
-    public function test_legacy_image_upload_creates_product_images_and_product_media(): void
+    public function test_legacy_image_upload_endpoint_creates_product_media_only(): void
     {
         Storage::fake('public');
         Sanctum::actingAs(Admin::factory()->create());
@@ -1052,21 +1057,21 @@ class AdminCatalogManagementTest extends TestCase
 
         $response->assertCreated()
             ->assertJsonPath('success', true)
-            ->assertJsonStructure(['data' => ['id', 'path', 'url']]);
+            ->assertJsonPath('data.source', 'product_media')
+            ->assertJsonStructure(['data' => ['id', 'path', 'url', 'media_id', 'source']]);
 
-        $this->assertSame(1, ProductImage::query()->count());
+        $this->assertSame(0, ProductImage::query()->count());
         $this->assertSame(1, ProductMedia::query()->count());
 
-        $legacy = ProductImage::query()->firstOrFail();
         $media = ProductMedia::query()->firstOrFail();
 
-        $this->assertSame($response->json('data.id'), $legacy->id);
-        $this->assertSame($response->json('data.path'), $legacy->path);
-        $this->assertSame(Storage::disk('public')->url($legacy->path), $media->url);
-        $this->assertTrue(Storage::disk('public')->exists($legacy->path));
+        $this->assertSame($response->json('data.id'), $media->id);
+        $this->assertSame($response->json('data.media_id'), $media->id);
+        $this->assertSame($response->json('data.url'), $media->url);
+        $this->assertTrue(Storage::disk('public')->exists($response->json('data.path')));
     }
 
-    public function test_legacy_and_catalog_uploads_create_one_row_pair_each_without_duplicates(): void
+    public function test_legacy_and_catalog_upload_endpoints_each_create_product_media_only(): void
     {
         Storage::fake('public');
         Sanctum::actingAs(Admin::factory()->create());
@@ -1090,7 +1095,7 @@ class AdminCatalogManagementTest extends TestCase
             'Accept' => 'application/json',
         ])->assertCreated();
 
-        $this->assertSame(2, ProductImage::query()->where('product_id', $product->id)->count());
+        $this->assertSame(0, ProductImage::query()->where('product_id', $product->id)->count());
         $this->assertSame(2, ProductMedia::query()->where('product_id', $product->id)->count());
     }
 
@@ -1115,7 +1120,6 @@ class AdminCatalogManagementTest extends TestCase
         $upload->assertCreated();
         $mediaId = $upload->json('data.id');
         $originalUrl = $upload->json('data.url');
-        $legacyPath = ProductImage::query()->value('path');
 
         $this->put('/api/v1/admin/products/'.$product->id.'/media/'.$mediaId, [
             'file' => MinimalTestImage::jpeg('replacement.jpg'),
@@ -1130,7 +1134,7 @@ class AdminCatalogManagementTest extends TestCase
             );
 
         $this->assertSame($originalUrl, ProductMedia::query()->whereKey($mediaId)->value('url'));
-        $this->assertSame($legacyPath, ProductImage::query()->value('path'));
+        $this->assertSame(0, ProductImage::query()->count());
         $this->assertSame('Original image', ProductMedia::query()->whereKey($mediaId)->value('alt_text'));
     }
 
@@ -1173,7 +1177,7 @@ class AdminCatalogManagementTest extends TestCase
         $this->assertFalse($media->is_active);
     }
 
-    public function test_update_product_media_primary_uses_dual_write_synchronization(): void
+    public function test_update_product_media_primary_updates_catalog_flags_without_creating_legacy_rows(): void
     {
         Storage::fake('public');
         Sanctum::actingAs(Admin::factory()->create());
@@ -1200,7 +1204,6 @@ class AdminCatalogManagementTest extends TestCase
 
         $firstMediaId = $first->json('data.id');
         $secondMediaId = $second->json('data.id');
-        $secondMediaUrl = $second->json('data.url');
 
         $this->putJson('/api/v1/admin/products/'.$product->id.'/media/'.$secondMediaId, [
             'is_primary' => true,
@@ -1210,20 +1213,8 @@ class AdminCatalogManagementTest extends TestCase
 
         $this->assertFalse(ProductMedia::query()->whereKey($firstMediaId)->value('is_primary'));
         $this->assertTrue(ProductMedia::query()->whereKey($secondMediaId)->value('is_primary'));
-
-        $secondLegacy = ProductImage::query()
-            ->get()
-            ->first(fn (ProductImage $image): bool => Storage::disk('public')->url($image->path) === $secondMediaUrl);
-
-        $this->assertNotNull($secondLegacy);
-        $this->assertTrue($secondLegacy->is_primary);
-
-        $firstLegacy = ProductImage::query()
-            ->get()
-            ->first(fn (ProductImage $image): bool => Storage::disk('public')->url($image->path) === $first->json('data.url'));
-
-        $this->assertNotNull($firstLegacy);
-        $this->assertFalse($firstLegacy->is_primary);
+        $this->assertSame(0, ProductImage::query()->count());
+        $this->assertSame(2, ProductMedia::query()->where('product_id', $product->id)->count());
     }
 
     public function test_admin_can_manage_product_catalog_attribute_values(): void
@@ -1481,5 +1472,10 @@ class AdminCatalogManagementTest extends TestCase
         $this->assertFalse(
             ProductVariantAttributeValue::query()->where('product_variant_id', $variantId)->exists(),
         );
+    }
+
+    private function chinaSupplierId(): string
+    {
+        return Supplier::factory()->create(['is_active' => true, 'country' => 'CN'])->id;
     }
 }

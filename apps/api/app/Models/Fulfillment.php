@@ -9,6 +9,7 @@ use Database\Factories\FulfillmentFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -55,5 +56,20 @@ class Fulfillment extends Model
     public function warehouseJob(): HasOne
     {
         return $this->hasOne(WarehouseJob::class);
+    }
+
+    public function chinaWorkflowRecord(): HasOne
+    {
+        return $this->hasOne(ChinaWorkflowRecord::class);
+    }
+
+    public function purchaseOrders(): HasMany
+    {
+        return $this->hasMany(PurchaseOrder::class);
+    }
+
+    public function statusHistories(): HasMany
+    {
+        return $this->hasMany(FulfillmentStatusHistory::class);
     }
 }

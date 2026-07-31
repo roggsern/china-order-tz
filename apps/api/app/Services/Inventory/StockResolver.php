@@ -3,10 +3,13 @@
 namespace App\Services\Inventory;
 
 use App\Enums\PurchasabilityPath;
+use App\Enums\InventoryWarehouseCode;
 use App\Models\Inventory;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\VariantInventory;
+use App\Services\China\Procurement\ChinaCommercialStockService;
+use App\Services\Commerce\CommerceChannelResolver;
 use App\Services\Inventory\DTOs\StockResolutionContext;
 use App\Services\Inventory\DTOs\StockResolutionResult;
 
@@ -22,6 +25,11 @@ use App\Services\Inventory\DTOs\StockResolutionResult;
  */
 final class StockResolver
 {
+    public function __construct(
+        private readonly CommerceChannelResolver $commerceChannels,
+        private readonly ChinaCommercialStockService $commercialStock,
+    ) {}
+
     /**
      * Resolve Catalog Stock for an explicit sell unit.
      * Pass $variant for Variant path; omit for Simple (base) path.
@@ -48,6 +56,12 @@ final class StockResolver
         ?StockResolutionContext $context = null,
     ): StockResolutionResult {
         $context ??= new StockResolutionContext;
+
+        $product->loadMissing('commerceChannel');
+
+        if ($this->commerceChannels->isChinaImportProduct($product)) {
+            return $this->resolveCommercialStock($product, null, PurchasabilityPath::Simple, $context);
+        }
 
         $row = $this->findSimpleInventory($product);
 
@@ -105,6 +119,30 @@ final class StockResolver
         $context ??= new StockResolutionContext;
         $warehouse = $context->warehouseCode();
         $productId = $product?->id ?? $variant->product_id;
+        $product ??= $variant->relationLoaded('product')
+            ? $variant->product
+            : Product::query()->find($productId);
+
+        if ($product !== null && $this->commerceChannels->isChinaImportProduct($product)) {
+            return $this->resolveCommercialStock($product, $variant, PurchasabilityPath::Variant, $context);
+        }
+
+        // Customer commerce sellable stock is MAIN-only. China / in-transit never sell.
+        if ($context->commerceSellableOnly && ! InventoryWarehouseCode::isSellableCommerceCode($warehouse)) {
+            return StockResolutionResult::unresolved(
+                path: PurchasabilityPath::Variant,
+                source: 'variant_inventories',
+                inventoryType: 'variant',
+                meta: [
+                    'product_id' => $productId,
+                    'product_variant_id' => $variant->id,
+                    'warehouse_code' => $warehouse,
+                    'policy_present' => false,
+                    'non_sellable_warehouse' => true,
+                    'sellable_for_commerce' => false,
+                ],
+            );
+        }
 
         $row = $this->findVariantInventory($variant, $warehouse);
 
@@ -197,6 +235,7 @@ final class StockResolver
                 'inventory_location_id' => $row->inventory_location_id,
                 'is_active' => (bool) $row->is_active,
                 'policy_present' => true,
+                'sellable_for_commerce' => InventoryWarehouseCode::isSellableCommerceCode((string) $row->warehouse_code),
                 'reservation_applied' => false,
                 'warehouse_allocation' => null,
                 'location_selection' => $context->inventoryLocationId,
@@ -301,5 +340,60 @@ final class StockResolver
             ->where('product_id', $productId)
             ->where('product_variant_id', $variant->id)
             ->first();
+    }
+
+    private function resolveCommercialStock(
+        Product $product,
+        ?ProductVariant $variant,
+        PurchasabilityPath $path,
+        StockResolutionContext $context,
+    ): StockResolutionResult {
+        $row = $this->commercialStock->findForProduct($product, $variant);
+
+        if ($row === null) {
+            return StockResolutionResult::unresolved(
+                path: $path,
+                source: 'china_commercial_stocks',
+                inventoryType: 'commercial',
+                meta: [
+                    'product_id' => $product->id,
+                    'product_variant_id' => $variant?->id,
+                    'policy_present' => false,
+                    'inventory_source' => 'commercial',
+                    'fulfillment_source' => 'china_import',
+                    'channel_selection' => $context->channel,
+                ],
+            );
+        }
+
+        $available = (int) $row->available_quantity;
+        $reserved = (int) $row->reserved_quantity;
+        $ordered = (int) $row->ordered_quantity;
+
+        return new StockResolutionResult(
+            resolved: true,
+            source: 'china_commercial_stocks',
+            inventoryType: 'commercial',
+            quantityOnHand: $available + $reserved,
+            quantityReserved: $reserved,
+            quantityAvailable: $available,
+            location: 'COMMERCIAL',
+            path: $path,
+            inventory: null,
+            meta: [
+                'product_id' => $product->id,
+                'product_variant_id' => $variant?->id,
+                'china_commercial_stock_id' => $row->id,
+                'ordered_quantity' => $ordered,
+                'policy_present' => true,
+                'inventory_source' => 'commercial',
+                'fulfillment_source' => 'china_import',
+                'sellable_for_commerce' => true,
+                'reservation_applied' => false,
+                'warehouse_allocation' => null,
+                'location_selection' => $context->inventoryLocationId,
+                'channel_selection' => $context->channel,
+            ],
+        );
     }
 }

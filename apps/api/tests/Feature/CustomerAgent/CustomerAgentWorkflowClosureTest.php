@@ -227,6 +227,37 @@ class CustomerAgentWorkflowClosureTest extends TestCase
         ]);
     }
 
+    private function advanceToPackedForAgentHandover(Order $order): void
+    {
+        $po = PurchaseOrder::query()->where('order_id', $order->id)->firstOrFail();
+        $this->postJson("/api/v1/admin/purchase-orders/{$po->id}/supplier-response", [
+            'response' => SupplierPoResponse::Accepted->value,
+        ])->assertOk();
+        $itemId = $po->fresh()->items()->first()->id;
+        $this->postJson("/api/v1/admin/purchase-orders/{$po->id}/receive", [
+            'items' => [['purchase_order_item_id' => $itemId, 'quantity' => 1]],
+        ])->assertCreated();
+
+        $this->postJson("/api/v1/admin/orders/{$order->id}/china-workflow/qc", [
+            'status' => ChinaQcStatus::Passed->value,
+        ])->assertOk();
+
+        $fulfillment = $order->fresh()->fulfillment;
+        app(FulfillmentEngine::class)->updateStatus($fulfillment, [
+            'status' => FulfillmentStatus::Processing->value,
+        ]);
+        $job = WarehouseJob::query()->where('fulfillment_id', $fulfillment->id)->firstOrFail();
+        $wh = app(WarehouseEngine::class);
+        foreach ([
+            WarehouseJobStatus::Picking,
+            WarehouseJobStatus::Picked,
+            WarehouseJobStatus::Packing,
+            WarehouseJobStatus::Packed,
+        ] as $status) {
+            $wh->updateStatus($job->fresh(), ['status' => $status->value]);
+        }
+    }
+
     public function test_customer_agent_selected_and_company_shipment_blocked(): void
     {
         ['order' => $order] = $this->createPaidChinaAgentOrder();
@@ -260,13 +291,24 @@ class CustomerAgentWorkflowClosureTest extends TestCase
         ])->assertStatus(422);
     }
 
-    public function test_export_not_ready_blocks_authorization(): void
+    public function test_export_not_ready_does_not_block_customer_agent_authorization_after_packed(): void
     {
         ['order' => $order] = $this->createPaidChinaAgentOrder();
-        // No export ready / warehouse advance.
+        $this->advanceToPackedForAgentHandover($order);
+
+        $fulfillment = $order->fresh()->fulfillment->fresh(['order.deliveryOption', 'warehouseJob']);
+        $this->assertSame(FulfillmentStatus::Processing, $fulfillment->status);
+        $this->assertSame(WarehouseJobStatus::Packed, $fulfillment->warehouseJob?->status);
+
+        $eval = app(ShipmentEligibilityService::class)->evaluateCustomerAgentPickup(
+            $fulfillment,
+            requireAuthorization: false,
+        );
+        $this->assertTrue($eval['eligible'], $eval['reason'] ?? 'expected eligible');
+
         $this->postJson("/api/v1/admin/orders/{$order->id}/customer-agent/authorize", [
-            'notes' => 'Too early',
-        ])->assertStatus(422);
+            'notes' => 'Ready for agent handover after packing',
+        ])->assertOk();
     }
 
     public function test_warehouse_not_ready_blocks_authorization(): void
@@ -287,6 +329,70 @@ class CustomerAgentWorkflowClosureTest extends TestCase
 
         $this->postJson("/api/v1/admin/orders/{$order->id}/customer-agent/authorize")
             ->assertStatus(422);
+    }
+
+    public function test_customer_agent_handover_succeeds_after_packed_without_export_ready(): void
+    {
+        ['order' => $order] = $this->createPaidChinaAgentOrder();
+        $this->advanceToPackedForAgentHandover($order);
+
+        $this->postJson("/api/v1/admin/orders/{$order->id}/customer-agent/bootstrap")->assertOk();
+        $this->postJson("/api/v1/admin/orders/{$order->id}/customer-agent/authorize", [
+            'agent_company' => 'Asha Logistics',
+        ])->assertOk();
+
+        $fulfillment = $order->fresh()->fulfillment->fresh(['order.deliveryOption', 'warehouseJob']);
+        $eval = app(ShipmentEligibilityService::class)->evaluateCustomerAgentPickup(
+            $fulfillment,
+            requireAuthorization: true,
+        );
+        $this->assertTrue($eval['eligible'], $eval['reason'] ?? 'expected eligible');
+        $this->assertSame(FulfillmentStatus::Processing, $fulfillment->status);
+
+        $this->postJson("/api/v1/admin/orders/{$order->id}/customer-agent/handover", [
+            'reference_number' => 'PU-PACKED-1',
+            'notes' => 'Delivered to nominated agent after packing',
+        ])->assertOk()
+            ->assertJsonPath('data.pickup_status', AgentPickupStatus::HandoverCompleted->value);
+
+        $fulfillment = $order->fresh()->fulfillment;
+        $this->assertSame(FulfillmentStatus::Delivered, $fulfillment->status);
+        $this->assertNotNull($fulfillment->completed_at);
+        $this->assertDatabaseHas('fulfillment_status_histories', [
+            'fulfillment_id' => $fulfillment->id,
+            'from_status' => FulfillmentStatus::Shipped->value,
+            'to_status' => FulfillmentStatus::Delivered->value,
+            'source' => \App\Enums\FulfillmentStatusHistorySource::CustomerAgent->value,
+        ]);
+    }
+
+    public function test_customer_agent_handover_blocked_before_warehouse_packing(): void
+    {
+        ['order' => $order] = $this->createPaidChinaAgentOrder();
+        $po = PurchaseOrder::query()->where('order_id', $order->id)->firstOrFail();
+        $this->postJson("/api/v1/admin/purchase-orders/{$po->id}/supplier-response", [
+            'response' => SupplierPoResponse::Accepted->value,
+        ])->assertOk();
+        $itemId = $po->fresh()->items()->first()->id;
+        $this->postJson("/api/v1/admin/purchase-orders/{$po->id}/receive", [
+            'items' => [['purchase_order_item_id' => $itemId, 'quantity' => 1]],
+        ])->assertCreated();
+        $this->postJson("/api/v1/admin/orders/{$order->id}/china-workflow/qc", [
+            'status' => ChinaQcStatus::Passed->value,
+        ])->assertOk();
+
+        $fulfillment = $order->fresh()->fulfillment->fresh(['order.deliveryOption', 'warehouseJob']);
+        $eval = app(ShipmentEligibilityService::class)->evaluateCustomerAgentPickup(
+            $fulfillment,
+            requireAuthorization: false,
+        );
+        $this->assertFalse($eval['eligible']);
+        $this->assertStringContainsString('packed', strtolower($eval['reason'] ?? ''));
+
+        $this->postJson("/api/v1/admin/orders/{$order->id}/customer-agent/bootstrap")->assertOk();
+        $this->postJson("/api/v1/admin/orders/{$order->id}/customer-agent/handover", [
+            'notes' => 'Too early',
+        ])->assertStatus(422);
     }
 
     public function test_authorization_issued_expired_and_revoked(): void
@@ -381,6 +487,12 @@ class CustomerAgentWorkflowClosureTest extends TestCase
             ->assertJsonPath('tracking.tracking_ownership', 'customer_agent')
             ->assertJsonPath('tracking.company_transport_tracking', false);
 
+        $this->assertSame(
+            FulfillmentStatus::Delivered,
+            $order->fresh()->fulfillment->status,
+        );
+        $this->assertNotNull($order->fresh()->fulfillment->completed_at);
+
         // Duplicate handover prevented.
         $this->postJson("/api/v1/admin/orders/{$order->id}/customer-agent/handover", [
             'notes' => 'retry',
@@ -428,6 +540,99 @@ class CustomerAgentWorkflowClosureTest extends TestCase
         $this->postJson("/api/v1/admin/orders/{$order->id}/customer-agent/release", [
             'status' => WarehouseReleaseStatus::ReadyForPickup->value,
         ])->assertForbidden();
+    }
+
+    public function test_customer_agent_fulfillment_stays_processing_before_handover(): void
+    {
+        ['order' => $order] = $this->createPaidChinaAgentOrder();
+        $this->advanceToPackedForAgentHandover($order);
+
+        $this->postJson("/api/v1/admin/orders/{$order->id}/customer-agent/bootstrap")->assertOk();
+        $this->postJson("/api/v1/admin/orders/{$order->id}/customer-agent/authorize")->assertOk();
+
+        $this->assertSame(
+            FulfillmentStatus::Processing,
+            $order->fresh()->fulfillment->status,
+        );
+    }
+
+    public function test_company_shipping_delivered_tracking_does_not_auto_complete_fulfilment(): void
+    {
+        $user = User::factory()->create();
+        DeliveryAddress::factory()->create(['user_id' => $user->id]);
+        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::purchasable(30000);
+        $china = CommerceChannel::query()->where('code', CommerceChannelCode::ChinaImport->value)->firstOrFail();
+        Product::query()->whereKey($product->id)->update([
+            'commerce_channel_id' => $china->id,
+            'fulfillment_source' => CommerceChannelCode::ChinaImport->fulfillmentSource(),
+            'air_shipping_price' => 8000,
+        ]);
+        ProductShippingOption::query()->where('product_id', $product->id)->forceDelete();
+        ProductShippingOption::factory()->air(8000)->create(['product_id' => $product->id]);
+        $this->mapSupplier($variant);
+
+        $cart = \App\Models\Cart::factory()->create([
+            'user_id' => $user->id,
+            'status' => \App\Enums\CartStatus::Active,
+            'currency' => 'TZS',
+        ]);
+        \App\Models\CartItem::factory()->create([
+            'cart_id' => $cart->id,
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 1,
+            'unit_price' => 30000,
+            'price_snapshot' => 30000,
+            'currency' => 'TZS',
+        ]);
+
+        Sanctum::actingAs($user);
+        ['order_id' => $orderId] = $this->createOrderWithShippingChoice([
+            'shipping_choice' => 'company_shipping',
+            'shipping_method' => 'air',
+        ]);
+        $order = Order::query()->findOrFail($orderId);
+        $order->forceFill([
+            'commerce_channel_id' => $china->id,
+            'commerce_channel_snapshot' => [
+                'id' => $china->id,
+                'code' => CommerceChannelCode::ChinaImport->value,
+                'name' => $china->name,
+            ],
+        ])->save();
+        $transactionId = $this->postJson("/api/v1/payments/start/{$order->id}")->json('data.id');
+        $transaction = \App\Models\PaymentTransaction::query()->findOrFail($transactionId);
+        app(PaymentTransactionCompletionService::class)->applyResult(
+            $transaction,
+            new PaymentProviderResult(
+                ok: true,
+                status: PaymentTransactionStatus::Successful,
+                providerReference: $transaction->provider_reference,
+            ),
+        );
+
+        $admin = Admin::factory()->superAdmin()->create();
+        Sanctum::actingAs($admin);
+        $this->advanceToExportReady($order->fresh());
+
+        $fulfillment = $order->fresh()->fulfillment;
+        app(FulfillmentEngine::class)->updateStatus($fulfillment, [
+            'status' => FulfillmentStatus::Shipped->value,
+        ]);
+
+        $shipment = \App\Models\Shipment::factory()->forFulfillment($fulfillment->fresh())->create([
+            'status' => \App\Enums\ShipmentLifecycleStatus::InTransit,
+        ]);
+
+        app(\App\Services\Tracking\TrackingEngine::class)->recordEvent($shipment, [
+            'event_type' => \App\Enums\TrackingEventType::Delivered->value,
+        ]);
+
+        $this->assertSame(FulfillmentStatus::Shipped, $fulfillment->fresh()->status);
+        $this->assertDatabaseMissing('fulfillment_status_histories', [
+            'fulfillment_id' => $fulfillment->id,
+            'source' => \App\Enums\FulfillmentStatusHistorySource::ShipmentReconciliation->value,
+        ]);
     }
 
     public function test_company_shipping_path_unchanged(): void

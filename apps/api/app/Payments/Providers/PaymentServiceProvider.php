@@ -2,6 +2,8 @@
 
 namespace App\Payments\Providers;
 
+use App\Events\Audit\PaymentConfigurationUpdatedAudit;
+use App\Listeners\Audit\RecordActivityLog;
 use App\Payments\Gateways\Nmb\Contracts\NmbCallbackSignatureVerifierInterface;
 use App\Payments\Gateways\Nmb\NmbApiClient;
 use App\Payments\Gateways\Nmb\NmbCallbackVerifier;
@@ -20,14 +22,19 @@ use App\Services\Payments\Orchestration\NmbOrchestratorCallbackService;
 use App\Services\Payments\Orchestration\PaymentOrchestrator;
 use App\Services\Payments\Orchestration\PaymentTransactionCompletionService;
 use App\Services\Payments\Orchestration\Providers\NmbPaymentProvider;
+use App\Services\Payments\PaymentConfigurationResolver;
+use App\Services\Payments\PaymentConfigurationService;
 use App\Support\Nmb\NmbConfigValidator;
 use App\Support\Nmb\NmbPaymentLogger;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
 class PaymentServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->singleton(PaymentConfigurationResolver::class);
+        $this->app->singleton(PaymentConfigurationService::class);
         $this->app->singleton(PaymentService::class);
         $this->app->singleton(NmbHttpClient::class);
         $this->app->singleton(NmbApiClient::class);
@@ -54,5 +61,10 @@ class PaymentServiceProvider extends ServiceProvider
                 $app->make(PaymentTransactionCompletionService::class),
             );
         });
+    }
+
+    public function boot(): void
+    {
+        Event::listen(PaymentConfigurationUpdatedAudit::class, [RecordActivityLog::class, 'record']);
     }
 }

@@ -11,7 +11,7 @@ class GetAdminOrdersAction
     public function handle(?string $status = null): LengthAwarePaginator
     {
         $query = Order::query()
-            ->with(['user', 'payments', 'refundTransactions', 'statusHistory'])
+            ->with(['user', 'items.product.images', 'payments', 'refundTransactions', 'statusHistory'])
             ->latest();
 
         if ($status !== null && $status !== '') {

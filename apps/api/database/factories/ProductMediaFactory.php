@@ -18,6 +18,7 @@ class ProductMediaFactory extends Factory
     {
         return [
             'product_id' => Product::factory(),
+            'product_variant_id' => null,
             'type' => ProductMediaType::Image,
             'url' => '/storage/demo-products/phone.jpg',
             'thumbnail_url' => null,
@@ -32,6 +33,13 @@ class ProductMediaFactory extends Factory
     public function primary(): static
     {
         return $this->state(fn () => ['is_primary' => true, 'sort_order' => 0]);
+    }
+
+    public function forVariant(string|\App\Models\ProductVariant $variant): static
+    {
+        $variantId = $variant instanceof \App\Models\ProductVariant ? $variant->id : $variant;
+
+        return $this->state(fn () => ['product_variant_id' => $variantId]);
     }
 
     public function video(): static

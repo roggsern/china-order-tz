@@ -56,7 +56,15 @@ final class StockResolutionResult
      */
     public function hasInventoryPolicy(): bool
     {
-        return $this->resolved && $this->inventory !== null;
+        if (! $this->resolved) {
+            return false;
+        }
+
+        if ($this->inventory !== null) {
+            return true;
+        }
+
+        return (bool) ($this->meta['policy_present'] ?? false);
     }
 
     /**

@@ -8,6 +8,7 @@ import {
   PaymentOrchestratorApiError,
   startPaymentTransaction,
 } from "@/lib/api/customer-payment-orchestrator";
+import { navigateAfterPaymentStart } from "@/lib/nmb/orchestrator-checkout";
 import { AuthInvitationCard } from "@/components/auth/AuthInvitationCard";
 
 /**
@@ -33,9 +34,9 @@ export default function OrderPayPage() {
     void (async () => {
       try {
         const order = await fetchCustomerOrder(orderNumber, token);
-        const transaction = await startPaymentTransaction(order.id, "nmb", token);
+        const transaction = await startPaymentTransaction(order.id, undefined, token);
         if (!cancelled) {
-          router.replace(`/payments/${encodeURIComponent(transaction.id)}`);
+          navigateAfterPaymentStart(router, transaction);
         }
       } catch (err) {
         if (cancelled) return;
@@ -76,7 +77,7 @@ export default function OrderPayPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-16 text-center text-sm text-zinc-500">
-      Starting payment with NMB…
+      Starting payment…
     </div>
   );
 }

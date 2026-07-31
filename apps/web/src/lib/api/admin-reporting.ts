@@ -99,6 +99,143 @@ export type AdminReportingActivityItem = {
   created_at?: string | null;
 };
 
+export type AdminCommandCenterOverview = {
+  orders_today: number;
+  revenue_today: number;
+  paid_orders_today: number;
+  pending_actions: number;
+  customers_total: number;
+  new_customers: number;
+};
+
+export type AdminCommandCenterOperations = {
+  fulfillment_queue: {
+    total: number;
+    china: number;
+    local: number;
+  };
+  warehouse: AdminReportingWarehouseMetrics;
+  shipments: AdminReportingShipmentsMetrics;
+  open_returns: number;
+};
+
+export type AdminCommandCenterChinaPipeline = {
+  procurement: number;
+  qc_pending: number;
+  warehouse_packing: number;
+  export_ready: number;
+  shipment_pending: number;
+  arrived_tanzania: number;
+  awaiting_receiving_choice: number;
+  handover_pending: number;
+};
+
+export type AdminCommandCenterTzLocalPipeline = {
+  pending: number;
+  processing: number;
+  ready_for_shipping: number;
+  shipped: number;
+  ready_for_completion: number;
+};
+
+export type AdminCommandCenterAttentionItem = {
+  key: string;
+  label: string;
+  count: number;
+  severity: "normal" | "medium" | "high";
+  href: string;
+};
+
+export type AdminCommandCenterStoreSummary = {
+  active_stores: number;
+  orders_today_by_store: Array<{
+    store_id: string | null;
+    store_name: string | null;
+    orders_today: number;
+  }>;
+};
+
+export type AdminStorefrontTrafficMetrics = {
+  reference_date: string;
+  visitors_today: number;
+  sessions_today: number;
+  new_visitors: number;
+  returning_visitors: number;
+  growth: {
+    visitors_change: number;
+    visitors_change_percent: number;
+    sessions_change: number;
+    sessions_change_percent: number;
+  };
+  top_pages: Array<{ path: string; views: number }>;
+  top_products: Array<{ product_id: string; name: string; views: number }>;
+  top_searches: Array<{ query: string; count: number }>;
+};
+
+export type AdminStorefrontConversionMetrics = {
+  funnel: {
+    visitors: number;
+    product_viewers: number;
+    cart_users: number;
+    checkout_users: number;
+    buyers: number;
+  };
+  conversion_rates: {
+    visitor_to_product_view: number;
+    product_view_to_cart: number;
+    cart_to_checkout: number;
+    checkout_to_purchase: number;
+    visitor_to_purchase: number;
+  };
+  attribution: {
+    orders_with_journey: number;
+    attributed_buyers: number;
+    first_touch_pages: Array<{ path: string; visitors: number; orders: number }>;
+  };
+  product_insights: Array<{
+    product_id: string;
+    name: string;
+    views: number;
+    cart_additions: number;
+    orders: number;
+    conversion_rate: number;
+  }>;
+};
+
+export type AdminGrowthIntelligenceAlert = {
+  type: string;
+  category: "warning" | "opportunity";
+  severity: "HIGH" | "MEDIUM" | "LOW";
+  title: string;
+  message: string;
+};
+
+export type AdminGrowthIntelligenceMetrics = {
+  health_status: "healthy" | "watch" | "at_risk";
+  health_summary: {
+    visitors: number;
+    buyers: number;
+    visitor_to_purchase: number;
+    visitors_change_percent: number;
+    conversion_change_points: number;
+    warning_count: number;
+    opportunity_count: number;
+    high_severity_count: number;
+  };
+  growth_comparisons: {
+    visitors_current: number;
+    visitors_previous: number;
+    visitors_change_percent: number;
+    buyers_current: number;
+    buyers_previous: number;
+    buyers_change_percent: number;
+    conversion_rate_current: number;
+    conversion_rate_previous: number;
+    conversion_change_points: number;
+  };
+  alerts: AdminGrowthIntelligenceAlert[];
+};
+
 export type AdminReportingDashboard = {
   period: AdminReportPeriod;
   sales: AdminReportingSalesMetrics;
@@ -118,6 +255,43 @@ export type AdminReportingDashboard = {
   };
   top_products: AdminReportingTopProduct[];
   recent_activity: AdminReportingActivityItem[];
+  overview?: AdminCommandCenterOverview;
+  operations?: AdminCommandCenterOperations;
+  china_pipeline?: AdminCommandCenterChinaPipeline;
+  tz_local?: AdminCommandCenterTzLocalPipeline;
+  attention_items?: AdminCommandCenterAttentionItem[];
+  store_summary?: AdminCommandCenterStoreSummary;
+  storefront_traffic?: AdminStorefrontTrafficMetrics;
+  storefront_conversion?: AdminStorefrontConversionMetrics;
+  growth_intelligence?: AdminGrowthIntelligenceMetrics;
+  section_errors?: Partial<Record<string, string>>;
+};
+
+export type AdminAlertSource = "operational" | "growth";
+
+export type AdminAlertSeverity = "HIGH" | "MEDIUM" | "LOW";
+
+export type AdminAlert = {
+  severity: AdminAlertSeverity;
+  title: string;
+  message: string;
+  source: AdminAlertSource;
+  created_at: string;
+  key?: string;
+  href?: string;
+  type?: string;
+  category?: string;
+};
+
+export type AdminAlertsPayload = {
+  period: AdminReportPeriod;
+  generated_at: string;
+  counts: {
+    operational: number;
+    growth: number;
+    total: number;
+  };
+  alerts: AdminAlert[];
 };
 
 export type AdminReportPayload = {
@@ -212,6 +386,13 @@ export async function fetchAdminReportingDashboard(
   return adminFetchJson<AdminReportingDashboard>(
     `/api/admin/dashboard${toSearchParams(range)}`,
     "Unable to load reporting dashboard.",
+  );
+}
+
+export async function fetchAdminAlerts(range?: AdminReportingDateRange): Promise<AdminAlertsPayload> {
+  return adminFetchJson<AdminAlertsPayload>(
+    `/api/admin/alerts${toSearchParams(range)}`,
+    "Unable to load admin alerts.",
   );
 }
 

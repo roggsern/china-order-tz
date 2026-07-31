@@ -1,5 +1,6 @@
 import type { CartState, CartTotals } from "@/lib/types/cart";
 import type { CustomerInformation, ShippingAddress } from "@/lib/types/checkout";
+import type { CheckoutShippingChoice } from "@/lib/checkout/shipping-choice";
 import type { ItemShippingBreakdown, OrderLineItem } from "@/lib/types/order";
 import type { ShippingMethodCode } from "@/lib/shipping/types";
 
@@ -11,6 +12,7 @@ export type CheckoutDraft = {
   cartSnapshot: CartState;
   items: OrderLineItem[];
   totals: CartTotals;
+  shippingChoice?: CheckoutShippingChoice | null;
   shippingMethod?: ShippingMethodCode | null;
   itemShippingBreakdown?: ItemShippingBreakdown[];
   /** Set when the order was confirmed on the Laravel backend. */

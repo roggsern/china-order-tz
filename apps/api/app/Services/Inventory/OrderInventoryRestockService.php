@@ -12,6 +12,8 @@ use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\VariantInventory;
+use App\Services\China\Procurement\ChinaProcurementBoardEngine;
+use App\Services\Commerce\CommerceChannelResolver;
 use App\Services\Inventory\DTOs\ReservationContext;
 use Illuminate\Support\Facades\DB;
 
@@ -27,6 +29,8 @@ final class OrderInventoryRestockService
         private readonly InventoryMutationGate $gate,
         private readonly StockResolver $stockResolver,
         private readonly ReservationService $reservationService,
+        private readonly CommerceChannelResolver $channels,
+        private readonly ChinaProcurementBoardEngine $procurement,
     ) {}
 
     /**
@@ -84,6 +88,12 @@ final class OrderInventoryRestockService
     public function applyAfterCancel(Order $order, OrderStatus $priorStatus, ?Admin $actor = null): void
     {
         if (in_array($priorStatus, [OrderStatus::Paid, OrderStatus::Confirmed, OrderStatus::Processing], true)) {
+            if ($this->channels->isChinaImportOrder($order)) {
+                $this->procurement->reversePaidOrderDemand($order, $actor);
+
+                return;
+            }
+
             $this->restockCancelledOrder($order, $actor);
 
             return;

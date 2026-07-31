@@ -3,10 +3,8 @@
 namespace App\Actions\CustomerCatalog;
 
 use App\Enums\CatalogOrigin;
-use App\Enums\CommerceChannelCode;
-use App\Enums\ProductLifecycleStatus;
-use App\Enums\ProductVisibility;
 use App\Models\Category;
+use App\Services\Storefront\ChinaStorefrontCatalog;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 
@@ -20,6 +18,10 @@ class ListCategoriesAction
      */
     public function handle(): Collection
     {
+        if ($this->usesCrosswalkNavigation()) {
+            return app(ChinaStorefrontCatalog::class)->navigationCategories();
+        }
+
         $query = Category::query()
             ->where('is_active', true)
             ->orderBy('sort_order')
@@ -90,21 +92,11 @@ class ListCategoriesAction
         if (request()->boolean('with_products')) {
             $query->whereHas('products', fn (Builder $q) => $q->active());
         }
+    }
 
-        // ORDER FROM CHINA navigation: only categories with published China-import products.
-        if (request()->boolean('china_navigation') || request()->boolean('navigation')) {
-            $query->where(function (Builder $q) {
-                $q->whereHas('products', fn (Builder $p) => $this->chinaPublished($p))
-                    ->orWhereHas('children', function (Builder $child) {
-                        $child->where('is_active', true)
-                            ->whereNull('store_id')
-                            ->where(function (Builder $inner) {
-                                $inner->whereHas('products', fn (Builder $p) => $this->chinaPublished($p))
-                                    ->orWhereHas('children.products', fn (Builder $p) => $this->chinaPublished($p));
-                            });
-                    });
-            });
-        }
+    private function usesCrosswalkNavigation(): bool
+    {
+        return request()->boolean('china_navigation') || request()->boolean('navigation');
     }
 
     private function isChinaOriginRequest(): bool
@@ -112,16 +104,5 @@ class ListCategoriesAction
         $origin = request()->query('origin');
 
         return is_string($origin) && strtolower($origin) === CatalogOrigin::China->value;
-    }
-
-    private function chinaPublished(Builder $query): Builder
-    {
-        return $query
-            ->where('is_active', true)
-            ->where('is_demo', false)
-            ->where('lifecycle_status', ProductLifecycleStatus::Active)
-            ->where('visibility', ProductVisibility::Public)
-            ->whereNull('store_id')
-            ->whereHas('commerceChannel', fn (Builder $q) => $q->where('code', CommerceChannelCode::ChinaImport->value));
     }
 }

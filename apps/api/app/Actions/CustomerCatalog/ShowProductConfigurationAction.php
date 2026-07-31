@@ -3,6 +3,8 @@
 namespace App\Actions\CustomerCatalog;
 
 use App\Models\Product;
+use App\Models\ProductType;
+use App\Services\Catalog\CustomerProductAvailabilityPresenter;
 use App\Services\ProductConfiguration\ResolveStorefrontConfigurationOptions;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -10,6 +12,7 @@ class ShowProductConfigurationAction
 {
     public function __construct(
         private readonly ResolveStorefrontConfigurationOptions $resolveOptions,
+        private readonly CustomerProductAvailabilityPresenter $availabilityPresenter,
     ) {}
 
     /**
@@ -18,7 +21,7 @@ class ShowProductConfigurationAction
      */
     public function handle(Product $product, array $selections = []): array
     {
-        if ($product->is_demo || ! $product->isPurchasable()) {
+        if ($product->is_demo || ! $product->isVisible()) {
             throw new NotFoundHttpException('Product not found.');
         }
 
@@ -27,12 +30,15 @@ class ShowProductConfigurationAction
         $schema = $result['schema'];
 
         return [
+            ...$this->availabilityPresenter->present($product),
             'product_id' => $product->id,
             'product_type' => $schema['product_type'] === null ? null : [
                 'id' => $schema['product_type']->id,
                 'name' => $schema['product_type']->name,
                 'slug' => $schema['product_type']->slug,
-                'sku_pattern' => $schema['product_type']->sku_pattern,
+                'sku_pattern' => $schema['product_type'] instanceof ProductType
+                    ? $schema['product_type']->sku_pattern
+                    : null,
             ],
             'capabilities' => $schema['capabilities'],
             'attributes' => $schema['attributes'],

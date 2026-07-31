@@ -51,10 +51,39 @@ class PaymentOrchestrator
         $currency = strtoupper((string) ($order->currency ?: 'TZS'));
 
         return DB::transaction(function () use ($order, $provider, $providerKey, $amount, $currency): PaymentTransaction {
+            /** @var Order $lockedOrder */
+            $lockedOrder = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
+
+            $this->assertOrderPayable($lockedOrder);
+
+            $existing = PaymentTransaction::query()
+                ->where('order_id', $lockedOrder->id)
+                ->whereIn('status', [
+                    PaymentTransactionStatus::Pending,
+                    PaymentTransactionStatus::Processing,
+                ])
+                ->orderByDesc('created_at')
+                ->lockForUpdate()
+                ->first();
+
+            if ($existing !== null) {
+                $existingProvider = $existing->provider instanceof PaymentProvider
+                    ? $existing->provider->value
+                    : strtolower((string) $existing->provider);
+
+                if ($existingProvider !== $providerKey) {
+                    throw ValidationException::withMessages([
+                        'provider' => ['An active payment is already in progress for this order.'],
+                    ]);
+                }
+
+                return $existing->fresh(['order']) ?? $existing;
+            }
+
             $merchantReference = $this->merchantReferenceGenerator->generate();
 
             $transaction = PaymentTransaction::query()->create([
-                'order_id' => $order->id,
+                'order_id' => $lockedOrder->id,
                 'provider' => $providerKey,
                 'merchant_reference' => $merchantReference,
                 'currency' => $currency,
@@ -63,7 +92,7 @@ class PaymentOrchestrator
             ]);
 
             $result = $provider->initiate(new PaymentInitiationRequest(
-                order: $order,
+                order: $lockedOrder,
                 merchantReference: $merchantReference,
                 amount: $amount,
                 currency: $currency,

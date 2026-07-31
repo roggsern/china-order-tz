@@ -73,7 +73,7 @@ class Admin extends Authenticatable
     public function stores(): BelongsToMany
     {
         return $this->belongsToMany(Store::class, 'store_user_assignments')
-            ->withPivot(['assignment_type', 'starts_at', 'ends_at', 'is_active', 'assigned_by'])
+            ->withPivot(['assignment_type', 'operational_scope', 'starts_at', 'ends_at', 'is_active', 'assigned_by'])
             ->withTimestamps();
     }
 

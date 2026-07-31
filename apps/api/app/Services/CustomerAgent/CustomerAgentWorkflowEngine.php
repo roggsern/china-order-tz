@@ -5,6 +5,7 @@ namespace App\Services\CustomerAgent;
 use App\Enums\AgentPickupStatus;
 use App\Enums\DeliveryType;
 use App\Enums\FulfillmentStatus;
+use App\Enums\FulfillmentStatusHistorySource;
 use App\Enums\NotificationEventType;
 use App\Enums\PickupAuthorizationStatus;
 use App\Enums\WarehouseReleaseStatus;
@@ -22,6 +23,7 @@ use App\Models\Order;
 use App\Models\WarehouseJob;
 use App\Services\China\ChinaWorkflowEngine;
 use App\Services\Fulfillment\FulfillmentEngine;
+use App\Services\Fulfillment\FulfillmentStatusUpdateContext;
 use App\Services\Notifications\NotificationPlatform;
 use App\Services\Shipments\ShipmentEligibilityService;
 use Illuminate\Support\Facades\DB;
@@ -545,7 +547,7 @@ class CustomerAgentWorkflowEngine
                 $key,
             );
 
-            // Sync China workflow stage (consumes Export Ready already validated).
+            // Sync China workflow stage after seller handover readiness is validated.
             $agentName = $evidence['agent_name'] ?? $pickup->agent_name;
             $agentContact = $evidence['agent_contact'] ?? $pickup->agent_contact ?? $pickup->agent_phone;
             $this->chinaWorkflow->recordAgentHandoff(
@@ -730,6 +732,16 @@ class CustomerAgentWorkflowEngine
                 'pickup' => [$evaluation['reason'] ?? 'Customer Agent pickup prerequisites not met.'],
             ]);
         }
+
+        $fulfillmentStatus = $fulfillment->status instanceof FulfillmentStatus
+            ? $fulfillment->status
+            : FulfillmentStatus::tryFrom((string) $fulfillment->status);
+
+        if ($fulfillmentStatus === FulfillmentStatus::Cancelled) {
+            throw ValidationException::withMessages([
+                'fulfillment' => ['Cannot continue Customer Agent workflow on a cancelled fulfillment.'],
+            ]);
+        }
     }
 
     private function assertAuthorizationValid(CustomerAgentPickup $pickup): void
@@ -761,14 +773,27 @@ class CustomerAgentWorkflowEngine
             $this->fulfillment->updateStatus($fulfillment, [
                 'status' => FulfillmentStatus::Shipped->value,
                 'notes' => 'Released to customer shipping agent',
-            ]);
+            ], new FulfillmentStatusUpdateContext(
+                source: FulfillmentStatusHistorySource::CustomerAgent,
+                notes: 'Released to customer shipping agent',
+            ));
         }
     }
 
     private function advanceFulfillmentToDelivered(Order $order): void
     {
-        $fulfillment = $order->fresh()?->fulfillment;
+        $order->loadMissing(['fulfillment', 'deliveryOption']);
+        $fulfillment = $order->fulfillment;
         if ($fulfillment === null) {
+            return;
+        }
+
+        $type = $order->deliveryOption?->delivery_type;
+        $deliveryType = $type instanceof DeliveryType
+            ? $type
+            : DeliveryType::tryFrom((string) ($type ?? ''));
+
+        if ($deliveryType !== DeliveryType::CustomerAgent) {
             return;
         }
 
@@ -776,20 +801,41 @@ class CustomerAgentWorkflowEngine
             ? $fulfillment->status
             : FulfillmentStatus::tryFrom((string) $fulfillment->status);
 
-        if ($status === FulfillmentStatus::ReadyForShipping) {
-            $this->fulfillment->updateStatus($fulfillment, [
-                'status' => FulfillmentStatus::Shipped->value,
-                'notes' => 'Released to customer shipping agent',
-            ]);
-            $fulfillment = $fulfillment->fresh() ?? $fulfillment;
-            $status = FulfillmentStatus::Shipped;
+        if ($status === null || $status->isTerminal()) {
+            return;
         }
 
-        if ($status === FulfillmentStatus::Shipped) {
-            $this->fulfillment->updateStatus($fulfillment, [
-                'status' => FulfillmentStatus::Delivered->value,
-                'notes' => 'Customer agent handover completed',
-            ]);
+        while ($status !== FulfillmentStatus::Delivered) {
+            $next = match ($status) {
+                FulfillmentStatus::Pending => FulfillmentStatus::Processing,
+                FulfillmentStatus::Processing => FulfillmentStatus::ReadyForShipping,
+                FulfillmentStatus::ReadyForShipping => FulfillmentStatus::Shipped,
+                FulfillmentStatus::Shipped => FulfillmentStatus::Delivered,
+                default => null,
+            };
+
+            if ($next === null || ! $status->canTransitionTo($next)) {
+                break;
+            }
+
+            $notes = match ($next) {
+                FulfillmentStatus::Processing => 'Customer agent fulfilment started',
+                FulfillmentStatus::ReadyForShipping => 'Ready for customer agent handover',
+                FulfillmentStatus::Shipped => 'Released to customer shipping agent',
+                FulfillmentStatus::Delivered => 'Customer agent handover completed',
+                default => 'Customer agent fulfilment advanced',
+            };
+
+            $fulfillment = $this->fulfillment->updateStatus(
+                $fulfillment,
+                ['status' => $next->value, 'notes' => $notes],
+                new FulfillmentStatusUpdateContext(
+                    source: FulfillmentStatusHistorySource::CustomerAgent,
+                    notes: $notes,
+                ),
+            );
+
+            $status = $next;
         }
     }
 

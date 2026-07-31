@@ -16,7 +16,7 @@ class ProductImageWriteSyncServiceTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_store_uploaded_image_creates_both_rows_with_one_file(): void
+    public function test_store_uploaded_image_creates_product_media_only(): void
     {
         Storage::fake('public');
 
@@ -27,27 +27,53 @@ class ProductImageWriteSyncServiceTest extends TestCase
             MinimalTestImage::jpeg('catalog.jpg'),
             $product,
             [
-                'alt_text' => 'Synced image',
+                'alt_text' => 'Catalog image',
                 'title' => 'Catalog title',
                 'sort_order' => 2,
                 'is_primary' => true,
             ],
         );
 
-        $this->assertSame(1, ProductImage::query()->count());
+        $this->assertSame(0, ProductImage::query()->count());
         $this->assertSame(1, ProductMedia::query()->count());
-
-        $legacy = $result->legacyImage;
-        $this->assertSame($product->id, $legacy->product_id);
-        $this->assertSame('Synced image', $legacy->alt_text);
-        $this->assertSame(2, $legacy->sort_order);
-        $this->assertTrue($legacy->is_primary);
-        $this->assertTrue(Storage::disk('public')->exists($legacy->path));
+        $this->assertNull($result->legacyImage);
 
         $media = $result->catalogMedia;
-        $this->assertSame($media->id, ProductMedia::query()->value('id'));
-        $this->assertSame(Storage::disk('public')->url($legacy->path), $media->url);
+        $this->assertSame($product->id, $media->product_id);
+        $this->assertNull($media->product_variant_id);
+        $this->assertSame('Catalog image', $media->alt_text);
+        $this->assertSame(2, $media->sort_order);
         $this->assertTrue($media->is_primary);
+        $this->assertNotNull($result->storagePath);
+        $this->assertTrue(Storage::disk('public')->exists($result->storagePath));
+        $this->assertSame(Storage::disk('public')->url($result->storagePath), $media->url);
+    }
+
+    public function test_variant_upload_writes_catalog_media_only(): void
+    {
+        Storage::fake('public');
+
+        $product = Product::factory()->create();
+        $variant = \App\Models\ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'sku' => 'MEDIA-VAR-1',
+            'name' => 'Variant',
+            'is_active' => true,
+            'is_default' => true,
+        ]);
+
+        $result = app(ProductImageWriteSyncService::class)->storeUploadedImage(
+            MinimalTestImage::jpeg('variant.jpg'),
+            $product,
+            [
+                'product_variant_id' => $variant->id,
+                'is_primary' => true,
+            ],
+        );
+
+        $this->assertSame(0, ProductImage::query()->count());
+        $this->assertSame(1, ProductMedia::query()->count());
+        $this->assertSame($variant->id, $result->catalogMedia->product_variant_id);
     }
 
     public function test_store_uploaded_image_rolls_back_when_media_create_fails(): void

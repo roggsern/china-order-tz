@@ -37,7 +37,7 @@ class UpdateProductMediaAction
 
             $data = [];
 
-            foreach (['alt_text', 'title', 'sort_order', 'is_active', 'thumbnail_url'] as $field) {
+            foreach (['alt_text', 'title', 'sort_order', 'is_active', 'thumbnail_url', 'product_variant_id'] as $field) {
                 if (array_key_exists($field, $validated)) {
                     $data[$field] = $validated[$field];
                 }
@@ -60,7 +60,7 @@ class UpdateProductMediaAction
 
             if ($data !== []) {
                 $media->update($data);
-                $media = $media->fresh();
+                $media = $media->fresh(['variant']);
             }
 
             if (array_key_exists('is_primary', $validated)) {
@@ -71,13 +71,13 @@ class UpdateProductMediaAction
                         ]);
                     }
 
-                    return $this->primarySync->setPrimaryFromCatalogMedia($media);
+                    return $this->primarySync->setPrimaryFromCatalogMedia($media)->load('variant');
                 }
 
-                return $this->primarySync->clearPrimaryFromCatalogMedia($media);
+                return $this->primarySync->clearPrimaryFromCatalogMedia($media)->load('variant');
             }
 
-            return $media;
+            return $media->loadMissing('variant');
         });
     }
 }

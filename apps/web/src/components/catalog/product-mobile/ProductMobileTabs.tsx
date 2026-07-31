@@ -1,17 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { useFeatureAvailability } from "@/hooks/use-feature-availability";
 import type { CustomerReview, ProductOrigin, ProductSpecification, ProductShippingContext } from "@/lib/types/catalog";
 import { formatDeliveryWindow, formatPrice } from "@/lib/catalog/utils";
 import { LOCAL_DELIVERY_NEGOTIATED_LABEL } from "@/lib/catalog/product-type";
 import { getProductShippingOptions, getDeliveryOptions } from "@/lib/catalog/delivery";
+import { useShippingDurations } from "@/hooks/use-shipping-durations";
 import { ProductReviewsPanel } from "../ProductReviewsPanel";
 import { ProductOriginBanner } from "../ProductOriginBanner";
 
 type TabId = "description" | "specifications" | "shipping" | "reviews";
 
 interface ProductMobileTabsProps {
+  productSlug: string;
   description: string;
   features: string[];
   specifications: ProductSpecification[];
@@ -22,7 +25,7 @@ interface ProductMobileTabsProps {
   origin: ProductOrigin;
 }
 
-const tabs: { id: TabId; label: string }[] = [
+const allTabs: { id: TabId; label: string }[] = [
   { id: "description", label: "Description" },
   { id: "specifications", label: "Specs" },
   { id: "shipping", label: "Shipping" },
@@ -30,6 +33,7 @@ const tabs: { id: TabId; label: string }[] = [
 ];
 
 export function ProductMobileTabs({
+  productSlug,
   description,
   features,
   specifications,
@@ -40,6 +44,14 @@ export function ProductMobileTabs({
   origin,
 }: ProductMobileTabsProps) {
   const reduceMotion = useReducedMotion();
+  const { reviews: reviewsEnabled, isReady: featuresReady } = useFeatureAvailability();
+  const tabs = useMemo(
+    () =>
+      featuresReady && !reviewsEnabled
+        ? allTabs.filter((tab) => tab.id !== "reviews")
+        : allTabs,
+    [featuresReady, reviewsEnabled],
+  );
   const [activeTab, setActiveTab] = useState<TabId>("description");
 
   return (
@@ -98,6 +110,7 @@ export function ProductMobileTabs({
             )}
             {activeTab === "reviews" && (
               <ProductReviewsPanel
+                productSlug={productSlug}
                 reviews={reviews}
                 reviewCount={reviewCount}
                 averageRating={averageRating}
@@ -161,6 +174,8 @@ function ShippingPanel({
   shippingContext: ProductShippingContext;
   origin: ProductOrigin;
 }) {
+  useShippingDurations();
+
   if (origin === "china") {
     const options = getProductShippingOptions(shippingContext);
 

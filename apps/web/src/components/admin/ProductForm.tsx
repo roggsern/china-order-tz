@@ -15,7 +15,12 @@ import { productTypeToOrigin } from "@/lib/catalog/product-type";
 import { slugify } from "@/lib/catalog/utils";
 import { productToFormData } from "@/components/admin/AdminProductsProvider";
 import { ImageUploader } from "@/components/admin/ImageUploader";
+import { AdminBrandAsyncSelect } from "@/components/admin/AdminBrandAsyncSelect";
+import { AdminCategoryTreeSelect } from "@/components/admin/AdminCategoryTreeSelect";
 import { ProductConfigurationGrid } from "@/components/admin/ProductConfigurationGrid";
+import { resolveBrandLeafCategoryId } from "@/lib/admin/catalog-selector-utils";
+import { useAdminPermissions } from "@/hooks/use-admin-permissions";
+import { hasAdminPermission } from "@/lib/api/admin-me";
 import { ProductImageDisplay } from "@/components/catalog/ProductImageDisplay";
 import { WholesalePricingEditor } from "@/components/admin/WholesalePricingEditor";
 import { getProductPrimaryImage } from "@/lib/catalog/product-images";
@@ -90,6 +95,8 @@ function FieldError({ message }: { message?: string }) {
 
 export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct }: ProductFormProps) {
   const router = useRouter();
+  const { permissions } = useAdminPermissions();
+  const canCreateBrand = hasAdminPermission(permissions, "catalog.create");
   const [form, setForm] = useState<ProductFormData>(
     initialData ? productToFormData(initialData) : defaultFormData,
   );
@@ -99,6 +106,7 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [rootCategories, setRootCategories] = useState<AdminCategory[]>([]);
   const [subcategories, setSubcategories] = useState<AdminCategory[]>([]);
+  const [allCategories, setAllCategories] = useState<AdminCategory[]>([]);
   const [brands, setBrands] = useState<AdminBrand[]>([]);
   const [optionsError, setOptionsError] = useState<string | null>(null);
   const [optionsLoading, setOptionsLoading] = useState(true);
@@ -170,6 +178,29 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
     }
 
     void loadRootCategories();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [catalogOrigin]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAllCategories() {
+      try {
+        const all = await fetchAdminCategories({ origin: catalogOrigin });
+        if (!cancelled) {
+          setAllCategories(all);
+        }
+      } catch {
+        if (!cancelled) {
+          setAllCategories([]);
+        }
+      }
+    }
+
+    void loadAllCategories();
 
     return () => {
       cancelled = true;
@@ -560,85 +591,67 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
             </div>
 
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <div>
+              <div className="sm:col-span-2">
                 <label className="admin-label" htmlFor="parentCategoryId">
                   Category *
                 </label>
-                <select
+                <AdminCategoryTreeSelect
                   id="parentCategoryId"
-                  value={form.parentCategoryId}
-                  onChange={(event) => updateField("parentCategoryId", event.target.value)}
-                  className="admin-input mt-1.5"
-                  disabled={optionsLoading || rootCategories.length === 0}
-                >
-                  <option value="">
-                    {optionsLoading
-                      ? "Loading…"
-                      : rootCategories.length === 0
-                        ? "No categories configured."
-                        : "Select category"}
-                  </option>
-                  {rootCategories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-                <FieldError message={errors.categorySlug} />
-              </div>
-
-              <div>
-                <label className="admin-label" htmlFor="categoryId">
-                  Subcategory
-                </label>
-                <select
-                  id="categoryId"
-                  value={
+                  categories={allCategories.length > 0 ? allCategories : [...rootCategories, ...subcategories]}
+                  categoryId={form.parentCategoryId}
+                  subcategoryId={
                     form.categoryId && form.categoryId !== form.parentCategoryId
                       ? form.categoryId
                       : ""
                   }
-                  onChange={(event) => updateField("categoryId", event.target.value)}
-                  className="admin-input mt-1.5"
-                  disabled={!form.parentCategoryId || optionsLoading}
-                >
-                  <option value="">
-                    {!form.parentCategoryId
-                      ? "Select a category first"
-                      : subcategories.length === 0
-                        ? "No subcategories configured."
-                        : "Select subcategory"}
-                  </option>
-                  {subcategories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
+                  disabled={optionsLoading || rootCategories.length === 0}
+                  onChange={(selection) => {
+                    const parent = selection.categoryId;
+                    const leaf = selection.subcategoryId || selection.categoryId;
+                    setForm((prev) => ({
+                      ...prev,
+                      parentCategoryId: parent,
+                      categoryId: leaf,
+                      categorySlug:
+                        allCategories.find((item) => item.id === parent)?.slug ??
+                        rootCategories.find((item) => item.id === parent)?.slug ??
+                        prev.categorySlug,
+                      subcategorySlug:
+                        allCategories.find((item) => item.id === selection.subcategoryId)
+                          ?.slug ?? "",
+                    }));
+                  }}
+                />
+                <FieldError message={errors.categorySlug} />
               </div>
 
               <div className="sm:col-span-2">
                 <label className="admin-label" htmlFor="brandId">
                   Brand
                 </label>
-                <select
+                <AdminBrandAsyncSelect
                   id="brandId"
                   value={form.brandId}
-                  onChange={(event) => updateField("brandId", event.target.value)}
-                  className="admin-input mt-1.5"
-                  disabled={optionsLoading || brands.length === 0}
-                >
-                  <option value="">
-                    {brands.length === 0 ? "No brands configured." : "No brand"}
-                  </option>
-                  {brands.map((brand) => (
-                    <option key={brand.id} value={brand.id}>
-                      {brand.name}
-                    </option>
-                  ))}
-                </select>
+                  selectedLabel={
+                    brands.find((brand) => brand.id === form.brandId)?.name || form.brand
+                  }
+                  categoryId={resolveBrandLeafCategoryId(
+                    form.parentCategoryId,
+                    form.categoryId !== form.parentCategoryId ? form.categoryId : "",
+                  )}
+                  canCreate={canCreateBrand}
+                  disabled={optionsLoading}
+                  onChange={(brandId, brand) => {
+                    setForm((prev) => ({
+                      ...prev,
+                      brandId,
+                      brand: brand?.name ?? "",
+                      brandSlug: brand?.slug ?? "",
+                    }));
+                  }}
+                />
                 <p className="mt-1 text-xs text-zinc-500">
-                  When brand↔category links exist, this list is filtered to linked brands.
+                  Category-aware brand search with a &quot;Show all brands&quot; fallback.
                 </p>
                 <FieldError message={errors.brandSlug} />
               </div>

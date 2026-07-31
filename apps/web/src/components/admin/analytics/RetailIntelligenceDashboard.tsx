@@ -199,6 +199,12 @@ export function RetailIntelligenceDashboard() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link
+            href="/admin/analytics/china"
+            className="rounded-md border border-[#8b6914]/40 px-3 py-1.5 text-xs font-medium text-[#e8c547] hover:border-[#c9a227]/70"
+          >
+            China commercial →
+          </Link>
           <button
             type="button"
             disabled={exporting}

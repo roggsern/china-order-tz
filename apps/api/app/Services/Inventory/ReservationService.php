@@ -15,6 +15,7 @@ use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\VariantInventory;
+use App\Services\Commerce\CommerceChannelResolver;
 use App\Services\Inventory\DTOs\InventoryMutationResult;
 use App\Services\Inventory\DTOs\ReservationContext;
 use App\Services\Inventory\DTOs\ReservationResult;
@@ -32,6 +33,7 @@ final class ReservationService
     public function __construct(
         private readonly InventoryMutationGate $mutationGate,
         private readonly StockResolver $stockResolver,
+        private readonly CommerceChannelResolver $commerceChannels,
     ) {}
 
     /**
@@ -377,6 +379,10 @@ final class ReservationService
         CartItem $item,
         ReservationContext $context,
     ): InventoryMutationResult {
+        if ($this->isChinaImportCartItem($item)) {
+            return $this->skippedCommercialReservation(InventoryMutationKind::Reserve, $item);
+        }
+
         $inventory = $this->resolveInventoryRow($item);
         $qty = (int) $item->quantity;
         $key = $this->reserveKey($session, $item);
@@ -403,6 +409,10 @@ final class ReservationService
         CartItem $item,
         ReservationContext $context,
     ): InventoryMutationResult {
+        if ($this->isChinaImportCartItem($item)) {
+            return $this->skippedCommercialReservation(InventoryMutationKind::Release, $item);
+        }
+
         $inventory = $this->resolveInventoryRow($item);
         $qty = $this->openHoldQuantity($session, $item) ?? (int) $item->quantity;
         $key = $this->releaseKey($session, $item);
@@ -552,6 +562,47 @@ final class ReservationService
         }
 
         return $stock->inventory;
+    }
+
+    private function isChinaImportCartItem(CartItem $item): bool
+    {
+        $product = $item->product ?? Product::query()->find($item->product_id);
+        if ($product === null) {
+            return false;
+        }
+
+        $product->loadMissing('commerceChannel');
+
+        return $this->commerceChannels->isChinaImportProduct($product);
+    }
+
+    private function skippedCommercialReservation(
+        InventoryMutationKind $kind,
+        CartItem $item,
+    ): InventoryMutationResult {
+        $path = filled($item->product_variant_id)
+            ? PurchasabilityPath::Variant
+            : PurchasabilityPath::Simple;
+
+        return new InventoryMutationResult(
+            applied: false,
+            kind: $kind,
+            path: $path,
+            source: 'china_commercial_stocks',
+            quantityBefore: 0,
+            quantityChange: 0,
+            quantityAfter: 0,
+            inventory: null,
+            movement: null,
+            idempotentReplay: true,
+            meta: [
+                'skipped' => true,
+                'skip_reason' => 'china_import_commercial_stock',
+                'inventory_source' => 'commercial',
+                'product_id' => $item->product_id,
+                'product_variant_id' => $item->product_variant_id,
+            ],
+        );
     }
 
     private function reserveKey(CheckoutSession $session, CartItem $item): string

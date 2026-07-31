@@ -8,6 +8,7 @@ use App\Enums\ProductVisibility;
 use App\Enums\ShippingMethod;
 use App\Http\Requests\Concerns\AuthorizesAdminPermission;
 use App\Http\Requests\Concerns\RejectsTzLocalChinaFreight;
+use App\Http\Requests\Concerns\ValidatesChinaImportProductSupplier;
 use App\Models\Admin;
 use App\Models\CommerceChannel;
 use App\Support\Admin\AdminPermissions;
@@ -20,6 +21,7 @@ class StoreProductRequest extends FormRequest
 {
     use AuthorizesAdminPermission;
     use RejectsTzLocalChinaFreight;
+    use ValidatesChinaImportProductSupplier;
 
     protected function requiredPermission(): string
     {
@@ -39,7 +41,7 @@ class StoreProductRequest extends FormRequest
             'category_id' => ['required_without:catalog_product_type_id', 'nullable', 'uuid', 'exists:categories,id'],
             'catalog_product_type_id' => ['required_without:category_id', 'nullable', 'uuid', 'exists:catalog_product_types,id'],
             'brand_id' => ['nullable', 'uuid', 'exists:brands,id'],
-            'supplier_id' => ['nullable', 'uuid', 'exists:suppliers,id'],
+            'supplier_id' => ['nullable', 'uuid', Rule::exists('suppliers', 'id')->where('is_active', true)],
             'sku' => ['nullable', 'string', 'max:100', 'unique:products,sku'],
             'price' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'compare_at_price' => ['nullable', 'numeric', 'min:0'],
@@ -166,6 +168,7 @@ class StoreProductRequest extends FormRequest
             }
 
             $this->rejectTzLocalChinaFreight($validator, $channelCode);
+            $this->validateChinaImportSupplier($validator);
         });
     }
 

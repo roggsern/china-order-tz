@@ -150,11 +150,19 @@ class ProcurementEngineTest extends TestCase
 
         $inventory = VariantInventory::query()
             ->where('product_variant_id', $variant->id)
-            ->where('warehouse_code', 'MAIN')
+            ->where('warehouse_code', 'CHINA')
             ->first();
 
         $this->assertNotNull($inventory);
         $this->assertSame(4, (int) $inventory->on_hand);
+
+        $this->assertSame(
+            0,
+            (int) (VariantInventory::query()
+                ->where('product_variant_id', $variant->id)
+                ->where('warehouse_code', 'MAIN')
+                ->value('on_hand') ?? 0)
+        );
 
         $this->assertDatabaseHas('inventory_logs', [
             'product_variant_id' => $variant->id,

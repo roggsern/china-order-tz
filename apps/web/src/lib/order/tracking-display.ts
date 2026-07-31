@@ -10,8 +10,8 @@ import {
 } from "@/lib/order/tracking-status";
 
 /**
+ * @deprecated Use `@/lib/order/customer-progress` via backend projection instead.
  * Customer-facing import-commerce timeline (display only).
- * Maps onto existing tracking statuses without changing payment/shipping/order logic.
  */
 export const CUSTOMER_TRACKING_DISPLAY_STATUS = {
   ORDER_PLACED: "ORDER_PLACED",

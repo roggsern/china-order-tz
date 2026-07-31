@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { useFeatureAvailability } from "@/hooks/use-feature-availability";
 import { useCustomerSession } from "@/lib/customer/use-customer-session";
 import { AuthInvitationCard } from "@/components/auth/AuthInvitationCard";
 import { useWishlist } from "@/lib/wishlist/use-wishlist";
@@ -10,6 +11,7 @@ interface WishlistButtonProps {
   className?: string;
   size?: "sm" | "md";
   productId?: number;
+  catalogProductId?: string;
   slug?: string;
   name?: string;
   imageUrl?: string;
@@ -32,6 +34,7 @@ export function WishlistButton({
   className = "",
   size = "md",
   productId,
+  catalogProductId,
   slug,
   name,
   imageUrl,
@@ -39,6 +42,7 @@ export function WishlistButton({
   gradient,
   price,
 }: WishlistButtonProps) {
+  const { wishlist: wishlistEnabled, isReady: featuresReady } = useFeatureAvailability();
   const { isLoggedIn, isReady } = useCustomerSession();
   const pathname = usePathname();
   const { isSaved, toggle, ready } = useWishlist();
@@ -47,9 +51,13 @@ export function WishlistButton({
 
   useEffect(() => {
     if (ready && productId != null) {
-      setActive(isSaved(productId));
+      setActive(isSaved(productId, catalogProductId));
     }
-  }, [ready, productId, isSaved]);
+  }, [ready, productId, catalogProductId, isSaved]);
+
+  if (featuresReady && !wishlistEnabled) {
+    return null;
+  }
 
   return (
     <div className="relative">
@@ -69,16 +77,16 @@ export function WishlistButton({
             return;
           }
 
-          const added = toggle({
+          void toggle({
             productId,
+            catalogProductId,
             slug,
             name,
             imageUrl,
             emoji,
             gradient,
             price,
-          });
-          setActive(added);
+          }).then(setActive);
         }}
         aria-label={active ? "Remove from wishlist" : "Add to wishlist"}
         aria-pressed={active}

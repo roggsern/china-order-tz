@@ -7,6 +7,7 @@ use App\Enums\ProductVisibility;
 use App\Enums\ShippingMethod;
 use App\Enums\CommerceChannelCode;
 use App\Http\Requests\Concerns\RejectsTzLocalChinaFreight;
+use App\Http\Requests\Concerns\ValidatesChinaImportProductSupplier;
 use App\Models\Admin;
 use App\Models\CommerceChannel;
 use App\Models\Product;
@@ -20,6 +21,7 @@ use Illuminate\Validation\Validator;
 class UpdateProductRequest extends FormRequest
 {
     use RejectsTzLocalChinaFreight;
+    use ValidatesChinaImportProductSupplier;
 
     public function authorize(): bool
     {
@@ -85,7 +87,7 @@ class UpdateProductRequest extends FormRequest
             'category_id' => ['sometimes', 'nullable', 'uuid', 'exists:categories,id'],
             'catalog_product_type_id' => ['sometimes', 'nullable', 'uuid', 'exists:catalog_product_types,id'],
             'brand_id' => ['nullable', 'uuid', 'exists:brands,id'],
-            'supplier_id' => ['nullable', 'uuid', 'exists:suppliers,id'],
+            'supplier_id' => ['nullable', 'uuid', Rule::exists('suppliers', 'id')->where('is_active', true)],
             'sku' => ['sometimes', 'nullable', 'string', 'max:100', Rule::unique('products', 'sku')->ignore($product)],
             'price' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'compare_at_price' => ['nullable', 'numeric', 'min:0'],
@@ -204,6 +206,7 @@ class UpdateProductRequest extends FormRequest
                 ?? CommerceChannelCode::fromFulfillmentSource($product->fulfillment_source ?? null);
 
             $this->rejectTzLocalChinaFreight($validator, $channelCode);
+            $this->validateChinaImportSupplier($validator, $product);
 
             if ($channelCode !== CommerceChannelCode::TzLocal) {
                 return;

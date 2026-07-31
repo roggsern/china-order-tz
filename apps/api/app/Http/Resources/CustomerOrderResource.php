@@ -3,6 +3,8 @@
 namespace App\Http\Resources;
 
 use App\Enums\OrderStatus;
+use App\Services\Orders\CustomerOrderListPreviewBuilder;
+use App\Services\Orders\CustomerOrderPaymentStatusResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -21,11 +23,13 @@ class CustomerOrderResource extends JsonResource
             'source' => $this->resolveSource(),
             'status' => $status?->value ?? (string) $this->status,
             'status_label' => $status?->customerLabel() ?? 'Status unavailable',
+            'payment_status' => app(CustomerOrderPaymentStatusResolver::class)->resolve($this->resource),
             'currency' => $this->currency,
             'subtotal' => $this->subtotal,
             'grand_total' => $this->grand_total,
             'total' => $this->grand_total,
             'created_at' => $this->created_at,
+            'preview' => app(CustomerOrderListPreviewBuilder::class)->build($this->resource),
         ];
     }
 }

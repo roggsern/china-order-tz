@@ -9,7 +9,7 @@ export type TrackingStage = {
   icon: string;
 };
 
-/** Customer-facing fulfillment lifecycle (6 steps). */
+/** @deprecated Use `@/lib/order/customer-progress` instead. */
 export const CUSTOMER_TRACKING_STAGES: TrackingStage[] = [
   {
     id: "pending",

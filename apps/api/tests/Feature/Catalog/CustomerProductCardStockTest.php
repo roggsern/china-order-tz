@@ -7,6 +7,7 @@ use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductVisibility;
 use App\Models\Brand;
 use App\Models\Category;
+use App\Models\ChinaCommercialStock;
 use App\Models\CommerceChannel;
 use App\Models\Inventory;
 use App\Models\Product;
@@ -65,10 +66,13 @@ class CustomerProductCardStockTest extends TestCase
             'is_available' => true,
         ]);
 
-        Inventory::query()->updateOrCreate(
-            ['product_id' => $product->id, 'product_variant_id' => null],
-            ['quantity' => 12, 'reserved_quantity' => 2, 'low_stock_threshold' => 1],
-        );
+        ChinaCommercialStock::query()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => null,
+            'available_quantity' => 10,
+            'reserved_quantity' => 0,
+            'ordered_quantity' => 0,
+        ]);
 
         $response = $this->getJson('/api/v1/storefront/china/products?category=electronics')
             ->assertOk();
@@ -140,19 +144,12 @@ class CustomerProductCardStockTest extends TestCase
 
     public function test_listing_variant_product_omits_parent_stock_and_exposes_variant_stock(): void
     {
-        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::purchasable(28000, 6);
+        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::chinaPurchasable(28000, 6);
         $product->forceFill([
             'slug' => 'variant-listing-phone',
-            'commerce_channel_id' => $this->china->id,
-            'fulfillment_source' => CommerceChannelCode::ChinaImport->fulfillmentSource(),
             'visibility' => ProductVisibility::Public,
             'store_id' => null,
         ])->save();
-
-        ProductShippingOption::factory()->air(8000)->create([
-            'product_id' => $product->id,
-            'is_available' => true,
-        ]);
 
         $this->getJson('/api/v1/products')
             ->assertOk()
@@ -161,7 +158,34 @@ class CustomerProductCardStockTest extends TestCase
             ->assertJsonMissingPath('data.0.in_stock')
             ->assertJsonPath('data.0.variants.0.id', $variant->id)
             ->assertJsonPath('data.0.variants.0.stock', 6)
-            ->assertJsonPath('data.0.variants.0.in_stock', true);
+            ->assertJsonPath('data.0.variants.0.in_stock', true)
+            ->assertJsonPath('data.0.variants.0.inventory.available_quantity', 6);
+    }
+
+    public function test_china_listing_exposes_commercial_variant_stock_on_china_storefront(): void
+    {
+        $this->seed(CategorySeeder::class);
+        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::chinaPurchasable(28000, 9);
+        $phones = Category::query()->where('slug', 'electronics-phones')->firstOrFail();
+        $brand = Brand::factory()->create(['is_active' => true]);
+
+        $product->forceFill([
+            'slug' => 'china-commercial-variant',
+            'category_id' => $phones->id,
+            'brand_id' => $brand->id,
+            'store_id' => null,
+            'visibility' => ProductVisibility::Public,
+        ])->save();
+
+        $response = $this->getJson('/api/v1/storefront/china/products?category=electronics')
+            ->assertOk();
+
+        $card = collect($response->json('data'))->firstWhere('slug', $product->slug);
+        $this->assertNotNull($card);
+        $this->assertSame($variant->id, $card['variants'][0]['id'] ?? null);
+        $this->assertSame(9, $card['variants'][0]['stock'] ?? null);
+        $this->assertTrue($card['variants'][0]['in_stock'] ?? false);
+        $this->assertSame(9, $card['variants'][0]['inventory']['available_quantity'] ?? null);
     }
 
     public function test_listing_variant_product_with_zero_stock(): void

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Http\Resources\Concerns\PresentsCustomerCatalogPrice;
 use App\Services\Catalog\CustomerProductMediaResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -14,6 +15,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  */
 class CustomerCartProductResource extends JsonResource
 {
+    use PresentsCustomerCatalogPrice;
+
     public function toArray(Request $request): array
     {
         return [
@@ -22,7 +25,7 @@ class CustomerCartProductResource extends JsonResource
             'name' => $this->name,
             'short_description' => $this->short_description,
             'sku' => $this->sku,
-            'price' => $this->price,
+            'price' => $this->resolvedCatalogDisplayPrice(),
             'compare_at_price' => $this->compare_at_price,
             'primary_image' => app(CustomerProductMediaResolver::class)->resolvePrimary($this->resource),
             'images' => app(CustomerProductMediaResolver::class)->resolveGallery($this->resource),

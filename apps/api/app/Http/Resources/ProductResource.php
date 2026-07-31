@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Services\AdminProducts\AdminProductListSummaryPresenter;
 use App\Services\Inventory\CatalogStockPresenter;
 use App\Services\ProductConfiguration\LegacyConfigurationProductDetector;
 use Illuminate\Http\Request;
@@ -14,6 +15,7 @@ class ProductResource extends JsonResource
     {
         $presenter = app(CatalogStockPresenter::class);
         $legacyConfigurationDetector = app(LegacyConfigurationProductDetector::class);
+        $listSummary = app(AdminProductListSummaryPresenter::class);
 
         return [
             'id' => $this->id,
@@ -47,6 +49,12 @@ class ProductResource extends JsonResource
             'store_id' => $this->store_id,
             'fulfillment_source' => $this->fulfillment_source,
             'commerce_channel' => new CommerceChannelResource($this->whenLoaded('commerceChannel')),
+            // Additive ADMIN-08.1 list summaries (safe for existing consumers).
+            'image' => $listSummary->image($this->resource),
+            'store' => $listSummary->store($this->resource),
+            'variants_count' => $listSummary->variantsCount($this->resource),
+            'price_range' => $listSummary->priceRange($this->resource),
+            'stock_summary' => $listSummary->stockSummary($this->resource),
             'product_type' => new ProductTypeResource($this->whenLoaded('productType')),
             'catalog_product_type' => $this->whenLoaded('catalogProductType', fn () => [
                 'id' => $this->catalogProductType?->id,
@@ -56,6 +64,7 @@ class ProductResource extends JsonResource
             ]),
             'category' => new CategoryResource($this->whenLoaded('category')),
             'brand' => new BrandResource($this->whenLoaded('brand')),
+            'supplier_id' => $this->supplier_id,
             'supplier' => new SupplierResource($this->whenLoaded('supplier')),
             'images' => ProductImageResource::collection($this->whenLoaded('images')),
             'variants' => ProductVariantResource::collection($this->whenLoaded('variants')),

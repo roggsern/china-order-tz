@@ -3,13 +3,16 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasUuidPrimaryKey;
+use Database\Factories\UserAddressFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class UserAddress extends Model
 {
-    use HasUuidPrimaryKey, SoftDeletes;
+    /** @use HasFactory<UserAddressFactory> */
+    use HasFactory, HasUuidPrimaryKey, SoftDeletes;
 
     protected $fillable = [
         'user_id',
@@ -40,4 +43,17 @@ class UserAddress extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    /** Street / primary line (canonical column: address_line_1). */
+    public function street(): string
+    {
+        return (string) $this->address_line_1;
+    }
+
+    /** District (canonical column: address_line_2). */
+    public function district(): ?string
+    {
+        return $this->address_line_2;
+    }
 }
+

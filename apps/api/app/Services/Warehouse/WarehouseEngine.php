@@ -2,7 +2,9 @@
 
 namespace App\Services\Warehouse;
 
+use App\Enums\DeliveryType;
 use App\Enums\FulfillmentStatus;
+use App\Enums\FulfillmentStatusHistorySource;
 use App\Enums\OrderStatus;
 use App\Enums\NotificationEventType;
 use App\Enums\WarehouseJobStatus;
@@ -13,6 +15,7 @@ use App\Models\Fulfillment;
 use App\Models\Order;
 use App\Models\WarehouseJob;
 use App\Services\Fulfillment\FulfillmentEngine;
+use App\Services\Fulfillment\FulfillmentStatusUpdateContext;
 use App\Services\Notifications\NotificationPlatform;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -174,6 +177,29 @@ class WarehouseEngine
 
     private function publishWarehouseNotification(WarehouseJob $job, WarehouseJobStatus $status): void
     {
+        $job->loadMissing('order.deliveryOption');
+        $deliveryType = $this->resolveDeliveryType($job);
+
+        if ($this->isTanzaniaLocalDelivery($deliveryType)) {
+            if ($status !== WarehouseJobStatus::ReadyToShip) {
+                return;
+            }
+
+            $eventType = match ($deliveryType) {
+                DeliveryType::SelfPickup => NotificationEventType::WarehouseReadyForPickup,
+                DeliveryType::NegotiatedDelivery => NotificationEventType::WarehouseReadyForDeliveryArrangement,
+                default => null,
+            };
+
+            if ($eventType === null) {
+                return;
+            }
+
+            $this->dispatchWarehouseNotification($job, $eventType);
+
+            return;
+        }
+
         $eventType = match ($status) {
             WarehouseJobStatus::Picking => NotificationEventType::WarehousePickingStarted,
             WarehouseJobStatus::Packed => NotificationEventType::WarehousePacked,
@@ -185,6 +211,27 @@ class WarehouseEngine
             return;
         }
 
+        $this->dispatchWarehouseNotification($job, $eventType);
+    }
+
+    private function resolveDeliveryType(WarehouseJob $job): ?DeliveryType
+    {
+        $deliveryType = $job->order?->deliveryOption?->delivery_type;
+
+        if ($deliveryType instanceof DeliveryType) {
+            return $deliveryType;
+        }
+
+        return DeliveryType::tryFrom((string) ($deliveryType ?? ''));
+    }
+
+    private function isTanzaniaLocalDelivery(?DeliveryType $deliveryType): bool
+    {
+        return in_array($deliveryType, [DeliveryType::SelfPickup, DeliveryType::NegotiatedDelivery], true);
+    }
+
+    private function dispatchWarehouseNotification(WarehouseJob $job, NotificationEventType $eventType): void
+    {
         $job->loadMissing('order.user');
         $user = $job->order?->user;
         if ($user === null) {
@@ -197,7 +244,7 @@ class WarehouseEngine
                 'order_number' => $job->order?->order_number,
                 'order_id' => $job->order_id,
                 'warehouse_job_id' => $job->id,
-                'warehouse_status' => $status->value,
+                'warehouse_status' => $job->status?->value ?? (string) $job->status,
             ]);
         } catch (\Throwable $e) {
             Log::warning('notification.warehouse_publish_failed', [
@@ -275,7 +322,9 @@ class WarehouseEngine
             ) {
                 $this->fulfillmentEngine->updateStatus($fulfillment, [
                     'status' => FulfillmentStatus::Processing->value,
-                ]);
+                ], new FulfillmentStatusUpdateContext(
+                    source: FulfillmentStatusHistorySource::WarehouseSync,
+                ));
             }
         }
 
@@ -288,7 +337,9 @@ class WarehouseEngine
             if ($current === FulfillmentStatus::Pending) {
                 $this->fulfillmentEngine->updateStatus($fulfillment, [
                     'status' => FulfillmentStatus::Processing->value,
-                ]);
+                ], new FulfillmentStatusUpdateContext(
+                    source: FulfillmentStatusHistorySource::WarehouseSync,
+                ));
                 $fulfillment = $fulfillment->fresh() ?? $fulfillment;
                 $current = $fulfillment->status instanceof FulfillmentStatus
                     ? $fulfillment->status
@@ -300,7 +351,9 @@ class WarehouseEngine
             ) {
                 $this->fulfillmentEngine->updateStatus($fulfillment, [
                     'status' => FulfillmentStatus::ReadyForShipping->value,
-                ]);
+                ], new FulfillmentStatusUpdateContext(
+                    source: FulfillmentStatusHistorySource::WarehouseSync,
+                ));
             }
         }
 
@@ -311,7 +364,9 @@ class WarehouseEngine
             ) {
                 $this->fulfillmentEngine->updateStatus($fulfillment, [
                     'status' => FulfillmentStatus::Cancelled->value,
-                ]);
+                ], new FulfillmentStatusUpdateContext(
+                    source: FulfillmentStatusHistorySource::WarehouseSync,
+                ));
             }
         }
     }

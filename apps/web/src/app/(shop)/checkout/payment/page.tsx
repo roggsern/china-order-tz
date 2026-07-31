@@ -3,8 +3,7 @@ import { PaymentPageContent } from "@/components/checkout/PaymentPageContent";
 
 export const metadata: Metadata = {
   title: "Payment — CHINA ORDER TZ",
-  description:
-    "Choose your payment method and complete your order with M-Pesa, cash on delivery, or bank transfer.",
+  description: "Complete your order with secure NMB checkout.",
 };
 
 export default function CheckoutPaymentPage() {

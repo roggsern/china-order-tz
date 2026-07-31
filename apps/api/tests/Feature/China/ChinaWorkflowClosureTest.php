@@ -381,10 +381,8 @@ class ChinaWorkflowClosureTest extends TestCase
             'agent_name' => 'Agent Asha',
             'agent_contact' => '+255700000001',
             'evidence' => 'Signed pickup sheet #1',
-        ])->assertOk()
-            ->assertJsonPath('data.stage', ChinaWorkflowStage::AgentHandedOff->value);
+        ])->assertStatus(422);
 
-        // Company shipment still ineligible for Customer Agent delivery.
         app(FulfillmentEngine::class)->updateStatus($fulfillment->fresh(), [
             'status' => FulfillmentStatus::ReadyForShipping->value,
         ]);

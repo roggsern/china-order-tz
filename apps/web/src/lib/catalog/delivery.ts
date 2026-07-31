@@ -2,6 +2,10 @@ import type { ProductOrigin, ProductShippingContext } from "@/lib/types/catalog"
 import { formatPrice } from "@/lib/catalog/utils";
 import { LOCAL_DELIVERY_NEGOTIATED_LABEL } from "@/lib/catalog/product-type";
 import {
+  formatDurationDaysLabel,
+  resolveDurationWindow,
+} from "@/lib/shipping/durations";
+import {
   resolveProductShippingOptions,
   type ResolvedShippingOption,
 } from "@/lib/shipping/smart-engine";
@@ -61,15 +65,26 @@ export function getProductShippingOptions(input: ProductShippingContext): Produc
 
 export function getDeliveryOptions(origin: ProductOrigin): DeliveryOption[] {
   if (origin === "tz") {
+    const local = formatDurationDaysLabel(resolveDurationWindow("local_delivery"));
     return [
-      { icon: "🚚", label: "Local Delivery", detail: "Dar es Salaam", subdetail: "1–2 Days" },
-      { icon: "📍", label: "Other Regions", detail: "Nationwide", subdetail: "2–5 Days" },
+      { icon: "🚚", label: "Local Delivery", detail: "Dar es Salaam", subdetail: local },
+      { icon: "📍", label: "Other Regions", detail: "Nationwide", subdetail: local },
     ];
   }
 
   return [
-    { icon: "✈", label: "Air Freight", detail: "Estimated Delivery", subdetail: "7–12 Days" },
-    { icon: "🚢", label: "Sea Freight", detail: "Estimated Delivery", subdetail: "35–45 Days" },
+    {
+      icon: "✈",
+      label: "Air Freight",
+      detail: "Estimated Delivery",
+      subdetail: formatDurationDaysLabel(resolveDurationWindow("air_freight")),
+    },
+    {
+      icon: "🚢",
+      label: "Sea Freight",
+      detail: "Estimated Delivery",
+      subdetail: formatDurationDaysLabel(resolveDurationWindow("sea_freight")),
+    },
   ];
 }
 

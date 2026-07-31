@@ -2,59 +2,39 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { ORDER_STATUS } from "@/lib/types/order";
-import { formatDeliveryEstimate, formatPrice } from "@/lib/catalog/utils";
+import { formatPrice } from "@/lib/catalog/utils";
 import { getOrderShippingMethodLabel } from "@/lib/payment/order-filters";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment/constants";
-import { getAdminDisplayStatus } from "@/lib/order/tracking-stages";
-import { getMethodByCode } from "@/lib/shipping/engine";
+import {
+  resolveAdminPaymentStatusLabel,
+  resolveAdminFulfilmentStatusLabel,
+  ADMIN_SHIPPING_CONFIGURATION_MESSAGE,
+} from "@/lib/admin/order-detail-display";
 import { resolveAdminOrderSourceBadge } from "@/lib/admin/order-source-badge";
 import { useAdminOrders } from "@/components/admin/AdminOrdersProvider";
-import { AdminDeliveryPanel } from "@/components/admin/AdminDeliveryPanel";
 import { AdminOrderCustomerCard } from "@/components/admin/AdminOrderCustomerCard";
-import { AdminOrderFulfillmentCard } from "@/components/admin/AdminOrderFulfillmentCard";
-import { AdminOrderShipmentCard } from "@/components/admin/AdminOrderShipmentCard";
-import { AdminOrderFulfillmentTimeline } from "@/components/admin/AdminOrderFulfillmentTimeline";
+import { AdminOrderFulfilmentWorkspaceCard } from "@/components/admin/AdminOrderFulfilmentWorkspaceCard";
 import { AdminOrderItemsList } from "@/components/admin/AdminOrderItemsList";
-import { AdminOrderQuickActions } from "@/components/admin/AdminOrderQuickActions";
 import { AdminOrderSourceBadge } from "@/components/admin/AdminOrderSourceBadge";
-import { OrderStatusSelect } from "@/components/admin/OrderStatusSelect";
+import { AdminOrderStatusOverview } from "@/components/admin/AdminOrderStatusOverview";
 import { OrderSummaryPayment } from "@/components/payment/OrderSummaryPayment";
 import { PaymentStatusBadge } from "@/components/payment/PaymentStatusBadge";
 import { OrderLiveStatusIndicator } from "@/components/admin/OrderLiveStatusIndicator";
 import { OrderCustomerDetails } from "@/components/order/OrderCustomerDetails";
 import { ShippingBreakdownList } from "@/components/shipping/ShippingQuantityBreakdown";
+import { getMethodByCode } from "@/lib/shipping/engine";
 
 interface AdminOrderDetailContentProps {
   orderId: string;
 }
 
 export function AdminOrderDetailContent({ orderId }: AdminOrderDetailContentProps) {
-  const {
-    getOrderById,
-    isHydrated,
-    markPaymentReceived,
-    markOrderProcessing,
-    markOrderShipped,
-    markOrderDelivered,
-    updateOrderStatus,
-  } = useAdminOrders();
+  const { getOrderById, isHydrated } = useAdminOrders();
   const order = getOrderById(orderId);
 
   const shippingMethods = useMemo(() => {
     if (!order) return [];
     return [...new Set(order.items.map((item) => item.shippingMethod))];
-  }, [order]);
-
-  const deliveryEstimates = useMemo(() => {
-    if (!order) return [];
-    return [
-      ...new Set(
-        order.items
-          .map((item) => item.estimatedDeliveryDays ?? item.shipping?.days)
-          .filter((value) => value && value !== "—"),
-      ),
-    ];
   }, [order]);
 
   if (!isHydrated) {
@@ -90,8 +70,6 @@ export function AdminOrderDetailContent({ orderId }: AdminOrderDetailContentProp
   }
 
   const sourceBadge = resolveAdminOrderSourceBadge(order);
-  const editable =
-    order.status !== ORDER_STATUS.CANCELLED && order.status !== ORDER_STATUS.DELIVERED;
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
@@ -126,6 +104,25 @@ export function AdminOrderDetailContent({ orderId }: AdminOrderDetailContentProp
           </div>
         </div>
 
+        <dl className="mt-4 grid gap-3 border-t border-zinc-100 pt-4 sm:grid-cols-2">
+          <div>
+            <dt className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-400">
+              Payment Status
+            </dt>
+            <dd className="mt-1 text-sm font-semibold text-zinc-900">
+              {resolveAdminPaymentStatusLabel(order)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-400">
+              Fulfilment Status
+            </dt>
+            <dd className="mt-1 text-sm font-semibold text-zinc-900">
+              {resolveAdminFulfilmentStatusLabel(order)}
+            </dd>
+          </div>
+        </dl>
+
         <div className="mt-4 border-t border-zinc-100 pt-4">
           <AdminOrderCustomerCard customer={order.customer} orderDate={order.createdAt} />
         </div>
@@ -133,10 +130,10 @@ export function AdminOrderDetailContent({ orderId }: AdminOrderDetailContentProp
 
       <section className="admin-card mt-4 p-4 sm:p-5">
         <h2 className="text-xs font-bold uppercase tracking-[0.14em] text-zinc-500">
-          Fulfillment progress
+          Order status overview
         </h2>
         <div className="mt-4">
-          <AdminOrderFulfillmentTimeline order={order} />
+          <AdminOrderStatusOverview order={order} />
         </div>
       </section>
 
@@ -155,7 +152,7 @@ export function AdminOrderDetailContent({ orderId }: AdminOrderDetailContentProp
           </section>
 
           <section className="admin-card p-4 sm:p-5">
-            <h2 className="text-sm font-semibold text-zinc-900">Shipping & delivery</h2>
+            <h2 className="text-sm font-semibold text-zinc-900">Shipping</h2>
             <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
               <div>
                 <dt className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-400">
@@ -183,20 +180,18 @@ export function AdminOrderDetailContent({ orderId }: AdminOrderDetailContentProp
               </div>
               <div>
                 <dt className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-400">
-                  Estimate
-                </dt>
-                <dd className="mt-1 font-medium text-zinc-900">
-                  {deliveryEstimates.length > 0
-                    ? deliveryEstimates.map((estimate) => formatDeliveryEstimate(estimate)).join(", ")
-                    : "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-400">
-                  Shipping total
+                  Shipping cost
                 </dt>
                 <dd className="mt-1 font-semibold text-zinc-900">
                   {formatPrice(order.shippingTotal ?? order.totals.shippingTotal)}
+                </dd>
+              </div>
+              <div className="sm:col-span-2">
+                <dt className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-400">
+                  Delivery timing
+                </dt>
+                <dd className="mt-1 text-sm text-zinc-600">
+                  {ADMIN_SHIPPING_CONFIGURATION_MESSAGE}
                 </dd>
               </div>
             </dl>
@@ -221,42 +216,14 @@ export function AdminOrderDetailContent({ orderId }: AdminOrderDetailContentProp
               />
             </div>
           </section>
-
-          <AdminDeliveryPanel order={order} />
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
-          <AdminOrderFulfillmentCard orderId={order.id} orderStatus={order.status} />
-          <AdminOrderShipmentCard orderId={order.id} />
+          <AdminOrderFulfilmentWorkspaceCard orderId={order.id} />
 
           <section className="admin-card p-4 sm:p-5">
-            <h2 className="text-sm font-semibold text-zinc-900">Quick actions</h2>
-            <div className="mt-3">
-              <AdminOrderQuickActions
-                order={order}
-                onMarkPaid={() => markPaymentReceived(order.id)}
-                onMarkProcessing={() => markOrderProcessing(order.id)}
-                onMarkShipped={() => markOrderShipped(order.id)}
-                onMarkDelivered={() => markOrderDelivered(order.id)}
-              />
-            </div>
-
-            {editable && (
-              <div className="mt-4 border-t border-zinc-100 pt-4">
-                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-400">
-                  Manual status
-                </p>
-                <div className="mt-2">
-                  <OrderStatusSelect
-                    value={getAdminDisplayStatus(order.status)}
-                    onChange={(status) => updateOrderStatus(order.id, status)}
-                    className="w-full text-sm"
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="mt-4 flex flex-col gap-2 border-t border-zinc-100 pt-4">
+            <h2 className="text-sm font-semibold text-zinc-900">Reference links</h2>
+            <div className="mt-3 flex flex-col gap-2">
               <Link
                 href={`/track/${order.id}`}
                 target="_blank"

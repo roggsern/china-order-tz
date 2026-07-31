@@ -80,6 +80,12 @@ class ProductVariant extends Model
         return $this->hasMany(VariantInventory::class, 'product_variant_id');
     }
 
+    /** CHINA_IMPORT commercial availability (read path for catalog filters). */
+    public function chinaCommercialStock(): HasOne
+    {
+        return $this->hasOne(ChinaCommercialStock::class, 'product_variant_id');
+    }
+
     public function priceTiers(): HasMany
     {
         return $this->hasMany(ConfigurationPriceTier::class, 'product_variant_id');
@@ -89,6 +95,12 @@ class ProductVariant extends Model
     public function prices(): HasMany
     {
         return $this->hasMany(VariantPrice::class, 'product_variant_id');
+    }
+
+    /** Catalog media bound to this variant (product_media.product_variant_id). */
+    public function media(): HasMany
+    {
+        return $this->hasMany(ProductMedia::class, 'product_variant_id')->ordered();
     }
 
     public function mainInventory(): ?VariantInventory

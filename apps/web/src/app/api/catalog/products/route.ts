@@ -1,5 +1,8 @@
-import { getApiUrl } from "@/lib/config/env";
 import { NextResponse } from "next/server";
+import {
+  proxyCatalogProductShow,
+  resolveCatalogProductSlugFromRequest,
+} from "@/lib/api/catalog-proxy";
 
 function forwardSearchParams(request: Request, allowedKeys: string[]): string {
   const incoming = new URL(request.url).searchParams;
@@ -16,8 +19,9 @@ function forwardSearchParams(request: Request, allowedKeys: string[]): string {
   return upstream.toString();
 }
 
-async function proxyCatalogGet(path: string, request: Request, allowedQueryKeys: string[]) {
-  const apiUrl = getApiUrl();
+async function proxyCatalogListGet(request: Request) {
+  const { getServerApiUrl } = await import("@/lib/config/env");
+  const apiUrl = getServerApiUrl();
 
   if (!apiUrl) {
     return NextResponse.json(
@@ -26,8 +30,18 @@ async function proxyCatalogGet(path: string, request: Request, allowedQueryKeys:
     );
   }
 
-  const query = forwardSearchParams(request, allowedQueryKeys);
-  const upstreamUrl = `${apiUrl}/api/v1${path}${query ? `?${query}` : ""}`;
+  const query = forwardSearchParams(request, [
+    "page",
+    "per_page",
+    "featured",
+    "category",
+    "brand",
+    "search",
+    "store",
+    "origin",
+    "commerce_channel",
+  ]);
+  const upstreamUrl = `${apiUrl}/api/v1/products${query ? `?${query}` : ""}`;
 
   const upstream = await fetch(upstreamUrl, {
     method: "GET",
@@ -40,13 +54,16 @@ async function proxyCatalogGet(path: string, request: Request, allowedQueryKeys:
   return NextResponse.json(payload, { status: upstream.status });
 }
 
+/**
+ * GET /api/catalog/products — list catalog products
+ * GET /api/catalog/products?slug={slug} — show single product (static BFF fallback)
+ */
 export async function GET(request: Request) {
-  return proxyCatalogGet("/products", request, [
-    "page",
-    "per_page",
-    "featured",
-    "category",
-    "brand",
-    "search",
-  ]);
+  const slug = resolveCatalogProductSlugFromRequest(request);
+
+  if (slug) {
+    return proxyCatalogProductShow(slug);
+  }
+
+  return proxyCatalogListGet(request);
 }

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { UserIcon } from "@/components/home/icons";
 import { resolveCustomerDisplayName } from "@/lib/customer/display-name";
 import { logoutCustomer } from "@/lib/customer/logout-customer";
+import { useFeatureAvailability } from "@/hooks/use-feature-availability";
 import { useCustomerSession } from "@/lib/customer/use-customer-session";
 
 const mobileIconButtonClass =
@@ -21,8 +22,9 @@ const ACCOUNT_MENU_ITEMS: AccountMenuItem[] = [
   { type: "link", label: "Wishlist", href: "/wishlist" },
   { type: "link", label: "Saved Addresses", href: "/account/addresses" },
   { type: "link", label: "Loyalty & Rewards", href: "/account/loyalty" },
+  { type: "link", label: "Support", href: "/account/support" },
   { type: "link", label: "Notifications", href: "/account/notifications" },
-  { type: "link", label: "Settings", href: "/account" },
+  { type: "link", label: "Security", href: "/account/security" },
   { type: "logout", label: "Sign Out" },
 ];
 
@@ -56,6 +58,15 @@ export function AccountMenu({
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const { session, isLoggedIn, isReady } = useCustomerSession();
+  const { wishlist: wishlistEnabled, isReady: featuresReady } = useFeatureAvailability();
+
+  const menuItems = ACCOUNT_MENU_ITEMS.filter(
+    (item) =>
+      item.type !== "link" ||
+      item.href !== "/wishlist" ||
+      !featuresReady ||
+      wishlistEnabled,
+  );
 
   const label = isLoggedIn ? "My Account" : "Sign In";
   const displayName = resolveCustomerDisplayName(session?.name, session?.email);
@@ -66,8 +77,9 @@ export function AccountMenu({
 
   const handleLogout = useCallback(() => {
     closeMenu();
-    logoutCustomer();
-    router.push("/");
+    void logoutCustomer().finally(() => {
+      router.push("/");
+    });
   }, [closeMenu, router]);
 
   useEffect(() => {
@@ -159,7 +171,7 @@ export function AccountMenu({
           </div>
 
           <div className="p-1.5">
-            {ACCOUNT_MENU_ITEMS.map((item) => {
+            {menuItems.map((item) => {
               if (item.type === "link") {
                 return (
                   <Link

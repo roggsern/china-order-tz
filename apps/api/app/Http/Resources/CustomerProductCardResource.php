@@ -2,7 +2,9 @@
 
 namespace App\Http\Resources;
 
+use App\Http\Resources\Concerns\PresentsCustomerCatalogAvailability;
 use App\Http\Resources\Concerns\PresentsCustomerCatalogStock;
+use App\Http\Resources\Concerns\PresentsCustomerCatalogPrice;
 use App\Models\Product;
 use App\Services\Catalog\CustomerProductMediaResolver;
 use Illuminate\Http\Request;
@@ -11,16 +13,19 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /** @mixin Product */
 class CustomerProductCardResource extends JsonResource
 {
+    use PresentsCustomerCatalogAvailability;
+    use PresentsCustomerCatalogPrice;
     use PresentsCustomerCatalogStock;
 
     public function toArray(Request $request): array
     {
         return [
+            ...$this->customerCatalogAvailability(),
             'id' => $this->id,
             'slug' => $this->slug,
             'name' => $this->name,
             'short_description' => $this->short_description,
-            'price' => $this->price,
+            'price' => $this->resolvedCatalogDisplayPrice(),
             'compare_at_price' => $this->compare_at_price,
             'is_featured' => $this->is_featured,
             'primary_image' => app(CustomerProductMediaResolver::class)->resolvePrimary($this->resource),

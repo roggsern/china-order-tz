@@ -1,12 +1,17 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
 import type { CustomerReview } from "@/lib/types/catalog";
 import { usePathname } from "next/navigation";
+import { useFeatureAvailability } from "@/hooks/use-feature-availability";
 import { useCustomerSession } from "@/lib/customer/use-customer-session";
+import { fetchProductReviews } from "@/lib/api/customer-reviews";
 import { AuthInvitationCard } from "@/components/auth/AuthInvitationCard";
+import { ProductReviewForm } from "./ProductReviewForm";
 import { RatingStars } from "./RatingStars";
 
 interface ProductReviewsPanelProps {
+  productSlug: string;
   reviews: CustomerReview[];
   reviewCount: number;
   averageRating: number;
@@ -26,14 +31,47 @@ function ratingDistribution(reviews: CustomerReview[]) {
 }
 
 export function ProductReviewsPanel({
-  reviews,
+  productSlug,
+  reviews: initialReviews,
   reviewCount,
   averageRating,
   compact = false,
 }: ProductReviewsPanelProps) {
+  const [reviews, setReviews] = useState(initialReviews);
+  const [isLoadingReviews, setIsLoadingReviews] = useState(false);
   const distribution = ratingDistribution(reviews);
   const { isLoggedIn, isReady } = useCustomerSession();
+  const { reviews: reviewsEnabled, isReady: featuresReady } = useFeatureAvailability();
   const pathname = usePathname();
+
+  const loadReviews = useCallback(async () => {
+    if (!productSlug.trim()) {
+      return;
+    }
+
+    setIsLoadingReviews(true);
+
+    try {
+      const nextReviews = await fetchProductReviews(productSlug);
+      setReviews(nextReviews);
+    } catch {
+      setReviews(initialReviews);
+    } finally {
+      setIsLoadingReviews(false);
+    }
+  }, [initialReviews, productSlug]);
+
+  useEffect(() => {
+    if (!featuresReady || !reviewsEnabled) {
+      return;
+    }
+
+    void loadReviews();
+  }, [featuresReady, reviewsEnabled, loadReviews]);
+
+  if (featuresReady && !reviewsEnabled) {
+    return null;
+  }
 
   return (
     <div className={compact ? "space-y-4" : "max-w-3xl space-y-8"}>
@@ -76,10 +114,20 @@ export function ProductReviewsPanel({
           returnUrl={pathname || "/products"}
           compact
         />
+      ) : isReady && isLoggedIn ? (
+        <ProductReviewForm
+          productSlug={productSlug}
+          compact={compact}
+          onSubmitted={loadReviews}
+        />
       ) : null}
 
       <div className={compact ? "space-y-3" : "space-y-4"}>
-        {reviews.length === 0 ? (
+        {isLoadingReviews && reviews.length === 0 ? (
+          <div className="rounded-2xl border border-zinc-100 bg-zinc-50/80 px-4 py-8 text-center text-sm text-zinc-500">
+            Loading reviews...
+          </div>
+        ) : reviews.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50/80 px-4 py-8 text-center">
             <span className="text-2xl" aria-hidden>
               ⭐
@@ -109,7 +157,9 @@ export function ProductReviewsPanel({
                 </div>
                 <RatingStars rating={review.rating} size="sm" />
               </div>
-              <h4 className="mt-3 text-sm font-semibold text-zinc-800">{review.title}</h4>
+              {review.title ? (
+                <h4 className="mt-3 text-sm font-semibold text-zinc-800">{review.title}</h4>
+              ) : null}
               <p className="mt-1.5 text-sm leading-relaxed text-zinc-600">{review.comment}</p>
               {review.verified ? (
                 <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-100">

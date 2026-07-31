@@ -80,6 +80,12 @@ class BuyFromTzStorefrontTest extends TestCase
             ['zion-mode', 'peachy-lingerie', 'tzur-jewelry', 'rovi-beauty'],
             $slugs,
         );
+        $this->assertNotNull(
+            collect($response->json('data'))->firstWhere('slug', 'zion-mode')['logo_url'] ?? null,
+        );
+        $this->assertNotNull(
+            collect($response->json('data'))->firstWhere('slug', 'peachy-lingerie')['logo_url'] ?? null,
+        );
         $this->assertNotContains('Apple', $names);
         $this->assertNotContains('Nike', $names);
         $this->assertNotContains($hidden->name, $names);

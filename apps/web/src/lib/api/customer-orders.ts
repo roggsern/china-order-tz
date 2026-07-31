@@ -1,11 +1,35 @@
 import { getCustomerApiToken } from "@/lib/api/customer-auth";
+import { resolveImageUrl } from "@/lib/catalog/product-images";
 import { getCustomerSession } from "@/lib/customer/session";
-import { syncTimelineWithOrder } from "@/lib/payment/timeline";
+import { fetchClientCatalogProducts } from "@/lib/catalog/client-catalog";
+import {
+  applyResolvedImageToOrderLineItem,
+  enrichOrderLineItemsWithCatalogImages,
+} from "@/lib/order/resolve-order-item-image";
+import {
+  mapCustomerProgressToTimelineEvents,
+  parseCustomerOrderProgress,
+  type CustomerOrderProgress,
+} from "@/lib/order/customer-progress";
+import { parseReceivingChoiceSnapshot } from "@/lib/api/customer-receiving-choice";
+import { productService } from "@/lib/services/product-service.client";
+import { durationDaysFromSnapshots } from "@/lib/shipping/durations";
 import type { ShippingMethodCode } from "@/lib/shipping/types";
-import type { CustomerInformation } from "@/lib/types/checkout";
+import type { CustomerInformation, ShippingAddress } from "@/lib/types/checkout";
 import type { Order, OrderLineItem, OrderStatus } from "@/lib/types/order";
 import { normalizeOrder } from "@/lib/types/order";
 import type { PaymentMethodCode, PaymentStatus } from "@/lib/types/payment";
+
+export type ApiCustomerOrderPreview = {
+  item_count: number;
+  total_quantity: number;
+  primary_item: {
+    name: string;
+    image_url: string | null;
+    quantity: number;
+  } | null;
+  extra_items: number;
+};
 
 export type ApiCustomerOrder = {
   id: string;
@@ -13,8 +37,10 @@ export type ApiCustomerOrder = {
   /** API may return China/Dar or china/local */
   source: string;
   status: string;
+  payment_status?: string | null;
   total: number | string;
   created_at: string;
+  preview?: ApiCustomerOrderPreview;
 };
 
 export type CustomerOrdersListResponse = {
@@ -38,8 +64,14 @@ export type CustomerOrderListItem = {
   grandTotal: number;
   itemPreview: string;
   itemCount: number | null;
+  imageUrl?: string;
   /** Raw commerce source from API (China/Dar/china/local). */
   source: string | null;
+};
+
+export type CustomerOrdersFetchResult = {
+  orders: CustomerOrderListItem[];
+  total: number;
 };
 
 export class CustomerOrdersApiError extends Error {
@@ -69,12 +101,15 @@ export type ApiCustomerOrderItem = {
   brand_name_snapshot?: string | null;
   variant_name_snapshot?: string | null;
   variant_sku_snapshot?: string | null;
+  barcode_snapshot?: string | null;
   sku_snapshot?: string | null;
   currency_snapshot?: string | null;
   unit_price_snapshot?: number | string | null;
   shipping_mode_snapshot?: string | null;
   shipping_price_snapshot?: number | string | null;
   shipping_notes_snapshot?: string | null;
+  estimated_min_days_snapshot?: number | string | null;
+  estimated_max_days_snapshot?: number | string | null;
   attributes_snapshot?: Array<{ attribute: string; value: string }> | null;
   product_image_snapshot?: string | null;
   image_snapshot?: string | null;
@@ -87,6 +122,31 @@ export type ApiCustomerOrderItem = {
   shipping_price?: number | string | null;
   shipping_subtotal?: number | string | null;
   delivery_status?: string | null;
+};
+
+export type ApiCustomerOrderShippingAddress = {
+  first_name?: string;
+  last_name?: string;
+  full_name?: string;
+  phone?: string;
+  email?: string | null;
+  address_line_1?: string;
+  address_line_2?: string | null;
+  city?: string;
+  region?: string | null;
+  postal_code?: string | null;
+  country?: string;
+};
+
+export type ApiCustomerOrderPayment = {
+  payment_status?: string | null;
+  payment_method?: string | null;
+  reference?: string | null;
+  provider?: string | null;
+  amount?: number | string | null;
+  currency?: string | null;
+  paid_at?: string | null;
+  initiated_at?: string | null;
 };
 
 export type ApiCustomerOrderDetail = {
@@ -106,13 +166,13 @@ export type ApiCustomerOrderDetail = {
     grand_total?: number | string;
     total: number | string;
   };
-  payment: {
-    payment_status?: string | null;
-    payment_method?: string | null;
-  };
+  payment: ApiCustomerOrderPayment;
+  shipping_address?: ApiCustomerOrderShippingAddress | null;
   shipment: {
     status?: string | null;
   };
+  progress?: CustomerOrderProgress | null;
+  receiving_choice?: ReturnType<typeof parseReceivingChoiceSnapshot>;
 };
 
 export type CustomerOrderDetailResponse = {
@@ -175,7 +235,7 @@ function parseAmount(value: number | string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function mapApiPaymentStatus(
+export function mapApiPaymentStatus(
   paymentStatus: string | null | undefined,
   orderStatus: string,
 ): PaymentStatus {
@@ -203,6 +263,12 @@ function mapApiPaymentMethod(method: string | null | undefined): PaymentMethodCo
   }
 
   return method as PaymentMethodCode;
+}
+
+function mapDetailPaymentMethod(
+  payment: ApiCustomerOrderPayment | undefined,
+): PaymentMethodCode | null {
+  return mapApiPaymentMethod(payment?.payment_method ?? payment?.provider);
 }
 
 function customerFromSession(): CustomerInformation {
@@ -236,24 +302,30 @@ function mapApiOrderItem(item: ApiCustomerOrderItem, index: number): OrderLineIt
       ? "air_freight"
       : shippingMode === "sea"
         ? "sea_freight"
-        : "sea_freight";
+        : item.delivery_status
+          ? "local_delivery"
+          : "sea_freight";
   const unitShipping = parseAmount(item.shipping_price_snapshot ?? item.shipping_price ?? 0);
   const lineShippingCost =
     item.shipping_subtotal != null
       ? parseAmount(item.shipping_subtotal)
       : unitShipping * quantity;
   const name = item.product_name_snapshot || item.product_name;
-  const imageUrl = item.product_image_snapshot || item.image_snapshot || undefined;
+  const snapshotUrl = item.product_image_snapshot || item.image_snapshot || undefined;
   const numericProductId =
     typeof item.product_id === "number"
       ? item.product_id
       : Number.parseInt(String(item.product_id).replace(/\D/g, "").slice(0, 9), 10) || index + 1;
+  const estimatedDeliveryDays = durationDaysFromSnapshots(
+    item.estimated_min_days_snapshot,
+    item.estimated_max_days_snapshot,
+  );
 
   const attributeLabel = Array.isArray(item.attributes_snapshot)
     ? item.attributes_snapshot.map((row) => `${row.attribute}: ${row.value}`).join(" · ")
     : undefined;
 
-  return {
+  return applyResolvedImageToOrderLineItem({
     id: item.id?.trim() || `${item.product_id}-${index}`,
     productId: numericProductId,
     slug: item.product_slug_snapshot || String(item.product_id),
@@ -269,18 +341,42 @@ function mapApiOrderItem(item: ApiCustomerOrderItem, index: number): OrderLineIt
       method: shippingMethod,
       unitCost: unitShipping,
       cost: lineShippingCost,
-      days: "—",
+      days: estimatedDeliveryDays,
     },
     shippingMethod,
     shippingCost: lineShippingCost,
-    estimatedDeliveryDays: "—",
+    estimatedDeliveryDays,
     image: {
       id: numericProductId,
       emoji: "📦",
       gradient: "from-zinc-100 to-zinc-200",
       alt: name,
-      url: imageUrl,
+      url: snapshotUrl,
     },
+  });
+}
+
+function mapApiShippingAddressToUi(
+  address: ApiCustomerOrderShippingAddress | null | undefined,
+): ShippingAddress {
+  if (!address) {
+    return {
+      addressLine1: "",
+      addressLine2: "",
+      city: "",
+      region: "",
+      postalCode: "",
+      country: "Tanzania",
+    };
+  }
+
+  return {
+    addressLine1: address.address_line_1?.trim() ?? "",
+    addressLine2: address.address_line_2?.trim() ?? "",
+    city: address.city?.trim() ?? "",
+    region: address.region?.trim() ?? "",
+    postalCode: address.postal_code?.trim() ?? "",
+    country: address.country?.trim() || "Tanzania",
   };
 }
 
@@ -293,6 +389,8 @@ export function mapApiCustomerOrderDetailToOrder(detail: ApiCustomerOrderDetail)
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
   const { orderStatus } = mapBackendStatuses(detail.status);
   const paymentStatus = mapApiPaymentStatus(detail.payment?.payment_status, detail.status);
+  const progress = parseCustomerOrderProgress(detail.progress);
+  const receivingChoice = parseReceivingChoiceSnapshot(detail.receiving_choice);
   const createdAt = detail.created_at;
 
   const order = normalizeOrder({
@@ -300,19 +398,19 @@ export function mapApiCustomerOrderDetailToOrder(detail: ApiCustomerOrderDetail)
     orderNumber: detail.order_number,
     status: orderStatus,
     paymentStatus,
-    paymentMethod: mapApiPaymentMethod(detail.payment?.payment_method),
-    paymentReference: null,
+    paymentMethod: mapDetailPaymentMethod(detail.payment),
+    paymentReference: detail.payment?.reference?.trim() || null,
+    paymentPaidAt: detail.payment?.paid_at ?? null,
+    paymentProvider: detail.payment?.provider?.trim() || null,
+    paymentAmount:
+      detail.payment?.amount != null && detail.payment.amount !== ""
+        ? parseAmount(detail.payment.amount)
+        : null,
+    paymentCurrency: detail.payment?.currency?.trim() || null,
     createdAt,
     updatedAt: createdAt,
     customer: customerFromSession(),
-    shippingAddress: {
-      addressLine1: "",
-      addressLine2: "",
-      city: "",
-      region: "",
-      postalCode: "",
-      country: "Tanzania",
-    },
+    shippingAddress: mapApiShippingAddressToUi(detail.shipping_address),
     orderNotes: "",
     items,
     subtotal,
@@ -330,16 +428,53 @@ export function mapApiCustomerOrderDetailToOrder(detail: ApiCustomerOrderDetail)
       grandTotal,
     },
     timeline: [],
+    progress,
+    receivingChoice,
   });
+
+  const timeline = progress
+    ? mapCustomerProgressToTimelineEvents(progress, {
+        timestamps: { ORDER_CONFIRMED: createdAt },
+      })
+    : [];
 
   return {
     ...order,
-    timeline: syncTimelineWithOrder(order),
+    timeline,
+  };
+}
+
+function resolveListItemPreview(order: ApiCustomerOrder): {
+  itemPreview: string;
+  itemCount: number | null;
+  imageUrl?: string;
+} {
+  const preview = order.preview;
+  const primary = preview?.primary_item;
+  const extraItems = preview?.extra_items ?? 0;
+  const fallbackPreview = getSourcePreview(order.source);
+
+  if (!primary?.name) {
+    return {
+      itemPreview: fallbackPreview,
+      itemCount: preview?.total_quantity ?? null,
+    };
+  }
+
+  const snapshotUrl = primary.image_url?.trim();
+  const imageUrl = snapshotUrl ? resolveImageUrl(snapshotUrl) : undefined;
+
+  return {
+    itemPreview: extraItems > 0 ? `${primary.name} +${extraItems} more` : primary.name,
+    itemCount: preview?.total_quantity ?? primary.quantity ?? null,
+    imageUrl,
   };
 }
 
 export function mapApiCustomerOrderToListItem(order: ApiCustomerOrder): CustomerOrderListItem {
-  const { orderStatus, paymentStatus } = mapBackendStatuses(order.status);
+  const { orderStatus } = mapBackendStatuses(order.status);
+  const paymentStatus = mapApiPaymentStatus(order.payment_status, order.status);
+  const previewFields = resolveListItemPreview(order);
 
   return {
     id: order.id,
@@ -348,8 +483,9 @@ export function mapApiCustomerOrderToListItem(order: ApiCustomerOrder): Customer
     paymentStatus,
     createdAt: order.created_at,
     grandTotal: parseAmount(order.total),
-    itemPreview: getSourcePreview(order.source),
-    itemCount: null,
+    itemPreview: previewFields.itemPreview,
+    itemCount: previewFields.itemCount,
+    imageUrl: previewFields.imageUrl,
     source: order.source ?? null,
   };
 }
@@ -361,7 +497,7 @@ export async function fetchCustomerOrders(
     filter?: "all" | "active" | "completed";
     token?: string | null;
   },
-): Promise<CustomerOrderListItem[]> {
+): Promise<CustomerOrdersFetchResult> {
   const authToken = options?.token ?? getCustomerApiToken();
 
   if (!authToken) {
@@ -398,7 +534,10 @@ export async function fetchCustomerOrders(
     throw new CustomerOrdersApiError("Unexpected orders response from the server.");
   }
 
-  return payload.data.map(mapApiCustomerOrderToListItem);
+  return {
+    orders: payload.data.map(mapApiCustomerOrderToListItem),
+    total: payload.meta?.total ?? payload.data.length,
+  };
 }
 
 export type OrderEngineCreatedOrder = {
@@ -511,5 +650,33 @@ export async function fetchCustomerOrder(
     throw new CustomerOrderApiError("Unexpected order response from the server.");
   }
 
-  return mapApiCustomerOrderDetailToOrder(payload.data);
+  let order = mapApiCustomerOrderDetailToOrder(payload.data);
+
+  const needsCatalogFallback = payload.data.items.some(
+    (item) => !(item.product_image_snapshot || item.image_snapshot)?.trim(),
+  );
+
+  if (needsCatalogFallback) {
+    try {
+      let products;
+      try {
+        products = await fetchClientCatalogProducts();
+      } catch {
+        products = await productService.list();
+      }
+
+      order = {
+        ...order,
+        items: enrichOrderLineItemsWithCatalogImages(
+          order.items,
+          products,
+          payload.data.items,
+        ),
+      };
+    } catch {
+      // Keep snapshot-only resolution when catalog is unavailable.
+    }
+  }
+
+  return order;
 }

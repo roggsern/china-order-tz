@@ -23,6 +23,7 @@ import {
 } from "@/lib/customer/normalize-phone";
 import { DEFAULT_PHONE_COUNTRY_ISO } from "@/lib/customer/phone-countries";
 import { saveCustomerSession } from "@/lib/customer/session";
+import { markCustomerJustRegistered } from "@/lib/customer/arrival-signal";
 import { InternationalPhoneInput } from "@/components/auth/InternationalPhoneInput";
 import {
   AUTH_INPUT_CLASS,
@@ -224,6 +225,7 @@ export function RegisterForm() {
         "🎉 Welcome to CHINA ORDER TZ!\nYour account has been created successfully.",
       );
       window.dispatchEvent(new Event("customer-session-updated"));
+      markCustomerJustRegistered();
       // Cart lives in localStorage — register does not clear it.
       router.push(resolvePostAuthRedirect(returnUrl));
     } catch (registerError) {

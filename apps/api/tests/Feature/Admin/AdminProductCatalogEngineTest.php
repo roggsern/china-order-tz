@@ -8,6 +8,7 @@ use App\Models\Category;
 use App\Models\CommerceChannel;
 use App\Models\Product;
 use App\Models\ProductType;
+use App\Models\Supplier;
 use Database\Seeders\ProductTypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -49,6 +50,7 @@ class AdminProductCatalogEngineTest extends TestCase
             'category_id' => $leaf->id,
             'catalog_product_type_id' => $cpt->id,
             'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
+            'supplier_id' => Supplier::factory()->create(['is_active' => true, 'country' => 'CN'])->id,
             'price' => 100000,
             'status' => true,
             'stock_quantity' => 5,

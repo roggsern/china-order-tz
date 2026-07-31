@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\User;
 use App\Services\Checkout\CheckoutOrchestrator;
 use App\Services\Checkout\CheckoutShippingChoiceService;
+use App\Services\Profile\CustomerAddressService;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -19,6 +20,7 @@ class OrderCreationService
         private readonly CheckoutOrchestrator $checkoutOrchestrator,
         private readonly CheckoutShippingChoiceService $shippingChoice,
         private readonly OrderEngine $orderEngine,
+        private readonly CustomerAddressService $customerAddresses,
     ) {}
 
     /**
@@ -33,6 +35,12 @@ class OrderCreationService
     {
         $user->unsetRelation('deliveryAddress');
         $user->load('deliveryAddress');
+
+        if ($user->deliveryAddress === null) {
+            $this->customerAddresses->ensureDeliveryAddressFromDefault($user);
+            $user->unsetRelation('deliveryAddress');
+            $user->load('deliveryAddress');
+        }
 
         if ($user->deliveryAddress === null) {
             throw ValidationException::withMessages([

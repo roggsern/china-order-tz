@@ -51,11 +51,11 @@ services:
       BACKUP_RETENTION_WEEKLY: ${BACKUP_RETENTION_WEEKLY:-4}
       BACKUP_RETENTION_MONTHLY: ${BACKUP_RETENTION_MONTHLY:-6}
       BACKUP_DAILY_AT: ${BACKUP_DAILY_AT:-02:15}
-    volumes:
+    volumes: !override
       - api_storage:/var/www/html/storage
       - app_backups:/var/backups/china-order-tz
     healthcheck:
-      test: ["CMD", "php", "artisan", "ops:health-check"]
+      test: ["CMD", "php", "artisan", "ops:health"]
       interval: 30s
       timeout: 15s
       retries: 3
@@ -64,8 +64,9 @@ services:
       mysql:
         condition: service_healthy
 
-  # Required when NMB_PROCESS_CALLBACKS_ASYNC=true (default).
+  # Required when NMB_PROCESS_CALLBACKS_ASYNC=true (default). Always on in production (no workers profile).
   queue:
+    profiles: !reset []
     build:
       context: .
       dockerfile: docker/php/Dockerfile
@@ -89,10 +90,17 @@ services:
       ]
     environment:
       <<: *laravel-prod-runtime
+      SKIP_MIGRATIONS: "true"
       SKIP_OPTIMIZE: "true"
       QUEUE_RESTART_ON_BOOT: "false"
-    volumes:
+    volumes: !override
       - api_storage:/var/www/html/storage
+    healthcheck:
+      test: ["CMD", "php", "artisan", "ops:queue-health"]
+      interval: 60s
+      timeout: 20s
+      retries: 3
+      start_period: 120s
     depends_on:
       mysql:
         condition: service_healthy
@@ -101,8 +109,9 @@ services:
     networks:
       - china-order-tz
 
-  # RC1-G4C1 — long-running scheduler (alternative to host cron).
+  # RC1-G4C1 — long-running scheduler (alternative to host cron). Always on in production.
   scheduler:
+    profiles: !reset []
     build:
       context: .
       dockerfile: docker/php/Dockerfile
@@ -114,11 +123,18 @@ services:
     command: ["php", "artisan", "schedule:work"]
     environment:
       <<: *laravel-prod-runtime
+      SKIP_MIGRATIONS: "true"
       SKIP_OPTIMIZE: "true"
       QUEUE_RESTART_ON_BOOT: "false"
-    volumes:
+    volumes: !override
       - api_storage:/var/www/html/storage
       - app_backups:/var/backups/china-order-tz
+    healthcheck:
+      test: ["CMD", "php", "artisan", "ops:health"]
+      interval: 60s
+      timeout: 20s
+      retries: 3
+      start_period: 120s
     depends_on:
       mysql:
         condition: service_healthy
@@ -128,8 +144,11 @@ services:
       - china-order-tz
 
   nginx:
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile.prod
     restart: always
-    volumes:
+    volumes: !override
       - api_storage:/var/www/html/storage:ro
     depends_on:
       - api
@@ -140,7 +159,8 @@ services:
       dockerfile: docker/node/Dockerfile
       target: production
     restart: always
-    environment:
+    volumes: !override []
+    environment: !override
       NODE_ENV: production
       API_INTERNAL_URL: ${API_INTERNAL_URL:-http://nginx}
     ports:

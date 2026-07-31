@@ -157,6 +157,22 @@ class CommerceChannelResolver
         return $this->strategyFor($this->resolveOrderChannel($order));
     }
 
+    public function isChinaImportProduct(Product $product): bool
+    {
+        return $this->resolveProductChannelCode($product) === CommerceChannelCode::ChinaImport;
+    }
+
+    public function isChinaImportOrder(Order $order): bool
+    {
+        return CommerceChannelCode::tryFrom($this->resolveOrderChannel($order)->code) === CommerceChannelCode::ChinaImport;
+    }
+
+    private function resolveProductChannelCode(Product $product): CommerceChannelCode
+    {
+        return CommerceChannelCode::tryFrom($this->resolveProductChannel($product)->code)
+            ?? CommerceChannelCode::ChinaImport;
+    }
+
     /**
      * @return array{id: string, code: string, name: string, description: string|null, customer_label: string}
      */

@@ -4,6 +4,7 @@ namespace App\Actions\AdminProducts;
 
 use App\Models\Category;
 use App\Models\Product;
+use App\Services\Catalog\CustomerProductMediaResolver;
 use App\Services\ProductConfiguration\LegacyConfigurationProductDetector;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -46,20 +47,24 @@ class GetAdminProductsAction
 
         $query = Product::query();
         $this->legacyConfigurationDetector->applyExistsSelect($query);
-        $query->with([
+        $query->withCount('variants');
+        $query->with(array_merge([
                 'commerceChannel',
+                'store',
                 'category.department',
                 'category.parent',
                 'brand',
+                'supplier',
                 'catalogProductType.subcategory',
                 'inventory',
-                'images',
                 'priceTiers',
                 'variants.attributeValues',
                 'variants.inventory',
                 'variants.inventories',
+                'variants.prices',
                 'variants.priceTiers',
-            ]);
+                'variants.product',
+            ], CustomerProductMediaResolver::catalogEagerLoads()));
 
         if (request()->boolean('trashed')) {
             $query->onlyTrashed();

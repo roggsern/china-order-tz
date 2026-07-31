@@ -9,7 +9,10 @@ use App\Models\Admin;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\Settings\SettingsService;
+use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -20,6 +23,24 @@ use Tests\TestCase;
 class CustomerOrderPaymentPreparationTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->seed(SettingsSeeder::class);
+        Cache::flush();
+
+        // Prepare path requires methods enabled in admin payment settings.
+        app(SettingsService::class)->set('payments.enabled_methods', [
+            'nmb' => true,
+            'mpesa' => false,
+            'card' => false,
+            'cash' => true,
+            'bank_transfer' => true,
+        ]);
+        Cache::flush();
+    }
 
     private function createPendingOrder(User $user, array $overrides = []): Order
     {

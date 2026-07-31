@@ -3,20 +3,59 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import type { Product, ProductImage } from "@/lib/types/catalog";
-import { getProductGalleryImagesForColor } from "@/lib/catalog/product-images";
+import { getProductGalleryMedia, type ProductGalleryMediaSlide } from "@/lib/catalog/product-gallery-media";
 import { CloseIcon } from "@/components/home/icons";
 import { ProductImageDisplay } from "../ProductImageDisplay";
+import { ProductVideoDisplay } from "../ProductVideoDisplay";
 
 interface ProductGalleryMobileProps {
-  product: Pick<Product, "images" | "image" | "name" | "emoji" | "gradient" | "primary_image">;
+  product: Pick<
+    Product,
+    | "images"
+    | "image"
+    | "name"
+    | "emoji"
+    | "gradient"
+    | "primary_image"
+    | "videos"
+    | "variantGalleries"
+  >;
   selectedColorSlug?: string | null;
+  configurationId?: string | null;
+}
+
+function renderGallerySlide(
+  slide: ProductGalleryMediaSlide,
+  product: Pick<Product, "emoji" | "gradient">,
+  options?: { thumbnailOnly?: boolean },
+) {
+  if (slide.kind === "video") {
+    return (
+      <ProductVideoDisplay
+        video={slide.video}
+        className="h-full w-full"
+        thumbnailOnly={options?.thumbnailOnly}
+      />
+    );
+  }
+
+  return (
+    <ProductImageDisplay
+      image={slide.image}
+      fallbackEmoji={product.emoji}
+      fallbackGradient={product.gradient}
+      className="h-full w-full"
+      emojiClassName={options?.thumbnailOnly ? "text-xl" : "text-7xl drop-shadow-lg"}
+    />
+  );
 }
 
 export function ProductGalleryMobile({
   product,
   selectedColorSlug = null,
+  configurationId = null,
 }: ProductGalleryMobileProps) {
-  const images = getProductGalleryImagesForColor(product, selectedColorSlug);
+  const media = getProductGalleryMedia(product, selectedColorSlug, configurationId);
   const reduceMotion = useReducedMotion();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -24,14 +63,14 @@ export function ProductGalleryMobile({
 
   const syncIndexFromScroll = useCallback(() => {
     const container = scrollRef.current;
-    if (!container || images.length === 0) return;
+    if (!container || media.length === 0) return;
 
     const width = container.clientWidth;
     if (width <= 0) return;
 
     const index = Math.round(container.scrollLeft / width);
-    setActiveIndex(Math.min(Math.max(index, 0), images.length - 1));
-  }, [images.length]);
+    setActiveIndex(Math.min(Math.max(index, 0), media.length - 1));
+  }, [media.length]);
 
   const scrollToIndex = (index: number) => {
     const container = scrollRef.current;
@@ -44,15 +83,15 @@ export function ProductGalleryMobile({
     setActiveIndex(index);
   };
 
-  // When color-filtered slides change, snap back to the first matching image.
   useEffect(() => {
     setActiveIndex(0);
     scrollRef.current?.scrollTo({ left: 0, behavior: "auto" });
-  }, [selectedColorSlug, images.length]);
+  }, [selectedColorSlug, configurationId, media.length]);
 
-  if (images.length === 0) return null;
+  if (media.length === 0) return null;
 
-  const activeImage = images[activeIndex] ?? images[0];
+  const activeSlide = media[activeIndex] ?? media[0];
+  const activeImage = activeSlide.kind === "image" ? activeSlide.image : null;
 
   return (
     <>
@@ -67,58 +106,62 @@ export function ProductGalleryMobile({
           onScroll={syncIndexFromScroll}
           className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
-          {images.map((image, index) => (
-            <motion.button
-              key={image.id}
-              type="button"
-              onClick={() => {
-                setActiveIndex(index);
-                setZoomOpen(true);
-              }}
+          {media.map((slide, index) => (
+            <motion.div
+              key={slide.key}
               className="relative w-full shrink-0 snap-center"
-              aria-label={`View ${product.name} image ${index + 1}`}
               initial={false}
               animate={{ opacity: activeIndex === index ? 1 : 0.92 }}
               transition={{ duration: 0.2 }}
             >
-              <ProductImageDisplay
-                image={image}
-                fallbackEmoji={product.emoji}
-                fallbackGradient={product.gradient}
-                className="aspect-square w-full"
-                emojiClassName="text-7xl drop-shadow-lg"
-              />
-            </motion.button>
+              {slide.kind === "image" ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveIndex(index);
+                    setZoomOpen(true);
+                  }}
+                  className="block w-full"
+                  aria-label={`View ${product.name} image ${index + 1}`}
+                >
+                  {renderGallerySlide(slide, product)}
+                </button>
+              ) : (
+                <div className="aspect-square w-full" aria-label={`${product.name} product video`}>
+                  {renderGallerySlide(slide, product)}
+                </div>
+              )}
+            </motion.div>
           ))}
         </div>
 
-        {images.length > 1 && (
+        {media.length > 1 && (
           <>
             <span className="absolute bottom-3 right-3 rounded-full bg-black/55 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
-              {activeIndex + 1} / {images.length}
+              {activeIndex + 1} / {media.length}
             </span>
             <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
-            {images.map((image, index) => (
-              <motion.span
-                key={image.id}
-                layout
-                className={`h-1.5 rounded-full ${
-                  index === activeIndex ? "bg-[#c9a227]" : "bg-white/70"
-                }`}
-                animate={{ width: index === activeIndex ? 20 : 6 }}
-                transition={{ type: "spring", stiffness: 400, damping: 28 }}
-              />
-            ))}
+              {media.map((slide, index) => (
+                <motion.span
+                  key={slide.key}
+                  layout
+                  className={`h-1.5 rounded-full ${
+                    index === activeIndex ? "bg-[#c9a227]" : "bg-white/70"
+                  }`}
+                  animate={{ width: index === activeIndex ? 20 : 6 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 28 }}
+                />
+              ))}
             </div>
           </>
         )}
       </div>
 
-      {images.length > 1 && (
+      {media.length > 1 && (
         <div className="flex gap-2 overflow-x-auto px-4 py-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {images.map((image, index) => (
+          {media.map((slide, index) => (
             <button
-              key={image.id}
+              key={slide.key}
               type="button"
               onClick={() => scrollToIndex(index)}
               className={`h-16 w-16 shrink-0 overflow-hidden rounded-xl ring-2 transition ${
@@ -126,27 +169,23 @@ export function ProductGalleryMobile({
                   ? "ring-[#c9a227] ring-offset-1"
                   : "ring-transparent opacity-70"
               }`}
-              aria-label={`Select image ${index + 1}`}
+              aria-label={`Select slide ${index + 1}`}
               aria-current={index === activeIndex}
             >
-              <ProductImageDisplay
-                image={image}
-                fallbackEmoji={product.emoji}
-                fallbackGradient={product.gradient}
-                className="h-full w-full"
-                emojiClassName="text-xl"
-              />
+              {renderGallerySlide(slide, product, { thumbnailOnly: slide.kind === "video" })}
             </button>
           ))}
         </div>
       )}
 
-      <ImageZoomModal
-        image={activeImage}
-        product={product}
-        open={zoomOpen}
-        onClose={() => setZoomOpen(false)}
-      />
+      {activeImage ? (
+        <ImageZoomModal
+          image={activeImage}
+          product={product}
+          open={zoomOpen}
+          onClose={() => setZoomOpen(false)}
+        />
+      ) : null}
     </>
   );
 }

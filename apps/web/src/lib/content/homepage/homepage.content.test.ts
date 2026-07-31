@@ -11,13 +11,10 @@ import {
 import { STOREFRONT_NAV_LABELS } from "@/lib/storefront/navigation-policy";
 
 describe("homepage commercial content — hero", () => {
-  it("includes China, TZ, sponsor, and seasonal slide types", async () => {
+  it("shows only Order from China and Buy from TZ hero slides at launch", async () => {
     const content = await getHomepageContent();
-    const types = new Set(content.heroSlides.map((slide) => slide.type));
-    assert.ok(types.has("china"));
-    assert.ok(types.has("tz"));
-    assert.ok(types.has("sponsor"));
-    assert.ok(types.has("seasonal"));
+    const types = content.heroSlides.map((slide) => slide.type);
+    assert.deepEqual(types, ["china", "tz"]);
   });
 
   it("uses exact dual-journey labels on journey slides", async () => {
@@ -72,24 +69,20 @@ describe("homepage commercial content — ads & sponsors", () => {
     assert.equal(isActivelyScheduled(mixed[1]!, now), false);
   });
 
-  it("groups ads by placement", async () => {
+  it("groups ads by placement from seed when launch ads are disabled", async () => {
     const content = await getHomepageContent();
-    const mid = getAdsByPlacement(content.advertisements, "mid_page");
-    const footer = getAdsByPlacement(content.advertisements, "footer");
-    const banner = getAdsByPlacement(content.advertisements, "homepage_banner");
-    assert.ok(mid.length >= 1);
-    assert.ok(footer.length >= 1);
-    assert.ok(banner.length >= 1);
-    assert.ok(mid.every((ad) => ad.placement === "mid_page"));
+    assert.equal(getAdsByPlacement(content.advertisements, "mid_page").length, 0);
+    assert.equal(getAdsByPlacement(content.advertisements, "footer").length, 0);
+    assert.equal(getAdsByPlacement(content.advertisements, "homepage_banner").length, 0);
+
+    const raw = filterActiveScheduled(homepageContentSeed.advertisements);
+    assert.ok(getAdsByPlacement(raw, "mid_page").length >= 1);
+    assert.ok(getAdsByPlacement(raw, "footer").length >= 1);
   });
 
-  it("renders a trusted partner sponsor grid from content", async () => {
+  it("hides trusted partner sponsors from customer homepage at launch", async () => {
     const content = await getHomepageContent();
-    const names = content.sponsors.map((sponsor) => sponsor.name);
-    assert.ok(names.includes("NMB"));
-    assert.ok(names.includes("Visa"));
-    assert.ok(names.includes("Vodacom"));
-    assert.ok(content.sponsors.length >= 6);
+    assert.equal(content.sponsors.length, 0);
   });
 });
 
@@ -100,14 +93,9 @@ describe("homepage commercial content — flash deals & sections", () => {
     assert.equal(discountPercent(50, 60), 0);
   });
 
-  it("includes flash deals with countdown end dates", async () => {
+  it("hides flash deals from customer homepage at launch", async () => {
     const content = await getHomepageContent();
-    assert.ok(content.flashDeals.length >= 2);
-    for (const deal of content.flashDeals) {
-      assert.ok(deal.newPrice < deal.oldPrice);
-      assert.ok(Date.parse(deal.endsAt) > Date.now() - 1000);
-      assert.ok(deal.href.length > 0);
-    }
+    assert.equal(content.flashDeals.length, 0);
   });
 
   it("exposes store and collection section copy for CMS-ready UI", async () => {

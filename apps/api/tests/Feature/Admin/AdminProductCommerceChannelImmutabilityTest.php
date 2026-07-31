@@ -9,6 +9,7 @@ use App\Models\Category;
 use App\Models\CommerceChannel;
 use App\Models\Product;
 use App\Models\Store;
+use App\Models\Supplier;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -109,6 +110,7 @@ class AdminProductCommerceChannelImmutabilityTest extends TestCase
             'category_id' => $category->id,
             'catalog_product_type_id' => $catalogProductType->id,
             'commerce_channel_id' => $china->id,
+            'supplier_id' => Supplier::factory()->create(['is_active' => true, 'country' => 'CN'])->id,
             'price' => 10000,
             'stock_quantity' => 1,
             'lifecycle_status' => 'draft',

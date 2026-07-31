@@ -11,6 +11,9 @@ use App\Models\Admin;
 use App\Models\Order;
 use App\Models\Shipment;
 use App\Models\ShipmentTrackingEvent;
+use App\Services\Fulfillment\FulfillmentShipmentArrivalService;
+use App\Services\Fulfillment\FulfillmentShipmentDispatchService;
+use App\Services\Fulfillment\FulfillmentShipmentReconciliationService;
 use App\Services\Notifications\NotificationPlatform;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -33,6 +36,9 @@ class TrackingEngine
         private readonly TrackingTimelineBuilder $timelineBuilder,
         private readonly OrderTimelineComposer $composer,
         private readonly NotificationPlatform $notifications,
+        private readonly FulfillmentShipmentDispatchService $fulfillmentDispatch,
+        private readonly FulfillmentShipmentArrivalService $fulfillmentArrival,
+        private readonly FulfillmentShipmentReconciliationService $fulfillmentReconciliation,
     ) {}
 
     /**
@@ -150,6 +156,26 @@ class TrackingEngine
             // Transport cache only — does not write orders.status (OrderLifecycleEngine).
             $this->syncShipmentStatus($locked, $event);
 
+            $shipmentForFulfillment = $locked->fresh(['fulfillment.order.deliveryOption', 'fulfillment.order.user', 'order.user']) ?? $locked;
+
+            $this->fulfillmentDispatch->reconcileDispatchedShipment($shipmentForFulfillment);
+
+            $shipmentStatus = $shipmentForFulfillment->status instanceof ShipmentLifecycleStatus
+                ? $shipmentForFulfillment->status
+                : ShipmentLifecycleStatus::tryFrom((string) ($shipmentForFulfillment->status ?? ''));
+
+            if ($shipmentStatus === ShipmentLifecycleStatus::Arrived) {
+                $this->fulfillmentArrival->reconcileArrivedShipment(
+                    $shipmentForFulfillment->fresh(['fulfillment.order.deliveryOption', 'fulfillment.order.user', 'order.user']) ?? $shipmentForFulfillment,
+                );
+            }
+
+            if ($shipmentStatus === ShipmentLifecycleStatus::Delivered) {
+                $this->fulfillmentReconciliation->reconcileDeliveredShipment(
+                    $shipmentForFulfillment->fresh(['fulfillment.order.deliveryOption']) ?? $shipmentForFulfillment,
+                );
+            }
+
             $fresh = $event->fresh(['creator', 'shipment.order.user']) ?? $event;
 
             try {
@@ -178,6 +204,16 @@ class TrackingEngine
         $eventType = $event->event_type instanceof TrackingEventType
             ? $event->event_type
             : TrackingEventType::tryFrom((string) $event->event_type);
+
+        $shipment = $event->shipment;
+        if ($shipment !== null && $this->fulfillmentArrival->publishesDedicatedArrivalNotification($shipment)) {
+            if (in_array($eventType, [
+                TrackingEventType::ArrivedDestination,
+                TrackingEventType::WarehouseReceived,
+            ], true)) {
+                return;
+            }
+        }
 
         $notificationType = $eventType === TrackingEventType::Delivered
             ? NotificationEventType::OrderDelivered
@@ -244,6 +280,10 @@ class TrackingEngine
 
         if ($resolved === ShipmentLifecycleStatus::InTransit && $shipment->shipped_at === null) {
             $shipment->shipped_at = $event->event_at ?? now();
+        }
+
+        if ($resolved === ShipmentLifecycleStatus::Arrived && $shipment->arrived_at === null) {
+            $shipment->arrived_at = $event->event_at ?? now();
         }
 
         if ($resolved === ShipmentLifecycleStatus::Delivered && $shipment->delivered_at === null) {

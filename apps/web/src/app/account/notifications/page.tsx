@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { StorefrontShell } from "@/components/layout/StorefrontShell";
 import { AccountPageSkeleton } from "@/components/ui/PageSkeletons";
 import { useCustomerSession } from "@/lib/customer/use-customer-session";
@@ -13,6 +14,7 @@ import {
   markCustomerNotificationRead,
   type CustomerNotification,
 } from "@/lib/api/customer-notifications";
+import { resolveNotificationHref } from "@/lib/notifications/resolve-notification-href";
 
 function formatWhen(value?: string | null): string {
   if (!value) return "";
@@ -27,6 +29,7 @@ function formatWhen(value?: string | null): string {
 }
 
 export default function AccountNotificationsPage() {
+  const router = useRouter();
   const { isReady, isLoggedIn } = useCustomerSession();
   const [rows, setRows] = useState<CustomerNotification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,6 +65,35 @@ export default function AccountNotificationsPage() {
     if (!isReady) return;
     void reload();
   }, [isReady, isLoggedIn, reload]);
+
+  const onNotificationClick = async (row: CustomerNotification) => {
+    if (!row.is_read) {
+      setBusy(true);
+      try {
+        await markCustomerNotificationRead(row.id);
+        setRows((current) =>
+          current.map((entry) =>
+            entry.id === row.id ? { ...entry, is_read: true } : entry,
+          ),
+        );
+      } catch (err) {
+        setError(
+          err instanceof CustomerNotificationsApiError
+            ? err.message
+            : "Unable to mark as read.",
+        );
+        setBusy(false);
+        return;
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    const href = resolveNotificationHref(row);
+    if (href) {
+      router.push(href);
+    }
+  };
 
   const onMarkRead = async (id: string) => {
     setBusy(true);
@@ -146,35 +178,57 @@ export default function AccountNotificationsPage() {
           </p>
         ) : (
           <ul className="divide-y divide-zinc-200 border border-zinc-200 bg-white">
-            {rows.map((row) => (
-              <li
-                key={row.id}
-                className={`px-4 py-4 sm:px-5 ${row.is_read ? "bg-white" : "bg-amber-50/40"}`}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-zinc-900">{row.title}</p>
-                    <p className="mt-1 text-sm text-zinc-600">{row.message}</p>
-                    <p className="mt-2 text-xs text-zinc-400">
-                      {row.event_type ?? row.type}
-                      {row.created_at ? ` · ${formatWhen(row.created_at)}` : ""}
-                    </p>
+            {rows.map((row) => {
+              const destination = resolveNotificationHref(row);
+              const rowClassName = `px-4 py-4 sm:px-5 ${
+                row.is_read ? "bg-white" : "bg-amber-50/40"
+              }`;
+
+              const body = (
+                <>
+                  <p className="text-sm font-semibold text-zinc-900">{row.title}</p>
+                  <p className="mt-1 text-sm text-zinc-600">{row.message}</p>
+                  <p className="mt-2 text-xs text-zinc-400">
+                    {row.event_type ?? row.type}
+                    {row.created_at ? ` · ${formatWhen(row.created_at)}` : ""}
+                  </p>
+                </>
+              );
+
+              return (
+                <li key={row.id} className={rowClassName}>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    {destination ? (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void onNotificationClick(row)}
+                        className="min-w-0 flex-1 text-left transition hover:opacity-90 disabled:opacity-50"
+                      >
+                        {body}
+                        <span className="mt-2 inline-block text-xs font-semibold text-[#8b6914]">
+                          View details →
+                        </span>
+                      </button>
+                    ) : (
+                      <div className="min-w-0 flex-1">{body}</div>
+                    )}
+                    {!row.is_read ? (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void onMarkRead(row.id)}
+                        className="shrink-0 text-sm font-medium text-[#8b6914] hover:underline disabled:opacity-50"
+                      >
+                        Mark read
+                      </button>
+                    ) : (
+                      <span className="shrink-0 text-xs text-zinc-400">Read</span>
+                    )}
                   </div>
-                  {!row.is_read ? (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void onMarkRead(row.id)}
-                      className="shrink-0 text-sm font-medium text-[#8b6914] hover:underline disabled:opacity-50"
-                    >
-                      Mark read
-                    </button>
-                  ) : (
-                    <span className="shrink-0 text-xs text-zinc-400">Read</span>
-                  )}
-                </div>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

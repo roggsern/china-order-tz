@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { buildCartHydrationPlan } from "@/lib/cart/hydration";
 import type {
   AddToCartInput,
   CartLineItem,
@@ -51,6 +52,7 @@ import {
   getCustomerCartErrorMessage,
   shouldFallbackToLocalCartOnError,
 } from "@/lib/cart/sync-errors";
+import { filterLocalItemsForServerSync } from "@/lib/cart/sync-local-to-server";
 import { PRODUCTS_UPDATED_EVENT } from "@/lib/admin/product-storage";
 import { getCustomerApiToken } from "@/lib/api/customer-auth";
 import {
@@ -63,6 +65,7 @@ import {
   updateServerCartItemQuantity,
 } from "@/lib/api/customer-cart";
 import { CartDrawerProvider } from "@/lib/cart/drawer-context";
+import { fetchShippingDurations } from "@/lib/shipping/durations";
 import { CartDrawer } from "./CartDrawer";
 
 function persistState(state: CartState) {
@@ -91,7 +94,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<CartState>(EMPTY_CART_STATE);
   const [isHydrated, setIsHydrated] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
-  const hydrationRef = useRef(false);
   const itemsRef = useRef(state.items);
   const serverModeRef = useRef(false);
   itemsRef.current = state.items;
@@ -110,45 +112,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  useEffect(() => {
-    if (hydrationRef.current || typeof window === "undefined") {
-      return;
-    }
-    hydrationRef.current = true;
-
-    const loaded = loadCartState();
-    const pathname = window.location.pathname;
-
-    if (isAdminPath(pathname) || isPostCheckoutPath(pathname)) {
-      setState(loaded);
-      setIsHydrated(true);
-      return;
-    }
-
-    const hydrateCart = async () => {
-      let products;
-
-      try {
-        products = await fetchClientCatalogProducts();
-      } catch {
-        products = await productService.list();
-      }
-
-      const validated = validateCartAgainstCatalog(loaded, products);
-      const token = getCustomerApiToken();
-
-      if (!token) {
-        serverModeRef.current = false;
-        setState(validated);
-        setIsHydrated(true);
-        return;
-      }
-
+  const syncLocalCartToServer = useCallback(
+    async (validated: CartState, token: string): Promise<CartState> => {
       try {
         let serverCart = await fetchServerCart(token);
 
         if ((serverCart.items?.length ?? 0) === 0) {
-          const syncable = validated.items.filter((item) => item.catalogProductId);
+          const syncable = filterLocalItemsForServerSync(
+            validated.items.filter((item) => item.catalogProductId),
+            serverCart.items ?? [],
+          );
 
           for (const item of syncable) {
             try {
@@ -181,42 +154,134 @@ export function CartProvider({ children }: { children: ReactNode }) {
           const mapped = mapServerCartItems(serverCart);
           const next = applyServerCart(mapped, validated);
           persistState(next);
-          setState(next);
-        } else {
-          serverModeRef.current = false;
-          setState(validated);
+          return next;
         }
+
+        serverModeRef.current = false;
+        return validated;
       } catch (error) {
         if (shouldFallbackToLocalCartOnError(error)) {
           serverModeRef.current = false;
-          setState(validated);
-        } else {
-          setSyncError(
-            getCustomerCartErrorMessage(error, "Unable to sync your cart with the server."),
-          );
-
-          try {
-            const serverCart = await fetchServerCart(token);
-            if ((serverCart.items?.length ?? 0) > 0) {
-              const next = applyServerCart(mapServerCartItems(serverCart), validated);
-              persistState(next);
-              setState(next);
-            } else {
-              serverModeRef.current = false;
-              setState(validated);
-            }
-          } catch {
-            serverModeRef.current = false;
-            setState(validated);
-          }
+          return validated;
         }
+
+        setSyncError(
+          getCustomerCartErrorMessage(error, "Unable to sync your cart with the server."),
+        );
+
+        try {
+          const serverCart = await fetchServerCart(token);
+          if ((serverCart.items?.length ?? 0) > 0) {
+            const next = applyServerCart(mapServerCartItems(serverCart), validated);
+            persistState(next);
+            return next;
+          }
+        } catch {
+          // Keep local cart when server recovery fails.
+        }
+
+        serverModeRef.current = false;
+        return validated;
+      }
+    },
+    [applyServerCart],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    let cancelled = false;
+    const loaded = loadCartState();
+    const plan = buildCartHydrationPlan(window.location.pathname);
+
+    setState(loaded);
+    if (plan.markHydratedImmediately) {
+      setIsHydrated(true);
+    }
+
+    if (!plan.runBackgroundSync) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const hydrateCart = async () => {
+      let products;
+
+      try {
+        products = await fetchClientCatalogProducts();
+      } catch {
+        products = await productService.list();
       }
 
-      setIsHydrated(true);
+      if (cancelled) {
+        return;
+      }
+
+      await fetchShippingDurations();
+
+      if (cancelled) {
+        return;
+      }
+
+      const validated = validateCartAgainstCatalog(loaded, products);
+      const token = getCustomerApiToken();
+
+      if (!token) {
+        serverModeRef.current = false;
+        setState(validated);
+        return;
+      }
+
+      const next = await syncLocalCartToServer(validated, token);
+      if (cancelled) {
+        return;
+      }
+
+      setState(next);
     };
 
     void hydrateCart();
-  }, [applyServerCart]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [syncLocalCartToServer]);
+
+  useEffect(() => {
+    if (!isHydrated || typeof window === "undefined") {
+      return;
+    }
+
+    const onSessionUpdated = () => {
+      const token = getCustomerApiToken();
+      if (!token) {
+        serverModeRef.current = false;
+        return;
+      }
+
+      void (async () => {
+        let products;
+
+        try {
+          products = await fetchClientCatalogProducts();
+        } catch {
+          products = await productService.list();
+        }
+
+        const validated = validateCartAgainstCatalog(loadCartState(), products);
+        const next = await syncLocalCartToServer(validated, token);
+        setState(next);
+      })();
+    };
+
+    window.addEventListener("customer-session-updated", onSessionUpdated);
+    return () => {
+      window.removeEventListener("customer-session-updated", onSessionUpdated);
+    };
+  }, [isHydrated, syncLocalCartToServer]);
 
   useEffect(() => {
     if (!isHydrated || typeof window === "undefined") {

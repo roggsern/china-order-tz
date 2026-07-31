@@ -162,6 +162,30 @@ export type AdminApiProduct = {
   store_id?: string | null;
   fulfillment_source?: string | null;
   commerce_channel?: AdminApiCommerceChannel | null;
+  store?: {
+    id?: string;
+    name?: string | null;
+    code?: string | null;
+    slug?: string | null;
+  } | null;
+  image?: {
+    id?: string;
+    path?: string | null;
+    url?: string | null;
+    alt_text?: string | null;
+  } | null;
+  variants_count?: number;
+  price_range?: {
+    min?: string | number | null;
+    max?: string | number | null;
+    currency?: string | null;
+  } | null;
+  stock_summary?: {
+    path?: string | null;
+    total_available?: number;
+    variants_in_stock?: number;
+    variants_out_of_stock?: number;
+  } | null;
   air_shipping_price?: string | number | null;
   sea_shipping_price?: string | number | null;
   shipping_options?: Array<{
@@ -192,6 +216,13 @@ export type AdminApiProduct = {
   } | null;
   category?: AdminApiCategory | null;
   brand?: AdminApiBrand | null;
+  supplier_id?: string | null;
+  supplier?: {
+    id?: string;
+    name?: string | null;
+    code?: string | null;
+    is_active?: boolean;
+  } | null;
   images?: AdminApiProductImage[];
   inventory?: AdminApiInventory[];
   variants?: AdminApiConfiguration[];
@@ -217,6 +248,8 @@ export type AdminCatalogProduct = {
   sortOrder: number;
   brandId: string | null;
   brandName: string | null;
+  supplierId: string | null;
+  supplierName: string | null;
   catalogProductTypeId: string | null;
   catalogProductTypeName: string | null;
   categoryId: string | null;
@@ -224,7 +257,27 @@ export type AdminCatalogProduct = {
   departmentId: string | null;
   commerceChannelId: string | null;
   commerceChannelCode: string | null;
+  commerceChannelLabel: string | null;
   storeId: string | null;
+  storeName: string | null;
+  image: {
+    id: string;
+    path: string | null;
+    url: string | null;
+    altText: string | null;
+  } | null;
+  variantsCount: number;
+  priceRange: {
+    min: number | null;
+    max: number | null;
+    currency: string;
+  } | null;
+  stockSummary: {
+    path: "simple" | "variant" | "none";
+    totalAvailable: number;
+    variantsInStock: number;
+    variantsOutOfStock: number;
+  } | null;
   hasSimpleInventoryPolicy: boolean;
   legacyConfigurationProduct: boolean;
   isDemo: boolean;
@@ -235,6 +288,7 @@ export type AdminCatalogProductWritePayload = {
   name: string;
   catalog_product_type_id: string;
   brand_id?: string | null;
+  supplier_id?: string | null;
   sku?: string | null;
   price?: number;
   short_description?: string | null;
@@ -793,6 +847,8 @@ export async function fetchAdminCategories(
 
 export type AdminBrandListParams = {
   categoryId?: string;
+  /** When true with categoryId, skip category-aware brand filtering (show all). */
+  allBrands?: boolean;
   search?: string;
   isActive?: boolean;
   isFeatured?: boolean;
@@ -806,6 +862,7 @@ export async function fetchAdminBrands(
 ): Promise<AdminBrand[]> {
   const query: Record<string, string | number | undefined> = {};
   if (params.categoryId) query.category_id = params.categoryId;
+  if (params.allBrands) query.all = 1;
   if (params.search) query.search = params.search;
   if (params.isActive === true) query.is_active = 1;
   if (params.isActive === false) query.is_active = 0;
@@ -831,6 +888,7 @@ export async function fetchAdminBrandsPage(
   searchParams.set("page", String(page));
   searchParams.set("per_page", String(perPage));
   if (params.categoryId) searchParams.set("category_id", params.categoryId);
+  if (params.allBrands) searchParams.set("all", "1");
   if (params.search) searchParams.set("search", params.search);
   if (params.isActive === true) searchParams.set("is_active", "1");
   if (params.isActive === false) searchParams.set("is_active", "0");
@@ -2077,6 +2135,14 @@ export function mapAdminApiCatalogProduct(product: AdminApiProduct): AdminCatalo
   const visibility =
     visibilityRaw === "private" || visibilityRaw === "hidden" ? visibilityRaw : "public";
 
+  const priceRangeRaw = product.price_range;
+  const stockRaw = product.stock_summary;
+  const stockPathRaw = stockRaw?.path;
+  const stockPath =
+    stockPathRaw === "variant" || stockPathRaw === "none" || stockPathRaw === "simple"
+      ? stockPathRaw
+      : "simple";
+
   return {
     id: product.id,
     name: product.name,
@@ -2092,6 +2158,8 @@ export function mapAdminApiCatalogProduct(product: AdminApiProduct): AdminCatalo
     sortOrder: product.sort_order ?? 0,
     brandId: product.brand?.id ?? null,
     brandName: product.brand?.name ?? null,
+    supplierId: product.supplier_id ?? product.supplier?.id ?? null,
+    supplierName: product.supplier?.name ?? null,
     catalogProductTypeId:
       product.catalog_product_type_id ?? product.catalog_product_type?.id ?? null,
     catalogProductTypeName: product.catalog_product_type?.name ?? null,
@@ -2100,7 +2168,43 @@ export function mapAdminApiCatalogProduct(product: AdminApiProduct): AdminCatalo
     departmentId: product.category?.department_id ?? null,
     commerceChannelId: product.commerce_channel_id ?? product.commerce_channel?.id ?? null,
     commerceChannelCode: product.commerce_channel?.code ?? null,
-    storeId: product.store_id ?? null,
+    commerceChannelLabel:
+      product.commerce_channel?.admin_label ?? product.commerce_channel?.name ?? null,
+    storeId: product.store_id ?? product.store?.id ?? null,
+    storeName: product.store?.name ?? null,
+    image: product.image?.id
+      ? {
+          id: product.image.id,
+          path: product.image.path ?? null,
+          url: product.image.url ?? null,
+          altText: product.image.alt_text ?? null,
+        }
+      : null,
+    variantsCount:
+      typeof product.variants_count === "number"
+        ? product.variants_count
+        : (product.variants?.length ?? product.configurations?.length ?? 0),
+    priceRange: priceRangeRaw
+      ? {
+          min:
+            priceRangeRaw.min == null || priceRangeRaw.min === ""
+              ? null
+              : parseMoney(priceRangeRaw.min),
+          max:
+            priceRangeRaw.max == null || priceRangeRaw.max === ""
+              ? null
+              : parseMoney(priceRangeRaw.max),
+          currency: priceRangeRaw.currency?.trim() || "TZS",
+        }
+      : null,
+    stockSummary: stockRaw
+      ? {
+          path: stockPath,
+          totalAvailable: Number(stockRaw.total_available ?? 0) || 0,
+          variantsInStock: Number(stockRaw.variants_in_stock ?? 0) || 0,
+          variantsOutOfStock: Number(stockRaw.variants_out_of_stock ?? 0) || 0,
+        }
+      : null,
     hasSimpleInventoryPolicy: (product.inventory?.length ?? 0) > 0,
     legacyConfigurationProduct: product.legacy_configuration_product === true,
     isDemo: product.is_demo === true,
@@ -2405,6 +2509,8 @@ export async function syncAdminProductShippingOptions(
 export type AdminProductMedia = {
   id: string;
   productId: string;
+  productVariantId: string | null;
+  variantName: string | null;
   type: "image" | "video";
   url: string;
   thumbnailUrl: string | null;
@@ -2419,6 +2525,8 @@ export type AdminProductMedia = {
 type AdminApiProductMedia = {
   id: string;
   product_id: string;
+  product_variant_id?: string | null;
+  variant_name?: string | null;
   type: "image" | "video" | string;
   url: string;
   thumbnail_url?: string | null;
@@ -2434,6 +2542,8 @@ export function mapAdminApiProductMedia(item: AdminApiProductMedia): AdminProduc
   return {
     id: item.id,
     productId: item.product_id,
+    productVariantId: item.product_variant_id ?? null,
+    variantName: item.variant_name?.trim() || null,
     type: item.type === "video" ? "video" : "image",
     url: item.url,
     thumbnailUrl: item.thumbnail_url ?? null,
@@ -2446,9 +2556,18 @@ export function mapAdminApiProductMedia(item: AdminApiProductMedia): AdminProduc
   };
 }
 
-export async function fetchAdminProductMedia(productId: string): Promise<AdminProductMedia[]> {
+export async function fetchAdminProductMedia(
+  productId: string,
+  options: { productVariantId?: string | null } = {},
+): Promise<AdminProductMedia[]> {
+  const params = new URLSearchParams();
+  if (options.productVariantId) {
+    params.set("product_variant_id", options.productVariantId);
+  }
+  const query = params.toString();
+
   const response = await fetch(
-    `/api/admin/products/${encodeURIComponent(productId)}/media`,
+    `/api/admin/products/${encodeURIComponent(productId)}/media${query ? `?${query}` : ""}`,
     { headers: { Accept: "application/json" }, cache: "no-store" },
   );
 
@@ -2476,6 +2595,7 @@ export async function uploadAdminProductMediaImage(
     title?: string;
     isPrimary?: boolean;
     sortOrder?: number;
+    productVariantId?: string | null;
   } = {},
 ): Promise<AdminProductMedia> {
   const formData = new FormData();
@@ -2488,6 +2608,9 @@ export async function uploadAdminProductMediaImage(
   }
   if (options.sortOrder !== undefined) {
     formData.append("sort_order", String(options.sortOrder));
+  }
+  if (options.productVariantId) {
+    formData.append("product_variant_id", options.productVariantId);
   }
 
   const response = await fetch(
@@ -2730,6 +2853,7 @@ export type AdminProductVariant = {
   stock: number | null;
   pricesCount: number;
   inventoriesCount: number;
+  displayAttributes: Array<{ attribute: string; value: string }>;
   attributeValues: AdminProductVariantAttributeValue[];
 };
 
@@ -2751,6 +2875,9 @@ export type AdminProductVariantsPayload = {
   variants: AdminProductVariant[];
   attributes: AdminVariantAttribute[];
   createdCount?: number;
+  generated?: number;
+  needsPricing?: number;
+  needsInventorySetup?: number;
 };
 
 type AdminApiVariantAttributeValue = {
@@ -2781,6 +2908,7 @@ type AdminApiProductVariant = {
   stock?: number | null;
   prices_count?: number;
   inventories_count?: number;
+  display_attributes?: Array<{ attribute?: string | null; value?: string | null }>;
   attribute_values?: AdminApiVariantAttributeValue[];
 };
 
@@ -2796,6 +2924,9 @@ type AdminApiProductVariantsPayload = {
   variants?: AdminApiProductVariant[];
   attributes?: AdminApiVariantAttribute[];
   created_count?: number;
+  generated?: number;
+  needs_pricing?: number;
+  needs_inventory_setup?: number;
 };
 
 export function mapAdminApiProductVariant(item: AdminApiProductVariant): AdminProductVariant {
@@ -2813,6 +2944,12 @@ export function mapAdminApiProductVariant(item: AdminApiProductVariant): AdminPr
     stock: item.stock === null || item.stock === undefined ? null : Number(item.stock),
     pricesCount: Number(item.prices_count ?? 0),
     inventoriesCount: Number(item.inventories_count ?? 0),
+    displayAttributes: (item.display_attributes ?? [])
+      .map((row) => ({
+        attribute: row.attribute?.trim() ?? "",
+        value: row.value?.trim() ?? "",
+      }))
+      .filter((row) => row.attribute !== "" && row.value !== ""),
     attributeValues: (item.attribute_values ?? []).map((row) => ({
       id: row.id,
       catalogAttributeId: row.catalog_attribute_id,
@@ -2851,6 +2988,20 @@ function mapAdminApiProductVariantsPayload(
       data?.created_count === undefined || data?.created_count === null
         ? undefined
         : Number(data.created_count),
+    generated:
+      data?.generated === undefined || data?.generated === null
+        ? data?.created_count === undefined || data?.created_count === null
+          ? undefined
+          : Number(data.created_count)
+        : Number(data.generated),
+    needsPricing:
+      data?.needs_pricing === undefined || data?.needs_pricing === null
+        ? undefined
+        : Number(data.needs_pricing),
+    needsInventorySetup:
+      data?.needs_inventory_setup === undefined || data?.needs_inventory_setup === null
+        ? undefined
+        : Number(data.needs_inventory_setup),
   };
 }
 

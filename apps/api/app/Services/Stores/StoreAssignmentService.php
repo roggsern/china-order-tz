@@ -3,6 +3,7 @@
 namespace App\Services\Stores;
 
 use App\Enums\StoreAssignmentType;
+use App\Enums\StoreOperationalScope;
 use App\Events\Audit\StorePlatformAudit;
 use App\Models\Admin;
 use App\Models\Store;
@@ -32,6 +33,7 @@ class StoreAssignmentService
             ],
             [
                 'assignment_type' => $type,
+                'operational_scope' => StoreOperationalScope::StoreOperator,
                 'starts_at' => $startsAt,
                 'ends_at' => $endsAt,
                 'is_active' => true,

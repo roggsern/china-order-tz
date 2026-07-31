@@ -4,6 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { formatPrice } from "@/lib/catalog/utils";
 import {
+  formatVariantDisplayLabel,
+  mapVariantDisplayAttributes,
+  mapVariantDisplayAttributesToSelected,
+} from "@/lib/catalog/variant-display-attributes";
+import {
   fetchStorefrontConfiguration,
   fetchStorefrontQuote,
   StorefrontConfigurationApiError,
@@ -141,6 +146,24 @@ export function ProductConfigurationPicker({
   }, [experience]);
 
   const selectedAttributes = useMemo(() => {
+    if (matched) {
+      const fromMatched = mapVariantDisplayAttributesToSelected(
+        mapVariantDisplayAttributes({
+          display_attributes: matched.display_attributes,
+          attribute_values: matched.attribute_values.map((row) => ({
+            attribute: {
+              name: row.attribute_name ?? undefined,
+              slug: row.attribute_slug ?? undefined,
+            },
+            value: row.value,
+          })),
+        }),
+      );
+      if (fromMatched.length > 0) {
+        return fromMatched;
+      }
+    }
+
     return configAttributes.flatMap((attribute) => {
       const valueId = selections[attribute.id];
       if (!valueId) return [];
@@ -154,7 +177,7 @@ export function ProductConfigurationPicker({
         },
       ];
     });
-  }, [configAttributes, selections]);
+  }, [configAttributes, matched, selections]);
 
   const selectedColorSlug = useMemo(() => {
     const colorAttribute = configAttributes.find(
@@ -175,10 +198,25 @@ export function ProductConfigurationPicker({
     const configurationId = experience?.matched_configuration_id ?? null;
     const inStock = Boolean(experience?.is_in_stock);
     const stock = matched?.stock ?? 0;
+    const label =
+      matched?.name?.trim() ||
+      formatVariantDisplayLabel(
+        mapVariantDisplayAttributes({
+          display_attributes: matched?.display_attributes,
+          attribute_values: matched?.attribute_values?.map((row) => ({
+            attribute: {
+              name: row.attribute_name ?? undefined,
+              slug: row.attribute_slug ?? undefined,
+            },
+            value: row.value,
+          })),
+        }),
+      ) ||
+      "";
 
     onSelectionChange({
       configurationId,
-      label: matched?.name ?? "",
+      label,
       sku: matched?.sku ?? "",
       inStock,
       stock,
@@ -290,7 +328,7 @@ export function ProductConfigurationPicker({
   );
 
   return (
-    <div className="space-y-5 border-t border-zinc-100 pt-6">
+    <div className="space-y-4 border-t border-zinc-100 pt-5">
       <div className="flex items-end justify-between gap-3">
         <div>
           {experience.product_type ? (
@@ -298,7 +336,7 @@ export function ProductConfigurationPicker({
               {experience.product_type.name} configuration
             </p>
           ) : null}
-          <h3 className="mt-1 text-base font-bold text-zinc-900">Choose your options</h3>
+          <h3 className="mt-0.5 text-sm font-bold text-zinc-900">Choose your options</h3>
         </div>
         {matched?.sku ? (
           <p className="truncate text-[11px] font-medium text-zinc-400">{matched.sku}</p>
@@ -314,7 +352,7 @@ export function ProductConfigurationPicker({
         );
 
         return (
-          <div key={attribute.id} className="space-y-2.5">
+          <div key={attribute.id} className="space-y-2">
             <div className="flex items-baseline justify-between gap-2">
               <p className="text-sm font-semibold text-zinc-900">
                 {attribute.name}
@@ -333,7 +371,7 @@ export function ProductConfigurationPicker({
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
               {visibleValues.map((value) => {
                 const enabled = (experience.allowed_value_ids[attribute.id] ?? []).includes(
                   value.id,
@@ -353,31 +391,30 @@ export function ProductConfigurationPicker({
                       reduceMotion
                         ? undefined
                         : {
-                            scale: isSelected ? 1.02 : 1,
-                            y: isSelected ? -1 : 0,
+                            scale: isSelected ? 1.01 : 1,
                           }
                     }
                     transition={{ type: "spring", stiffness: 420, damping: 28 }}
-                    className={`relative overflow-hidden rounded-2xl border px-3.5 py-3.5 text-left transition-all duration-200 ${
+                    className={`relative overflow-hidden rounded-xl border px-2.5 py-2 text-left transition-all duration-200 ${
                       isSelected
-                        ? "border-[#c9a227] bg-gradient-to-br from-[#c9a227]/18 via-white to-white shadow-[0_10px_28px_rgba(201,162,39,0.2)]"
+                        ? "border-[#c9a227] bg-gradient-to-br from-[#c9a227]/15 via-white to-white shadow-[0_4px_16px_rgba(201,162,39,0.16)] ring-1 ring-[#c9a227]/25"
                         : disabled
                           ? "cursor-not-allowed border-zinc-100 bg-zinc-50/80 opacity-55"
-                          : "border-zinc-200 bg-white hover:-translate-y-0.5 hover:border-[#c9a227]/35 hover:shadow-[0_8px_22px_rgba(0,0,0,0.06)]"
+                          : "border-zinc-200 bg-white hover:border-[#c9a227]/35 hover:shadow-sm"
                     }`}
                     aria-pressed={isSelected}
                     aria-disabled={disabled}
                   >
                     {isSelected ? (
-                      <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-[#c9a227] text-[10px] font-bold text-white">
+                      <span className="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#c9a227] text-[9px] font-bold text-white">
                         ✓
                       </span>
                     ) : null}
 
-                    <div className="flex items-center gap-2.5 pr-4">
+                    <div className="flex items-center gap-2 pr-3">
                       {isColor && value.color_code ? (
                         <span
-                          className={`h-8 w-8 shrink-0 rounded-full border shadow-inner ${
+                          className={`h-6 w-6 shrink-0 rounded-full border shadow-inner ${
                             disabled ? "border-zinc-200 grayscale" : "border-zinc-300"
                           }`}
                           style={{ backgroundColor: value.color_code }}
@@ -386,23 +423,21 @@ export function ProductConfigurationPicker({
                       ) : null}
                       <div className="min-w-0">
                         <p
-                          className={`truncate text-sm font-semibold ${
+                          className={`truncate text-[13px] font-semibold leading-tight ${
                             disabled ? "text-zinc-400 line-through" : "text-zinc-900"
                           }`}
                         >
                           {value.value}
                         </p>
                         {disabled ? (
-                          <p className="mt-0.5 text-[11px] font-medium text-zinc-400">
+                          <p className="mt-0.5 text-[10px] font-medium text-zinc-400">
                             Unavailable
                           </p>
                         ) : isSelected ? (
-                          <p className="mt-0.5 text-[11px] font-semibold text-[#8b6914]">
+                          <p className="mt-0.5 text-[10px] font-semibold text-[#8b6914]">
                             Selected
                           </p>
-                        ) : (
-                          <p className="mt-0.5 text-[11px] text-zinc-400">Tap to choose</p>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                   </motion.button>
@@ -420,7 +455,7 @@ export function ProductConfigurationPicker({
             initial={reduceMotion ? false : { opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={reduceMotion ? undefined : { opacity: 0, y: -4 }}
-            className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3"
+            className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5"
             role="status"
           >
             <p className="text-sm font-semibold text-red-700">
@@ -439,7 +474,7 @@ export function ProductConfigurationPicker({
             className="text-sm text-zinc-500"
             role="status"
           >
-            Select all options to see shipping and your order total.
+            Select all options to continue.
           </motion.p>
         ) : matched?.in_stock ? (
           <motion.div
@@ -447,7 +482,7 @@ export function ProductConfigurationPicker({
             initial={reduceMotion ? false : { opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={reduceMotion ? undefined : { opacity: 0 }}
-            className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-zinc-100 bg-zinc-50/80 px-4 py-3"
+            className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-100 bg-zinc-50/80 px-3 py-2.5"
           >
             <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">

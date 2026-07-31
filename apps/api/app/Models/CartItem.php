@@ -28,6 +28,8 @@ class CartItem extends Model
         'shipping_method_id',
         'shipping_cost',
         'estimated_delivery_days',
+        'estimated_min_days',
+        'estimated_max_days',
     ];
 
     protected function casts(): array
@@ -40,6 +42,8 @@ class CartItem extends Model
             'shipping_method' => ShippingMethod::class,
             'shipping_cost' => 'decimal:2',
             'estimated_delivery_days' => 'integer',
+            'estimated_min_days' => 'integer',
+            'estimated_max_days' => 'integer',
         ];
     }
 

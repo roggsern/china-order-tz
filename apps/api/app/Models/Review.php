@@ -26,6 +26,9 @@ class Review extends Model
         'is_approved',
         'status',
         'is_verified_purchase',
+        'moderation_note',
+        'moderated_by_admin_id',
+        'moderated_at',
     ];
 
     protected function casts(): array
@@ -34,6 +37,7 @@ class Review extends Model
             'rating' => 'integer',
             'is_approved' => 'boolean',
             'is_verified_purchase' => 'boolean',
+            'moderated_at' => 'datetime',
         ];
     }
 
@@ -50,6 +54,11 @@ class Review extends Model
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
+    }
+
+    public function moderatedBy(): BelongsTo
+    {
+        return $this->belongsTo(Admin::class, 'moderated_by_admin_id');
     }
 
     public function images(): HasMany

@@ -1,20 +1,23 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import type { CustomerTrackingDisplayStep } from "@/lib/order/tracking-display";
+import type { CustomerProgressDisplayStep } from "@/lib/order/customer-progress";
+import { resolveTrackingStepVisualState } from "@/lib/order/tracking-stepper-visual-state";
 import { formatTrackingTimestamp } from "@/lib/order/tracking-format";
 
 interface OrderTrackingStepperProps {
-  timeline: CustomerTrackingDisplayStep[];
+  timeline: CustomerProgressDisplayStep[];
   tone?: "light" | "dark";
 }
 
 function StepIndicator({
   step,
+  visualState,
   isCancelled,
   tone,
 }: {
-  step: CustomerTrackingDisplayStep;
+  step: CustomerProgressDisplayStep;
+  visualState: CustomerProgressDisplayStep["state"];
   isCancelled: boolean;
   tone: "light" | "dark";
 }) {
@@ -34,7 +37,7 @@ function StepIndicator({
     );
   }
 
-  if (step.state === "completed") {
+  if (visualState === "completed") {
     return (
       <motion.span
         layout
@@ -48,7 +51,7 @@ function StepIndicator({
     );
   }
 
-  if (step.state === "current") {
+  if (visualState === "current") {
     return (
       <motion.span
         layout
@@ -84,14 +87,14 @@ function StepIndicator({
 }
 
 function connectorClass(
-  step: CustomerTrackingDisplayStep,
+  visualState: CustomerProgressDisplayStep["state"],
   isCancelled: boolean,
   tone: "light" | "dark",
 ): string {
-  if (isCancelled || step.state === "upcoming") {
+  if (isCancelled || visualState === "upcoming") {
     return tone === "dark" ? "bg-zinc-700" : "bg-zinc-200";
   }
-  if (step.state === "completed") {
+  if (visualState === "completed") {
     return "bg-emerald-400";
   }
   return "bg-gradient-to-b from-[#c9a227] to-zinc-200";
@@ -111,10 +114,11 @@ export function OrderTrackingStepper({
     >
       {timeline.map((step, index) => {
         const isLast = index === timeline.length - 1;
+        const visualState = resolveTrackingStepVisualState(step, index, timeline.length);
 
         return (
           <motion.li
-            key={step.status}
+            key={step.key}
             layout
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
@@ -124,7 +128,7 @@ export function OrderTrackingStepper({
             {!isLast ? (
               <span
                 className={`absolute left-[19px] top-10 h-[calc(100%-10px)] w-0.5 ${connectorClass(
-                  step,
+                  visualState,
                   isCancelled,
                   tone,
                 )}`}
@@ -132,15 +136,20 @@ export function OrderTrackingStepper({
               />
             ) : null}
 
-            <StepIndicator step={step} isCancelled={isCancelled} tone={tone} />
+            <StepIndicator
+              step={step}
+              visualState={visualState}
+              isCancelled={isCancelled}
+              tone={tone}
+            />
 
             <div
               className={`min-w-0 flex-1 rounded-2xl px-3 py-2.5 transition sm:px-4 ${
-                step.state === "current" && !isCancelled
+                visualState === "current" && !isCancelled
                   ? isDark
                     ? "bg-[#c9a227]/10 ring-1 ring-[#c9a227]/25"
                     : "bg-[#c9a227]/8 ring-1 ring-[#c9a227]/20"
-                  : step.state === "completed" && !isCancelled
+                  : visualState === "completed" && !isCancelled
                     ? isDark
                       ? "bg-emerald-500/5"
                       : "bg-emerald-50/50"
@@ -150,11 +159,11 @@ export function OrderTrackingStepper({
               <div className="flex flex-wrap items-center gap-2">
                 <p
                   className={`text-sm font-bold ${
-                    step.state === "current" && !isCancelled
+                    visualState === "current" && !isCancelled
                       ? isDark
                         ? "text-[#e8c547]"
                         : "text-[#8b6914]"
-                      : step.state === "completed"
+                      : visualState === "completed"
                         ? isDark
                           ? "text-[#c9a227]"
                           : "text-zinc-900"
@@ -165,7 +174,7 @@ export function OrderTrackingStepper({
                 >
                   {step.label}
                 </p>
-                {step.state === "current" && !isCancelled ? (
+                {visualState === "current" && !isCancelled ? (
                   <span
                     className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
                       isDark

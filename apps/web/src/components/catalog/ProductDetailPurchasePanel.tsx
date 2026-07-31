@@ -1,19 +1,10 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import type { Category, Product } from "@/lib/types/catalog";
-import { pickProductShippingContext } from "@/lib/types/catalog";
 import { useMoqDisplayState } from "@/lib/catalog/use-moq-display";
 import { ProductDetailHeader } from "./ProductDetailHeader";
 import { ProductPriceSection } from "./ProductPriceSection";
-import {
-  ShippingEstimator,
-  getDefaultShippingMethod,
-  getShippingCostForMethod,
-  type ShippingMethodSelection,
-} from "./ShippingEstimator";
-import { LandedCostSummary } from "./LandedCostSummary";
-import { DeliveryEstimator } from "./DeliveryEstimator";
 import { ProductOriginBanner } from "./ProductOriginBanner";
 import { QuantitySelector } from "./QuantitySelector";
 import { AddToCartButton } from "./AddToCartButton";
@@ -28,17 +19,20 @@ import {
 } from "./ProductConfigurationPicker";
 import { ProductMoqStatusCard } from "./ProductMoqStatusCard";
 import type { StorefrontPriceQuote } from "@/lib/catalog/storefront-configuration";
+import { isProductPurchaseUnavailable } from "@/lib/catalog/product-availability";
 
 interface ProductDetailPurchasePanelProps {
   product: Product;
   category?: Category;
   onSelectedColorChange?: (colorSlug: string | null) => void;
+  onConfigurationIdChange?: (configurationId: string | null) => void;
 }
 
 export function ProductDetailPurchasePanel({
   product,
   category,
   onSelectedColorChange,
+  onConfigurationIdChange,
 }: ProductDetailPurchasePanelProps) {
   const [quantity, setQuantity] = useState(1);
   const [quantityMax, setQuantityMax] = useState(Math.min(Math.max(product.stock, 0), 99));
@@ -55,14 +49,13 @@ export function ProductDetailPurchasePanel({
   });
   const [quote, setQuote] = useState<StorefrontPriceQuote | null>(null);
 
-  const shippingContext = pickProductShippingContext(product);
-  const [selectedMethod, setSelectedMethod] = useState<ShippingMethodSelection>(() =>
-    getDefaultShippingMethod(shippingContext),
+  const handleSelectionChange = useCallback(
+    (selection: StorefrontConfigurationSelection) => {
+      setConfigSelection(selection);
+      onConfigurationIdChange?.(selection.configurationId);
+    },
+    [onConfigurationIdChange],
   );
-
-  const handleSelectionChange = useCallback((selection: StorefrontConfigurationSelection) => {
-    setConfigSelection(selection);
-  }, []);
 
   const handleQuoteChange = useCallback((nextQuote: StorefrontPriceQuote | null) => {
     setQuote(nextQuote);
@@ -83,9 +76,12 @@ export function ProductDetailPurchasePanel({
     configSelection.hasConfigurations &&
     configSelection.isComplete &&
     !configSelection.inStock;
+  const purchaseUnavailable = isProductPurchaseUnavailable(product);
   const isOutOfStock =
-    (!configSelection.hasConfigurations && product.stock <= 0) || configurationOutOfStock;
+    !purchaseUnavailable &&
+    ((!configSelection.hasConfigurations && product.stock <= 0) || configurationOutOfStock);
   const canAdd =
+    !purchaseUnavailable &&
     !isOutOfStock &&
     !needsConfiguration &&
     (!configSelection.hasConfigurations || Boolean(configSelection.configurationId));
@@ -103,29 +99,25 @@ export function ProductDetailPurchasePanel({
     moqDisplay.wholesaleApplied
       ? moqDisplay.compareAtUnitPrice ?? undefined
       : undefined;
-
-  const shippingCost = useMemo(
-    () =>
-      orderSummaryReady
-        ? getShippingCostForMethod(shippingContext, selectedMethod, quantity)
-        : null,
-    [shippingContext, selectedMethod, quantity, orderSummaryReady],
-  );
+  const displayPrice =
+    configSelection.hasConfigurations && !orderSummaryReady
+      ? product.price
+      : unitPrice;
+  const displayOldPrice =
+    moqDisplay.wholesaleApplied && compareAtUnitPrice != null
+      ? compareAtUnitPrice
+      : product.oldPrice;
 
   return (
     <div className="min-w-0 lg:sticky lg:top-20 lg:self-start">
       <div className="space-y-6 rounded-3xl border border-zinc-100 bg-white p-6 shadow-[0_8px_40px_rgba(0,0,0,0.06)] lg:space-y-5 lg:p-5">
         <ProductDetailHeader product={product} category={category} />
 
-        {!configSelection.hasConfigurations ? (
-          <ProductPriceSection price={product.price} oldPrice={product.oldPrice} />
-        ) : null}
+        <ProductPriceSection price={displayPrice} oldPrice={displayOldPrice} />
 
         {product.trustBadges.length > 0 && (
           <TrustBadges badges={product.trustBadges} size="md" />
         )}
-
-        <ProductOriginBanner origin={product.origin} />
 
         <ProductConfigurationPicker
           productSlug={product.slug}
@@ -140,6 +132,12 @@ export function ProductDetailPurchasePanel({
         {needsConfiguration ? (
           <p className="text-sm font-medium text-amber-700" role="status">
             Select a complete configuration to continue.
+          </p>
+        ) : null}
+
+        {purchaseUnavailable ? (
+          <p className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm font-medium text-zinc-600" role="status">
+            This product is currently unavailable for purchase.
           </p>
         ) : null}
 
@@ -163,41 +161,6 @@ export function ProductDetailPurchasePanel({
           />
         </div>
 
-        {product.origin === "china" ? (
-          <ShippingEstimator
-            {...shippingContext}
-            selectedMethod={selectedMethod}
-            onSelect={setSelectedMethod}
-            quantity={quantity}
-            configurationIncomplete={needsConfiguration}
-          />
-        ) : (
-          <div className="rounded-2xl border border-zinc-100 bg-zinc-50/50 p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.15em] text-zinc-500">
-              Shipping
-            </p>
-            {needsConfiguration ? (
-              <p className="mt-3 text-sm font-medium text-zinc-600" role="status">
-                Complete your selection to estimate shipping.
-              </p>
-            ) : (
-              <DeliveryEstimator origin={product.origin} variant="detail" className="mt-4" />
-            )}
-          </div>
-        )}
-
-        <LandedCostSummary
-          productPrice={unitPrice}
-          compareAtUnitPrice={
-            moqDisplay.wholesaleApplied ? moqDisplay.compareAtUnitPrice : null
-          }
-          shippingCost={shippingCost}
-          quantity={quantity}
-          shippingContext={shippingContext}
-          isReady={orderSummaryReady}
-          moqHint={moqDisplay.moqHint}
-        />
-
         <div className="flex flex-col gap-3">
           <BuyNowButton
             product={product}
@@ -220,6 +183,7 @@ export function ProductDetailPurchasePanel({
               quantity={quantity}
               variant="detail"
               disabled={!canAdd}
+              purchaseUnavailable={purchaseUnavailable}
               configurationId={configSelection.configurationId}
               configurationLabel={configSelection.label}
               configurationSku={configSelection.sku}
@@ -236,6 +200,7 @@ export function ProductDetailPurchasePanel({
             <WishlistButton
               className="shrink-0"
               productId={product.id}
+              catalogProductId={product.catalogProductId}
               slug={product.slug}
               name={product.name}
               imageUrl={getCatalogProductImageSrc(product) || undefined}
@@ -245,6 +210,8 @@ export function ProductDetailPurchasePanel({
             />
           </div>
         </div>
+
+        <ProductOriginBanner origin={product.origin} />
 
         <ProductPurchaseTrust />
       </div>

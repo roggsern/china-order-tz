@@ -65,14 +65,14 @@ class CustomerProfileAndAddressTest extends TestCase
         ])->assertOk()
             ->assertJsonPath('data.first_name', 'Janet')
             ->assertJsonPath('data.last_name', 'Mbuya')
-            ->assertJsonPath('data.email', 'janet@example.com');
+            ->assertJsonPath('data.email', 'jane@example.com');
 
         $this->assertDatabaseHas('users', [
             'id' => $user->id,
             'first_name' => 'Janet',
             'last_name' => 'Mbuya',
             'name' => 'Janet Mbuya',
-            'email' => 'janet@example.com',
+            'email' => 'jane@example.com',
         ]);
     }
 

@@ -17,7 +17,14 @@ class ShowCustomerOrderAction
             'items',
             'items.product.commerceChannel',
             'payments',
+            'paymentTransactions',
             'deliveryOption',
+            'shippingAddress',
+            'fulfillment',
+            'fulfillment.warehouseJob',
+            'fulfillment.shipment',
+            'shipments',
+            'warehouseJob',
         ]);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -17,9 +18,24 @@ class AdminResource extends JsonResource
             'phone' => $this->phone,
             'is_super_admin' => $this->is_super_admin,
             'is_active' => $this->is_active,
+            'permissions' => $this->resolvePermissions(),
             'role' => new RoleResource($this->whenLoaded('role')),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolvePermissions(): array
+    {
+        if ($this->is_super_admin) {
+            return AdminPermissions::all();
+        }
+
+        $role = $this->relationLoaded('role') ? $this->role : null;
+
+        return $role?->permissionSlugs() ?? [];
     }
 }

@@ -131,14 +131,19 @@ class AdminProductController extends Controller
         Product $product,
         UploadProductImageAction $action,
     ): JsonResponse {
-        $image = $action->handle($request, $product);
+        $result = $action->handle($request, $product);
+        $media = $result->catalogMedia;
+        $path = $result->storagePath;
+        $url = $media->url ?? ($path !== null ? Storage::disk('public')->url($path) : null);
 
         return response()->json([
             'success' => true,
             'data' => [
-                'id' => $image->id,
-                'path' => $image->path,
-                'url' => Storage::disk('public')->url($image->path),
+                'id' => $media->id,
+                'path' => $path,
+                'url' => $url,
+                'media_id' => $media->id,
+                'source' => 'product_media',
             ],
         ], 201);
     }

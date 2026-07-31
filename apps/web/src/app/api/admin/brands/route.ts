@@ -10,7 +10,9 @@ export async function GET(request: Request) {
     "per_page",
     "category_id",
     "search",
+    "all",
     "is_active",
+    "is_featured",
     "trashed",
   ]);
   return proxyAdminApiRequest("/brands", { method: "GET", searchParams });

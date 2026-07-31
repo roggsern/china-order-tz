@@ -132,3 +132,29 @@ export async function refreshPaymentTransaction(
     "Unable to refresh payment transaction.",
   );
 }
+
+export async function resolvePaymentReturnTransaction(
+  input: { orderId?: string | null; merchantReference?: string | null },
+  token?: string | null,
+): Promise<PaymentTransactionPayload> {
+  const params = new URLSearchParams();
+
+  if (input.orderId?.trim()) {
+    params.set("order_id", input.orderId.trim());
+  }
+
+  if (input.merchantReference?.trim()) {
+    params.set("merchant_reference", input.merchantReference.trim());
+  }
+
+  const query = params.toString();
+
+  return apiFetch<PaymentTransactionPayload>(
+    `/api/payments/return-context${query ? `?${query}` : ""}`,
+    {
+      method: "GET",
+      headers: getAuthHeaders(token),
+    },
+    "Unable to resolve payment return context.",
+  );
+}

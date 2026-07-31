@@ -2,16 +2,19 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Enums\ProductMediaType;
+use App\Http\Requests\Admin\Concerns\ValidatesProductVariantMediaBinding;
 use App\Http\Requests\Concerns\AuthorizesAdminPermission;
 use App\Support\Admin\AdminPermissions;
-use App\Enums\ProductMediaType;
 use App\Support\Security\SafePublicUrl;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreProductMediaRequest extends FormRequest
 {
     use AuthorizesAdminPermission;
+    use ValidatesProductVariantMediaBinding;
 
     protected function requiredPermission(): string
     {
@@ -27,6 +30,7 @@ class StoreProductMediaRequest extends FormRequest
 
         $rules = [
             'type' => ['required', 'string', Rule::in(array_column(ProductMediaType::cases(), 'value'))],
+            'product_variant_id' => ['sometimes', 'nullable', 'uuid'],
             'alt_text' => ['sometimes', 'nullable', 'string', 'max:255'],
             'title' => ['sometimes', 'nullable', 'string', 'max:255'],
             'sort_order' => ['sometimes', 'integer', 'min:0', 'max:999999'],
@@ -52,6 +56,11 @@ class StoreProductMediaRequest extends FormRequest
         return $rules;
     }
 
+    public function withValidator(Validator $validator): void
+    {
+        $this->validateProductVariantMediaBinding($validator);
+    }
+
     protected function prepareForValidation(): void
     {
         if (! $this->filled('type')) {
@@ -64,6 +73,10 @@ class StoreProductMediaRequest extends FormRequest
                     $field => filter_var($this->input($field), FILTER_VALIDATE_BOOLEAN),
                 ]);
             }
+        }
+
+        if ($this->has('product_variant_id') && $this->input('product_variant_id') === '') {
+            $this->merge(['product_variant_id' => null]);
         }
     }
 }

@@ -44,6 +44,11 @@ class OrderFromChinaStorefrontTest extends TestCase
     {
         $this->seed(CategorySeeder::class);
 
+        $phones = Category::query()->where('slug', 'electronics-phones')->firstOrFail();
+        $brand = Brand::factory()->create(['is_active' => true]);
+        $product = $this->makeProduct($phones, $brand, 'menu-visible-phone', $this->china);
+        $this->ensureChinaListable($product);
+
         // Faker / sample orphan root with China origin — must not appear in menu.
         Category::factory()->create([
             'name' => 'Et Rerum',
@@ -84,6 +89,9 @@ class OrderFromChinaStorefrontTest extends TestCase
         foreach ($slugs as $slug) {
             $this->assertContains($slug, $bibleRoots);
         }
+
+        $this->assertContains('electronics', $slugs);
+        $this->assertNotContains('building-materials', $slugs);
 
         $this->assertNotContains('Et Rerum', $names);
         $this->assertNotContains('Bras', $names);

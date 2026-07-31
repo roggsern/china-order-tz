@@ -22,6 +22,7 @@ use App\Models\ProductShippingOption;
 use App\Models\ProductType;
 use App\Models\ProductVariant;
 use App\Models\Store;
+use App\Models\Supplier;
 use App\Models\VariantInventory;
 use App\Models\VariantPrice;
 use Database\Seeders\ProductTypeSeeder;
@@ -160,6 +161,7 @@ class AdminProductActiveDegradationGuardTest extends TestCase
             'category_id' => $category->id,
             'catalog_product_type_id' => $catalogType->id,
             'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
+            'supplier_id' => Supplier::factory()->create(['is_active' => true, 'country' => 'CN'])->id,
             'sku' => 'CFG-GUARD-1',
             'price' => 500000,
             'air_shipping_price' => 8000,
@@ -301,6 +303,7 @@ class AdminProductActiveDegradationGuardTest extends TestCase
             'category_id' => $category->id,
             'catalog_product_type_id' => $catalogType->id,
             'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
+            'supplier_id' => Supplier::factory()->create(['is_active' => true, 'country' => 'CN'])->id,
             'sku' => 'CFG-DRAFT-1',
             'price' => 500000,
             'status' => 'draft',

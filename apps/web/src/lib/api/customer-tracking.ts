@@ -11,12 +11,24 @@ export type CustomerTrackingPayload = {
   current_status: string;
   current_status_label?: string | null;
   source?: string | null;
+  progress?: {
+    current_key: string;
+    current_label: string;
+    steps: Array<{
+      key: string;
+      label: string;
+      completed: boolean;
+    }>;
+  } | null;
+  unified_timeline?: Array<Record<string, unknown>>;
   shipment_summary?: {
     id: string;
     shipment_number: string;
     transport_mode?: string | null;
     status?: string | null;
+    status_label?: string | null;
     carrier_name?: string | null;
+    tracking_reference?: string | null;
   } | null;
   timeline: Array<{
     id?: string | null;

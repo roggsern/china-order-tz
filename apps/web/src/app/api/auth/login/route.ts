@@ -6,10 +6,17 @@ type LoginRequestBody = {
   password?: string;
 };
 
+function resolveCorrelationId(request: Request): string | null {
+  return (
+    request.headers.get("x-correlation-id")?.trim()
+    || request.headers.get("x-request-id")?.trim()
+    || null
+  );
+}
+
 export async function POST(request: Request) {
   const apiUrl = getApiUrl();
-  
-  console.log("API_URL_USED:", apiUrl);
+  const correlationId = resolveCorrelationId(request);
 
   if (!apiUrl) {
     return NextResponse.json(
@@ -39,20 +46,37 @@ export async function POST(request: Request) {
     );
   }
 
-  const upstream = await fetch(`${apiUrl}/api/v1/login`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({ email, password }),
-    cache: "no-store",
-  });
+  let upstream: Response;
+
+  try {
+    upstream = await fetch(`${apiUrl}/api/v1/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({ email, password }),
+      cache: "no-store",
+    });
+  } catch {
+    console.warn("auth.login.upstream_unreachable", {
+      correlationId,
+    });
+
+    return NextResponse.json(
+      { success: false, message: "Unable to reach authentication service." },
+      { status: 502 },
+    );
+  }
+
+  if (!upstream.ok) {
+    console.warn("auth.login.upstream_failed", {
+      status: upstream.status,
+      correlationId,
+    });
+  }
 
   const text = await upstream.text();
-
-  console.log("STATUS:", upstream.status);
-  console.log("BODY:", text);
 
   try {
     return NextResponse.json(JSON.parse(text), {

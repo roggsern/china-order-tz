@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Payments\RefreshPaymentTransactionAction;
+use App\Actions\Payments\ResolvePaymentReturnTransactionAction;
 use App\Actions\Payments\ShowPaymentTransactionAction;
 use App\Actions\Payments\StartPaymentTransactionAction;
+use App\Http\Requests\Payments\ResolvePaymentReturnRequest;
 use App\Http\Requests\Payments\StartPaymentTransactionRequest;
 use App\Http\Resources\PaymentTransactionResource;
 use App\Models\Order;
@@ -63,6 +65,26 @@ class PaymentOrchestratorController extends Controller
             'data' => new PaymentTransactionResource(
                 $action->handle($user, $paymentTransaction)->load('order'),
             ),
+        ]);
+    }
+
+    public function resolveReturn(
+        ResolvePaymentReturnRequest $request,
+        ResolvePaymentReturnTransactionAction $action,
+    ): JsonResponse {
+        /** @var User $user */
+        $user = auth()->user();
+
+        $transaction = $action->handle(
+            $user,
+            $request->validated('order_id'),
+            $request->validated('merchant_reference'),
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Payment return transaction resolved.',
+            'data' => new PaymentTransactionResource($transaction),
         ]);
     }
 }

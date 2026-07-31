@@ -28,8 +28,6 @@ import { ORDER_STATUS } from "@/lib/types/order";
 import { MpesaPaymentStatusHero } from "@/components/payment/MpesaPaymentStatusHero";
 import { MpesaPaymentSuccessPanel } from "@/components/payment/MpesaPaymentSuccessPanel";
 import { MpesaStkFlowSteps } from "@/components/payment/MpesaStkFlowSteps";
-import { TestModeBanner } from "@/components/payment/TestModeBanner";
-import { usePaymentTestMode } from "@/hooks/use-payment-test-mode";
 
 interface PaymentProcessingContentProps {
   orderId: string;
@@ -40,7 +38,6 @@ export function PaymentProcessingContent({ orderId }: PaymentProcessingContentPr
   const searchParams = useSearchParams();
   const { clearPurchasedItems } = useCart();
   const { order, isLoading } = useOrderById(orderId, { subscribe: true, poll: true });
-  const { testMode } = usePaymentTestMode();
 
   const [transactionId, setTransactionId] = useState<string | null>(null);
   const [paymentReference, setPaymentReference] = useState<string | null>(null);
@@ -97,7 +94,7 @@ export function PaymentProcessingContent({ orderId }: PaymentProcessingContentPr
   });
 
   const headline = statusMessage ?? getStkPhaseHeadline(phase);
-  const subtext = getStkPhaseSubtext(phase, testMode);
+  const subtext = getStkPhaseSubtext(phase, false);
 
   const pollPayment = useCallback(async () => {
     if (!transactionId || pollingRef.current || paymentPaid || paymentFailed) {
@@ -196,14 +193,12 @@ export function PaymentProcessingContent({ orderId }: PaymentProcessingContentPr
   return (
     <div className="min-h-[70vh] bg-zinc-950 px-4 py-8 sm:px-6 sm:py-12">
       <div className="mx-auto max-w-md">
-        {testMode ? <TestModeBanner className="mb-6" variant="dark" /> : null}
-
         <AnimatePresence mode="wait">
           <MpesaPaymentStatusHero
             phase={phase}
             headline={headline}
             subtext={subtext}
-            testMode={testMode}
+            testMode={false}
           />
         </AnimatePresence>
 
@@ -224,16 +219,6 @@ export function PaymentProcessingContent({ orderId }: PaymentProcessingContentPr
             className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900/80 p-5 shadow-xl shadow-black/20 backdrop-blur sm:p-6"
           >
             <MpesaStkFlowSteps phase={phase} />
-
-            {testMode && phase === "waiting_pin" ? (
-              <button
-                type="button"
-                onClick={() => void pollPayment()}
-                className="mt-4 w-full rounded-xl border border-[#c9a227]/40 bg-[#c9a227]/10 px-4 py-2.5 text-sm font-semibold text-[#e8c547] transition hover:bg-[#c9a227]/20"
-              >
-                Check payment status
-              </button>
-            ) : null}
 
             {snapshot.orderProcessing && !paymentPaid ? (
               <p className="mt-4 text-center text-xs text-zinc-500">

@@ -20,6 +20,9 @@ final class AdminPermissions
 
     public const ADMINS_ASSIGN_ROLES = 'admins.assign_roles';
 
+    // Role permission governance
+    public const ROLES_MANAGE_PERMISSIONS = 'roles.manage_permissions';
+
     // Catalog
     public const CATALOG_VIEW = 'catalog.view';
 
@@ -83,6 +86,10 @@ final class AdminPermissions
 
     public const PAYMENTS_MANAGE_MANUAL = 'payments.manage_manual';
 
+    public const PAYMENTS_CONFIG_VIEW = 'payments.config.view';
+
+    public const PAYMENTS_CONFIG_MANAGE = 'payments.config.manage';
+
     // Returns
     public const RETURNS_VIEW = 'returns.view';
 
@@ -93,6 +100,13 @@ final class AdminPermissions
     public const RETURNS_REJECT = 'returns.reject';
 
     public const RETURNS_REFUND = 'returns.refund';
+
+    // Refund operations
+    public const REFUNDS_VIEW = 'refunds.view';
+
+    public const REFUNDS_MANAGE = 'refunds.manage';
+
+    public const REFUNDS_APPROVE = 'refunds.approve';
 
     // Customers
     public const CUSTOMERS_VIEW = 'customers.view';
@@ -121,6 +135,43 @@ final class AdminPermissions
     public const SETTINGS_VIEW = 'settings.view';
 
     public const SETTINGS_MANAGE = 'settings.manage';
+
+    // Feature flags / maintenance mode
+    public const FEATURES_VIEW = 'features.view';
+
+    public const FEATURES_MANAGE = 'features.manage';
+
+    // Store management + business settings (stores.settings JSON)
+    public const STORES_VIEW = 'stores.view';
+
+    public const STORES_CREATE = 'stores.create';
+
+    public const STORES_UPDATE = 'stores.update';
+
+    public const STORES_MANAGE = 'stores.manage';
+
+    public const STORES_ASSIGN = 'stores.assign';
+
+    public const STORES_TEAM_VIEW = 'stores.team.view';
+
+    public const STORES_TEAM_MANAGE = 'stores.team.manage';
+
+    // Customer support
+    public const SUPPORT_VIEW = 'support.view';
+
+    public const SUPPORT_MANAGE = 'support.manage';
+
+    public const SUPPORT_ASSIGN = 'support.assign';
+
+    // Reviews
+    public const REVIEWS_VIEW = 'reviews.view';
+
+    public const REVIEWS_MANAGE = 'reviews.manage';
+
+    // Shipping rates (platform shipping_methods / shipping_rates SSoT)
+    public const SHIPPING_VIEW = 'shipping.view';
+
+    public const SHIPPING_MANAGE = 'shipping.manage';
 
     // Reports
     public const REPORTS_VIEW = 'reports.view';
@@ -180,6 +231,10 @@ final class AdminPermissions
 
     public const WAREHOUSE_JOBS_DELETE = 'warehouse.jobs.delete';
 
+    public const WAREHOUSE_MANAGE = 'warehouse.manage';
+
+    public const WAREHOUSE_TRANSFER = 'warehouse.transfer';
+
     // Promotions
     public const PROMOTIONS_VIEW = 'promotions.view';
 
@@ -194,12 +249,19 @@ final class AdminPermissions
 
     public const LOYALTY_MANAGE = 'loyalty.manage';
 
-    // Notification templates / activity
+    // Notification delivery configuration / templates / activity
+    public const NOTIFICATIONS_VIEW = 'notifications.view';
+
+    public const NOTIFICATIONS_MANAGE = 'notifications.manage';
+
     public const NOTIFICATIONS_TEMPLATES_VIEW = 'notifications.templates.view';
 
     public const NOTIFICATIONS_TEMPLATES_MANAGE = 'notifications.templates.manage';
 
     public const ACTIVITY_LOGS_VIEW = 'activity_logs.view';
+
+    // POS
+    public const POS_PAYMENT_METHODS_VIEW = 'pos.payment_methods.view';
 
     /**
      * @return list<string>
@@ -213,6 +275,7 @@ final class AdminPermissions
             self::ADMINS_ACTIVATE,
             self::ADMINS_DEACTIVATE,
             self::ADMINS_ASSIGN_ROLES,
+            self::ROLES_MANAGE_PERMISSIONS,
             self::CATALOG_VIEW,
             self::CATALOG_CREATE,
             self::CATALOG_UPDATE,
@@ -242,11 +305,16 @@ final class AdminPermissions
             self::PAYMENTS_RETRY,
             self::PAYMENTS_REFUND,
             self::PAYMENTS_MANAGE_MANUAL,
+            self::PAYMENTS_CONFIG_VIEW,
+            self::PAYMENTS_CONFIG_MANAGE,
             self::RETURNS_VIEW,
             self::RETURNS_MANAGE,
             self::RETURNS_APPROVE,
             self::RETURNS_REJECT,
             self::RETURNS_REFUND,
+            self::REFUNDS_VIEW,
+            self::REFUNDS_MANAGE,
+            self::REFUNDS_APPROVE,
             self::CUSTOMERS_VIEW,
             self::CUSTOMERS_UPDATE,
             self::CUSTOMERS_BLOCK,
@@ -259,6 +327,22 @@ final class AdminPermissions
             self::CMS_PUBLISH,
             self::SETTINGS_VIEW,
             self::SETTINGS_MANAGE,
+            self::FEATURES_VIEW,
+            self::FEATURES_MANAGE,
+            self::STORES_VIEW,
+            self::STORES_CREATE,
+            self::STORES_UPDATE,
+            self::STORES_MANAGE,
+            self::STORES_ASSIGN,
+            self::STORES_TEAM_VIEW,
+            self::STORES_TEAM_MANAGE,
+            self::SUPPORT_VIEW,
+            self::SUPPORT_MANAGE,
+            self::SUPPORT_ASSIGN,
+            self::REVIEWS_VIEW,
+            self::REVIEWS_MANAGE,
+            self::SHIPPING_VIEW,
+            self::SHIPPING_MANAGE,
             self::REPORTS_VIEW,
             self::REPORTS_EXPORT,
             self::ANALYTICS_VIEW,
@@ -286,15 +370,20 @@ final class AdminPermissions
             self::WAREHOUSE_JOBS_UPDATE,
             self::WAREHOUSE_JOBS_COMPLETE,
             self::WAREHOUSE_JOBS_DELETE,
+            self::WAREHOUSE_MANAGE,
+            self::WAREHOUSE_TRANSFER,
             self::PROMOTIONS_VIEW,
             self::PROMOTIONS_CREATE,
             self::PROMOTIONS_UPDATE,
             self::PROMOTIONS_DELETE,
             self::LOYALTY_VIEW,
             self::LOYALTY_MANAGE,
+            self::NOTIFICATIONS_VIEW,
+            self::NOTIFICATIONS_MANAGE,
             self::NOTIFICATIONS_TEMPLATES_VIEW,
             self::NOTIFICATIONS_TEMPLATES_MANAGE,
             self::ACTIVITY_LOGS_VIEW,
+            self::POS_PAYMENT_METHODS_VIEW,
         ];
     }
 

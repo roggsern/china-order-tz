@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { formatPrice } from "@/lib/catalog/utils";
+import { ProductImageDisplay } from "@/components/catalog/ProductImageDisplay";
+import { OrderCommerceSourceBadge } from "@/components/storefront/OrderCommerceSourceBadge";
 import type { OrderStatus } from "@/lib/types/order";
 import { ORDER_STATUS } from "@/lib/types/order";
 import type { PaymentStatus } from "@/lib/types/payment";
-import { PackageThumbnailIcon } from "@/components/account/AccountIcons";
-import { OrderCommerceSourceBadge } from "@/components/storefront/OrderCommerceSourceBadge";
 import { PaymentStatusBadge } from "@/components/payment/PaymentStatusBadge";
 import { OrderStatusBadge } from "./OrderStatusBadge";
 
@@ -60,14 +60,13 @@ export function OrderOverviewCard({ order, className = "" }: OrderOverviewCardPr
           } text-[#8b6914]`}
           aria-hidden
         >
-          {order.imageUrl ? (
-            // Product remote URLs vary by CDN; plain img keeps order cards lightweight.
-            <img src={order.imageUrl} alt="" className="h-full w-full object-cover" />
-          ) : order.imageEmoji ? (
-            <span className="text-3xl">{order.imageEmoji}</span>
-          ) : (
-            <PackageThumbnailIcon className="h-8 w-8 opacity-80" />
-          )}
+          <ProductImageDisplay
+            src={order.imageUrl}
+            fallbackEmoji={order.imageEmoji ?? "📦"}
+            fallbackGradient={order.imageGradient ?? "from-zinc-100 to-zinc-200"}
+            className="h-full w-full"
+            emojiClassName="text-3xl"
+          />
         </div>
 
         <div className="min-w-0 flex-1">

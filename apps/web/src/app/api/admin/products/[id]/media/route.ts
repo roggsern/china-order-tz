@@ -1,6 +1,7 @@
 import {
   proxyAdminApiRequest,
   proxyAdminMultipartRequest,
+  forwardAllowedSearchParams,
 } from "@/lib/api/admin-upstream";
 
 type RouteContext = {
@@ -8,7 +9,7 @@ type RouteContext = {
 };
 
 /** GET /api/admin/products/{id}/media */
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   const { id } = await context.params;
   const trimmed = id?.trim();
 
@@ -19,8 +20,11 @@ export async function GET(_request: Request, context: RouteContext) {
     );
   }
 
+  const searchParams = forwardAllowedSearchParams(request, ["product_variant_id"]);
+
   return proxyAdminApiRequest(`/products/${encodeURIComponent(trimmed)}/media`, {
     method: "GET",
+    searchParams,
   });
 }
 

@@ -13,6 +13,10 @@ class ProductMediaResource extends JsonResource
         return [
             'id' => $this->id,
             'product_id' => $this->product_id,
+            'product_variant_id' => $this->product_variant_id,
+            'variant_name' => $this->relationLoaded('variant')
+                ? $this->variant?->name
+                : null,
             'type' => $this->type?->value ?? $this->type,
             'url' => $this->url,
             'thumbnail_url' => $this->thumbnail_url,

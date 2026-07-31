@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 import type { ProductOrigin, ProductShippingContext } from "@/lib/types/catalog";
 import { getProductShippingOptions, getDeliveryOptions } from "@/lib/catalog/delivery";
 import { formatDays } from "@/lib/catalog/utils";
+import { getDefaultFlatShippingDeliveryDays } from "@/lib/shipping/config";
+import { useShippingDurations } from "@/hooks/use-shipping-durations";
 import { RatingStars } from "../RatingStars";
 import { StockStatus } from "../StockStatus";
 
@@ -29,11 +31,11 @@ function getDeliveryEstimateLabel(
       return formatDays(primary.deliveryDays);
     }
 
-    return "7–12 Days";
+    return formatDays(getDefaultFlatShippingDeliveryDays("air_freight"));
   }
 
   const local = getDeliveryOptions("tz")[0];
-  return local.subdetail ?? "1–2 Days";
+  return local.subdetail ?? formatDays(getDefaultFlatShippingDeliveryDays("local_delivery"));
 }
 
 export function ProductMobileQuickInfo({
@@ -43,6 +45,7 @@ export function ProductMobileQuickInfo({
   origin,
   shippingContext,
 }: ProductMobileQuickInfoProps) {
+  useShippingDurations();
   const deliveryEstimate = getDeliveryEstimateLabel(origin, shippingContext);
 
   return (

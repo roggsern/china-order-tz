@@ -2,13 +2,13 @@
 
 namespace App\Actions\AdminOrders;
 
-use App\Enums\FulfillmentStatus;
 use App\Enums\OrderStatus;
 use App\Models\Admin;
 use App\Models\Order;
 use App\Services\Inventory\OrderInventoryRestockService;
 use App\Services\Orders\Lifecycle\OrderLifecycleContext;
 use App\Services\Orders\Lifecycle\OrderLifecycleEngine;
+use App\Services\Orders\OrderCancellationCascadeService;
 use App\Services\Returns\RefundEngine;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +23,7 @@ class CancelOrderAction
         private readonly OrderLifecycleEngine $lifecycle,
         private readonly RefundEngine $refunds,
         private readonly OrderInventoryRestockService $inventoryRestock,
+        private readonly OrderCancellationCascadeService $cancellationCascade,
     ) {}
 
     public function handle(Order $order, ?string $reason = null): Order
@@ -44,11 +45,14 @@ class CancelOrderAction
 
             if ($priorStatus !== null) {
                 $this->inventoryRestock->applyAfterCancel($updated, $priorStatus, $admin);
-
-                if (in_array($priorStatus, [OrderStatus::Paid, OrderStatus::Confirmed, OrderStatus::Processing], true)) {
-                    $this->cancelOpenFulfillment($updated);
-                }
             }
+
+            $this->cancellationCascade->cascadeAfterOrderCancellation(
+                $updated,
+                $priorStatus,
+                $admin,
+                $reason,
+            );
 
             $fresh = $updated->fresh() ?? $updated;
             $now = $fresh->status instanceof OrderStatus
@@ -68,25 +72,5 @@ class CancelOrderAction
                 'refundTransactions',
             ]);
         });
-    }
-
-    private function cancelOpenFulfillment(Order $order): void
-    {
-        $order->loadMissing('fulfillment');
-        $fulfillment = $order->fulfillment;
-        if ($fulfillment === null) {
-            return;
-        }
-
-        $fs = $fulfillment->status instanceof FulfillmentStatus
-            ? $fulfillment->status
-            : FulfillmentStatus::tryFrom((string) $fulfillment->status);
-
-        if ($fs !== null && ! $fs->isTerminal() && $fs->canTransitionTo(FulfillmentStatus::Cancelled)) {
-            $fulfillment->forceFill([
-                'status' => FulfillmentStatus::Cancelled,
-                'completed_at' => now(),
-            ])->save();
-        }
     }
 }

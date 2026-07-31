@@ -107,9 +107,11 @@ class CreateProductAction
 
             $storeId = $validated['store_id'] ?? null;
             if ($channelCode === CommerceChannelCode::TzLocal && blank($storeId)) {
-                throw ValidationException::withMessages([
-                    'store_id' => ['TZ_LOCAL products must belong to a store.'],
-                ]);
+                if ($lifecycle->isPurchasable()) {
+                    throw ValidationException::withMessages([
+                        'store_id' => ['TZ_LOCAL products must belong to a store.'],
+                    ]);
+                }
             }
             if ($channelCode === CommerceChannelCode::ChinaImport) {
                 $storeId = null;

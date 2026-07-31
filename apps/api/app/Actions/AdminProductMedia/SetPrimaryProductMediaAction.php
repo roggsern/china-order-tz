@@ -26,6 +26,6 @@ class SetPrimaryProductMediaAction
             ]);
         }
 
-        return $this->primarySync->setPrimaryFromCatalogMedia($media);
+        return $this->primarySync->setPrimaryFromCatalogMedia($media)->load('variant');
     }
 }

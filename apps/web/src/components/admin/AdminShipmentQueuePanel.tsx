@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { AdminRefreshStatusBar } from "@/components/admin/AdminRefreshStatusBar";
 import {
   AdminShipmentApiError,
   fetchAdminShipments,
@@ -10,6 +11,7 @@ import {
   type AdminShipment,
   type TrackingTimelineItem,
 } from "@/lib/api/admin-shipments";
+import { useAdminAutoRefresh } from "@/hooks/use-admin-auto-refresh";
 
 const STATUS_STYLES: Record<string, string> = {
   pending: "bg-amber-50 text-amber-800 ring-amber-600/20",
@@ -44,8 +46,10 @@ export function AdminShipmentQueuePanel() {
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
 
-  const reload = useCallback(async () => {
-    setLoading(true);
+  const reload = useCallback(async (options?: { background?: boolean }) => {
+    if (!options?.background) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const data = await fetchAdminShipments({
@@ -54,19 +58,37 @@ export function AdminShipmentQueuePanel() {
       });
       setRows(data);
     } catch (err) {
-      setRows([]);
+      if (!options?.background) {
+        setRows([]);
+      }
       setError(
         err instanceof AdminShipmentApiError
           ? err.message
           : "Unable to load shipments.",
       );
     } finally {
-      setLoading(false);
+      if (!options?.background) {
+        setLoading(false);
+      }
     }
   }, [modeFilter, statusFilter]);
 
+  const markSyncedRef = useRef<() => void>(() => {});
+
+  const autoRefresh = useAdminAutoRefresh({
+    page: "shipments",
+    enabled: !loading,
+    onRefresh: async (options) => {
+      await reload(options);
+      markSyncedRef.current();
+    },
+  });
+  markSyncedRef.current = autoRefresh.markSynced;
+
   useEffect(() => {
-    void reload();
+    void reload().then(() => {
+      markSyncedRef.current();
+    });
   }, [reload]);
 
   const openTracking = async (row: AdminShipment) => {
@@ -128,16 +150,25 @@ export function AdminShipmentQueuePanel() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
-      <header>
-        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#8b6914]">
-          Operations
-        </p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight text-zinc-900">
-          Shipment Queue
-        </h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Status is derived from tracking events. Add events to advance the timeline.
-        </p>
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#8b6914]">
+            Operations
+          </p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-zinc-900">
+            Shipment Queue
+          </h1>
+          <p className="mt-1 text-sm text-zinc-500">
+            Status is derived from tracking events. Add events to advance the timeline.
+          </p>
+        </div>
+        <AdminRefreshStatusBar
+          lastUpdatedAt={autoRefresh.lastUpdatedAt}
+          isRefreshing={autoRefresh.isRefreshing || loading}
+          policyLabel={autoRefresh.policyLabel}
+          onRefresh={() => void autoRefresh.refreshNow({ manual: true })}
+          className="w-full sm:w-auto"
+        />
       </header>
 
       <div className="mt-5 flex flex-wrap gap-2">

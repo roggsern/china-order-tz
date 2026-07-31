@@ -147,7 +147,7 @@ class OrderTimelineComposer
                     label: (string) $row->new_status,
                     occurredAt: optional($row->created_at)?->toIso8601String() ?? now()->toIso8601String(),
                     source: TimelineSourceModule::ChinaWorkflow,
-                    visibility: TimelineVisibility::Customer,
+                    visibility: TimelineVisibility::Internal,
                     correlationKey: $row->idempotency_key ?? 'shipment_status:'.$row->id,
                     actorType: $row->admin_id ? 'admin' : 'system',
                     actorId: $row->admin_id,
@@ -385,11 +385,11 @@ class OrderTimelineComposer
     private function mapChinaAction(string $action): array
     {
         return match (true) {
-            str_starts_with($action, 'qc_passed') || $action === 'qc_passed' => ['qc_passed', TimelineVisibility::Customer, 'Quality check passed'],
+            str_starts_with($action, 'qc_passed') || $action === 'qc_passed' => ['qc_passed', TimelineVisibility::Internal, 'Quality check passed'],
             str_starts_with($action, 'qc_') => ['qc_internal', TimelineVisibility::Internal, 'QC update'],
-            $action === 'export_ready' => ['export_ready', TimelineVisibility::Customer, 'Export ready'],
-            $action === 'consolidated' => ['consolidation_completed', TimelineVisibility::Customer, 'Consolidation completed'],
-            $action === 'bootstrapped', $action === 'procurement_started' => ['procurement_started', TimelineVisibility::Customer, 'Procurement started'],
+            $action === 'export_ready' => ['export_ready', TimelineVisibility::Internal, 'Export ready'],
+            $action === 'consolidated' => ['consolidation_completed', TimelineVisibility::Internal, 'Consolidation completed'],
+            $action === 'bootstrapped', $action === 'procurement_started' => ['procurement_started', TimelineVisibility::Internal, 'Procurement started'],
             $action === 'supplier_response' => ['procurement_update', TimelineVisibility::Internal, 'Supplier response'],
             $action === 'agent_handoff' => ['handed_to_customer_agent', TimelineVisibility::Customer, 'Handed to customer agent'],
             default => ['china_'.$action, TimelineVisibility::Internal, 'China workflow: '.$action],

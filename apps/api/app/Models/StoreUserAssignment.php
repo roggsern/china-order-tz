@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\StoreAssignmentType;
+use App\Enums\StoreOperationalScope;
 use App\Models\Concerns\HasUuidPrimaryKey;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,6 +16,7 @@ class StoreUserAssignment extends Model
         'admin_id',
         'store_id',
         'assignment_type',
+        'operational_scope',
         'starts_at',
         'ends_at',
         'is_active',
@@ -25,6 +27,7 @@ class StoreUserAssignment extends Model
     {
         return [
             'assignment_type' => StoreAssignmentType::class,
+            'operational_scope' => StoreOperationalScope::class,
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
             'is_active' => 'boolean',

@@ -3,12 +3,17 @@ import { getCatalogProductImageSrc } from "@/lib/catalog/product-images";
 import { pickProductShippingContext, type Product } from "@/lib/types/catalog";
 import { calculateDiscount } from "@/lib/catalog/utils";
 import { PriceDisplay } from "./PriceDisplay";
-import { RatingStars } from "./RatingStars";
+import { FeatureGatedRatingStars } from "./FeatureGatedRatingStars";
 import { AddToCartButton } from "./AddToCartButton";
 import { ProductCardBadges } from "./ProductCardBadges";
 import { ProductImageDisplay } from "./ProductImageDisplay";
 import { ProductCardFooter } from "./ProductCardFooter";
 import { WishlistButton } from "./WishlistButton";
+import {
+  isProductCardPurchaseDisabled,
+  isProductPurchaseUnavailable,
+  resolveProductCardAvailabilityOverlay,
+} from "@/lib/catalog/product-availability";
 
 interface ProductCardProps {
   product: Product;
@@ -19,7 +24,9 @@ export function ProductCard({ product, variant = "default" }: ProductCardProps) 
   const discount = calculateDiscount(product.price, product.oldPrice);
   const imageSrc = getCatalogProductImageSrc(product);
   const isLuxury = variant === "luxury";
-  const outOfStock = product.stock <= 0;
+  const purchaseUnavailable = isProductPurchaseUnavailable(product);
+  const cardPurchaseDisabled = isProductCardPurchaseDisabled(product);
+  const availabilityOverlay = resolveProductCardAvailabilityOverlay(product);
 
   return (
     <article
@@ -53,6 +60,7 @@ export function ProductCard({ product, variant = "default" }: ProductCardProps) 
           <WishlistButton
             size="sm"
             productId={product.id}
+            catalogProductId={product.catalogProductId}
             slug={product.slug}
             name={product.name}
             imageUrl={imageSrc}
@@ -62,11 +70,11 @@ export function ProductCard({ product, variant = "default" }: ProductCardProps) 
           />
         </div>
 
-        {outOfStock && (
+        {availabilityOverlay ? (
           <div className="absolute inset-x-0 bottom-0 z-10 bg-zinc-900/80 px-3 py-2 text-center text-[10px] font-bold uppercase tracking-[0.08em] text-white backdrop-blur-sm sm:text-[11px]">
-            Out of stock
+            {availabilityOverlay}
           </div>
-        )}
+        ) : null}
       </div>
 
       <div className={`flex flex-1 flex-col ${isLuxury ? "p-3.5 sm:p-4 md:p-5" : "p-3.5 sm:p-4"}`}>
@@ -87,7 +95,7 @@ export function ProductCard({ product, variant = "default" }: ProductCardProps) 
         </Link>
 
         <div className="mt-2">
-          <RatingStars
+          <FeatureGatedRatingStars
             rating={product.rating}
             size="sm"
             showValue
@@ -109,7 +117,9 @@ export function ProductCard({ product, variant = "default" }: ProductCardProps) 
         <div className="mt-auto pt-3 sm:pt-4">
           <AddToCartButton
             product={product}
-            disabled={outOfStock}
+            disabled={cardPurchaseDisabled}
+            purchaseUnavailable={purchaseUnavailable}
+            availabilityStatus={product.availabilityStatus}
             variant="card"
             className="w-full"
           />

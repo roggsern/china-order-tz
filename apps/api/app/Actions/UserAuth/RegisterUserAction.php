@@ -26,6 +26,7 @@ class RegisterUserAction
             'email' => $request->validated('email'),
             'phone' => $request->validated('phone'),
             'password' => $request->validated('password'),
+            'email_verified_at' => null,
         ]);
 
         $customerRole = Role::query()->where('slug', 'customer')->firstOrFail();
@@ -38,6 +39,15 @@ class RegisterUserAction
             $this->customerProfiles->ensureForUser($user, $source);
         } catch (\Throwable $e) {
             Log::warning('crm.profile_on_register_failed', [
+                'user_id' => $user->id,
+                'message' => $e->getMessage(),
+            ]);
+        }
+
+        try {
+            $user->sendEmailVerificationNotification();
+        } catch (\Throwable $e) {
+            Log::warning('auth.email_verification_on_register_failed', [
                 'user_id' => $user->id,
                 'message' => $e->getMessage(),
             ]);

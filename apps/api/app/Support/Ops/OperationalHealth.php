@@ -36,6 +36,8 @@ final class OperationalHealth
                 'cache' => self::timed('cache', self::cache(...), $timings),
                 'storage' => self::timed('storage', self::storage(...), $timings),
                 'scheduler' => self::timed('scheduler', self::scheduler(...), $timings),
+                'mail' => self::timed('mail', self::mail(...), $timings),
+                'production_config' => self::timed('production_config', self::productionConfig(...), $timings),
                 'environment' => self::timed('environment', self::environment(...), $timings),
             ];
 
@@ -61,6 +63,8 @@ final class OperationalHealth
                     'cache' => false,
                     'storage' => false,
                     'scheduler' => false,
+                    'mail' => false,
+                    'production_config' => false,
                     'environment' => false,
                 ],
                 'critical_ok' => false,
@@ -81,6 +85,8 @@ final class OperationalHealth
         if (($checks['cache'] !== true)
             || ($checks['queue'] === false)
             || ($checks['scheduler'] === false)
+            || ($checks['mail'] === false)
+            || ($checks['production_config'] === false)
             || ($checks['environment'] !== true)) {
             return 'degraded';
         }
@@ -235,6 +241,42 @@ final class OperationalHealth
             $env = (string) app()->environment();
 
             return $env !== '';
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Soft mail readiness — required in production for auth/account emails.
+     *
+     * @return bool|null true configured, false missing, null not applicable
+     */
+    private static function mail(): ?bool
+    {
+        try {
+            if (! app()->environment('production')) {
+                return null;
+            }
+
+            return ProductionEnvironmentValidator::isMailConfigured();
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Soft production config gate — payment/debug/webhook safety without reading secrets.
+     *
+     * @return bool|null true ok, false unsafe, null not applicable
+     */
+    private static function productionConfig(): ?bool
+    {
+        try {
+            if (! app()->environment('production')) {
+                return null;
+            }
+
+            return ProductionEnvironmentValidator::isProductionConfigHealthy();
         } catch (\Throwable) {
             return false;
         }

@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useCartActions, useCartState } from "@/lib/cart/context";
 import { useCartDrawer } from "@/lib/cart/drawer-context";
+import { resolveCheckoutRoute } from "@/lib/cart/checkout-navigation";
 import { clearCheckoutDraft } from "@/lib/checkout/draft";
 import { CloseIcon } from "@/components/home/icons";
 import { OrderSummaryTotals } from "./OrderSummaryTotals";
@@ -47,10 +48,14 @@ export function CartDrawer() {
   const hiddenAxis = isDesktop ? { x: "100%", y: 0 } : { x: 0, y: "100%" };
 
   const handleCheckout = () => {
-    if (items.length === 0) return;
+    const route = resolveCheckoutRoute(items.length);
+    if (!route) {
+      return;
+    }
+
     clearCheckoutDraft();
+    router.push(route);
     close();
-    window.setTimeout(() => router.push("/checkout"), 280);
   };
 
   return createPortal(

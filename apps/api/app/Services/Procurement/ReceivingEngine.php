@@ -3,6 +3,7 @@
 namespace App\Services\Procurement;
 
 use App\Enums\ReceivingStatus;
+use App\Enums\InventoryWarehouseCode;
 use App\Events\Procurement\GoodsReceived;
 use App\Events\Procurement\InventoryReceived;
 use App\Models\Admin;
@@ -201,8 +202,19 @@ class ReceivingEngine
             return $this->inventory->locationForProduct($product);
         }
 
-        // Legacy catalog products without store → MAIN warehouse.
+        // China-import catalog (no store location) is received into CHINA, never MAIN.
+        // TZ sellable stock is created only after ChinaInventoryPipeline::receiveInTanzania.
         return null;
+    }
+
+    private function resolveReceiveWarehouseCode(PurchaseOrderItem $item): string
+    {
+        $product = $item->variant?->product;
+        if ($product !== null && $product->requiresChinaShipping()) {
+            return InventoryWarehouseCode::China->value;
+        }
+
+        return InventoryWarehouseCode::Main->value;
     }
 
     private function increaseVariantInventory(
@@ -230,7 +242,7 @@ class ReceivingEngine
             )
             : $this->inventory->receiveToWarehouseCode(
                 $variant,
-                'MAIN',
+                $this->resolveReceiveWarehouseCode($item),
                 $qty,
                 $admin,
                 'procurement_receipt',

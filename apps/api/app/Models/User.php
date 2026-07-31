@@ -3,7 +3,10 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasUuidPrimaryKey;
+use App\Services\Auth\CustomerEmailVerificationService;
 use Database\Factories\UserFactory;
+use Illuminate\Auth\MustVerifyEmail;
+use Illuminate\Contracts\Auth\MustVerifyEmail as MustVerifyEmailContract;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -13,10 +16,10 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmailContract
 {
     /** @use HasFactory<UserFactory> */
-    use HasApiTokens, HasFactory, HasUuidPrimaryKey, Notifiable, SoftDeletes;
+    use HasApiTokens, HasFactory, HasUuidPrimaryKey, MustVerifyEmail, Notifiable, SoftDeletes;
 
     protected $fillable = [
         'name',
@@ -56,6 +59,14 @@ class User extends Authenticatable
                 $user->tokens()->delete();
             }
         });
+    }
+
+    /**
+     * Prefer NotificationPlatform over Laravel's default VerifyEmail mailer.
+     */
+    public function sendEmailVerificationNotification(): void
+    {
+        app(CustomerEmailVerificationService::class)->send($this);
     }
 
     public function roles(): BelongsToMany

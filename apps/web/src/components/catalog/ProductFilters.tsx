@@ -45,7 +45,7 @@ function FilterPanel({ className = "" }: { className?: string }) {
   const searchParams = useSearchParams();
   const { products, isLoading: productsLoading, error: productsError } = useCatalogProducts();
   const { categories: categoryTree, isLoading: categoriesLoading, error: categoriesError } =
-    useCatalogCategories();
+    useCatalogCategories({ chinaNavigation: true });
   const { brands, isLoading: brandsLoading, error: brandsError } = useCatalogBrands();
 
   const categories = useMemo(() => {

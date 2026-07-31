@@ -7,6 +7,8 @@ namespace App\Services\Inventory\DTOs;
  *
  * Reservation / location / channel / region are reserved extension points —
  * they are not applied in this foundation sprint.
+ *
+ * ADMIN-11.3: commerceSellableOnly keeps checkout on MAIN; China/IN_TRANSIT are never sellable.
  */
 final class StockResolutionContext
 {
@@ -24,10 +26,26 @@ final class StockResolutionContext
          * Foundation sprint reads existing reserved columns only.
          */
         public readonly bool $includeReservations = true,
+        /**
+         * When true, refuse non-sellable warehouses (CHINA / IN_TRANSIT).
+         * Default true so customer commerce never reads China stock.
+         */
+        public readonly bool $commerceSellableOnly = true,
     ) {}
 
     public function warehouseCode(): string
     {
         return strtoupper($this->warehouseCode);
+    }
+
+    /**
+     * Reporting / pipeline reads for China or in-transit warehouses.
+     */
+    public static function forWarehouse(string $warehouseCode): self
+    {
+        return new self(
+            warehouseCode: strtoupper($warehouseCode),
+            commerceSellableOnly: false,
+        );
     }
 }

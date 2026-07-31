@@ -32,6 +32,8 @@ export type ProductPublishReadinessInput = {
   isDemo?: boolean;
   /** Required when commerce channel is CHINA_IMPORT. */
   hasPublishableShippingOption?: boolean;
+  /** Required when commerce channel is CHINA_IMPORT. */
+  supplierId?: string | null;
 };
 
 export function isLeafCategoryId(
@@ -114,6 +116,11 @@ export function calculateProductPublishReadiness(
   }
 
   if (channelCode === "CHINA_IMPORT") {
+    items.push({
+      id: "china-supplier",
+      label: "Supplier assigned",
+      met: Boolean(input.supplierId?.trim()),
+    });
     items.push({
       id: "china-shipping",
       label: "Shipping option configured",

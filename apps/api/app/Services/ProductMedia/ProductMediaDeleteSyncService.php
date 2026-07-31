@@ -8,6 +8,14 @@ use App\Models\ProductMedia;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
+/**
+ * Soft-delete sync between catalog product_media and legacy product_images.
+ *
+ * Orphan file policy:
+ * - Soft-deletes clear DB rows (and paired legacy/catalog counterparts when URL-matched).
+ * - Storage files are intentionally retained (no aggressive GC).
+ * - Disk cleanup requires a future dedicated lifecycle/GC job.
+ */
 class ProductMediaDeleteSyncService
 {
     public function deleteFromLegacyImage(ProductImage $image): void
@@ -75,6 +83,7 @@ class ProductMediaDeleteSyncService
 
         return ProductMedia::query()
             ->where('product_id', $image->product_id)
+            ->whereNull('product_variant_id')
             ->where('type', ProductMediaType::Image)
             ->where('url', $url)
             ->first();
@@ -82,7 +91,7 @@ class ProductMediaDeleteSyncService
 
     private function findLegacyImageForMedia(ProductMedia $media): ?ProductImage
     {
-        if (! $media->url) {
+        if (! $media->url || $media->product_variant_id !== null) {
             return null;
         }
 

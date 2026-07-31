@@ -11,6 +11,7 @@ use App\Models\DeliveryAddress;
 use App\Models\Inventory;
 use App\Models\Product;
 use App\Models\User;
+use App\Models\UserAddress;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -36,6 +37,22 @@ class CustomerCheckoutTest extends TestCase
 
     private function ensureSimpleInventory(Product $product, int $quantity = 100): void
     {
+        if ($product->commerceChannel?->isChinaImport() ?? $product->fresh('commerceChannel')->commerceChannel?->isChinaImport()) {
+            \App\Models\ChinaCommercialStock::query()->updateOrCreate(
+                [
+                    'product_id' => $product->id,
+                    'product_variant_id' => null,
+                ],
+                [
+                    'available_quantity' => $quantity,
+                    'reserved_quantity' => 0,
+                    'ordered_quantity' => 0,
+                ],
+            );
+
+            return;
+        }
+
         Inventory::query()->updateOrCreate(
             [
                 'product_id' => $product->id,
@@ -128,6 +145,40 @@ class CustomerCheckoutTest extends TestCase
         $this->postJson('/api/v1/checkout/prepare')
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['delivery_address']);
+    }
+
+    public function test_prepare_uses_default_saved_address_when_delivery_address_missing(): void
+    {
+        $user = User::factory()->create([
+            'first_name' => 'Jane',
+            'last_name' => 'Customer',
+        ]);
+        UserAddress::factory()->default()->create([
+            'user_id' => $user->id,
+            'address_line_1' => 'Saved Book Road',
+            'address_line_2' => 'Kinondoni',
+            'recipient_name' => 'Jane Customer',
+            'phone' => '+255712345678',
+            'city' => 'Dar es Salaam',
+            'region' => 'Dar es Salaam',
+            'country' => 'Tanzania',
+        ]);
+        $product = Product::factory()->fromDar()->create(['price' => 15000]);
+        $this->createActiveCartWithItem($user, $product);
+
+        Sanctum::actingAs($user);
+
+        $this->assertNull(DeliveryAddress::query()->where('user_id', $user->id)->first());
+
+        $this->postJson('/api/v1/checkout/prepare')
+            ->assertOk()
+            ->assertJsonPath('data.delivery_address.street', 'Saved Book Road')
+            ->assertJsonPath('data.delivery_address.district', 'Kinondoni');
+
+        $this->assertDatabaseHas('delivery_addresses', [
+            'user_id' => $user->id,
+            'street' => 'Saved Book Road',
+        ]);
     }
 
     public function test_china_shipping_summary(): void

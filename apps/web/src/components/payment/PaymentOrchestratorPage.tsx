@@ -13,6 +13,12 @@ import {
   startPaymentTransaction,
   type PaymentTransactionPayload,
 } from "@/lib/api/customer-payment-orchestrator";
+import {
+  buildNmbHostedCheckoutLauncherPath,
+  isNmbWebsiteHostedCheckout,
+  navigateAfterPaymentStart,
+  prepareNmbHostedCheckoutLaunch,
+} from "@/lib/nmb/orchestrator-checkout";
 import { AuthInvitationCard } from "@/components/auth/AuthInvitationCard";
 
 const STATUS_STYLES: Record<string, string> = {
@@ -42,6 +48,7 @@ export function PaymentOrchestratorPage({
   const [busy, setBusy] = useState(false);
   const [needsAuth, setNeedsAuth] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const launcherRedirectRef = useRef(false);
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -66,9 +73,9 @@ export function PaymentOrchestratorPage({
         const next = await fetchPaymentTransaction(transactionId, token);
         setTransaction(next);
       } else if (orderId) {
-        const next = await startPaymentTransaction(orderId, "nmb", token);
+        const next = await startPaymentTransaction(orderId, undefined, token);
         setTransaction(next);
-        router.replace(`/payments/${encodeURIComponent(next.id)}`);
+        navigateAfterPaymentStart(router, next);
       } else {
         setError("Missing payment transaction.");
       }
@@ -90,6 +97,18 @@ export function PaymentOrchestratorPage({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!transaction || launcherRedirectRef.current || !transactionId) {
+      return;
+    }
+
+    if (isNmbWebsiteHostedCheckout(transaction) && WAITING_STATUSES.has(transaction.status)) {
+      launcherRedirectRef.current = true;
+      prepareNmbHostedCheckoutLaunch(transaction);
+      router.replace(buildNmbHostedCheckoutLauncherPath(transaction.id));
+    }
+  }, [router, transaction, transactionId]);
 
   // Poll while waiting for NMB callback / verification.
   useEffect(() => {
@@ -126,9 +145,9 @@ export function PaymentOrchestratorPage({
 
     try {
       if (transaction.status === "failed" || transaction.status === "cancelled") {
-        const next = await startPaymentTransaction(transaction.order_id, "nmb", token);
+        const next = await startPaymentTransaction(transaction.order_id, undefined, token);
         setTransaction(next);
-        router.replace(`/payments/${encodeURIComponent(next.id)}`);
+        navigateAfterPaymentStart(router, next);
       } else {
         const next = await refreshPaymentTransaction(transaction.id, token);
         setTransaction(next);
@@ -256,6 +275,14 @@ export function PaymentOrchestratorPage({
               >
                 Open NMB checkout
               </a>
+            ) : isNmbWebsiteHostedCheckout(transaction) ? (
+              <Link
+                href={buildNmbHostedCheckoutLauncherPath(transaction.id)}
+                onClick={() => prepareNmbHostedCheckoutLaunch(transaction)}
+                className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-[#0b3d91] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0a347c]"
+              >
+                Open NMB checkout
+              </Link>
             ) : (
               <p className="mt-2 text-xs text-blue-700">
                 Session ready. Use your bank/NMB payment channel with merchant reference{" "}

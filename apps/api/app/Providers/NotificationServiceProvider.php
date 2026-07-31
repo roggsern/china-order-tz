@@ -2,8 +2,12 @@
 
 namespace App\Providers;
 
+use App\Events\Audit\NotificationConfigurationUpdatedAudit;
+use App\Listeners\Audit\RecordActivityLog;
 use App\Services\Notifications\ChannelProviderRegistry;
 use App\Services\Notifications\Contracts\NotificationChannelInterface;
+use App\Services\Notifications\NotificationConfigurationResolver;
+use App\Services\Notifications\NotificationConfigurationService;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Services\Notifications\NotificationPlatform;
 use App\Services\Notifications\NotificationRenderer;
@@ -13,6 +17,7 @@ use App\Services\Notifications\Providers\InAppNotificationProvider;
 use App\Services\Notifications\Providers\PushNotificationProvider;
 use App\Services\Notifications\Providers\SMSNotificationProvider;
 use App\Services\Notifications\Providers\WhatsAppNotificationProvider;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
 class NotificationServiceProvider extends ServiceProvider
@@ -21,6 +26,8 @@ class NotificationServiceProvider extends ServiceProvider
     {
         $this->app->singleton(NotificationRenderer::class);
         $this->app->singleton(NotificationTemplateEngine::class);
+        $this->app->singleton(NotificationConfigurationResolver::class);
+        $this->app->singleton(NotificationConfigurationService::class);
         $this->app->singleton(NotificationDispatcher::class);
         $this->app->singleton(NotificationPlatform::class);
 
@@ -48,5 +55,10 @@ class NotificationServiceProvider extends ServiceProvider
 
             return $registry;
         });
+    }
+
+    public function boot(): void
+    {
+        Event::listen(NotificationConfigurationUpdatedAudit::class, [RecordActivityLog::class, 'record']);
     }
 }

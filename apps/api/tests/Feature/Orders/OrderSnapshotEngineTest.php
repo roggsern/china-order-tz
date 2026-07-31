@@ -6,10 +6,15 @@ use App\Enums\CartStatus;
 use App\Enums\ShippingMethod;
 use App\Models\Cart;
 use App\Models\CartItem;
+use App\Models\CatalogAttribute;
+use App\Models\CatalogAttributeOption;
 use App\Models\DeliveryAddress;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\ProductAttribute;
+use App\Models\ProductAttributeValue;
+use App\Models\ProductMedia;
 use App\Models\ProductShippingOption;
 use App\Models\User;
 use App\Services\Orders\OrderSnapshotEngine;
@@ -267,6 +272,188 @@ class OrderSnapshotEngineTest extends TestCase
         $this->assertSame('Sea notes', $payload['shipping_notes_snapshot']);
         $this->assertSame('60000.00', (string) $payload['line_total']);
         $this->assertSame('12000.00', (string) $payload['shipping_subtotal']);
+    }
+
+    public function test_snapshot_prefers_variant_media_image(): void
+    {
+        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::purchasable(50000);
+
+        ProductMedia::factory()->primary()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => null,
+            'url' => '/storage/product-primary.jpg',
+        ]);
+        ProductMedia::factory()->primary()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'url' => '/storage/variant-primary.jpg',
+        ]);
+
+        $cart = Cart::factory()->create();
+        $item = CartItem::factory()->create([
+            'cart_id' => $cart->id,
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 1,
+            'unit_price' => 50000,
+            'price_snapshot' => 50000,
+        ]);
+
+        $payload = app(OrderSnapshotEngine::class)->snapshotFromCartItem($item->fresh());
+
+        $this->assertSame('variant-primary.jpg', $payload['image_snapshot']);
+        $this->assertSame('variant-primary.jpg', $payload['product_image_snapshot']);
+    }
+
+    public function test_catalog_attributes_are_snapshotted(): void
+    {
+        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::purchasable(50000);
+
+        $color = CatalogAttribute::factory()->create(['name' => 'Color', 'slug' => 'color-snap']);
+        $black = CatalogAttributeOption::factory()->create([
+            'catalog_attribute_id' => $color->id,
+            'value' => 'Black',
+            'slug' => 'black-snap',
+        ]);
+        $variant->catalogAttributeValues()->create([
+            'catalog_attribute_id' => $color->id,
+            'option_id' => $black->id,
+            'value_text' => 'Black',
+        ]);
+
+        $legacyAttribute = ProductAttribute::factory()->create(['name' => 'Legacy Color']);
+        $legacyValue = ProductAttributeValue::factory()->create([
+            'product_attribute_id' => $legacyAttribute->id,
+            'value' => 'Red',
+        ]);
+        $variant->attributeValues()->sync([$legacyValue->id]);
+
+        $cart = Cart::factory()->create();
+        $item = CartItem::factory()->create([
+            'cart_id' => $cart->id,
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 1,
+            'unit_price' => 50000,
+            'price_snapshot' => 50000,
+        ]);
+
+        $payload = app(OrderSnapshotEngine::class)->snapshotFromCartItem($item->fresh());
+
+        $this->assertSame([
+            ['attribute' => 'Color', 'value' => 'Black'],
+        ], $payload['attributes_snapshot']);
+    }
+
+    public function test_barcode_snapshot_is_populated(): void
+    {
+        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::purchasable(50000);
+        $variant->update(['barcode' => 'BC-ORDER-12345']);
+
+        $cart = Cart::factory()->create();
+        $item = CartItem::factory()->create([
+            'cart_id' => $cart->id,
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 1,
+            'unit_price' => 50000,
+            'price_snapshot' => 50000,
+        ]);
+
+        $payload = app(OrderSnapshotEngine::class)->snapshotFromCartItem($item->fresh());
+
+        $this->assertSame('BC-ORDER-12345', $payload['barcode_snapshot']);
+    }
+
+    public function test_deleted_variant_still_displays_historical_order(): void
+    {
+        $user = User::factory()->create();
+        DeliveryAddress::factory()->create(['user_id' => $user->id]);
+
+        ['product' => $product, 'variant' => $variant] = $this->seedChinaCart($user, [
+            'name' => 'Variant History Phone',
+            'price' => 25000,
+        ], [
+            'quantity' => 1,
+            'unit_price' => 25000,
+            'price_snapshot' => 25000,
+            'shipping_method' => ShippingMethod::Sea,
+            'shipping_price' => 2500,
+        ]);
+
+        $variant->update([
+            'name' => 'Black / 128GB',
+            'sku' => 'HIST-VAR-128',
+            'barcode' => 'BC-HIST-999',
+        ]);
+
+        ProductMedia::factory()->primary()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'url' => '/storage/hist-variant.jpg',
+        ]);
+
+        Sanctum::actingAs($user);
+        $response = $this->postJson('/api/v1/orders/confirm', [
+            'shipping_choice' => 'company_shipping',
+            'shipping_method' => 'sea',
+        ])->assertCreated();
+        $orderId = $response->json('data.order.id') ?? $response->json('data.id');
+
+        $item = OrderItem::query()->where('order_id', $orderId)->firstOrFail();
+        $this->assertSame('Black / 128GB', $item->variant_name_snapshot);
+        $this->assertSame('HIST-VAR-128', $item->variant_sku_snapshot);
+        $this->assertSame('BC-HIST-999', $item->barcode_snapshot);
+        $this->assertSame('hist-variant.jpg', $item->product_image_snapshot ?? $item->image_snapshot);
+
+        $variant->delete();
+        $product->update(['name' => 'Live Name Changed']);
+        ProductMedia::query()->where('product_id', $product->id)->delete();
+
+        $this->getJson("/api/v1/orders/{$orderId}")
+            ->assertOk()
+            ->assertJsonPath('data.items.0.product_name_snapshot', 'Variant History Phone')
+            ->assertJsonPath('data.items.0.variant_name_snapshot', 'Black / 128GB')
+            ->assertJsonPath('data.items.0.variant_sku_snapshot', 'HIST-VAR-128')
+            ->assertJsonPath('data.items.0.barcode_snapshot', 'BC-HIST-999')
+            ->assertJsonPath('data.items.0.product_image_snapshot', 'hist-variant.jpg');
+    }
+
+    public function test_image_snapshot_survives_live_media_deletion(): void
+    {
+        $user = User::factory()->create();
+        DeliveryAddress::factory()->create(['user_id' => $user->id]);
+
+        ['product' => $product, 'variant' => $variant] = $this->seedChinaCart($user, [
+            'name' => 'Image Snap Phone',
+            'price' => 30000,
+        ], [
+            'quantity' => 1,
+            'unit_price' => 30000,
+            'price_snapshot' => 30000,
+            'shipping_method' => ShippingMethod::Air,
+            'shipping_price' => 5000,
+        ]);
+
+        ProductMedia::factory()->primary()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'url' => '/storage/order-image-snap.jpg',
+        ]);
+
+        Sanctum::actingAs($user);
+        $response = $this->postJson('/api/v1/orders/confirm', [
+            'shipping_choice' => 'company_shipping',
+            'shipping_method' => 'air',
+        ])->assertCreated();
+        $orderId = $response->json('data.order.id') ?? $response->json('data.id');
+
+        ProductMedia::query()->where('product_id', $product->id)->delete();
+
+        $this->getJson("/api/v1/orders/{$orderId}")
+            ->assertOk()
+            ->assertJsonPath('data.items.0.product_image_snapshot', 'order-image-snap.jpg')
+            ->assertJsonPath('data.items.0.image_snapshot', 'order-image-snap.jpg');
     }
 
     public function test_guest_cannot_confirm_order(): void

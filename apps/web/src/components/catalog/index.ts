@@ -18,6 +18,7 @@ export { ProductCardFooter } from "./ProductCardFooter";
 export { TrustBadges } from "./TrustBadges";
 export { StockStatus } from "./StockStatus";
 export { ProductImageDisplay } from "./ProductImageDisplay";
+export { ProductVideoDisplay } from "./ProductVideoDisplay";
 export { ProductTabs } from "./ProductTabs";
 export { CategoryBanner } from "./CategoryBanner";
 export { CategoryCard } from "./CategoryCard";

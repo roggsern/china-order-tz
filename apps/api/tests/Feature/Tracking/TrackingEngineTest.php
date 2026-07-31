@@ -172,10 +172,14 @@ class TrackingEngineTest extends TestCase
 
         $this->getJson("/api/v1/orders/{$order->id}/tracking")
             ->assertOk()
-            ->assertJsonPath('data.source', 'shipment_tracking_events')
-            ->assertJsonPath('data.current_status', 'in_transit')
+            ->assertJsonPath('data.source', 'customer_progress')
             ->assertJsonPath('data.shipment_summary.shipment_number', $shipment->shipment_number)
-            ->assertJsonPath('data.timeline.0.location', 'Dar es Salaam');
+            ->assertJsonCount(5, 'data.timeline')
+            ->assertJsonStructure([
+                'data' => [
+                    'progress' => ['current_key', 'current_label', 'steps'],
+                ],
+            ]);
     }
 
     public function test_customer_ownership_enforced(): void

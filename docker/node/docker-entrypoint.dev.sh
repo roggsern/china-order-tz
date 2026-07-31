@@ -1,9 +1,12 @@
 #!/bin/sh
 set -e
 
-# apps/web is bind-mounted at /app; node_modules is a named Docker volume.
-# Never remove the node_modules mount point — `rm -rf node_modules` fails with
+# apps/web is bind-mounted at /app; node_modules and .next use named Docker volumes.
+# Never remove those mount points — `rm -rf node_modules` fails with
 # "Resource busy" and crashes the container into a restart loop.
+#
+# /app/.next is a named volume so dev compiles avoid Windows bind-mount I/O.
+# Source edits still hot-reload through the bind mount; only build output is isolated.
 #
 # Named volumes can lag behind the image after new dependencies are added.
 # Overlay image-built modules into the volume in place when packages are missing.

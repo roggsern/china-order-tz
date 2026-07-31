@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import type { Category, Product } from "@/lib/types/catalog";
 import { pickProductShippingContext } from "@/lib/types/catalog";
@@ -9,14 +9,6 @@ import { useMoqDisplayState } from "@/lib/catalog/use-moq-display";
 import { Breadcrumbs } from "../Breadcrumbs";
 import { ProductDetailHeader } from "../ProductDetailHeader";
 import { ProductPriceSection } from "../ProductPriceSection";
-import {
-  ShippingEstimator,
-  getDefaultShippingMethod,
-  getShippingCostForMethod,
-  type ShippingMethodSelection,
-} from "../ShippingEstimator";
-import { LandedCostSummary } from "../LandedCostSummary";
-import { DeliveryEstimator } from "../DeliveryEstimator";
 import { ProductOriginBanner } from "../ProductOriginBanner";
 import { QuantitySelector } from "../QuantitySelector";
 import { AddToCartButton } from "../AddToCartButton";
@@ -28,6 +20,7 @@ import {
   type StorefrontConfigurationSelection,
 } from "../ProductConfigurationPicker";
 import type { StorefrontPriceQuote } from "@/lib/catalog/storefront-configuration";
+import { isProductPurchaseUnavailable } from "@/lib/catalog/product-availability";
 import { ProductMoqStatusCard } from "../ProductMoqStatusCard";
 import { ProductGalleryMobile } from "./ProductGalleryMobile";
 import { ProductMobileTabs } from "./ProductMobileTabs";
@@ -63,9 +56,6 @@ export function ProductDetailMobile({
   });
   const [quote, setQuote] = useState<StorefrontPriceQuote | null>(null);
   const shippingContext = pickProductShippingContext(product);
-  const [selectedMethod, setSelectedMethod] = useState<ShippingMethodSelection>(() =>
-    getDefaultShippingMethod(shippingContext),
-  );
 
   const handleSelectionChange = useCallback((selection: StorefrontConfigurationSelection) => {
     setConfigSelection(selection);
@@ -92,9 +82,12 @@ export function ProductDetailMobile({
     configSelection.hasConfigurations &&
     configSelection.isComplete &&
     !configSelection.inStock;
+  const purchaseUnavailable = isProductPurchaseUnavailable(product);
   const isOutOfStock =
-    (!configSelection.hasConfigurations && product.stock <= 0) || configurationOutOfStock;
+    !purchaseUnavailable &&
+    ((!configSelection.hasConfigurations && product.stock <= 0) || configurationOutOfStock);
   const canAdd =
+    !purchaseUnavailable &&
     !isOutOfStock &&
     !needsConfiguration &&
     (!configSelection.hasConfigurations || Boolean(configSelection.configurationId));
@@ -111,14 +104,14 @@ export function ProductDetailMobile({
   const compareAtUnitPrice = moqDisplay.wholesaleApplied
     ? moqDisplay.compareAtUnitPrice ?? undefined
     : undefined;
-
-  const shippingCost = useMemo(
-    () =>
-      orderSummaryReady
-        ? getShippingCostForMethod(shippingContext, selectedMethod, quantity)
-        : null,
-    [shippingContext, selectedMethod, quantity, orderSummaryReady],
-  );
+  const displayPrice =
+    configSelection.hasConfigurations && !orderSummaryReady
+      ? product.price
+      : unitPrice;
+  const displayOldPrice =
+    moqDisplay.wholesaleApplied && compareAtUnitPrice != null
+      ? compareAtUnitPrice
+      : product.oldPrice;
 
   useEffect(() => {
     trackRecentlyViewed(product);
@@ -144,7 +137,11 @@ export function ProductDetailMobile({
       </div>
 
       <div className="mt-2">
-        <ProductGalleryMobile product={product} selectedColorSlug={selectedColorSlug} />
+        <ProductGalleryMobile
+          product={product}
+          selectedColorSlug={selectedColorSlug}
+          configurationId={configSelection.configurationId}
+        />
       </div>
 
       <motion.div
@@ -155,15 +152,11 @@ export function ProductDetailMobile({
       >
         <ProductDetailHeader product={product} category={category} />
 
-        {!configSelection.hasConfigurations ? (
-          <ProductPriceSection price={product.price} oldPrice={product.oldPrice} />
-        ) : null}
+        <ProductPriceSection price={displayPrice} oldPrice={displayOldPrice} />
 
         {product.trustBadges.length > 0 && (
           <TrustBadges badges={product.trustBadges} size="sm" />
         )}
-
-        <ProductOriginBanner origin={product.origin} />
 
         <div className="rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm">
           <ProductConfigurationPicker
@@ -205,41 +198,6 @@ export function ProductDetailMobile({
           )}
         </div>
 
-        {product.origin === "china" ? (
-          <ShippingEstimator
-            {...shippingContext}
-            selectedMethod={selectedMethod}
-            onSelect={setSelectedMethod}
-            quantity={quantity}
-            configurationIncomplete={needsConfiguration}
-          />
-        ) : (
-          <div className="rounded-2xl border border-zinc-100 bg-zinc-50/50 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.15em] text-zinc-500">
-              Shipping
-            </p>
-            {needsConfiguration ? (
-              <p className="mt-3 text-sm font-medium text-zinc-600" role="status">
-                Complete your selection to estimate shipping.
-              </p>
-            ) : (
-              <DeliveryEstimator origin={product.origin} variant="detail" className="mt-3" />
-            )}
-          </div>
-        )}
-
-        <LandedCostSummary
-          productPrice={unitPrice}
-          compareAtUnitPrice={
-            moqDisplay.wholesaleApplied ? moqDisplay.compareAtUnitPrice : null
-          }
-          shippingCost={shippingCost}
-          quantity={quantity}
-          shippingContext={shippingContext}
-          isReady={orderSummaryReady}
-          moqHint={moqDisplay.moqHint}
-        />
-
         <div className="space-y-2.5">
           <BuyNowButton
             product={product}
@@ -273,9 +231,12 @@ export function ProductDetailMobile({
           />
         </div>
 
+        <ProductOriginBanner origin={product.origin} />
+
         <ProductPurchaseTrust variant="compact" />
 
         <ProductMobileTabs
+          productSlug={product.slug}
           description={product.description}
           features={product.features}
           specifications={product.specifications}
@@ -319,6 +280,7 @@ export function ProductDetailMobile({
         product={product}
         quantity={quantity}
         disabled={!canAdd}
+        purchaseUnavailable={purchaseUnavailable}
         configurationId={configSelection.configurationId}
         configurationLabel={configSelection.label}
         configurationSku={configSelection.sku}

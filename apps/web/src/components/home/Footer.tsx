@@ -5,7 +5,7 @@ import Link from "next/link";
 import { HomepageAdRail } from "@/components/home/commercial/HomepageAdBanner";
 import { OfficialLogoImage } from "@/components/branding/OfficialLogoImage";
 import { useTzStores } from "@/lib/catalog/use-tz-stores";
-import { filterActiveScheduled, getAdsByPlacement, homepageContentSeed } from "@/lib/content/homepage";
+import { filterActiveScheduled, getAdsByPlacement, homepageContentSeed, isLaunchAdvertisementPlacementVisible } from "@/lib/content/homepage";
 import { useCustomerSession } from "@/lib/customer/use-customer-session";
 import { resolveStorefrontNavAudience } from "@/lib/storefront/navigation-policy";
 import { useStorefrontNavigation } from "@/lib/storefront/use-storefront-navigation";
@@ -79,7 +79,9 @@ export function Footer() {
 
   const footerAds = useMemo(() => {
     const active = filterActiveScheduled(homepageContentSeed.advertisements);
-    return getAdsByPlacement(active, "footer");
+    return getAdsByPlacement(active, "footer").filter((ad) =>
+      isLaunchAdvertisementPlacementVisible(ad.placement),
+    );
   }, []);
 
   const columns = navigation.footerColumns;

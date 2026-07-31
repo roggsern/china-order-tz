@@ -1,14 +1,16 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { paymentService } from "@/lib/payment/PaymentService";
+import { AuthInvitationCard } from "@/components/auth/AuthInvitationCard";
 import { PackageThumbnailIcon } from "@/components/account/AccountIcons";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { getCustomerApiToken } from "@/lib/api/customer-auth";
+import { lookupCustomerOrderForTracking } from "@/lib/order/order-tracking-lookup";
 
-const EXAMPLE_HINT = "e.g. CO-TZ-20250627-ABC123 or your order UUID";
+const EXAMPLE_HINT = "e.g. COTZ-20260730-000001 or your order UUID";
 
 export function TrackOrderLookupContent({ lookupPath = "/track" }: { lookupPath?: string }) {
   const router = useRouter();
@@ -16,8 +18,15 @@ export function TrackOrderLookupContent({ lookupPath = "/track" }: { lookupPath?
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [needsAuth, setNeedsAuth] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    setNeedsAuth(!getCustomerApiToken());
+    setIsCheckingAuth(false);
+  }, []);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = query.trim();
     if (!trimmed) {
@@ -30,15 +39,40 @@ export function TrackOrderLookupContent({ lookupPath = "/track" }: { lookupPath?
     setError(null);
     setNotFound(false);
 
-    const order = paymentService.resolveOrder(trimmed);
-    if (!order) {
+    const result = await lookupCustomerOrderForTracking(trimmed);
+
+    if (result.status === "needs_auth") {
+      setNeedsAuth(true);
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (result.status === "not_found") {
       setNotFound(true);
       setError(null);
       setIsSubmitting(false);
       return;
     }
 
-    router.push(`${lookupPath}/${order.id}`);
+    if (result.status === "error") {
+      setError(result.message);
+      setIsSubmitting(false);
+      return;
+    }
+
+    router.push(`${lookupPath}/${result.order.id}`);
+  }
+
+  if (isCheckingAuth) {
+    return null;
+  }
+
+  if (needsAuth) {
+    return (
+      <div className="mx-auto max-w-xl px-4 py-10 sm:px-6 sm:py-16 lg:px-8">
+        <AuthInvitationCard context="orders" returnUrl="/track" />
+      </div>
+    );
   }
 
   return (

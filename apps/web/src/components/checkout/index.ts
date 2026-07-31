@@ -5,6 +5,7 @@ export { CheckoutOrderSummary } from "./CheckoutOrderSummary";
 export { CheckoutSidebarSummary } from "./CheckoutSidebarSummary";
 export { CheckoutWizardProgress } from "./CheckoutWizardProgress";
 export { CheckoutCustomerStep } from "./CheckoutCustomerStep";
+export { CheckoutAddressStep } from "./CheckoutAddressStep";
 export { CheckoutShippingStep } from "./CheckoutShippingStep";
 export { CheckoutSummaryStep } from "./CheckoutSummaryStep";
 export { CheckoutStepIndicator } from "./CheckoutStepIndicator";

@@ -43,7 +43,12 @@ export function validateProductStoreAssignment(input: {
   commerceJourney: CommerceJourney | "";
   commerceChannelCode: string | null | undefined;
   storeId: string;
+  /** When false, skip validation for draft-first wizard early steps. */
+  requireAssignment?: boolean;
 }): string | null {
+  if (input.requireAssignment === false) {
+    return null;
+  }
   if (
     !shouldShowProductStoreSelector({
       isNewProduct: input.isNewProduct,

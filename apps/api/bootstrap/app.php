@@ -1,12 +1,14 @@
 <?php
 
 use App\Http\Middleware\AssignRequestId;
+use App\Http\Middleware\EnforceMaintenanceMode;
 use App\Http\Middleware\EnsureAdmin;
 use App\Http\Middleware\EnsureAdminIsActive;
 use App\Http\Middleware\EnsureAdminPermission;
 use App\Http\Middleware\EnsureUser;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Support\Monitoring\ErrorMonitorManager;
+use App\Exceptions\FeatureDisabledException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -28,6 +30,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->appendToGroup('api', [
             AssignRequestId::class,
+            EnforceMaintenanceMode::class,
         ]);
 
         $middleware->alias([
@@ -36,6 +39,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'ensure.admin' => EnsureAdmin::class,
             'ensure.user' => EnsureUser::class,
             'user.active' => EnsureUserIsActive::class,
+            'maintenance' => EnforceMaintenanceMode::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
@@ -66,6 +70,19 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $exceptions->shouldRenderJsonWhen(function (Request $request, \Throwable $throwable) {
             return $request->is('api/*') || $request->expectsJson();
+        });
+
+        $exceptions->render(function (FeatureDisabledException $exception, Request $request) {
+            if (! ($request->is('api/*') || $request->expectsJson())) {
+                return null;
+            }
+
+            return response()->json([
+                'success' => false,
+                'code' => 'feature_disabled',
+                'feature' => $exception->feature,
+                'message' => $exception->getMessage(),
+            ], 403);
         });
 
         $exceptions->render(function (AuthenticationException $exception, Request $request) {

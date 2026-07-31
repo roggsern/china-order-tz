@@ -44,17 +44,20 @@ class GetAdminBrandsAction
         $categoryId = request()->query('category_id');
 
         if (is_string($categoryId) && $categoryId !== '') {
-            $categoryIdsToCheck = $this->categoryAndAncestorIds($categoryId);
+            // Explicit show-all fallback for product create typeahead.
+            if (! request()->boolean('all')) {
+                $categoryIdsToCheck = $this->categoryAndAncestorIds($categoryId);
 
-            $hasLinks = DB::table('brand_category')
-                ->whereIn('category_id', $categoryIdsToCheck)
-                ->exists();
+                $hasLinks = DB::table('brand_category')
+                    ->whereIn('category_id', $categoryIdsToCheck)
+                    ->exists();
 
-            if ($hasLinks) {
-                $query->whereHas(
-                    'categories',
-                    fn (Builder $q) => $q->whereIn('categories.id', $categoryIdsToCheck),
-                );
+                if ($hasLinks) {
+                    $query->whereHas(
+                        'categories',
+                        fn (Builder $q) => $q->whereIn('categories.id', $categoryIdsToCheck),
+                    );
+                }
             }
         }
 

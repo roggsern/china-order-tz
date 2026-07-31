@@ -15,7 +15,7 @@ export type AdminOrderSourceBadgeData = {
 
 export function resolveAdminOrderSourceBadge(order: Order): AdminOrderSourceBadgeData {
   if (resolveAdminOrderType(order) === "china") {
-    return { label: "China Order", tone: "china" };
+    return { label: "Order from China", tone: "china" };
   }
 
   const summary = getAdminOrderListSummary(order);
@@ -31,7 +31,7 @@ export function resolveAdminOrderSourceBadge(order: Order): AdminOrderSourceBadg
     }
   }
 
-  return { label: "Buy from Dar", tone: "dar" };
+  return { label: "Buy From TZ", tone: "dar" };
 }
 
 export function resolveAdminLineItemSourceBadge(
@@ -41,7 +41,7 @@ export function resolveAdminLineItemSourceBadge(
   const meta = getOrderLineFilterMeta(order, item);
 
   if (meta.source === "china") {
-    return { label: "China Order", tone: "china" };
+    return { label: "Order from China", tone: "china" };
   }
 
   if (meta.brandSlug) {
@@ -55,5 +55,5 @@ export function resolveAdminLineItemSourceBadge(
     return { label: meta.brand.trim(), tone: "brand" };
   }
 
-  return { label: "Buy from Dar", tone: "dar" };
+  return { label: "Buy From TZ", tone: "dar" };
 }

@@ -70,6 +70,9 @@ test("mapServerCartItems maps china line origin and shipping costs from API cont
         product_variant_id: null,
         quantity: 1,
         unit_price: 25000,
+        estimated_min_days: 7,
+        estimated_max_days: 12,
+        shipping_method: "air",
         product: {
           id: BASE_PRODUCT_ID,
           slug: "china-phone",
@@ -85,30 +88,46 @@ test("mapServerCartItems maps china line origin and shipping costs from API cont
   assert.equal(line.origin, "china");
   assert.equal(line.airCost, 9000);
   assert.equal(line.seaCost, 6000);
+  assert.equal(line.estimatedDeliveryDays, "7–12");
+  assert.equal(line.shippingMethod, "air_freight");
 });
 
-test("mapServerCartItems maps tz line origin from commerce channel", () => {
+test("mapServerCartItems prefers display_attributes over nested attribute_values", () => {
   const cart: ServerCart = {
     id: "cart-1",
     items: [
       {
-        id: "item-2",
+        id: "item-attrs",
         product_id: BASE_PRODUCT_ID,
-        product_variant_id: null,
+        product_variant_id: "variant-1",
         quantity: 1,
-        unit_price: 18000,
+        unit_price: 25000,
         product: {
           id: BASE_PRODUCT_ID,
-          slug: "tz-dress",
-          name: "TZ Dress",
-          commerce_channel_code: "TZ_LOCAL",
+          slug: "attr-phone",
+          name: "Attr Phone",
+          commerce_channel_code: "CHINA_IMPORT",
+          shipping_prices: { air: 9000, sea: 6000 },
+        },
+        variant: {
+          id: "variant-1",
+          sku: "ATTR-BLK",
+          name: "Black",
+          display_attributes: [{ attribute: "Color", value: "Black" }],
+          attribute_values: [
+            {
+              attribute: { name: "Color", slug: "color" },
+              value: "Red",
+            },
+          ],
         },
       },
     ],
   };
 
   const [line] = mapServerCartItems(cart);
-  assert.equal(line.origin, "tz");
-  assert.equal(line.airCost, undefined);
-  assert.equal(line.seaCost, undefined);
+  assert.deepEqual(line.selectedAttributes, [
+    { name: "Color", value: "Black", slug: null },
+  ]);
+  assert.equal(line.configurationLabel, "Black");
 });

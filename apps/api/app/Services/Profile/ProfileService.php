@@ -12,11 +12,12 @@ class ProfileService
     }
 
     /**
+     * Email is not mutable here — use CustomerEmailChangeService.
+     *
      * @param  array{
      *     first_name: string,
      *     last_name: string,
-     *     phone?: string|null,
-     *     email: string
+     *     phone?: string|null
      * }  $data
      */
     public function update(User $user, array $data): User
@@ -26,7 +27,6 @@ class ProfileService
             'last_name' => $data['last_name'],
             'name' => trim("{$data['first_name']} {$data['last_name']}"),
             'phone' => $data['phone'] ?? $user->phone,
-            'email' => $data['email'],
         ]);
 
         return $user->fresh();

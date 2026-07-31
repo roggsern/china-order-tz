@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   CustomerOrdersApiError,
-  fetchCustomerOrder,
   fetchCustomerOrders,
   type CustomerOrderListItem,
 } from "@/lib/api/customer-orders";
@@ -15,7 +14,7 @@ import {
 import { getCustomerApiToken } from "@/lib/api/customer-auth";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { OrdersPageSkeleton } from "@/components/ui/PageSkeletons";
+import { OrderListCardsSkeleton } from "@/components/ui/PageSkeletons";
 import { OrdersSummaryIcon } from "@/components/account/AccountIcons";
 import { OrderOverviewCard, type OrderOverviewCardData } from "./OrderOverviewCard";
 
@@ -30,43 +29,10 @@ function toOverviewCard(order: CustomerOrderListItem): OrderOverviewCardData {
     productName: order.itemPreview,
     quantity: order.itemCount,
     source: order.source,
+    imageUrl: order.imageUrl,
     imageEmoji: "📦",
     imageGradient: "from-[#c9a227]/15 to-zinc-100",
   };
-}
-
-const DETAIL_ENRICH_LIMIT = 8;
-
-async function enrichOrders(orders: CustomerOrderListItem[]): Promise<OrderOverviewCardData[]> {
-  return Promise.all(
-    orders.map(async (order, index) => {
-      const base = toOverviewCard(order);
-      if (index >= DETAIL_ENRICH_LIMIT) {
-        return base;
-      }
-
-      try {
-        const detail = await fetchCustomerOrder(order.orderNumber);
-        const first = detail.items[0];
-        if (!first) {
-          return base;
-        }
-        const totalQty = detail.items.reduce((sum, item) => sum + item.quantity, 0);
-        const extraCount = detail.items.length - 1;
-        return {
-          ...base,
-          productName:
-            extraCount > 0 ? `${first.name} +${extraCount} more` : first.name,
-          quantity: totalQty,
-          imageUrl: first.image?.url ?? null,
-          imageEmoji: first.image?.emoji ?? "📦",
-          imageGradient: first.image?.gradient ?? "from-[#c9a227]/15 to-zinc-100",
-        };
-      } catch {
-        return base;
-      }
-    }),
-  );
 }
 
 export function MyOrdersContent() {
@@ -89,8 +55,7 @@ export function MyOrdersContent() {
 
     try {
       const nextOrders = await fetchCustomerOrders();
-      const cards = await enrichOrders(nextOrders);
-      setOrders(cards);
+      setOrders(nextOrders.orders.map(toOverviewCard));
     } catch (error) {
       setOrders([]);
 
@@ -118,10 +83,6 @@ export function MyOrdersContent() {
     void loadOrders();
   }, [loadOrders]);
 
-  if (isLoading) {
-    return <OrdersPageSkeleton />;
-  }
-
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
       <header className="animate-fade-in">
@@ -142,6 +103,8 @@ export function MyOrdersContent() {
         <div className="mt-10 animate-fade-in">
           <ErrorState message={errorMessage} onRetry={() => void loadOrders()} />
         </div>
+      ) : isLoading ? (
+        <OrderListCardsSkeleton className="mt-8" />
       ) : orders.length === 0 ? (
         <div className="mt-10 animate-fade-in">
           <EmptyState

@@ -60,7 +60,7 @@ export function AdminStatCard({
   };
 
   const content = (
-    <div className={`${variantClasses[variant]} p-5 transition hover:shadow-md`}>
+    <div className={`${variantClasses[variant]} p-4 transition hover:shadow-md sm:p-5`}>
       <div className="flex items-start justify-between gap-3">
         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">{label}</p>
         {icon}

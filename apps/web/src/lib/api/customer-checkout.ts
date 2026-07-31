@@ -1,3 +1,4 @@
+import { buildCatalogProductShowBffPath } from "@/lib/api/catalog-proxy";
 import { getCustomerApiToken } from "@/lib/api/customer-auth";
 import { normalizePhoneToE164 } from "@/lib/phone";
 import type { CartLineItem, CartState, CartTotals } from "@/lib/types/cart";
@@ -16,6 +17,7 @@ import {
 import type { CheckoutShippingChoice } from "@/lib/checkout/shipping-choice";
 import { toApiShippingMethod } from "@/lib/checkout/shipping-choice";
 import { inferProductOrigin } from "@/lib/catalog/map-api-product";
+import { loadVisitorIdentity } from "@/lib/storefront/visitor-identity";
 import type { ProductOrigin } from "@/lib/types/catalog";
 
 type ApiSuccessResponse<T> = {
@@ -117,6 +119,23 @@ async function customerApiFetch<T>(
 }
 
 /** Backend accepts shipping_method only for products that require China freight. */
+function hasCollectableCustomerDetails(customer: CustomerInformation): boolean {
+  return Boolean(
+    customer.firstName.trim() ||
+      customer.lastName.trim() ||
+      customer.phone.trim() ||
+      customer.email.trim(),
+  );
+}
+
+function hasCollectableAddressDetails(shippingAddress: ShippingAddress): boolean {
+  return Boolean(
+    shippingAddress.addressLine1.trim() ||
+      shippingAddress.city.trim() ||
+      shippingAddress.region.trim(),
+  );
+}
+
 function shouldSendChinaShippingMethod(
   item: CartLineItem,
   requiresChinaShipping: boolean,
@@ -165,7 +184,7 @@ async function resolveCatalogProductForSync(item: CartLineItem): Promise<{
     });
   }
 
-  const response = await fetch(`/api/catalog/products/${encodeURIComponent(item.slug)}`, {
+  const response = await fetch(buildCatalogProductShowBffPath(item.slug), {
     method: "GET",
     headers: { Accept: "application/json" },
     cache: "no-store",
@@ -441,12 +460,18 @@ export type BackendCheckoutInput = {
 export async function runBackendCheckoutFlow(
   input: BackendCheckoutInput,
 ): Promise<BackendOrderConfirmation> {
-  await updateCustomerProfile(input.customer, input.token);
-  await updateDeliveryAddress(input.customer, input.shippingAddress, input.token);
+  if (hasCollectableCustomerDetails(input.customer)) {
+    await updateCustomerProfile(input.customer, input.token);
+  }
+
+  if (hasCollectableAddressDetails(input.shippingAddress)) {
+    await updateDeliveryAddress(input.customer, input.shippingAddress, input.token);
+  }
+
   await syncCartToServer(input.cart.items, input.token);
 
   try {
-    const session = await startCheckoutSession(input.token);
+    const session = await startCheckoutSession(input.token, loadVisitorIdentity());
     await applyCheckoutShippingChoice(
       session.id,
       {

@@ -6,6 +6,7 @@ use App\Enums\PosPaymentHandler;
 use App\Http\Controllers\Controller;
 use App\Models\Admin;
 use App\Models\PaymentMethodDefinition;
+use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -14,6 +15,8 @@ class AdminPosPaymentMethodController extends Controller
 {
     public function index(): JsonResponse
     {
+        $this->authorize(AdminPermissions::POS_PAYMENT_METHODS_VIEW);
+
         return response()->json([
             'success' => true,
             'data' => PaymentMethodDefinition::query()->orderBy('sort_order')->get(),

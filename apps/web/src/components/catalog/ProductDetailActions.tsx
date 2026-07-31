@@ -38,6 +38,7 @@ export function ProductDetailActions({ product }: ProductDetailActionsProps) {
         <BuyNowButton product={product} quantity={quantity} disabled={isOutOfStock} />
         <WishlistButton
           productId={product.id}
+          catalogProductId={product.catalogProductId}
           slug={product.slug}
           name={product.name}
           emoji={product.emoji}

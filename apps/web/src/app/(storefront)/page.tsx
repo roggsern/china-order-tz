@@ -12,11 +12,16 @@ import { TrustIndicators } from "@/components/home/commercial/TrustIndicators";
 import { CommercialNewsletter } from "@/components/home/commercial/CommercialNewsletter";
 import { FeaturedProducts } from "@/components/home/FeaturedProducts";
 import { ProductGridSkeleton } from "@/components/catalog/ProductGridSkeleton";
-import { getHomepageContent, getAdsByPlacement } from "@/lib/content/homepage";
+import {
+  getHomepageContent,
+  getAdsByPlacement,
+  isStorefrontLaunchSectionEnabled,
+} from "@/lib/content/homepage";
 import {
   getHomeBestSellers,
   getHomeNewArrivalsByOrigin,
 } from "@/lib/catalog/home-catalog";
+import { mergeTzStoreMedia } from "@/lib/catalog/merge-tz-store-media";
 import { getTzStores } from "@/lib/api/tz-stores";
 
 async function CommercialNewArrivals() {
@@ -46,10 +51,9 @@ async function CommercialBestSellers() {
 
 async function CommercialShopByStore() {
   const content = await getHomepageContent();
-  const stores =
-    content.shopByStores?.length
-      ? content.shopByStores
-      : await getTzStores().catch(() => []);
+  const liveStores = await getTzStores().catch(() => []);
+  const preferred = content.shopByStores?.length ? content.shopByStores : liveStores;
+  const stores = mergeTzStoreMedia(preferred, liveStores);
   return <ShopByStore stores={stores} copy={content.sections.shopByStore} />;
 }
 
@@ -72,13 +76,16 @@ export default async function Home() {
     <>
       <HeroCarousel slides={content.heroSlides} />
 
-      {homepageBanners.length > 0 ? (
+      {homepageBanners.length > 0 &&
+      isStorefrontLaunchSectionEnabled("flashPromotions") ? (
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <HomepageAdRail ads={homepageBanners} />
         </div>
       ) : null}
 
-      <FlashDeals deals={content.flashDeals} copy={content.sections.flashDeals} />
+      {isStorefrontLaunchSectionEnabled("flashDeals") ? (
+        <FlashDeals deals={content.flashDeals} copy={content.sections.flashDeals} />
+      ) : null}
 
       <FeaturedCollections
         collections={content.collections}
@@ -115,7 +122,7 @@ export default async function Home() {
         <CommercialFeaturedProducts />
       </Suspense>
 
-      {midPageAds.length > 0 ? (
+      {midPageAds.length > 0 && isStorefrontLaunchSectionEnabled("midPageAds") ? (
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <HomepageAdRail ads={midPageAds} />
         </div>
@@ -151,7 +158,9 @@ export default async function Home() {
         <CommercialBestSellers />
       </Suspense>
 
-      <SponsorPartners sponsors={content.sponsors} copy={content.sections.sponsors} />
+      {isStorefrontLaunchSectionEnabled("trustedPartners") ? (
+        <SponsorPartners sponsors={content.sponsors} copy={content.sections.sponsors} />
+      ) : null}
 
       <CommercialWhyChooseUs
         items={content.whyChooseUs}

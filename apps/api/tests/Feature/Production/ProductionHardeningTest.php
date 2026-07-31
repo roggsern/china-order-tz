@@ -43,7 +43,7 @@ class ProductionHardeningTest extends TestCase
             $response->assertJsonStructure([
                 'environment',
                 'debug',
-                'checks' => ['database', 'queue', 'cache', 'storage', 'scheduler'],
+                'checks' => ['database', 'queue', 'cache', 'storage', 'scheduler', 'mail', 'production_config'],
             ]);
         }
     }

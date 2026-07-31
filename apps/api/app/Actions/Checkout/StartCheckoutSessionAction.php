@@ -12,8 +12,11 @@ class StartCheckoutSessionAction
         private readonly CheckoutOrchestrator $orchestrator,
     ) {}
 
-    public function handle(User $user): CheckoutSession
+    /**
+     * @param  array{visitor_uuid?: string|null, session_id?: string|null}  $attribution
+     */
+    public function handle(User $user, array $attribution = []): CheckoutSession
     {
-        return $this->orchestrator->start($user);
+        return $this->orchestrator->start($user, $attribution);
     }
 }

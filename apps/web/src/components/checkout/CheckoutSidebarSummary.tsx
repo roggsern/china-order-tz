@@ -16,6 +16,8 @@ interface CheckoutSidebarSummaryProps {
   totals: CartTotals;
   shippingMethod?: ShippingMethodCode | null;
   shippingEstimate?: string;
+  /** When false, hides the air/sea delivery estimate card (e.g. own shipping agent). */
+  showShippingEstimate?: boolean;
   onSubmit: () => void;
   isSubmitting?: boolean;
   submitDisabled?: boolean;
@@ -83,6 +85,7 @@ export function CheckoutSidebarSummary({
   totals,
   shippingMethod,
   shippingEstimate,
+  showShippingEstimate = false,
   onSubmit,
   isSubmitting = false,
   submitDisabled = false,
@@ -92,7 +95,9 @@ export function CheckoutSidebarSummary({
   className = "",
   hideSubmitOnMobile = true,
 }: CheckoutSidebarSummaryProps) {
-  const { method, estimate } = resolvePrimaryShipping(items, shippingMethod);
+  const { method, estimate } = showShippingEstimate
+    ? resolvePrimaryShipping(items, shippingMethod)
+    : { method: null as ShippingMethodCode | null, estimate: undefined };
   const [pulseTotal, setPulseTotal] = useState(false);
   const prevTotal = useRef(totals.grandTotal);
 
@@ -142,15 +147,17 @@ export function CheckoutSidebarSummary({
             </div>
           </div>
 
-          <div>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
-              Shipping
-            </p>
-            <CheckoutShippingSummary
-              method={method}
-              estimatedDelivery={shippingEstimate ?? estimate}
-            />
-          </div>
+          {showShippingEstimate && method ? (
+            <div>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
+                Shipping
+              </p>
+              <CheckoutShippingSummary
+                method={method}
+                estimatedDelivery={shippingEstimate ?? estimate}
+              />
+            </div>
+          ) : null}
 
           <div
             className={`rounded-2xl border border-zinc-100 bg-zinc-50/60 p-4 transition duration-300 ${

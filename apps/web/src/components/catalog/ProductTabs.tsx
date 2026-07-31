@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { useFeatureAvailability } from "@/hooks/use-feature-availability";
 import type {
   CustomerReview,
   ProductOrigin,
@@ -11,12 +12,14 @@ import type {
 import { formatDays, formatDeliveryWindow, formatPrice } from "@/lib/catalog/utils";
 import { LOCAL_DELIVERY_NEGOTIATED_LABEL } from "@/lib/catalog/product-type";
 import { getProductShippingOptions, getDeliveryOptions } from "@/lib/catalog/delivery";
+import { useShippingDurations } from "@/hooks/use-shipping-durations";
 import { ProductReviewsPanel } from "./ProductReviewsPanel";
 import { ProductOriginBanner } from "./ProductOriginBanner";
 
 type TabId = "description" | "specifications" | "shipping" | "reviews";
 
 interface ProductTabsProps {
+  productSlug: string;
   description: string;
   features: string[];
   specifications: ProductSpecification[];
@@ -28,7 +31,7 @@ interface ProductTabsProps {
   layout?: "default" | "below-gallery";
 }
 
-const tabs: { id: TabId; label: string }[] = [
+const allTabs: { id: TabId; label: string }[] = [
   { id: "description", label: "Description" },
   { id: "specifications", label: "Specifications" },
   { id: "shipping", label: "Shipping" },
@@ -36,6 +39,7 @@ const tabs: { id: TabId; label: string }[] = [
 ];
 
 export function ProductTabs({
+  productSlug,
   description,
   features,
   specifications,
@@ -47,6 +51,14 @@ export function ProductTabs({
   layout = "default",
 }: ProductTabsProps) {
   const reduceMotion = useReducedMotion();
+  const { reviews: reviewsEnabled, isReady: featuresReady } = useFeatureAvailability();
+  const tabs = useMemo(
+    () =>
+      featuresReady && !reviewsEnabled
+        ? allTabs.filter((tab) => tab.id !== "reviews")
+        : allTabs,
+    [featuresReady, reviewsEnabled],
+  );
   const [activeTab, setActiveTab] = useState<TabId>("description");
   const isBelowGallery = layout === "below-gallery";
 
@@ -128,6 +140,7 @@ export function ProductTabs({
 
             {activeTab === "reviews" && (
               <ProductReviewsPanel
+                productSlug={productSlug}
                 reviews={reviews}
                 reviewCount={reviewCount}
                 averageRating={averageRating}
@@ -147,6 +160,8 @@ function ShippingTabPanel({
   shippingContext: ProductShippingContext;
   origin: ProductOrigin;
 }) {
+  useShippingDurations();
+
   if (origin === "china") {
     const options = getProductShippingOptions(shippingContext);
 

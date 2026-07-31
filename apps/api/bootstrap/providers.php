@@ -2,9 +2,11 @@
 
 use App\Payments\Providers\PaymentServiceProvider;
 use App\Providers\AppServiceProvider;
+use App\Providers\AdminManagementServiceProvider;
 use App\Providers\AdminRbacServiceProvider;
 use App\Providers\AuditServiceProvider;
 use App\Providers\CmsServiceProvider;
+use App\Providers\ChinaProcurementServiceProvider;
 use App\Providers\ChinaWorkflowServiceProvider;
 use App\Providers\CustomerAgentServiceProvider;
 use App\Providers\CommerceServiceProvider;
@@ -24,13 +26,18 @@ use App\Providers\ProductShippingServiceProvider;
 use App\Providers\PromotionServiceProvider;
 use App\Providers\ReportingServiceProvider;
 use App\Providers\ReturnsServiceProvider;
+use App\Providers\ReviewModerationServiceProvider;
+use App\Providers\SettingsServiceProvider;
 use App\Providers\ShipmentServiceProvider;
+use App\Providers\SupportServiceProvider;
+use App\Providers\StorefrontServiceProvider;
 use App\Providers\TrackingServiceProvider;
 use App\Providers\WarehouseServiceProvider;
 
 return [
     AppServiceProvider::class,
     AdminRbacServiceProvider::class,
+    AdminManagementServiceProvider::class,
     PaymentServiceProvider::class,
     CommerceServiceProvider::class,
     ProcurementServiceProvider::class,
@@ -42,6 +49,7 @@ return [
     GrowthServiceProvider::class,
     CmsServiceProvider::class,
     ChinaWorkflowServiceProvider::class,
+    ChinaProcurementServiceProvider::class,
     CustomerAgentServiceProvider::class,
     PosServiceProvider::class,
     FulfillmentServiceProvider::class,
@@ -55,5 +63,9 @@ return [
     NotificationServiceProvider::class,
     AuditServiceProvider::class,
     ReturnsServiceProvider::class,
+    SupportServiceProvider::class,
+    ReviewModerationServiceProvider::class,
     ReportingServiceProvider::class,
+    SettingsServiceProvider::class,
+    StorefrontServiceProvider::class,
 ];

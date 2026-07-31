@@ -35,6 +35,7 @@ function mapNode(node: ApiCatalogCategory): CatalogCategoryNode {
 
 export function useCatalogCategories(options?: {
   origin?: ProductOrigin;
+  chinaNavigation?: boolean;
 }): CatalogCategoriesState {
   const [state, setState] = useState<CatalogCategoriesState>({
     categories: [],
@@ -48,6 +49,7 @@ export function useCatalogCategories(options?: {
     void fetchCategories({
       origin: options?.origin,
       tree: true,
+      chinaNavigation: options?.chinaNavigation,
     })
       .then((categories) => {
         if (!active) {
@@ -75,7 +77,7 @@ export function useCatalogCategories(options?: {
     return () => {
       active = false;
     };
-  }, [options?.origin]);
+  }, [options?.origin, options?.chinaNavigation]);
 
   return state;
 }

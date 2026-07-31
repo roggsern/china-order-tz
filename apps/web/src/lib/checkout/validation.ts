@@ -84,42 +84,9 @@ export function splitFullName(fullName: string): { firstName: string; lastName: 
   };
 }
 
-export function validateCheckoutStep1(form: CheckoutFormData): CheckoutFormErrors {
-  const errors: CheckoutFormErrors = {};
-
-  const fullName = validateFullName(
-    `${form.customer.firstName} ${form.customer.lastName}`.trim(),
-  );
-  if (fullName) {
-    errors.customer = { ...errors.customer, firstName: fullName };
-  }
-
-  const phone = validatePhone(form.customer.phone);
-  if (phone) {
-    errors.customer = { ...errors.customer, phone };
-  }
-
-  const email = validateEmailOptional(form.customer.email);
-  if (email) {
-    errors.customer = { ...errors.customer, email };
-  }
-
-  const addressLine1 = validateAddressLine1(form.shippingAddress.addressLine1);
-  if (addressLine1) {
-    errors.shippingAddress = { ...errors.shippingAddress, addressLine1 };
-  }
-
-  const city = validateCity(form.shippingAddress.city);
-  if (city) {
-    errors.shippingAddress = { ...errors.shippingAddress, city };
-  }
-
-  const region = validateRegion(form.shippingAddress.region);
-  if (region) {
-    errors.shippingAddress = { ...errors.shippingAddress, region };
-  }
-
-  return errors;
+/** Launch checkout — delivery address is not collected at checkout. */
+export function validateCheckoutStep1(_form: CheckoutFormData): CheckoutFormErrors {
+  return {};
 }
 
 export function validateCheckoutStep2(

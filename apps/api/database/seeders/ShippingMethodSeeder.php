@@ -26,6 +26,8 @@ class ShippingMethodSeeder extends Seeder
                     'base_cost' => 25000,
                     'cost_per_kg' => 8000,
                     'estimated_delivery_days' => 10,
+                    'estimated_min_days' => 7,
+                    'estimated_max_days' => 12,
                 ],
             ],
             [
@@ -38,7 +40,9 @@ class ShippingMethodSeeder extends Seeder
                 'rate' => [
                     'base_cost' => 10000,
                     'cost_per_kg' => 2500,
-                    'estimated_delivery_days' => 35,
+                    'estimated_delivery_days' => 40,
+                    'estimated_min_days' => 35,
+                    'estimated_max_days' => 45,
                 ],
             ],
             [
@@ -52,6 +56,8 @@ class ShippingMethodSeeder extends Seeder
                     'base_cost' => 5000,
                     'cost_per_kg' => null,
                     'estimated_delivery_days' => 2,
+                    'estimated_min_days' => 1,
+                    'estimated_max_days' => 5,
                 ],
             ],
         ];
@@ -75,6 +81,8 @@ class ShippingMethodSeeder extends Seeder
                     'base_cost' => $rate['base_cost'],
                     'cost_per_kg' => $rate['cost_per_kg'],
                     'estimated_delivery_days' => $rate['estimated_delivery_days'],
+                    'estimated_min_days' => $rate['estimated_min_days'],
+                    'estimated_max_days' => $rate['estimated_max_days'],
                     'currency' => 'TZS',
                     'is_active' => true,
                 ]

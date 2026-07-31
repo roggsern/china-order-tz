@@ -83,7 +83,7 @@ class LaunchClosureCheckoutPaymentTest extends TestCase
         $user = User::factory()->create();
         DeliveryAddress::factory()->create(['user_id' => $user->id]);
 
-        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::purchasable(25000);
+        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::chinaPurchasable(25000);
 
         $cart = Cart::factory()->create([
             'user_id' => $user->id,
@@ -109,9 +109,8 @@ class LaunchClosureCheckoutPaymentTest extends TestCase
         $user = User::factory()->create();
         DeliveryAddress::factory()->create(['user_id' => $user->id]);
 
-        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::purchasable($unit);
+        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::chinaPurchasable($unit, $unit > 0 ? 100 : 0);
         $product->update([
-            'fulfillment_source' => 'imported_from_china',
             'air_shipping_price' => $air,
         ]);
         ProductShippingOption::query()->where('product_id', $product->id)->forceDelete();
@@ -288,9 +287,12 @@ class LaunchClosureCheckoutPaymentTest extends TestCase
     {
         $user = User::factory()->create();
         DeliveryAddress::factory()->create(['user_id' => $user->id]);
-        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::purchasable(25000);
-        $product->update(['fulfillment_source' => 'imported_from_china']);
+        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::chinaPurchasable(25000);
         ProductShippingOption::query()->where('product_id', $product->id)->forceDelete();
+        $product->update([
+            'air_shipping_price' => null,
+            'sea_shipping_price' => null,
+        ]);
 
         $cart = Cart::factory()->create([
             'user_id' => $user->id,
@@ -413,8 +415,7 @@ class LaunchClosureCheckoutPaymentTest extends TestCase
     {
         $user = User::factory()->create();
         DeliveryAddress::factory()->create(['user_id' => $user->id]);
-        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::purchasable(25000);
-        $product->update(['fulfillment_source' => 'imported_from_china']);
+        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::chinaPurchasable(25000);
 
         $cart = Cart::factory()->create([
             'user_id' => $user->id,

@@ -12,6 +12,7 @@ use App\Models\InventoryCountSession;
 use App\Models\InventoryStockMovement;
 use App\Models\ReceivingRecord;
 use App\Models\VariantInventory;
+use App\Services\Inventory\ChinaInventoryStockReporter;
 use App\Services\Inventory\InventoryControlEngine;
 use App\Services\Stores\ActiveStoreContext;
 use App\Support\Admin\AdminPermissions;
@@ -25,6 +26,7 @@ class AdminInventoryController extends Controller
     public function __construct(
         private readonly InventoryControlEngine $inventory,
         private readonly ActiveStoreContext $stores,
+        private readonly ChinaInventoryStockReporter $chinaStock,
     ) {}
 
     public function dashboard(Request $request): JsonResponse
@@ -269,6 +271,22 @@ class AdminInventoryController extends Controller
         return response()->json([
             'success' => true,
             'data' => $this->inventory->valuation($storeIds),
+        ]);
+    }
+
+    /**
+     * ADMIN-11.3 — China vs TZ sellable vs in-transit stock buckets.
+     */
+    public function channelStock(Request $request): JsonResponse
+    {
+        $this->authorize(AdminPermissions::INVENTORY_VIEW);
+
+        $variantId = $request->query('product_variant_id');
+        $variantId = is_string($variantId) && $variantId !== '' ? $variantId : null;
+
+        return response()->json([
+            'success' => true,
+            'data' => $this->chinaStock->summarize($variantId),
         ]);
     }
 

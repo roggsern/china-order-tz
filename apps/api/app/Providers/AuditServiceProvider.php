@@ -4,6 +4,14 @@ namespace App\Providers;
 
 use App\Events\Audit\AdminLogin;
 use App\Events\Audit\AdminLogout;
+use App\Events\Audit\CustomerEmailChangedAudit;
+use App\Events\Audit\CustomerEmailChangeRequestedAudit;
+use App\Events\Audit\CustomerEmailVerificationRequestedAudit;
+use App\Events\Audit\CustomerEmailVerifiedAudit;
+use App\Events\Audit\CustomerLogoutAudit;
+use App\Events\Audit\CustomerPasswordChangedAudit;
+use App\Events\Audit\CustomerPasswordResetCompletedAudit;
+use App\Events\Audit\CustomerPasswordResetRequestedAudit;
 use App\Events\Audit\NotificationSent;
 use App\Events\Audit\NotificationTemplateUpdated;
 use App\Events\Audit\OrderCreated;
@@ -39,6 +47,14 @@ class AuditServiceProvider extends ServiceProvider
         NotificationSent::class,
         AdminLogin::class,
         AdminLogout::class,
+        CustomerLogoutAudit::class,
+        CustomerPasswordChangedAudit::class,
+        CustomerEmailChangeRequestedAudit::class,
+        CustomerEmailChangedAudit::class,
+        CustomerEmailVerificationRequestedAudit::class,
+        CustomerEmailVerifiedAudit::class,
+        CustomerPasswordResetRequestedAudit::class,
+        CustomerPasswordResetCompletedAudit::class,
     ];
 
     public function register(): void

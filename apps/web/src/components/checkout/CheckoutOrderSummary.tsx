@@ -4,6 +4,8 @@ import Link from "next/link";
 import type { CartTotals } from "@/lib/types/cart";
 import type { OrderLineItem } from "@/lib/types/order";
 import type { ShippingMethodCode } from "@/lib/shipping/types";
+import type { CheckoutShippingChoice } from "@/lib/checkout/shipping-choice";
+import { shouldShowCompanyShippingEstimate } from "@/lib/checkout/display-totals";
 import { CheckoutSidebarSummary } from "./CheckoutSidebarSummary";
 
 interface CheckoutOrderSummaryProps {
@@ -16,6 +18,7 @@ interface CheckoutOrderSummaryProps {
   submitHint?: string;
   backHref?: string;
   backLabel?: string;
+  shippingChoice?: CheckoutShippingChoice | null;
   shippingMethod?: ShippingMethodCode | null;
 }
 
@@ -29,14 +32,21 @@ export function CheckoutOrderSummary({
   submitHint = "Review your order once more, then place securely.",
   backHref = "/checkout",
   backLabel = "← Back to checkout",
+  shippingChoice = null,
   shippingMethod,
 }: CheckoutOrderSummaryProps) {
-  const primaryMethod =
-    shippingMethod ??
-    items.find((item) => item.shipping.method === "air_freight" || item.shipping.method === "sea_freight")
-      ?.shipping.method ??
-    items[0]?.shipping.method ??
-    null;
+  const showShippingEstimate = shouldShowCompanyShippingEstimate(
+    shippingChoice,
+    shippingMethod,
+  );
+  const primaryMethod = showShippingEstimate
+    ? (shippingMethod ??
+        items.find(
+          (item) =>
+            item.shipping.method === "air_freight" || item.shipping.method === "sea_freight",
+        )?.shipping.method ??
+        null)
+    : null;
 
   return (
     <div className="space-y-4">
@@ -44,6 +54,7 @@ export function CheckoutOrderSummary({
         items={items}
         totals={totals}
         shippingMethod={primaryMethod}
+        showShippingEstimate={showShippingEstimate}
         onSubmit={onSubmit}
         isSubmitting={isSubmitting}
         submitDisabled={submitDisabled}

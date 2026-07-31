@@ -1,8 +1,15 @@
 import type { ShippingMethod, ShippingRate } from "@/lib/shipping/types";
+import {
+  formatDurationWindow,
+  resolveDurationWindow,
+} from "@/lib/shipping/durations";
 
 /**
  * Configurable shipping catalog — mirrors `shipping_methods` + `shipping_rates` tables.
- * Admin updates rates here (or via API in production); engine reads from this data only.
+ * Pricing (`SHIPPING_RATES.baseCost` / `costPerKg`) stays here for the local cost engine.
+ *
+ * Customer-facing delivery windows come from `GET /shipping/durations` via
+ * `resolveDurationWindow`. `deliveryEstimate` on methods is a defensive mirror only.
  */
 export const SHIPPING_METHODS: ShippingMethod[] = [
   {
@@ -14,6 +21,7 @@ export const SHIPPING_METHODS: ShippingMethod[] = [
     fulfillmentSource: "imported_from_china",
     isActive: true,
     sortOrder: 1,
+    // Defensive mirror of backend defaults — prefer resolveDurationWindow / API cache.
     deliveryEstimate: { minDays: 7, maxDays: 12 },
   },
   {
@@ -48,6 +56,7 @@ export const SHIPPING_RATES: ShippingRate[] = [
     costPerKg: 15_000,
     minWeight: 0,
     maxWeight: null,
+    /** Rate-table typical used by cost engine only — not PDP duration SSoT. */
     estimatedDeliveryDays: 10,
     currency: "TZS",
     isActive: true,
@@ -101,23 +110,11 @@ export function getDefaultFlatShippingUnitCost(methodCode: ShippingMethod["code"
   return rate?.baseCost ?? 0;
 }
 
+/**
+ * Customer-facing day window string (e.g. "7–12").
+ * Prefers `/shipping/durations` cache; otherwise defensive fallback.
+ */
 export function getDefaultFlatShippingDeliveryDays(methodCode: ShippingMethod["code"]): string {
-  const method = SHIPPING_METHODS.find((entry) => entry.code === methodCode);
-  const rate = method
-    ? SHIPPING_RATES.find(
-        (entry) => entry.shippingMethodId === method.id && entry.isActive,
-      )
-    : undefined;
-
-  if (rate?.estimatedDeliveryDays != null) {
-    return String(rate.estimatedDeliveryDays);
-  }
-
-  if (method) {
-    const { minDays, maxDays } = method.deliveryEstimate;
-    if (minDays === maxDays) return String(minDays);
-    return `${minDays}–${maxDays}`;
-  }
-
-  return "—";
+  const window = resolveDurationWindow(methodCode);
+  return formatDurationWindow(window.min_days, window.max_days);
 }
