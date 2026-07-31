@@ -13,7 +13,37 @@ class ProductionComposeDefinitionTest extends TestCase
 {
     private static function repoRoot(): string
     {
-        return dirname(__DIR__, 5);
+        $override = getenv('MONOREPO_ROOT');
+        if (is_string($override) && $override !== '' && is_file($override.'/docker-compose.prod.yml')) {
+            return rtrim($override, '/\\');
+        }
+
+        $candidates = [
+            dirname(__DIR__, 5),
+            dirname(base_path(), 2),
+        ];
+
+        foreach ($candidates as $dir) {
+            if (is_file($dir.'/docker-compose.prod.yml')) {
+                return $dir;
+            }
+        }
+
+        $dir = __DIR__;
+        for ($i = 0; $i < 8; $i++) {
+            if (is_file($dir.'/docker-compose.prod.yml')) {
+                return $dir;
+            }
+
+            $parent = dirname($dir);
+            if ($parent === $dir) {
+                break;
+            }
+
+            $dir = $parent;
+        }
+
+        self::fail('Monorepo root not found (expected docker-compose.prod.yml). Run this test from a full repository checkout.');
     }
 
     private static function prodComposeRaw(): string
@@ -38,7 +68,7 @@ class ProductionComposeDefinitionTest extends TestCase
      */
     private static function prodCompose(): array
     {
-        return Yaml::parse(self::prodComposeRaw());
+        return Yaml::parse(self::prodComposeRaw(), Yaml::PARSE_CUSTOM_TAGS);
     }
 
     public function test_queue_and_scheduler_clear_workers_profile(): void
@@ -49,7 +79,11 @@ class ProductionComposeDefinitionTest extends TestCase
         foreach (['queue', 'scheduler'] as $name) {
             $this->assertArrayHasKey($name, $services, "Missing production service: {$name}");
             $this->assertArrayHasKey('profiles', $services[$name]);
-            $this->assertSame([], $services[$name]['profiles'], "{$name} must start by default in production.");
+
+            $profiles = $services[$name]['profiles'];
+            $isCleared = $profiles === [] || ($profiles instanceof \Symfony\Component\Yaml\Tag\TaggedValue && $profiles->getTag() === 'reset' && $profiles->getValue() === []);
+
+            $this->assertTrue($isCleared, "{$name} must start by default in production.");
         }
     }
 
@@ -90,9 +124,62 @@ class ProductionComposeDefinitionTest extends TestCase
     {
         $raw = self::prodComposeRaw();
 
-        $this->assertStringContainsString("volumes: !override []\n", $raw);
-        $this->assertStringContainsString("environment: !override\n", $raw);
+        $this->assertMatchesRegularExpression('/volumes: !override \[\]\r?\n/', $raw);
+        $this->assertMatchesRegularExpression('/environment: !override\r?\n/', $raw);
         $this->assertStringContainsString('NODE_ENV: production', $raw);
+    }
+
+    private static function nodeDockerfile(): string
+    {
+        return (string) file_get_contents(self::repoRoot().'/docker/node/Dockerfile');
+    }
+
+    public function test_node_dockerfile_declares_public_url_build_args_before_build(): void
+    {
+        $dockerfile = self::nodeDockerfile();
+        $buildPos = strpos($dockerfile, 'RUN npm run build');
+
+        $this->assertNotFalse($buildPos);
+        $this->assertStringContainsString('ARG NEXT_PUBLIC_APP_URL', $dockerfile);
+        $this->assertStringContainsString('ARG NEXT_PUBLIC_API_URL', $dockerfile);
+        $this->assertStringContainsString('ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}', $dockerfile);
+        $this->assertStringContainsString('ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}', $dockerfile);
+        $this->assertLessThan($buildPos, strpos($dockerfile, 'ARG NEXT_PUBLIC_APP_URL'));
+        $this->assertLessThan($buildPos, strpos($dockerfile, 'ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}'));
+    }
+
+    public function test_prod_compose_web_passes_public_url_build_args(): void
+    {
+        $compose = self::prodCompose();
+        $args = $compose['services']['web']['build']['args'] ?? [];
+
+        $this->assertSame('${NEXT_PUBLIC_APP_URL}', $args['NEXT_PUBLIC_APP_URL'] ?? null);
+        $this->assertSame('${NEXT_PUBLIC_API_URL}', $args['NEXT_PUBLIC_API_URL'] ?? null);
+    }
+
+    public function test_prod_compose_web_runtime_keeps_internal_api_url(): void
+    {
+        $raw = self::prodComposeRaw();
+
+        $this->assertStringContainsString('API_INTERNAL_URL: ${API_INTERNAL_URL:-http://nginx}', $raw);
+    }
+
+    public function test_prod_compose_web_build_args_source_production_env_without_localhost_defaults(): void
+    {
+        $raw = self::prodComposeRaw();
+
+        $this->assertStringContainsString('NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}', $raw);
+        $this->assertStringContainsString('NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}', $raw);
+        $this->assertStringNotContainsString('NEXT_PUBLIC_APP_URL: http://localhost', $raw);
+        $this->assertStringNotContainsString('NEXT_PUBLIC_API_URL: http://localhost', $raw);
+    }
+
+    public function test_production_env_template_declares_public_urls_for_web_build(): void
+    {
+        $template = (string) file_get_contents(self::repoRoot().'/apps/api/.env.production.example');
+
+        $this->assertStringContainsString('NEXT_PUBLIC_APP_URL=https://www.chinaordertz.com', $template);
+        $this->assertStringContainsString('NEXT_PUBLIC_API_URL=https://api.chinaordertz.com', $template);
     }
 
     public function test_nginx_uses_production_image(): void
