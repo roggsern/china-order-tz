@@ -4,6 +4,7 @@ import {
   buildLoginHref,
   resolvePostAuthRedirect,
   sanitizeReturnUrl,
+  withPreservedReturnUrl,
 } from "./return-url";
 
 describe("sanitizeReturnUrl", () => {
@@ -36,5 +37,18 @@ describe("resolvePostAuthRedirect", () => {
 describe("buildLoginHref", () => {
   it("preserves checkout return URL in login link", () => {
     assert.equal(buildLoginHref("/checkout"), "/login?returnUrl=%2Fcheckout");
+  });
+});
+
+describe("withPreservedReturnUrl", () => {
+  it("supports internal account routes as href targets", () => {
+    assert.equal(
+      withPreservedReturnUrl("/account/security", "/checkout"),
+      "/account/security?returnUrl=%2Fcheckout",
+    );
+  });
+
+  it("still sanitizes returnUrl and omits query when unsafe", () => {
+    assert.equal(withPreservedReturnUrl("/login", "https://evil.test"), "/login");
   });
 });

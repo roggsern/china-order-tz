@@ -19,6 +19,10 @@ describe("hasAdminPermission", () => {
     assert.equal(hasAdminPermission(permissions, "admins.view"), true);
     assert.equal(hasAdminPermission(permissions, "admins.create"), false);
   });
+
+  it("treats null permissions as no access", () => {
+    assert.equal(hasAdminPermission(null, "admins.view"), false);
+  });
 });
 
 describe("resolveAdminUserActions", () => {

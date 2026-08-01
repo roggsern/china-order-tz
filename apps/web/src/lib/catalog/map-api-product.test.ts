@@ -70,7 +70,6 @@ test("Case 3: API does not return stock => frontend fallback = 0", () => {
 test("china import card uses in_stock when numeric stock is absent", () => {
   assert.equal(
     resolveApiProductStock({
-      commerce_channel_code: "CHINA_IMPORT",
       in_stock: true,
     }),
     1,

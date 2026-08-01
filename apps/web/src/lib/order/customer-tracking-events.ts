@@ -17,6 +17,16 @@ export type CustomerTrackingOperationalEvent = {
   event_at?: string | null;
 };
 
+/** Normalize timeline `step` into a stable progress key when `key` is absent from the API contract. */
+function deriveProgressStepKey(step: string): string {
+  const trimmed = step.trim();
+  if (/^[A-Z][A-Z0-9_]+$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  return trimmed;
+}
+
 export function splitCustomerTrackingTimeline(timeline: CustomerTrackingPayload["timeline"]): {
   progressSteps: CustomerTrackingProgressStep[];
   operationalEvents: CustomerTrackingOperationalEvent[];
@@ -37,10 +47,10 @@ export function splitCustomerTrackingTimeline(timeline: CustomerTrackingPayload[
       continue;
     }
 
-    if (entry.key || entry.step) {
+    if (entry.step) {
       progressSteps.push({
-        key: entry.key ?? entry.step ?? "",
-        step: entry.step ?? entry.key ?? "",
+        key: deriveProgressStepKey(entry.step),
+        step: entry.step,
         description: entry.description,
         completed: entry.completed,
         completed_at: entry.completed_at,

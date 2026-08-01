@@ -4,8 +4,8 @@ import {
   canAssignSupport,
   canManageSupport,
   canViewSupport,
-} from "./admin-support.ts";
-import { hasAdminPermission } from "./admin-me.ts";
+} from "./admin-support";
+import { hasAdminPermission } from "./admin-me";
 
 describe("admin support helpers", () => {
   it("checks support permissions", () => {

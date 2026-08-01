@@ -52,12 +52,12 @@ export function resolveAdminPermissions(admin: AdminMe | null | undefined): stri
 }
 
 export function hasAdminPermission(
-  permissions: string[] | undefined,
+  permissions: string[] | null | undefined,
   slug: string,
 ): boolean {
   if (permissions === undefined) {
     return true;
   }
 
-  return permissions.includes(slug);
+  return (permissions ?? []).includes(slug);
 }

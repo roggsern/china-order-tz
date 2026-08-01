@@ -37,6 +37,8 @@ export type ApiCatalogStockSource = {
   stock?: string | number | null;
   quantity_available?: string | number | null;
   available_quantity?: string | number | null;
+  /** Boolean fallback when numeric stock is omitted (CustomerProductCardResource). */
+  in_stock?: boolean | null;
   inventory?: {
     available_quantity?: string | number | null;
     quantity?: string | number | null;

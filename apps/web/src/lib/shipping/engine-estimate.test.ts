@@ -104,20 +104,29 @@ describe("shipping duration display", () => {
 
   it("does not rewrite cart-captured duration into checkout snapshot", () => {
     const captured = "9–11";
-    const item = {
+    const item: CartLineItem = {
       id: "line-1",
-      productId: "p1",
+      productId: 1,
       slug: "widget",
       name: "Widget",
       unitPrice: 10_000,
       quantity: 1,
       origin: "china",
+      categorySlug: "electronics",
+      stock: 10,
+      selectedSize: null,
       shippingMethod: "air_freight",
       unitShippingCost: 25_000,
       shippingCost: 25_000,
       estimatedDeliveryDays: captured,
-      image: null,
-    } as CartLineItem;
+      image: {
+        id: 1,
+        emoji: "📦",
+        gradient: "from-zinc-500 to-zinc-700",
+        alt: "Widget",
+      },
+      addedAt: "2026-07-30T04:52:39+00:00",
+    };
 
     const orderItem = mapCartLineToOrderItem(item);
     assert.equal(orderItem.estimatedDeliveryDays, captured);

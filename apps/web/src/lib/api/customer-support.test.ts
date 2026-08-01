@@ -8,7 +8,7 @@ import {
   mapSupportTicketsFromResponse,
   normalizeCreateSupportTicketInput,
   type CustomerSupportTicket,
-} from "./customer-support.ts";
+} from "./customer-support";
 
 describe("customer support api helpers", () => {
   it("maps ticket list responses and preserves empty arrays", () => {

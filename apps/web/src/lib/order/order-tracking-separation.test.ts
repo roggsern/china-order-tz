@@ -11,7 +11,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 test("splitCustomerTrackingTimeline separates progress steps and operational events", () => {
   const { progressSteps, operationalEvents } = splitCustomerTrackingTimeline([
     {
-      key: "PREPARING",
       step: "Preparing your order",
       description: "We are preparing your items.",
       completed: true,
@@ -27,7 +26,8 @@ test("splitCustomerTrackingTimeline separates progress steps and operational eve
   ]);
 
   assert.equal(progressSteps.length, 1);
-  assert.equal(progressSteps[0]?.key, "PREPARING");
+  assert.equal(progressSteps[0]?.key, "Preparing your order");
+  assert.equal(progressSteps[0]?.step, "Preparing your order");
   assert.equal(operationalEvents.length, 1);
   assert.equal(operationalEvents[0]?.event_type, "out_for_delivery");
   assert.equal(operationalEvents[0]?.location, "Dar es Salaam");
@@ -106,7 +106,6 @@ test("loadLiveOrderTracking uses Laravel order detail and tracking endpoints", a
             },
             timeline: [
               {
-                key: "PREPARING",
                 step: "Preparing your order",
                 completed: false,
                 description: "We are preparing your items.",

@@ -53,10 +53,17 @@ export function buildRegisterHref(returnUrl?: string | null): string {
   return `/register?returnUrl=${encodeURIComponent(safe)}`;
 }
 
+/** Same-origin relative path (single leading slash, not protocol-relative). */
+export type InternalRelativeHref = `/${string}`;
+
 export function withPreservedReturnUrl(
-  href: "/login" | "/register" | "/forgot-password",
+  href: InternalRelativeHref,
   returnUrl?: string | null,
 ): string {
+  if (!href.startsWith("/") || href.startsWith("//")) {
+    return href;
+  }
+
   const safe = sanitizeReturnUrl(returnUrl);
   if (!safe) return href;
   return `${href}?returnUrl=${encodeURIComponent(safe)}`;

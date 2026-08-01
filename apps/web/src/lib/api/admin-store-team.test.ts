@@ -4,9 +4,9 @@ import {
   canManageStoreTeam,
   canViewStoreTeam,
   scopeLabel,
-} from "./admin-store-team.ts";
-import { hasAdminPermission } from "./admin-me.ts";
-import { canViewStoreDashboard, formatStoreMoney } from "./admin-store-dashboard.ts";
+} from "./admin-store-team";
+import { hasAdminPermission } from "./admin-me";
+import { canViewStoreDashboard, formatStoreMoney } from "./admin-store-dashboard";
 
 describe("admin store team helpers", () => {
   it("checks team permissions", () => {
