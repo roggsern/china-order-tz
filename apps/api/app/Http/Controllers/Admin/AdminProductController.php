@@ -152,16 +152,9 @@ class AdminProductController extends Controller
     {
         $this->authorize(AdminPermissions::CATALOG_VIEW);
 
-        $data = $action->handle($product)->map(fn ($image) => [
-            'id' => $image->id,
-            'path' => $image->path,
-            'url' => Storage::disk('public')->url($image->path),
-            'is_primary' => $image->is_primary,
-        ])->values();
-
         return response()->json([
             'success' => true,
-            'data' => $data,
+            'data' => $action->handle($product),
         ]);
     }
 

@@ -1071,6 +1071,79 @@ class AdminCatalogManagementTest extends TestCase
         $this->assertTrue(Storage::disk('public')->exists($response->json('data.path')));
     }
 
+    public function test_admin_product_show_returns_catalog_media_in_images_payload(): void
+    {
+        Storage::fake('public');
+        Sanctum::actingAs(Admin::factory()->create());
+
+        $product = Product::factory()->create([
+            'name' => 'Show Media Product',
+            'slug' => 'show-media-product',
+        ]);
+
+        ProductImage::factory()->primary()->create([
+            'product_id' => $product->id,
+            'path' => 'demo-products/phone.jpg',
+            'alt_text' => 'Legacy only',
+        ]);
+
+        $catalogMedia = ProductMedia::factory()->primary()->create([
+            'product_id' => $product->id,
+            'url' => Storage::disk('public')->url('demo-products/shoes.jpg'),
+            'thumbnail_url' => Storage::disk('public')->url('demo-products/shoes.jpg'),
+            'alt_text' => 'Catalog primary',
+            'is_active' => true,
+        ]);
+
+        $this->getJson('/api/v1/admin/products/'.$product->id)
+            ->assertOk()
+            ->assertJsonCount(1, 'data.images')
+            ->assertJsonPath('data.images.0.id', $catalogMedia->id)
+            ->assertJsonPath('data.images.0.is_primary', true)
+            ->assertJsonPath('data.images.0.alt_text', 'Catalog primary')
+            ->assertJsonPath('data.image.id', $catalogMedia->id);
+    }
+
+    public function test_admin_product_show_returns_empty_images_when_no_media_exists(): void
+    {
+        Sanctum::actingAs(Admin::factory()->create());
+
+        $product = Product::factory()->create([
+            'name' => 'No Media Product',
+            'slug' => 'no-media-product',
+        ]);
+
+        $this->getJson('/api/v1/admin/products/'.$product->id)
+            ->assertOk()
+            ->assertJsonPath('data.images', [])
+            ->assertJsonPath('data.image', null);
+    }
+
+    public function test_admin_product_images_index_reads_from_product_media(): void
+    {
+        Storage::fake('public');
+        Sanctum::actingAs(Admin::factory()->create());
+
+        $product = Product::factory()->create([
+            'name' => 'Legacy Images Index Product',
+            'slug' => 'legacy-images-index-product',
+        ]);
+
+        $media = ProductMedia::factory()->primary()->create([
+            'product_id' => $product->id,
+            'url' => Storage::disk('public')->url('demo-products/shoes.jpg'),
+            'alt_text' => 'Catalog image',
+            'is_active' => true,
+        ]);
+
+        $this->getJson('/api/v1/admin/products/'.$product->id.'/images')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $media->id)
+            ->assertJsonPath('data.0.is_primary', true)
+            ->assertJsonPath('data.0.alt_text', 'Catalog image');
+    }
+
     public function test_legacy_and_catalog_upload_endpoints_each_create_product_media_only(): void
     {
         Storage::fake('public');

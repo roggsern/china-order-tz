@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Services\AdminProducts\AdminProductListSummaryPresenter;
+use App\Services\Catalog\CustomerProductMediaResolver;
 use App\Services\Inventory\CatalogStockPresenter;
 use App\Services\ProductConfiguration\LegacyConfigurationProductDetector;
 use Illuminate\Http\Request;
@@ -16,6 +17,7 @@ class ProductResource extends JsonResource
         $presenter = app(CatalogStockPresenter::class);
         $legacyConfigurationDetector = app(LegacyConfigurationProductDetector::class);
         $listSummary = app(AdminProductListSummaryPresenter::class);
+        $mediaResolver = app(CustomerProductMediaResolver::class);
 
         return [
             'id' => $this->id,
@@ -66,7 +68,10 @@ class ProductResource extends JsonResource
             'brand' => new BrandResource($this->whenLoaded('brand')),
             'supplier_id' => $this->supplier_id,
             'supplier' => new SupplierResource($this->whenLoaded('supplier')),
-            'images' => ProductImageResource::collection($this->whenLoaded('images')),
+            'images' => $this->when(
+                $this->relationLoaded('media') || $this->relationLoaded('images'),
+                fn () => $mediaResolver->resolveAdminGallery($this->resource),
+            ),
             'variants' => ProductVariantResource::collection($this->whenLoaded('variants')),
             'configurations' => ProductVariantResource::collection($this->whenLoaded('variants')),
             // Canonical simple Catalog Stock via StockResolver when inventory relation is in play.

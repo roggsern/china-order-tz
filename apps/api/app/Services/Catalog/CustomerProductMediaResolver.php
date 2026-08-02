@@ -64,6 +64,25 @@ class CustomerProductMediaResolver
     }
 
     /**
+     * @return list<array{
+     *     id: string,
+     *     path: string|null,
+     *     url: string|null,
+     *     thumbnail_url: string|null,
+     *     alt_text: string|null,
+     *     sort_order: int,
+     *     is_primary: bool
+     * }>
+     */
+    public function resolveAdminGallery(Product $product, ?ProductVariant $variant = null): array
+    {
+        return $this->resolveGalleryItems($product, $variant)
+            ->map(fn (ProductMedia|ProductImage $item) => $this->toAdminImageArray($item))
+            ->values()
+            ->all();
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public static function catalogEagerLoads(): array
@@ -209,6 +228,19 @@ class CustomerProductMediaResolver
     }
 
     /**
+     * Eager loads for admin product detail/list gallery resolution.
+     *
+     * @return array<string, mixed>
+     */
+    public static function adminProductEagerLoads(): array
+    {
+        return [
+            'media' => fn ($query) => $query->images()->active()->ordered(),
+            'images' => fn ($query) => $query->orderByDesc('is_primary')->orderBy('sort_order'),
+        ];
+    }
+
+    /**
      * @return array{id: string, path: string|null, url: string|null, alt_text: string|null}
      */
     private function toCustomerImageArray(ProductMedia|ProductImage $item): array
@@ -229,6 +261,50 @@ class CustomerProductMediaResolver
                 ? Storage::disk('public')->url((string) $item->path)
                 : null,
             'alt_text' => $item->alt_text,
+        ];
+    }
+
+    /**
+     * @return array{
+     *     id: string,
+     *     path: string|null,
+     *     url: string|null,
+     *     thumbnail_url: string|null,
+     *     alt_text: string|null,
+     *     sort_order: int,
+     *     is_primary: bool
+     * }
+     */
+    private function toAdminImageArray(ProductMedia|ProductImage $item): array
+    {
+        if ($item instanceof ProductMedia) {
+            $path = $this->resolveMediaStoragePath($item);
+            $url = filled($item->url) ? (string) $item->url : null;
+            $thumbnail = filled($item->thumbnail_url) ? (string) $item->thumbnail_url : $url;
+
+            return [
+                'id' => $item->id,
+                'path' => $path,
+                'url' => $url,
+                'thumbnail_url' => $thumbnail,
+                'alt_text' => $item->alt_text,
+                'sort_order' => (int) $item->sort_order,
+                'is_primary' => (bool) $item->is_primary,
+            ];
+        }
+
+        $url = filled($item->path)
+            ? Storage::disk('public')->url((string) $item->path)
+            : null;
+
+        return [
+            'id' => $item->id,
+            'path' => $item->path,
+            'url' => $url,
+            'thumbnail_url' => $url,
+            'alt_text' => $item->alt_text,
+            'sort_order' => (int) $item->sort_order,
+            'is_primary' => (bool) $item->is_primary,
         ];
     }
 

@@ -59,6 +59,53 @@ class CustomerProductMediaResolverTest extends TestCase
         $this->assertSame(DemoProductImageLibrary::publicPath('phone.jpg'), $gallery[0]['path']);
     }
 
+    public function test_resolve_admin_gallery_prefers_catalog_media_and_preserves_primary(): void
+    {
+        Storage::fake('public');
+
+        $product = Product::factory()->create();
+
+        ProductImage::factory()->primary()->create([
+            'product_id' => $product->id,
+            'path' => DemoProductImageLibrary::publicPath('phone.jpg'),
+            'alt_text' => 'Legacy image',
+        ]);
+
+        $primary = ProductMedia::factory()->primary()->create([
+            'product_id' => $product->id,
+            'url' => Storage::disk('public')->url(DemoProductImageLibrary::publicPath('shoes.jpg')),
+            'thumbnail_url' => Storage::disk('public')->url(DemoProductImageLibrary::publicPath('shoes.jpg')),
+            'alt_text' => 'Catalog primary',
+            'sort_order' => 0,
+        ]);
+
+        ProductMedia::factory()->create([
+            'product_id' => $product->id,
+            'url' => Storage::disk('public')->url(DemoProductImageLibrary::publicPath('watch.jpg')),
+            'sort_order' => 1,
+            'is_primary' => false,
+        ]);
+
+        $gallery = $this->resolver->resolveAdminGallery($product->fresh(['media', 'images']));
+
+        $this->assertCount(2, $gallery);
+        $primaryRow = collect($gallery)->firstWhere('is_primary', true);
+        $this->assertNotNull($primaryRow);
+        $this->assertSame($primary->id, $primaryRow['id']);
+        $this->assertSame('Catalog primary', $primaryRow['alt_text']);
+        $this->assertNotNull($primaryRow['url']);
+        $this->assertNotNull($primaryRow['thumbnail_url']);
+    }
+
+    public function test_resolve_admin_gallery_returns_empty_array_when_no_media_exists(): void
+    {
+        $product = Product::factory()->create();
+
+        $gallery = $this->resolver->resolveAdminGallery($product->fresh(['media', 'images']));
+
+        $this->assertSame([], $gallery);
+    }
+
     public function test_resolve_videos_returns_active_catalog_videos(): void
     {
         $product = Product::factory()->create();

@@ -12,6 +12,7 @@ use App\Models\CatalogProductType;
 use App\Models\Category;
 use App\Models\CommerceChannel;
 use App\Models\Product;
+use App\Services\Catalog\CustomerProductMediaResolver;
 use App\Services\Catalog\GenerateProductSku;
 use App\Services\Inventory\AdminInventoryApplicationService;
 use App\Services\Pricing\SyncConfigurationPriceTiers;
@@ -196,21 +197,20 @@ class CreateProductAction
                 $this->purchasabilityPolicy->assertPublishable($product);
             }
 
-            return tap($product->fresh([
+            return tap($product->fresh(array_merge([
                 'commerceChannel',
                 'category.department',
                 'brand',
                 'catalogProductType.subcategory',
                 'productType',
                 'inventory',
-                'images',
                 'priceTiers',
                 'shippingOptions',
                 'variants.attributeValues.attribute',
                 'variants.inventory',
                 'variants.inventories',
                 'variants.priceTiers',
-            ]), function (Product $created) use ($channel): void {
+            ], CustomerProductMediaResolver::adminProductEagerLoads())), function (Product $created) use ($channel): void {
                 $admin = auth('sanctum')->user();
                 event(ProductCreated::fromProduct(
                     $created,

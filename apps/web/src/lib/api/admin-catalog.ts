@@ -104,6 +104,7 @@ export type AdminApiProductImage = {
   id: string;
   path?: string | null;
   url?: string | null;
+  thumbnail_url?: string | null;
   alt_text?: string | null;
   is_primary?: boolean;
   sort_order?: number;
@@ -543,7 +544,7 @@ function mapImage(
   productName: string,
   index: number,
 ): ProductImage | undefined {
-  const rawSrc = image.url?.trim() || image.path?.trim();
+  const rawSrc = image.url?.trim() || image.thumbnail_url?.trim() || image.path?.trim();
 
   if (!rawSrc || !image.id) {
     return undefined;

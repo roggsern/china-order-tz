@@ -12,6 +12,7 @@ use App\Models\CatalogProductType;
 use App\Models\Category;
 use App\Models\CommerceChannel;
 use App\Models\Product;
+use App\Services\Catalog\CustomerProductMediaResolver;
 use App\Services\Audit\ActivityLogFormatter;
 use App\Services\Catalog\GenerateProductSku;
 use App\Services\Inventory\AdminInventoryApplicationService;
@@ -258,14 +259,13 @@ class UpdateProductAction
                 $this->shippingOptionEngine->syncForProduct($product->fresh() ?? $product, $rows);
             }
 
-            $fresh = $product->fresh([
+            $fresh = $product->fresh(array_merge([
                 'commerceChannel',
                 'category.department',
                 'brand',
                 'catalogProductType.subcategory',
                 'productType',
                 'inventory',
-                'images',
                 'priceTiers',
                 'shippingOptions',
                 'variants.attributeValues.attribute',
@@ -273,7 +273,7 @@ class UpdateProductAction
                 'variants.prices',
                 'variants.inventories',
                 'variants.priceTiers',
-            ]);
+            ], CustomerProductMediaResolver::adminProductEagerLoads()));
 
             $publishCandidate = $fresh ?? $product;
             $lifecycle = $publishCandidate->lifecycle_status;
