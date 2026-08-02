@@ -6,6 +6,7 @@ use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductVisibility;
 use App\Enums\PurchasabilityPath;
 use App\Enums\CommerceChannelCode;
+use App\Enums\VariantPriceType;
 use App\Models\Admin;
 use App\Models\CatalogProductType;
 use App\Models\Category;
@@ -240,6 +241,125 @@ class ProductPurchasabilityPolicyTest extends TestCase
             $this->fail('Expected ValidationException for missing China shipping options.');
         } catch (ValidationException $exception) {
             $this->assertArrayHasKey('shipping_options', $exception->errors());
+        }
+    }
+
+    public function test_china_import_simple_product_without_commercial_or_local_inventory_can_be_published(): void
+    {
+        $product = $this->makePublishableProduct(CommerceChannelCode::ChinaImport);
+        ProductShippingOption::factory()->air(8000)->create(['product_id' => $product->id]);
+
+        Inventory::query()->where('product_id', $product->id)->delete();
+        \App\Models\ChinaCommercialStock::query()->where('product_id', $product->id)->delete();
+
+        $this->assertSame(PurchasabilityPath::Simple, $this->policy->resolvePath($product));
+        $this->assertFalse(app(\App\Services\Inventory\StockResolver::class)->hasSimpleInventoryPolicy($product->fresh(['commerceChannel'])));
+
+        $fresh = $product->fresh([
+            'commerceChannel',
+            'catalogProductType',
+            'category',
+            'inventory',
+            'shippingOptions',
+            'variants.prices',
+            'variants.inventories',
+        ]);
+
+        $this->policy->assertPublishable($fresh ?? $product);
+    }
+
+    public function test_tz_local_simple_product_without_inventory_policy_is_blocked_from_publish(): void
+    {
+        $product = $this->makePublishableProduct(CommerceChannelCode::TzLocal);
+        ProductShippingOption::query()->where('product_id', $product->id)->forceDelete();
+
+        Inventory::query()->where('product_id', $product->id)->delete();
+
+        $fresh = $product->fresh([
+            'commerceChannel',
+            'catalogProductType',
+            'category',
+            'inventory',
+            'shippingOptions',
+            'variants.prices',
+            'variants.inventories',
+        ]);
+
+        try {
+            $this->policy->assertPublishable($fresh ?? $product);
+            $this->fail('Expected ValidationException for missing TZ_LOCAL inventory policy.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('price', $exception->errors());
+            $this->assertContains(
+                'Simple products require a product-level inventory policy.',
+                $exception->errors()['price'],
+            );
+        }
+    }
+
+    public function test_variant_product_publish_rules_remain_unchanged(): void
+    {
+        $product = $this->makePublishableProduct(CommerceChannelCode::TzLocal);
+        ProductShippingOption::query()->where('product_id', $product->id)->forceDelete();
+        Inventory::query()->where('product_id', $product->id)->delete();
+
+        $variant = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'is_active' => true,
+            'price' => null,
+        ]);
+
+        \App\Models\VariantPrice::query()->create([
+            'product_variant_id' => $variant->id,
+            'price_type' => VariantPriceType::Retail,
+            'currency' => 'TZS',
+            'amount' => 22000,
+            'minimum_quantity' => 1,
+            'is_active' => true,
+        ]);
+
+        \App\Models\VariantInventory::query()->create([
+            'product_variant_id' => $variant->id,
+            'warehouse_code' => 'MAIN',
+            'on_hand' => 5,
+            'reserved' => 0,
+            'reorder_level' => 1,
+            'safety_stock' => 0,
+            'is_active' => true,
+        ]);
+
+        $fresh = $product->fresh([
+            'commerceChannel',
+            'catalogProductType',
+            'category',
+            'inventory',
+            'shippingOptions',
+            'variants.prices',
+            'variants.inventories',
+        ]);
+
+        $this->assertSame(PurchasabilityPath::Variant, $this->policy->resolvePath($fresh));
+        $this->policy->assertPublishable($fresh ?? $product);
+
+        \App\Models\VariantInventory::query()->where('product_variant_id', $variant->id)->delete();
+
+        $blocked = $product->fresh([
+            'commerceChannel',
+            'catalogProductType',
+            'category',
+            'inventory',
+            'shippingOptions',
+            'variants.prices',
+            'variants.inventories',
+        ]);
+
+        try {
+            $this->policy->assertPublishable($blocked ?? $product);
+            $this->fail('Expected ValidationException when sellable variant inventory is removed.');
+        } catch (ValidationException $exception) {
+            $this->assertTrue(
+                array_key_exists('variants', $exception->errors()) || array_key_exists('price', $exception->errors()),
+            );
         }
     }
 

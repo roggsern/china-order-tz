@@ -290,7 +290,10 @@ final class ProductPurchasabilityPolicy
             $errors[] = 'Simple products require a valid base price greater than zero.';
         }
 
-        if (! $this->stockResolver->hasSimpleInventoryPolicy($product)) {
+        if (
+            ! $this->isChinaImportProduct($product)
+            && ! $this->stockResolver->hasSimpleInventoryPolicy($product)
+        ) {
             $errors[] = 'Simple products require a product-level inventory policy.';
         }
 
