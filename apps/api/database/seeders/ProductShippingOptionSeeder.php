@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Enums\ShippingMethod;
 use App\Models\Product;
 use App\Services\ProductShipping\ProductShippingOptionEngine;
+use Faker\Factory as Faker;
 use Illuminate\Database\Seeder;
 
 /**
@@ -14,6 +15,7 @@ class ProductShippingOptionSeeder extends Seeder
 {
     public function run(): void
     {
+        $faker = Faker::create();
         $engine = app(ProductShippingOptionEngine::class);
 
         Product::query()
@@ -23,7 +25,7 @@ class ProductShippingOptionSeeder extends Seeder
                     ->orWhere('fulfillment_source', 'imported_from_china');
             })
             ->orderBy('created_at')
-            ->each(function (Product $product) use ($engine): void {
+            ->each(function (Product $product) use ($engine, $faker): void {
                 if ($product->shippingOptions()->exists()) {
                     return;
                 }
@@ -38,7 +40,7 @@ class ProductShippingOptionSeeder extends Seeder
                 $engine->syncForProduct($product, [
                     [
                         'transport_mode' => ShippingMethod::Air->value,
-                        'price' => fake()->randomFloat(2, 5000, 25000),
+                        'price' => $faker->randomFloat(2, 5000, 25000),
                         'currency' => 'TZS',
                         'is_available' => true,
                         'notes' => 'Manual air freight rate',
@@ -46,7 +48,7 @@ class ProductShippingOptionSeeder extends Seeder
                     ],
                     [
                         'transport_mode' => ShippingMethod::Sea->value,
-                        'price' => fake()->randomFloat(2, 2000, 12000),
+                        'price' => $faker->randomFloat(2, 2000, 12000),
                         'currency' => 'TZS',
                         'is_available' => true,
                         'notes' => 'Manual sea freight rate',

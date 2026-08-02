@@ -11,12 +11,15 @@ use App\Models\ProductTypeAttribute;
 use App\Models\ProductVariant;
 use App\Models\Supplier;
 use App\Services\ProductConfiguration\ResolveTypeFromCategory;
+use Faker\Factory as Faker;
 use Illuminate\Database\Seeder;
 
 class ProductSeeder extends Seeder
 {
     public function run(): void
     {
+        $faker = Faker::create();
+
         if (Product::query()->exists()) {
             $this->command?->info('ProductSeeder skipped: products already exist.');
 
@@ -38,7 +41,7 @@ class ProductSeeder extends Seeder
             'category_id' => fn () => $categories->random()->id,
             'brand_id' => fn () => $brands->random()->id,
             'supplier_id' => fn () => $suppliers->random()->id,
-        ])->each(function (Product $product) use ($resolveType) {
+        ])->each(function (Product $product) use ($resolveType, $faker) {
             $product->loadMissing(['supplier', 'category.parent']);
 
             $type = $resolveType->handle($product->category);
@@ -48,8 +51,8 @@ class ProductSeeder extends Seeder
 
             if ($product->isFromChina()) {
                 $product->update([
-                    'air_shipping_price' => fake()->randomFloat(2, 3000, 15000),
-                    'sea_shipping_price' => fake()->randomFloat(2, 1500, 8000),
+                    'air_shipping_price' => $faker->randomFloat(2, 3000, 15000),
+                    'sea_shipping_price' => $faker->randomFloat(2, 1500, 8000),
                 ]);
             }
 
@@ -59,10 +62,10 @@ class ProductSeeder extends Seeder
             Inventory::factory()->create([
                 'product_id' => $product->id,
                 'product_variant_id' => null,
-                'quantity' => fake()->numberBetween(10, 200),
+                'quantity' => $faker->numberBetween(10, 200),
             ]);
 
-            if ($type === null || ! $type->has_configurations || ! fake()->boolean(60)) {
+            if ($type === null || ! $type->has_configurations || ! $faker->boolean(60)) {
                 return;
             }
 
@@ -99,7 +102,7 @@ class ProductSeeder extends Seeder
             $variant->attributeValues()->sync($selectedValues->pluck('id')->all());
 
             Inventory::factory()->forVariant($variant)->create([
-                'quantity' => fake()->numberBetween(5, 100),
+                'quantity' => $faker->numberBetween(5, 100),
             ]);
         });
     }

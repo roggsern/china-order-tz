@@ -58,6 +58,16 @@ function samplePayload(overrides?: Partial<CatalogHealthPayload>): CatalogHealth
 }
 
 describe("catalog-health mapping", () => {
+  it("maps inventory group copy for TZ_LOCAL inventory policy scope", () => {
+    const report = mapCatalogHealthPayload(samplePayload());
+    const inventoryGroup = report.groups.find((group) => group.id === "inventory");
+
+    assert.equal(
+      inventoryGroup?.description,
+      "Missing inventory policy on active TZ_LOCAL products and variants.",
+    );
+  });
+
   it("maps API response into summary and grouped metrics", () => {
     const report = mapCatalogHealthPayload(
       samplePayload({
@@ -128,7 +138,10 @@ describe("catalog-health mapping", () => {
     assert.equal(report.groups.length, 4);
     assert.equal(report.groups[0]?.title, "Commerce readiness");
     assert.equal(report.groups[0]?.metrics[0]?.label, "Missing prices");
-    assert.equal(report.groups[0]?.metrics[1]?.label, "Not purchasable");
+    assert.equal(
+      report.groups[0]?.metrics.find((metric) => metric.key === "active_not_purchasable")?.label,
+      "Not purchasable",
+    );
     assert.equal(report.groups[1]?.metrics[1]?.label, "Variant media gaps");
     assert.equal(report.groups[2]?.metrics[0]?.label, "Inventory issues");
     assert.equal(report.isEmpty, false);

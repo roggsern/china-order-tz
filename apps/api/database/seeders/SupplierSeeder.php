@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Supplier;
+use Faker\Factory as Faker;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
@@ -10,6 +11,8 @@ class SupplierSeeder extends Seeder
 {
     public function run(): void
     {
+        $faker = Faker::create();
+
         $suppliers = [
             ['name' => 'Guangzhou Trade Co.', 'city' => 'Guangzhou', 'contact_person' => 'Li Wei'],
             ['name' => 'Shenzhen Electronics Ltd.', 'city' => 'Shenzhen', 'contact_person' => 'Zhang Ming'],
@@ -25,8 +28,8 @@ class SupplierSeeder extends Seeder
                     'code' => Str::upper(Str::slug($supplier['name'], '_')),
                     'contact_person' => $supplier['contact_person'],
                     'email' => $slug.'@supplier.cn',
-                    'phone' => '+86'.fake()->numerify('###########'),
-                    'address' => fake()->streetAddress(),
+                    'phone' => '+86'.$faker->numerify('###########'),
+                    'address' => $faker->streetAddress(),
                     'city' => $supplier['city'],
                     'country' => 'China',
                     'payment_terms' => 'Net 30',

@@ -4,6 +4,7 @@ namespace App\Services\Catalog;
 
 use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductVisibility;
+use App\Enums\CommerceChannelCode;
 use App\Enums\PurchasabilityPath;
 use App\Models\Product;
 use App\Models\ProductVariant;
@@ -63,6 +64,7 @@ class CatalogHealthService
                 'media' => fn ($query) => $query->images()->active()->ordered(),
                 'images' => fn ($query) => $query->orderByDesc('is_primary')->orderBy('sort_order'),
                 'inventory',
+                'commerceChannel',
             ])
             ->orderBy('created_at')
             ->chunkById(100, function (Collection $products) use (
@@ -92,7 +94,7 @@ class CatalogHealthService
                             $missingValidPrice[] = $product->id;
                         }
 
-                        if ($this->activeProductMissingInventoryPolicy($product)) {
+                        if (! $this->isChinaImportProduct($product) && $this->activeProductMissingInventoryPolicy($product)) {
                             $activeMissingInventoryPolicy[] = $product->id;
                         }
                     }
@@ -127,7 +129,10 @@ class CatalogHealthService
                             $variantsMissingValidPrice[] = $variant->id;
                         }
 
-                        if (! $this->stock->hasVariantInventoryPolicy($variant)) {
+                        if (
+                            ! $this->isChinaImportProduct($product)
+                            && ! $this->stock->hasVariantInventoryPolicy($variant)
+                        ) {
                             $variantsMissingInventoryPolicy[] = $variant->id;
                         }
                     }
@@ -297,6 +302,13 @@ class CatalogHealthService
         $result = $this->pricing->resolveVariantProductPrice($variant, null, $product);
 
         return ! ($result->resolved && (float) $result->unitPrice > 0);
+    }
+
+    private function isChinaImportProduct(Product $product): bool
+    {
+        $code = CommerceChannelCode::tryFrom((string) ($product->commerceChannel?->code ?? ''));
+
+        return $code === CommerceChannelCode::ChinaImport;
     }
 
     private function activeProductMissingInventoryPolicy(Product $product): bool

@@ -148,11 +148,14 @@ export function calculateProductPublishReadiness(
       label: "Base price greater than zero",
       met: input.price > 0,
     });
-    items.push({
-      id: "simple-inventory",
-      label: "Product-level inventory policy configured",
-      met: input.hasSimpleInventoryPolicy,
-    });
+
+    if (channelCode !== "CHINA_IMPORT") {
+      items.push({
+        id: "simple-inventory",
+        label: "Product-level inventory policy configured",
+        met: input.hasSimpleInventoryPolicy,
+      });
+    }
   }
 
   const missing = items.filter((item) => !item.met);

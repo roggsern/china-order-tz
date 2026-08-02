@@ -159,7 +159,7 @@ export function mapCatalogHealthPayload(payload: CatalogHealthPayload): CatalogH
     {
       id: "inventory",
       title: "Inventory",
-      description: "Missing inventory policy on active products and variants.",
+      description: "Missing inventory policy on active TZ_LOCAL products and variants.",
       metrics: [
         metric(
           "active_missing_inventory_policy",

@@ -22,7 +22,7 @@ test("calculateProductPublishReadiness marks simple product ready when requireme
     commerceChannelCode: "CHINA_IMPORT",
     commerceChannelId: "channel-1",
     storeId: null,
-    hasSimpleInventoryPolicy: true,
+    hasSimpleInventoryPolicy: false,
     variants: [],
     supplierId: "supplier-1",
     hasPublishableShippingOption: true,
@@ -31,6 +31,95 @@ test("calculateProductPublishReadiness marks simple product ready when requireme
   assert.equal(result.ready, true);
   assert.equal(result.path, "simple");
   assert.equal(result.missing.length, 0);
+  assert.equal(result.items.some((item) => item.id === "simple-inventory"), false);
+});
+
+test("Test A: CHINA_IMPORT ready without inventory policy when price supplier shipping met", () => {
+  const result = calculateProductPublishReadiness({
+    catalogProductTypeId: "cpt-1",
+    subcategoryId: "leaf-cat",
+    catalogProductTypeSubcategoryId: "leaf-cat",
+    catalogProductTypeIsActive: true,
+    isLeafCategory: true,
+    price: 150000,
+    commerceChannelCode: "CHINA_IMPORT",
+    commerceChannelId: "channel-1",
+    storeId: null,
+    hasSimpleInventoryPolicy: false,
+    variants: [],
+    supplierId: "supplier-1",
+    hasPublishableShippingOption: true,
+  });
+
+  assert.equal(result.ready, true);
+  assert.equal(result.items.some((item) => item.id === "simple-inventory"), false);
+});
+
+test("Test B: CHINA_IMPORT missing supplier blocks readiness", () => {
+  const result = calculateProductPublishReadiness({
+    catalogProductTypeId: "cpt-1",
+    subcategoryId: "leaf-cat",
+    catalogProductTypeSubcategoryId: "leaf-cat",
+    catalogProductTypeIsActive: true,
+    isLeafCategory: true,
+    price: 150000,
+    commerceChannelCode: "CHINA_IMPORT",
+    commerceChannelId: "channel-1",
+    storeId: null,
+    hasSimpleInventoryPolicy: false,
+    variants: [],
+    supplierId: null,
+    hasPublishableShippingOption: true,
+  });
+
+  assert.equal(result.ready, false);
+  assert.deepEqual(
+    result.missing.map((item) => item.id),
+    ["china-supplier"],
+  );
+  assert.equal(result.missing[0]?.label, "Supplier assigned");
+});
+
+test("Test C: TZ_LOCAL missing inventory policy blocks readiness", () => {
+  const result = calculateProductPublishReadiness({
+    catalogProductTypeId: "cpt-1",
+    subcategoryId: "leaf-cat",
+    catalogProductTypeSubcategoryId: "leaf-cat",
+    catalogProductTypeIsActive: true,
+    isLeafCategory: true,
+    price: 150000,
+    commerceChannelCode: "TZ_LOCAL",
+    commerceChannelId: "channel-tz",
+    storeId: "store-1",
+    hasSimpleInventoryPolicy: false,
+    variants: [],
+  });
+
+  assert.equal(result.ready, false);
+  assert.deepEqual(
+    result.missing.map((item) => item.id),
+    ["simple-inventory"],
+  );
+  assert.equal(result.missing[0]?.label, "Product-level inventory policy configured");
+});
+
+test("Test D: TZ_LOCAL ready when price and inventory policy met", () => {
+  const result = calculateProductPublishReadiness({
+    catalogProductTypeId: "cpt-1",
+    subcategoryId: "leaf-cat",
+    catalogProductTypeSubcategoryId: "leaf-cat",
+    catalogProductTypeIsActive: true,
+    isLeafCategory: true,
+    price: 150000,
+    commerceChannelCode: "TZ_LOCAL",
+    commerceChannelId: "channel-tz",
+    storeId: "store-1",
+    hasSimpleInventoryPolicy: true,
+    variants: [],
+  });
+
+  assert.equal(result.ready, true);
+  assert.equal(result.items.some((item) => item.id === "simple-inventory" && item.met), true);
 });
 
 test("calculateProductPublishReadiness flags missing simple price and inventory", () => {
@@ -51,8 +140,9 @@ test("calculateProductPublishReadiness flags missing simple price and inventory"
   assert.equal(result.ready, false);
   assert.deepEqual(
     result.missing.map((item) => item.id).sort(),
-    ["china-shipping", "china-supplier", "simple-inventory", "simple-price"].sort(),
+    ["china-shipping", "china-supplier", "simple-price"].sort(),
   );
+  assert.equal(result.items.some((item) => item.id === "simple-inventory"), false);
 });
 
 test("Case 1: TZ_LOCAL with store is ready", () => {

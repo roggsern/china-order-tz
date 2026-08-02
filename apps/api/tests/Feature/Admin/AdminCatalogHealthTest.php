@@ -141,7 +141,7 @@ class AdminCatalogHealthTest extends TestCase
             'price' => 30000,
         ]);
 
-        $notPurchasable = Product::factory()->create([
+        $notPurchasable = Product::factory()->tzLocal()->create([
             'slug' => 'health-not-purchasable',
             'name' => 'Health Not Purchasable',
             'price' => 0,
@@ -170,7 +170,7 @@ class AdminCatalogHealthTest extends TestCase
             'price' => 20000,
         ]);
 
-        $missingPolicy = Product::factory()->create([
+        $missingPolicy = Product::factory()->tzLocal()->create([
             'slug' => 'health-missing-stock-policy',
             'name' => 'Health Missing Stock Policy',
             'price' => 20000,
@@ -277,7 +277,7 @@ class AdminCatalogHealthTest extends TestCase
      */
     private function makeActivePublicSimpleProduct(array $overrides = []): Product
     {
-        $product = Product::factory()->create(array_merge([
+        $product = Product::factory()->tzLocal()->create(array_merge([
             'price' => 25000,
             'is_active' => true,
             'is_demo' => false,
