@@ -45,8 +45,8 @@ Who deploys what, and how to operate production. For runbooks see [OPERATIONS.md
 
 ```bash
 # On deployment host with Docker
-cp apps/api/.env.production.example .env   # first time only — then edit secrets
-bash scripts/validate-production-deploy.sh  # optional — static .env gate (no containers)
+cp .env.production.example .env   # first time only — then edit secrets
+bash scripts/validate-production-deploy.sh  # required — static .env gate (no containers)
 bash scripts/deploy-api-compose.sh
 ```
 

@@ -2,9 +2,11 @@
 # RC1-G4C.5 — static production preflight (no containers required).
 set -euo pipefail
 
+PRODUCTION_ENV_FILE="${PRODUCTION_ENV_FILE:-.env}"
+
 production_env_get() {
   local key="$1"
-  local file="${2:-.env}"
+  local file="${2:-${PRODUCTION_ENV_FILE:-.env}}"
   local line
 
   line="$(grep -E "^${key}=" "$file" 2>/dev/null | tail -1 || true)"
@@ -17,15 +19,16 @@ production_env_get() {
 
 production_require_env() {
   local key="$1"
+  local file="${2:-${PRODUCTION_ENV_FILE:-.env}}"
   local value
 
-  if ! value="$(production_env_get "$key")"; then
-    echo "Preflight failed: missing ${key} in .env" >&2
+  if ! value="$(production_env_get "$key" "$file")"; then
+    echo "Preflight failed: missing ${key} in ${file}" >&2
     return 1
   fi
 
   if [ -z "$value" ]; then
-    echo "Preflight failed: ${key} is empty in .env" >&2
+    echo "Preflight failed: ${key} is empty in ${file}" >&2
     return 1
   fi
 }
@@ -33,9 +36,10 @@ production_require_env() {
 production_require_env_not() {
   local key="$1"
   local forbidden="$2"
+  local file="${3:-${PRODUCTION_ENV_FILE:-.env}}"
   local value
 
-  value="$(production_env_get "$key")"
+  value="$(production_env_get "$key" "$file")"
   if [ "$value" = "$forbidden" ]; then
     echo "Preflight failed: ${key} must not be '${forbidden}' in production." >&2
     return 1
@@ -45,11 +49,34 @@ production_require_env_not() {
 production_require_env_value() {
   local key="$1"
   local expected="$2"
+  local file="${3:-${PRODUCTION_ENV_FILE:-.env}}"
   local value
 
-  value="$(production_env_get "$key")"
+  value="$(production_env_get "$key" "$file")"
   if [ "$value" != "$expected" ]; then
     echo "Preflight failed: ${key} must be '${expected}' (found '${value:-<empty>}')." >&2
+    return 1
+  fi
+}
+
+production_require_env_mirror() {
+  local source_key="$1"
+  local mirror_key="$2"
+  local file="${3:-${PRODUCTION_ENV_FILE:-.env}}"
+  local source_value mirror_value
+
+  if ! source_value="$(production_env_get "$source_key" "$file")"; then
+    echo "Preflight failed: missing ${source_key} in ${file}" >&2
+    return 1
+  fi
+
+  if ! mirror_value="$(production_env_get "$mirror_key" "$file")"; then
+    echo "Preflight failed: missing ${mirror_key} in ${file}" >&2
+    return 1
+  fi
+
+  if [ "$source_value" != "$mirror_value" ]; then
+    echo "Preflight failed: ${mirror_key} must mirror ${source_key} (MYSQL_* is the Compose source of truth)." >&2
     return 1
   fi
 }
@@ -58,10 +85,12 @@ production_preflight_static() {
   local env_file="${1:-.env}"
   local failed=0
 
+  PRODUCTION_ENV_FILE="$env_file"
+
   echo "==> Static production preflight (${env_file})..."
 
   if [ ! -f "$env_file" ]; then
-    echo "Preflight failed: ${env_file} not found. Copy apps/api/.env.production.example to .env" >&2
+    echo "Preflight failed: ${env_file} not found. Copy .env.production.example to .env" >&2
     return 1
   fi
 
@@ -72,44 +101,54 @@ production_preflight_static() {
   }
 
   # Application
-  run_check production_require_env_value APP_ENV production
-  run_check production_require_env_value APP_DEBUG false
-  run_check production_require_env APP_KEY
-  run_check production_require_env APP_URL
+  run_check production_require_env_value APP_ENV production "$env_file"
+  run_check production_require_env_value APP_DEBUG false "$env_file"
+  run_check production_require_env APP_KEY "$env_file"
+  run_check production_require_env APP_URL "$env_file"
 
-  # Database
-  run_check production_require_env DB_HOST
-  run_check production_require_env DB_DATABASE
-  run_check production_require_env DB_USERNAME
-  run_check production_require_env DB_PASSWORD
+  # Database — MYSQL_* is source of truth; DB_* must mirror for Laravel compatibility
+  run_check production_require_env MYSQL_ROOT_PASSWORD "$env_file"
+  run_check production_require_env MYSQL_DATABASE "$env_file"
+  run_check production_require_env MYSQL_USER "$env_file"
+  run_check production_require_env MYSQL_PASSWORD "$env_file"
+  run_check production_require_env DB_HOST "$env_file"
+  run_check production_require_env DB_DATABASE "$env_file"
+  run_check production_require_env DB_USERNAME "$env_file"
+  run_check production_require_env DB_PASSWORD "$env_file"
+  run_check production_require_env_mirror MYSQL_DATABASE DB_DATABASE "$env_file"
+  run_check production_require_env_mirror MYSQL_USER DB_USERNAME "$env_file"
+  run_check production_require_env_mirror MYSQL_PASSWORD DB_PASSWORD "$env_file"
+  run_check production_require_env_not MYSQL_ROOT_PASSWORD secret "$env_file"
+  run_check production_require_env_not MYSQL_PASSWORD secret "$env_file"
+  run_check production_require_env_not DB_PASSWORD secret "$env_file"
 
   # Frontend / auth
-  run_check production_require_env FRONTEND_URL
-  run_check production_require_env SANCTUM_STATEFUL_DOMAINS
+  run_check production_require_env FRONTEND_URL "$env_file"
+  run_check production_require_env SANCTUM_STATEFUL_DOMAINS "$env_file"
 
   # Mail
-  run_check production_require_env MAIL_MAILER
-  run_check production_require_env_not MAIL_MAILER log
-  run_check production_require_env_not MAIL_MAILER array
-  run_check production_require_env MAIL_HOST
-  run_check production_require_env MAIL_FROM_ADDRESS
-  run_check production_require_env_value NOTIFICATION_EMAIL_CONFIGURED true
+  run_check production_require_env MAIL_MAILER "$env_file"
+  run_check production_require_env_not MAIL_MAILER log "$env_file"
+  run_check production_require_env_not MAIL_MAILER array "$env_file"
+  run_check production_require_env MAIL_HOST "$env_file"
+  run_check production_require_env MAIL_FROM_ADDRESS "$env_file"
+  run_check production_require_env_value NOTIFICATION_EMAIL_CONFIGURED true "$env_file"
 
   # Payments — align with ops:production-env-check + nmb:validate-config
-  run_check production_require_env_not PAYMENT_DEFAULT_GATEWAY mock
-  run_check production_require_env_value NMB_WEBHOOK_REQUIRE_SIGNATURE true
-  run_check production_require_env NMB_BASE_URL
-  run_check production_require_env NMB_MERCHANT_ID
-  run_check production_require_env NMB_USERNAME
-  run_check production_require_env NMB_PASSWORD
-  run_check production_require_env NMB_RETURN_URL
-  run_check production_require_env NMB_CALLBACK_URL
-  run_check production_require_env NMB_WEBHOOK_SECRET
-  run_check production_require_env NMB_MERCHANT_NAME
-  run_check production_require_env NMB_MERCHANT_URL
+  run_check production_require_env_not PAYMENT_DEFAULT_GATEWAY mock "$env_file"
+  run_check production_require_env_value NMB_WEBHOOK_REQUIRE_SIGNATURE true "$env_file"
+  run_check production_require_env NMB_BASE_URL "$env_file"
+  run_check production_require_env NMB_MERCHANT_ID "$env_file"
+  run_check production_require_env NMB_USERNAME "$env_file"
+  run_check production_require_env NMB_PASSWORD "$env_file"
+  run_check production_require_env NMB_RETURN_URL "$env_file"
+  run_check production_require_env NMB_CALLBACK_URL "$env_file"
+  run_check production_require_env NMB_WEBHOOK_SECRET "$env_file"
+  run_check production_require_env NMB_MERCHANT_NAME "$env_file"
+  run_check production_require_env NMB_MERCHANT_URL "$env_file"
 
   local nmb_base_url
-  nmb_base_url="$(production_env_get NMB_BASE_URL || true)"
+  nmb_base_url="$(production_env_get NMB_BASE_URL "$env_file" || true)"
   if [ -n "$nmb_base_url" ]; then
     local lower_base
     lower_base="$(printf '%s' "$nmb_base_url" | tr '[:upper:]' '[:lower:]')"
@@ -120,13 +159,6 @@ production_preflight_static() {
         break
       fi
     done
-  fi
-
-  local db_password
-  db_password="$(production_env_get DB_PASSWORD || true)"
-  if [ "$db_password" = "secret" ]; then
-    echo "Preflight failed: DB_PASSWORD must be rotated from the default 'secret'." >&2
-    failed=1
   fi
 
   if [ "$failed" -ne 0 ]; then

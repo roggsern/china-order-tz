@@ -176,10 +176,46 @@ class ProductionComposeDefinitionTest extends TestCase
 
     public function test_production_env_template_declares_public_urls_for_web_build(): void
     {
-        $template = (string) file_get_contents(self::repoRoot().'/apps/api/.env.production.example');
+        $template = (string) file_get_contents(self::repoRoot().'/.env.production.example');
 
         $this->assertStringContainsString('NEXT_PUBLIC_APP_URL=https://www.chinaordertz.com', $template);
         $this->assertStringContainsString('NEXT_PUBLIC_API_URL=https://api.chinaordertz.com', $template);
+    }
+
+    public function test_production_env_template_declares_mysql_credentials_as_source_of_truth(): void
+    {
+        $template = (string) file_get_contents(self::repoRoot().'/.env.production.example');
+
+        foreach ([
+            'MYSQL_ROOT_PASSWORD=',
+            'MYSQL_DATABASE=china_order_tz',
+            'MYSQL_USER=china_order',
+            'MYSQL_PASSWORD=',
+            'MYSQL_* is the source of truth',
+            'DB_* must mirror MYSQL_*',
+        ] as $needle) {
+            $this->assertStringContainsString($needle, $template);
+        }
+    }
+
+    public function test_api_production_env_template_points_to_root_template(): void
+    {
+        $template = (string) file_get_contents(self::repoRoot().'/apps/api/.env.production.example');
+
+        $this->assertStringContainsString('DEPRECATED', $template);
+        $this->assertStringContainsString('.env.production.example', $template);
+    }
+
+    public function test_deploy_script_loads_dotenv_before_mysql_shell_usage(): void
+    {
+        $script = self::deployScript();
+
+        $loadPos = strpos($script, 'production_load_dotenv');
+        $mysqlPingPos = strpos($script, 'mysqladmin ping');
+
+        $this->assertNotFalse($loadPos);
+        $this->assertNotFalse($mysqlPingPos);
+        $this->assertLessThan($mysqlPingPos, $loadPos, 'production_load_dotenv must run before mysqladmin ping usage.');
     }
 
     public function test_nginx_uses_production_image(): void

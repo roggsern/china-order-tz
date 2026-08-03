@@ -15,8 +15,8 @@ Production Compose merges `docker-compose.yml` + `docker-compose.prod.yml`. The 
 - Mounts **persistent volumes** only: `api_storage` (runtime uploads/cache) and `app_backups`.
 
 ```bash
-cp apps/api/.env.production.example .env
-# Fill APP_KEY, DB passwords, NMB credentials, SMTP settings
+cp .env.production.example .env
+# Fill APP_KEY, MYSQL_* + mirrored DB_*, NMB credentials, SMTP settings
 
 # Recommended — validates .env, optional backup, builds, starts full stack, validates runtime:
 bash scripts/deploy-api-compose.sh
@@ -91,7 +91,9 @@ php artisan ops:backup-check        # Backup dependencies + latest artifact
 
 ## 3. Production environment safety
 
-**Template:** `apps/api/.env.production.example`
+**Template:** `.env.production.example` (project root)
+
+**Database credential contract:** `MYSQL_*` is the source of truth for Docker Compose and the MySQL container. Laravel `DB_*` values in `.env` must mirror `MYSQL_*` (same database, user, and password). Static preflight enforces this before deploy.
 
 | Variable | Production value |
 |----------|------------------|
@@ -285,10 +287,10 @@ Document actual host paths and credentials in your secure runbook (not in git).
 ### Pre-deploy
 
 - [ ] CI green on target SHA
-- [ ] `.env` populated from `apps/api/.env.production.example`
+- [ ] `.env` populated from `.env.production.example`
 - [ ] `bash scripts/validate-production-deploy.sh` passes (static gate — no containers)
 - [ ] `APP_KEY` generated
-- [ ] DB credentials rotated from defaults
+- [ ] `MYSQL_*` and mirrored `DB_*` credentials rotated from defaults (`secret`)
 - [ ] `php artisan nmb:validate-config` passes (also enforced by deploy script post-start)
 - [ ] SMTP tested (see mail checklist)
 - [ ] Feature flags reviewed (wishlist, reviews, checkout)

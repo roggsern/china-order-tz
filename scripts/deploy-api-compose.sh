@@ -5,8 +5,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.prod.yml)
+# shellcheck source=lib/load-env.sh
+source "${ROOT}/scripts/lib/load-env.sh"
 # shellcheck source=lib/production-preflight.sh
 source "${ROOT}/scripts/lib/production-preflight.sh"
+
+production_load_dotenv "${ROOT}/.env"
 
 wait_for_mysql_healthy() {
   echo "==> Waiting for MySQL health..."
@@ -94,7 +98,7 @@ maybe_run_pre_deploy_backup() {
 }
 
 # ── 1) Fail fast before any production containers start ─────────────────────
-production_preflight_static ".env"
+production_preflight_static "${ROOT}/.env"
 
 # ── 2) Optional backup before migrations (existing installs only) ───────────
 maybe_run_pre_deploy_backup
