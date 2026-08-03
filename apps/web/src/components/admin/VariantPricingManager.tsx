@@ -423,7 +423,7 @@ export function VariantPricingManager({
           </div>
           <div>
             <label className="admin-label" htmlFor="price-cost">
-              Cost
+              Cost / buying price
             </label>
             <input
               id="price-cost"

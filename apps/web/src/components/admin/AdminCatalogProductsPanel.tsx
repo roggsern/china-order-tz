@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { parseCatalogProductEditTab } from "@/lib/admin/product-id-map";
+import { parseCatalogProductEditTab, type CatalogProductEditTab } from "@/lib/admin/product-id-map";
 import {
   calculateProductPublishReadiness,
   formatPublishReadinessMissingLabels,
@@ -30,6 +30,8 @@ import { AdminCategoryTreeSelect } from "@/components/admin/AdminCategoryTreeSel
 import { AdminSupplierAsyncSelect } from "@/components/admin/AdminSupplierAsyncSelect";
 import { ProductMediaManager } from "@/components/admin/ProductMediaManager";
 import { ProductShippingManager } from "@/components/admin/ProductShippingManager";
+import { ProductCommercialAvailabilityManager } from "@/components/admin/ProductCommercialAvailabilityManager";
+import { ProductSimplePricingFields } from "@/components/admin/ProductSimplePricingFields";
 import { ProductStockManager } from "@/components/admin/ProductStockManager";
 import { ProductSpecificationsManager } from "@/components/admin/ProductSpecificationsManager";
 import { ProductVariantsManager } from "@/components/admin/ProductVariantsManager";
@@ -79,16 +81,24 @@ import {
 import { useAdminPermissions } from "@/hooks/use-admin-permissions";
 import { hasAdminPermission } from "@/lib/api/admin-me";
 import { resolveBrandLeafCategoryId } from "@/lib/admin/catalog-selector-utils";
-import { shouldUseProductCreationWizard } from "@/lib/admin/product-creation-wizard";
+import { productTypeMatchesCategoryScope } from "@/lib/admin/catalog-product-type-scope";
+import {
+  mapWizardPricingModelToApi,
+  shouldUseProductCreationWizard,
+  wizardSavePricingFields,
+  type ProductCreationPricingModel,
+} from "@/lib/admin/product-creation-wizard";
 
 type ProductFormState = {
   id?: string;
   name: string;
   sku: string;
   price: number;
+  costPrice: number | null;
   shortDescription: string;
   description: string;
   commerceJourney: CommerceJourney | "";
+  pricingModel: ProductCreationPricingModel;
   storeId: string;
   departmentId: string;
   categoryId: string;
@@ -106,9 +116,11 @@ const emptyForm = (): ProductFormState => ({
   name: "",
   sku: "",
   price: 0,
+  costPrice: null,
   shortDescription: "",
   description: "",
   commerceJourney: "",
+  pricingModel: "simple",
   storeId: "",
   departmentId: "",
   categoryId: "",
@@ -121,32 +133,6 @@ const emptyForm = (): ProductFormState => ({
   sortOrder: 0,
   isFeatured: false,
 });
-
-/** Category id plus every parent up the tree (leaf → root). */
-function categoryAncestorIds(
-  categoryId: string,
-  categories: AdminCategory[],
-): Set<string> {
-  const ids = new Set<string>();
-  let current = categories.find((item) => item.id === categoryId);
-
-  while (current) {
-    ids.add(current.id);
-    current = current.parentId
-      ? categories.find((item) => item.id === current!.parentId)
-      : undefined;
-  }
-
-  return ids;
-}
-
-function productTypeMatchesCategoryScope(
-  typeSubcategoryId: string,
-  scopeCategoryId: string,
-  categories: AdminCategory[],
-): boolean {
-  return categoryAncestorIds(scopeCategoryId, categories).has(typeSubcategoryId);
-}
 
 const PAGE_SIZE = 15;
 
@@ -182,9 +168,7 @@ export function AdminCatalogProductsPanel() {
   const [featuredFilter, setFeaturedFilter] = useState<"all" | "featured" | "standard">("all");
   const [showTrashed, setShowTrashed] = useState(false);
   const [form, setForm] = useState<ProductFormState | null>(null);
-  const [formTab, setFormTab] = useState<
-    "details" | "media" | "specifications" | "variants" | "shipping" | "stock"
-  >("details");
+  const [formTab, setFormTab] = useState<CatalogProductEditTab>("details");
   const [saving, setSaving] = useState(false);
   const [publishVariants, setPublishVariants] = useState<AdminProductVariant[]>([]);
   const [publishContext, setPublishContext] = useState<AdminCatalogProduct | null>(null);
@@ -417,7 +401,7 @@ export function AdminCatalogProductsPanel() {
   const openEdit = useCallback(
     (
       product: AdminCatalogProduct,
-      tab: "details" | "media" | "specifications" | "variants" | "shipping" | "stock" = "details",
+      tab: CatalogProductEditTab = "details",
     ) => {
       setFormTab(tab);
       const type = productTypes.find((item) => item.id === product.catalogProductTypeId);
@@ -433,6 +417,7 @@ export function AdminCatalogProductsPanel() {
         name: product.name,
         sku: product.sku ?? "",
         price: product.price,
+        costPrice: product.costPrice,
         shortDescription: product.shortDescription,
         description: product.description,
         commerceJourney:
@@ -441,6 +426,7 @@ export function AdminCatalogProductsPanel() {
             : product.commerceChannelCode === "CHINA_IMPORT"
               ? "china"
               : "",
+        pricingModel: product.pricingModel,
         storeId: product.storeId ?? "",
         departmentId: product.departmentId ?? category?.departmentId ?? "",
         categoryId: category?.id ?? "",
@@ -640,7 +626,9 @@ export function AdminCatalogProductsPanel() {
   const showShippingTab = Boolean(
     form?.id && isChinaImportCommerceChannel(publishContext?.commerceChannelCode),
   );
-  const showStockTab = Boolean(form?.id && publishVariants.length === 0);
+  const isChinaProduct = isChinaImportCommerceChannel(publishContext?.commerceChannelCode);
+  const showStockTab = Boolean(form?.id && publishVariants.length === 0 && !isChinaProduct);
+  const showCommercialAvailabilityTab = Boolean(form?.id && isChinaProduct);
 
   useEffect(() => {
     if (formTab === "shipping" && !showShippingTab) {
@@ -653,6 +641,12 @@ export function AdminCatalogProductsPanel() {
       setFormTab("details");
     }
   }, [formTab, showStockTab]);
+
+  useEffect(() => {
+    if (formTab === "commercial-availability" && !showCommercialAvailabilityTab) {
+      setFormTab("details");
+    }
+  }, [formTab, showCommercialAvailabilityTab]);
 
   const refreshPublishShippingOptions = useCallback(async () => {
     if (!form?.id || !isChinaImportCommerceChannel(publishContext?.commerceChannelCode)) {
@@ -839,6 +833,10 @@ export function AdminCatalogProductsPanel() {
     setSaving(true);
     setActionError(null);
 
+    const pricingFields = useWizardFlow
+      ? wizardSavePricingFields(form.pricingModel, form.price, form.costPrice)
+      : { price: form.price, cost_price: form.costPrice };
+
     const payload = mergeProductSupplierIdIntoPayload(
       mergeProductStoreIdIntoPayload(
         {
@@ -846,7 +844,8 @@ export function AdminCatalogProductsPanel() {
           catalog_product_type_id: form.catalogProductTypeId,
           brand_id: form.brandId || null,
           sku: form.sku.trim() || null,
-          price: form.price,
+          price: pricingFields.price,
+          cost_price: pricingFields.cost_price,
           short_description: form.shortDescription.trim() || null,
           description: form.description.trim() || null,
           status: form.id ? form.status : "draft",
@@ -856,6 +855,7 @@ export function AdminCatalogProductsPanel() {
           ...(!form.id
             ? {
                 commerce_channel_id: createChannelId,
+                pricing_model: mapWizardPricingModelToApi(form.pricingModel),
               }
             : {}),
         },
@@ -918,12 +918,14 @@ export function AdminCatalogProductsPanel() {
     setSaving(true);
     setActionError(null);
     try {
+      const pricingFields = wizardSavePricingFields(form.pricingModel, form.price, form.costPrice);
       await updateAdminCatalogProduct(form.id, {
         name: form.name.trim(),
         catalog_product_type_id: form.catalogProductTypeId,
         brand_id: form.brandId || null,
         sku: form.sku.trim() || null,
-        price: form.price,
+        price: pricingFields.price,
+        cost_price: pricingFields.cost_price,
         short_description: form.shortDescription.trim() || null,
         description: form.description.trim() || null,
         status: "active",
@@ -1056,6 +1058,19 @@ export function AdminCatalogProductsPanel() {
                     Stock
                   </button>
                 ) : null}
+                {showCommercialAvailabilityTab ? (
+                  <button
+                    type="button"
+                    className={`rounded-md px-3 py-1.5 text-xs font-medium ${
+                      formTab === "commercial-availability"
+                        ? "bg-zinc-900 text-white"
+                        : "text-zinc-600 hover:bg-zinc-50"
+                    }`}
+                    onClick={() => setFormTab("commercial-availability")}
+                  >
+                    Commercial Availability
+                  </button>
+                ) : null}
                 {showShippingTab ? (
                   <button
                     type="button"
@@ -1144,7 +1159,28 @@ export function AdminCatalogProductsPanel() {
             </div>
           ) : form.id && formTab === "variants" ? (
             <div className="mt-4">
-              <ProductVariantsManager productId={form.id} />
+              <ProductVariantsManager
+                productId={form.id}
+                commerceChannelCode={publishContext?.commerceChannelCode ?? null}
+              />
+              <div className="mt-4">
+                <button
+                  type="button"
+                  className="admin-btn-secondary"
+                  onClick={() => setForm(null)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          ) : form.id && formTab === "commercial-availability" && showCommercialAvailabilityTab ? (
+            <div className="mt-4">
+              <ProductCommercialAvailabilityManager
+                productId={form.id}
+                onSaved={() => {
+                  void refreshPublishContext();
+                }}
+              />
               <div className="mt-4">
                 <button
                   type="button"
@@ -1313,26 +1349,26 @@ export function AdminCatalogProductsPanel() {
                 </p>
               </div>
             ) : null}
-            <div>
-              <label className="admin-label" htmlFor="product-price">
-                Base price (TZS)
-              </label>
-              <input
-                id="product-price"
-                type="number"
-                min={0}
-                step={1}
-                className="admin-input mt-1.5"
-                value={form.price || ""}
-                onChange={(event) =>
-                  setForm({ ...form, price: Number(event.target.value) || 0 })
-                }
+            <div className="sm:col-span-2">
+              <ProductSimplePricingFields
+                sellingPrice={form.price}
+                costPrice={form.costPrice}
+                sellingPriceId="product-price"
+                costPriceId="product-cost-price"
+                onSellingPriceChange={(price) => setForm({ ...form, price })}
+                onCostPriceChange={(costPrice) => setForm({ ...form, costPrice })}
               />
-              <p className="mt-1 text-xs text-zinc-500">
-                Required for simple products before activation. Variant products use Variants tab
-                pricing.
-              </p>
             </div>
+            {isChinaProduct && form.id && publishVariants.length === 0 ? (
+              <div className="sm:col-span-2">
+                <ProductCommercialAvailabilityManager
+                  productId={form.id}
+                  onSaved={() => {
+                    void refreshPublishContext();
+                  }}
+                />
+              </div>
+            ) : null}
             <div>
               <label className="admin-label" htmlFor="form-department">
                 Department *

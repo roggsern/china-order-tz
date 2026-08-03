@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { VariantBulkActionBar } from "@/components/admin/VariantBulkActionBar";
 import { VariantInventoryManager } from "@/components/admin/VariantInventoryManager";
 import { VariantMediaManager } from "@/components/admin/VariantMediaManager";
 import { VariantPricingManager } from "@/components/admin/VariantPricingManager";
@@ -25,6 +26,7 @@ import { formatVariantDisplayLabel } from "@/lib/catalog/variant-display-attribu
 
 type ProductVariantsManagerProps = {
   productId: string;
+  commerceChannelCode?: string | null;
 };
 
 type ManualForm = {
@@ -45,7 +47,11 @@ const emptyForm = (): ManualForm => ({
   optionByAttribute: {},
 });
 
-export function ProductVariantsManager({ productId }: ProductVariantsManagerProps) {
+export function ProductVariantsManager({
+  productId,
+  commerceChannelCode,
+}: ProductVariantsManagerProps) {
+  const isChinaImport = commerceChannelCode === "CHINA_IMPORT";
   const { permissions } = useAdminPermissions();
   const canUpdateMedia = canManageVariantMedia(permissions);
   const [variants, setVariants] = useState<AdminProductVariant[]>([]);
@@ -62,6 +68,12 @@ export function ProductVariantsManager({ productId }: ProductVariantsManagerProp
   const [pricingVariantId, setPricingVariantId] = useState<string | null>(null);
   const [inventoryVariantId, setInventoryVariantId] = useState<string | null>(null);
   const [mediaVariantId, setMediaVariantId] = useState<string | null>(null);
+  const [selectedVariantIds, setSelectedVariantIds] = useState<string[]>([]);
+
+  const selectedCount = selectedVariantIds.length;
+  const allVariantIds = useMemo(() => variants.map((variant) => variant.id), [variants]);
+  const allSelected =
+    variants.length > 0 && selectedVariantIds.length === variants.length;
 
   const loadImageCounts = useCallback(async (variantRows: AdminProductVariant[]) => {
     const entries = await Promise.all(
@@ -94,6 +106,9 @@ export function ProductVariantsManager({ productId }: ProductVariantsManagerProp
         return next;
       });
       void loadImageCounts(payload.variants);
+      setSelectedVariantIds((current) =>
+        current.filter((id) => payload.variants.some((variant) => variant.id === id)),
+      );
     } catch (err) {
       setVariants([]);
       setAttributes([]);
@@ -315,21 +330,48 @@ export function ProductVariantsManager({ productId }: ProductVariantsManagerProp
         </div>
       ) : null}
 
+      <VariantBulkActionBar
+        productId={productId}
+        selectedCount={selectedCount}
+        selectedIds={selectedVariantIds}
+        isChinaImport={isChinaImport}
+        onClearSelection={() => setSelectedVariantIds([])}
+        onCompleted={() => {
+          setSuccess("Bulk variant update completed.");
+          void reload();
+        }}
+      />
+
       <p className="text-xs text-zinc-500">
-        Variants are purchasable units. Use Pricing and Inventory for the Pricing Engine and
-        Inventory Engine.
+        Variants are purchasable units. Use Pricing for sell prices
+        {isChinaImport
+          ? ". For China Import products, set customer availability in Commercial Availability."
+          : " and Inventory for warehouse stock."}
       </p>
 
       <div className="overflow-x-auto rounded-lg border border-zinc-200">
         <table className="min-w-full text-left text-sm">
             <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
             <tr>
+              <th className="px-3 py-2 font-medium">
+                <input
+                  type="checkbox"
+                  aria-label="Select all variants"
+                  checked={allSelected}
+                  disabled={variants.length === 0 || busy}
+                  onChange={(event) =>
+                    setSelectedVariantIds(event.target.checked ? allVariantIds : [])
+                  }
+                />
+              </th>
               <th className="px-3 py-2 font-medium">Name</th>
               <th className="px-3 py-2 font-medium">SKU</th>
               <th className="px-3 py-2 font-medium">Images</th>
               <th className="px-3 py-2 font-medium">Attributes</th>
               <th className="px-3 py-2 font-medium">Pricing</th>
-              <th className="px-3 py-2 font-medium">Inventory</th>
+              {!isChinaImport ? (
+                <th className="px-3 py-2 font-medium">Inventory</th>
+              ) : null}
               <th className="px-3 py-2 font-medium">Status</th>
               <th className="px-3 py-2 font-medium">Default</th>
               <th className="px-3 py-2 font-medium">Actions</th>
@@ -338,13 +380,28 @@ export function ProductVariantsManager({ productId }: ProductVariantsManagerProp
           <tbody>
             {variants.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-3 py-6 text-center text-zinc-500">
+                <td colSpan={isChinaImport ? 9 : 10} className="px-3 py-6 text-center text-zinc-500">
                   No variants yet. Create manually or generate combinations below.
                 </td>
               </tr>
             ) : (
               variants.map((variant) => (
                 <tr key={variant.id} className="border-t border-zinc-100">
+                  <td className="px-3 py-2">
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${variant.name || variant.sku}`}
+                      checked={selectedVariantIds.includes(variant.id)}
+                      disabled={busy}
+                      onChange={(event) => {
+                        setSelectedVariantIds((current) =>
+                          event.target.checked
+                            ? [...current, variant.id]
+                            : current.filter((id) => id !== variant.id),
+                        );
+                      }}
+                    />
+                  </td>
                   <td className="px-3 py-2 font-medium text-zinc-900">
                     {variant.name || "—"}
                   </td>
@@ -364,10 +421,12 @@ export function ProductVariantsManager({ productId }: ProductVariantsManagerProp
                   <td className="px-3 py-2 text-xs text-zinc-600">
                     {variant.pricesCount} price{variant.pricesCount === 1 ? "" : "s"}
                   </td>
-                  <td className="px-3 py-2 text-xs text-zinc-600">
-                    {variant.inventoriesCount} warehouse
-                    {variant.inventoriesCount === 1 ? "" : "s"}
-                  </td>
+                  {!isChinaImport ? (
+                    <td className="px-3 py-2 text-xs text-zinc-600">
+                      {variant.inventoriesCount} warehouse
+                      {variant.inventoriesCount === 1 ? "" : "s"}
+                    </td>
+                  ) : null}
                   <td className="px-3 py-2">
                     <span
                       className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
@@ -427,18 +486,20 @@ export function ProductVariantsManager({ productId }: ProductVariantsManagerProp
                       >
                         Pricing
                       </button>
-                      <button
-                        type="button"
-                        className="text-xs font-medium text-zinc-700 hover:underline"
-                        disabled={busy}
-                        onClick={() => {
-                          setPricingVariantId(null);
-                          setMediaVariantId(null);
-                          setInventoryVariantId(variant.id);
-                        }}
-                      >
-                        Inventory
-                      </button>
+                      {!isChinaImport ? (
+                        <button
+                          type="button"
+                          className="text-xs font-medium text-zinc-700 hover:underline"
+                          disabled={busy}
+                          onClick={() => {
+                            setPricingVariantId(null);
+                            setMediaVariantId(null);
+                            setInventoryVariantId(variant.id);
+                          }}
+                        >
+                          Inventory
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="text-xs font-medium text-red-600 hover:underline"
@@ -489,7 +550,7 @@ export function ProductVariantsManager({ productId }: ProductVariantsManagerProp
         />
       ) : null}
 
-      {inventoryVariantId ? (
+      {!isChinaImport && inventoryVariantId ? (
         <VariantInventoryManager
           variantId={inventoryVariantId}
           variantLabel={

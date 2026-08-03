@@ -7,10 +7,13 @@ import { AdminProductWizardProgress } from "@/components/admin/AdminProductWizar
 import { AdminSupplierAsyncSelect } from "@/components/admin/AdminSupplierAsyncSelect";
 import { ProductMediaManager } from "@/components/admin/ProductMediaManager";
 import { ProductShippingManager } from "@/components/admin/ProductShippingManager";
+import { ProductCommercialAvailabilityManager } from "@/components/admin/ProductCommercialAvailabilityManager";
+import { ProductSimplePricingFields } from "@/components/admin/ProductSimplePricingFields";
 import { ProductStockManager } from "@/components/admin/ProductStockManager";
 import { ProductVariantsManager } from "@/components/admin/ProductVariantsManager";
 import { PublishReadinessChecklist } from "@/components/admin/PublishReadinessChecklist";
 import { resolveBrandLeafCategoryId } from "@/lib/admin/catalog-selector-utils";
+import { filterCatalogProductTypesForCategoryScope } from "@/lib/admin/catalog-product-type-scope";
 import {
   calculateProductCreationWizardProgress,
   mapWizardMissingSummary,
@@ -20,12 +23,14 @@ import {
   previousWizardStepId,
   readPersistedWizardStep,
   resolveProductCreationWizardSteps,
+  type ProductCreationPricingModel,
   type ProductCreationWizardStepId,
   validateWizardStepBeforeContinue,
 } from "@/lib/admin/product-creation-wizard";
 import type { ProductPublishReadinessResult } from "@/lib/admin/product-publish-readiness";
 import {
   fetchAdminProductMedia,
+  fetchAdminCategories,
   type AdminBrand,
   type AdminCatalogProductType,
   type AdminCategory,
@@ -40,9 +45,11 @@ export type ProductCreationWizardFormState = {
   name: string;
   sku: string;
   price: number;
+  costPrice: number | null;
   shortDescription: string;
   description: string;
   commerceJourney: CommerceJourney | "";
+  pricingModel: ProductCreationPricingModel;
   storeId: string;
   departmentId: string;
   categoryId: string;
@@ -86,7 +93,7 @@ export function AdminProductCreationWizard({
   form,
   setForm,
   departments,
-  categories,
+  categories: _categories,
   productTypes,
   brands,
   suppliers,
@@ -108,9 +115,8 @@ export function AdminProductCreationWizard({
   onRefreshShipping,
 }: AdminProductCreationWizardProps) {
   const steps = useMemo(
-    () =>
-      resolveProductCreationWizardSteps(form.commerceJourney).map((step) => step),
-    [form.commerceJourney],
+    () => resolveProductCreationWizardSteps(form.commerceJourney, form.pricingModel),
+    [form.commerceJourney, form.pricingModel],
   );
 
   const [currentStepId, setCurrentStepId] = useState<ProductCreationWizardStepId>(() =>
@@ -119,18 +125,106 @@ export function AdminProductCreationWizard({
   const [mediaCount, setMediaCount] = useState(0);
   const [hasPrimaryImage, setHasPrimaryImage] = useState(false);
   const [stepError, setStepError] = useState<string | null>(null);
+  const [taxonomyCategories, setTaxonomyCategories] = useState<AdminCategory[]>([]);
+  const [taxonomyLoading, setTaxonomyLoading] = useState(false);
+  const [taxonomyError, setTaxonomyError] = useState<string | null>(null);
+
+  const isTzLocal = form.commerceJourney === "tz";
+  const isChinaImport = form.commerceJourney === "china";
 
   const formTypes = useMemo(() => {
-    const scopeId = form.subcategoryId || form.categoryId;
-    if (!scopeId) {
-      return [];
-    }
-    return productTypes.filter((type) => type.subcategoryId === scopeId);
-  }, [form.categoryId, form.subcategoryId, productTypes]);
+    return filterCatalogProductTypesForCategoryScope({
+      productTypes,
+      categoryId: form.categoryId,
+      subcategoryId: form.subcategoryId,
+      categories: taxonomyCategories,
+    });
+  }, [form.categoryId, form.subcategoryId, productTypes, taxonomyCategories]);
 
   useEffect(() => {
     setCurrentStepId((previous) => normalizeWizardStepId(previous, steps));
   }, [steps]);
+
+  useEffect(() => {
+    if (form.commerceJourney === "china") {
+      if (!form.departmentId) {
+        setTaxonomyCategories([]);
+        setTaxonomyError(null);
+        return;
+      }
+
+      let cancelled = false;
+      setTaxonomyLoading(true);
+      setTaxonomyError(null);
+
+      void fetchAdminCategories({
+        origin: "china",
+        departmentId: form.departmentId,
+      })
+        .then((items) => {
+          if (!cancelled) {
+            setTaxonomyCategories(items);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setTaxonomyCategories([]);
+            setTaxonomyError("Unable to load China catalog categories.");
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setTaxonomyLoading(false);
+          }
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (form.commerceJourney === "tz") {
+      if (!form.storeId) {
+        setTaxonomyCategories([]);
+        setTaxonomyError(null);
+        return;
+      }
+
+      let cancelled = false;
+      setTaxonomyLoading(true);
+      setTaxonomyError(null);
+
+      void fetchAdminCategories({
+        origin: "tz",
+        storeId: form.storeId,
+        isActive: true,
+      })
+        .then((items) => {
+          if (!cancelled) {
+            setTaxonomyCategories(items);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setTaxonomyCategories([]);
+            setTaxonomyError("Unable to load store categories.");
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setTaxonomyLoading(false);
+          }
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setTaxonomyCategories([]);
+    setTaxonomyError(null);
+    return undefined;
+  }, [form.commerceJourney, form.departmentId, form.storeId]);
 
   useEffect(() => {
     if (!form.id) {
@@ -272,6 +366,10 @@ export function AdminProductCreationWizard({
                   commerceJourney,
                   storeId: commerceJourney === "tz" ? current.storeId : "",
                   supplierId: commerceJourney === "china" ? current.supplierId : "",
+                  departmentId: "",
+                  categoryId: "",
+                  subcategoryId: "",
+                  catalogProductTypeId: "",
                 }));
               }}
             >
@@ -280,6 +378,58 @@ export function AdminProductCreationWizard({
               <option value="tz">TZ_LOCAL — Buy From Tanzania</option>
             </select>
           </div>
+          {form.commerceJourney ? (
+            <div className="sm:col-span-2">
+              <fieldset>
+                <legend className="admin-label">Pricing model *</legend>
+                <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                  <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-3">
+                    <input
+                      type="radio"
+                      name="wizard-pricing-model"
+                      className="mt-1"
+                      checked={form.pricingModel === "simple"}
+                      disabled={Boolean(form.id)}
+                      onChange={() =>
+                        setForm((current) => ({ ...current, pricingModel: "simple" }))
+                      }
+                    />
+                    <span>
+                      <span className="block text-sm font-medium text-zinc-900">Simple product</span>
+                      <span className="mt-0.5 block text-xs text-zinc-500">
+                        One base price and product-level stock or commercial availability.
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-3">
+                    <input
+                      type="radio"
+                      name="wizard-pricing-model"
+                      className="mt-1"
+                      checked={form.pricingModel === "variants"}
+                      disabled={Boolean(form.id)}
+                      onChange={() =>
+                        setForm((current) => ({ ...current, pricingModel: "variants" }))
+                      }
+                    />
+                    <span>
+                      <span className="block text-sm font-medium text-zinc-900">
+                        Product with variants
+                      </span>
+                      <span className="mt-0.5 block text-xs text-zinc-500">
+                        Skip simple pricing — set price and stock per variant instead.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+                {form.id ? (
+                  <p className="mt-2 text-xs text-zinc-500">
+                    Pricing model is locked after the draft product is created.
+                  </p>
+                ) : null}
+              </fieldset>
+            </div>
+          ) : null}
           <div className="sm:col-span-2">
             <label className="admin-label" htmlFor="wizard-name">
               Product name *
@@ -291,43 +441,89 @@ export function AdminProductCreationWizard({
               onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
             />
           </div>
-          <div>
-            <label className="admin-label" htmlFor="wizard-department">
-              Department *
-            </label>
-            <select
-              id="wizard-department"
-              className="admin-input mt-1.5"
-              value={form.departmentId}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  departmentId: event.target.value,
-                  categoryId: "",
-                  subcategoryId: "",
-                  catalogProductTypeId: "",
-                }))
-              }
-            >
-              <option value="">Select department</option>
-              {departments.map((department) => (
-                <option key={department.id} value={department.id}>
-                  {department.name}
+          {isChinaImport ? (
+            <div>
+              <label className="admin-label" htmlFor="wizard-department">
+                Department *
+              </label>
+              <select
+                id="wizard-department"
+                className="admin-input mt-1.5"
+                value={form.departmentId}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    departmentId: event.target.value,
+                    categoryId: "",
+                    subcategoryId: "",
+                    catalogProductTypeId: "",
+                  }))
+                }
+              >
+                <option value="">Select department</option>
+                {departments.map((department) => (
+                  <option key={department.id} value={department.id}>
+                    {department.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+          {isTzLocal ? (
+            <div>
+              <label className="admin-label" htmlFor="wizard-store-basic">
+                Store *
+              </label>
+              <select
+                id="wizard-store-basic"
+                className="admin-input mt-1.5"
+                value={form.storeId}
+                disabled={storesLoading}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    storeId: event.target.value,
+                    categoryId: "",
+                    subcategoryId: "",
+                    catalogProductTypeId: "",
+                  }))
+                }
+              >
+                <option value="">
+                  {storesLoading
+                    ? "Loading stores…"
+                    : storesError
+                      ? "Unable to load stores"
+                      : stores.length === 0
+                        ? "No active stores available"
+                        : "Select store"}
                 </option>
-              ))}
-            </select>
-          </div>
+                {stores.map((store) => (
+                  <option key={store.id} value={store.id}>
+                    {store.name}
+                    {store.code ? ` (${store.code})` : ""}
+                  </option>
+                ))}
+              </select>
+              {storesError ? <p className="mt-1 text-xs text-red-600">{storesError}</p> : null}
+            </div>
+          ) : null}
           <div>
             <label className="admin-label" htmlFor="wizard-category">
               Category *
             </label>
             <AdminCategoryTreeSelect
               id="wizard-category"
-              categories={categories}
-              departmentId={form.departmentId}
+              categories={taxonomyCategories}
+              departmentId={isChinaImport ? form.departmentId : undefined}
+              storeId={isTzLocal ? form.storeId : undefined}
               categoryId={form.categoryId}
               subcategoryId={form.subcategoryId}
-              disabled={!form.departmentId}
+              disabled={
+                taxonomyLoading ||
+                (isChinaImport && !form.departmentId) ||
+                (isTzLocal && !form.storeId)
+              }
               onChange={(selection) =>
                 setForm((current) => ({
                   ...current,
@@ -337,6 +533,12 @@ export function AdminProductCreationWizard({
                 }))
               }
             />
+            {taxonomyLoading ? (
+              <p className="mt-1 text-xs text-zinc-500">Loading categories…</p>
+            ) : null}
+            {taxonomyError ? (
+              <p className="mt-1 text-xs text-red-600">{taxonomyError}</p>
+            ) : null}
           </div>
           <div>
             <label className="admin-label" htmlFor="wizard-type">
@@ -395,32 +597,43 @@ export function AdminProductCreationWizard({
         />
       ) : null}
 
-      {currentStepId === "pricing" ? (
-        <div className="max-w-md space-y-3">
-          <label className="admin-label" htmlFor="wizard-price">
-            Selling price (TZS)
-          </label>
-          <input
-            id="wizard-price"
-            type="number"
-            min={0}
-            step={1}
-            className="admin-input mt-1.5"
-            value={form.price || ""}
-            onChange={(event) =>
+      {currentStepId === "pricing" && form.pricingModel === "simple" ? (
+        <div className="max-w-2xl space-y-4">
+          <ProductSimplePricingFields
+            sellingPrice={form.price}
+            costPrice={form.costPrice}
+            sellingPriceId="wizard-price"
+            costPriceId="wizard-cost-price"
+            onSellingPriceChange={(price) =>
               setForm((current) => ({
                 ...current,
-                price: Number(event.target.value) || 0,
+                price,
+              }))
+            }
+            onCostPriceChange={(costPrice) =>
+              setForm((current) => ({
+                ...current,
+                costPrice,
               }))
             }
           />
-          <p className="text-xs text-zinc-500">
-            Simple products use this base price. Variant products manage pricing on the Variants step.
-          </p>
-          {form.id && publishSellableVariantCount === 0 ? (
+          {form.commerceJourney === "china" && publishSellableVariantCount === 0 ? (
+            <p className="text-xs text-sky-800">
+              No variants. Commercial availability is managed at product level.
+            </p>
+          ) : null}
+          {form.commerceJourney !== "china" && form.id && publishSellableVariantCount === 0 ? (
             <ProductStockManager
               productId={form.id}
               onStockSaved={() => {
+                void onRefreshPublishContext();
+              }}
+            />
+          ) : null}
+          {form.commerceJourney === "china" && form.id && publishSellableVariantCount === 0 ? (
+            <ProductCommercialAvailabilityManager
+              productId={form.id}
+              onSaved={() => {
                 void onRefreshPublishContext();
               }}
             />
@@ -429,9 +642,26 @@ export function AdminProductCreationWizard({
       ) : null}
 
       {currentStepId === "variants" && form.id ? (
-        <ProductVariantsManager
-          productId={form.id}
-        />
+        <div className="space-y-4">
+          {form.commerceJourney === "china" ? (
+            <p className="text-xs text-sky-800">
+              Stock is managed per variant. Set commercial availability on the Commercial Availability
+              tab after creating variants, or below once variants exist.
+            </p>
+          ) : null}
+          <ProductVariantsManager
+            productId={form.id}
+            commerceChannelCode={form.commerceJourney === "china" ? "CHINA_IMPORT" : "TZ_LOCAL"}
+          />
+          {form.commerceJourney === "china" ? (
+            <ProductCommercialAvailabilityManager
+              productId={form.id}
+              onSaved={() => {
+                void onRefreshPublishContext();
+              }}
+            />
+          ) : null}
+        </div>
       ) : null}
 
       {currentStepId === "shipping" && form.id ? (
@@ -456,41 +686,6 @@ export function AdminProductCreationWizard({
           />
           <p className="text-xs text-zinc-500">
             Required before publishing China import products. Used for supplier purchase orders.
-          </p>
-        </div>
-      ) : null}
-
-      {currentStepId === "store" ? (
-        <div className="max-w-lg space-y-3">
-          <label className="admin-label" htmlFor="wizard-store">
-            Store *
-          </label>
-          <select
-            id="wizard-store"
-            className="admin-input mt-1.5"
-            value={form.storeId}
-            disabled={storesLoading}
-            onChange={(event) => setForm((current) => ({ ...current, storeId: event.target.value }))}
-          >
-            <option value="">
-              {storesLoading
-                ? "Loading stores…"
-                : storesError
-                  ? "Unable to load stores"
-                  : stores.length === 0
-                    ? "No active stores available"
-                    : "Select store"}
-            </option>
-            {stores.map((store) => (
-              <option key={store.id} value={store.id}>
-                {store.name}
-                {store.code ? ` (${store.code})` : ""}
-              </option>
-            ))}
-          </select>
-          {storesError ? <p className="text-xs text-red-600">{storesError}</p> : null}
-          <p className="text-xs text-zinc-500">
-            TZ_LOCAL products must belong to a store before publishing.
           </p>
         </div>
       ) : null}

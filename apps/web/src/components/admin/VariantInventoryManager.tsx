@@ -13,6 +13,7 @@ import {
 type VariantInventoryManagerProps = {
   variantId: string;
   variantLabel: string;
+  defaultWarehouseCode?: string;
   onClose?: () => void;
 };
 
@@ -25,8 +26,8 @@ type InventoryForm = {
   isActive: boolean;
 };
 
-const emptyForm = (): InventoryForm => ({
-  warehouseCode: "MAIN",
+const emptyForm = (warehouseCode = "MAIN"): InventoryForm => ({
+  warehouseCode,
   onHand: "0",
   reserved: "0",
   reorderLevel: "5",
@@ -37,6 +38,7 @@ const emptyForm = (): InventoryForm => ({
 export function VariantInventoryManager({
   variantId,
   variantLabel,
+  defaultWarehouseCode = "MAIN",
   onClose,
 }: VariantInventoryManagerProps) {
   const [rows, setRows] = useState<AdminVariantInventory[]>([]);
@@ -71,7 +73,7 @@ export function VariantInventoryManager({
 
   const startCreate = () => {
     setEditingId(null);
-    setForm(emptyForm());
+    setForm(emptyForm(defaultWarehouseCode));
     setSuccess(null);
     setError(null);
   };
@@ -124,7 +126,7 @@ export function VariantInventoryManager({
         setSuccess("Inventory created.");
       }
       setEditingId(null);
-      setForm(emptyForm());
+      setForm(emptyForm(defaultWarehouseCode));
       await reload();
     } catch (err) {
       setError(
