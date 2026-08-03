@@ -15,6 +15,7 @@ import { OrderItemsList } from "./OrderItemsList";
 import { OrderStatusSummary } from "./OrderStatusSummary";
 import { OrderStatusBadge } from "./OrderStatusBadge";
 import { buildCompactOrderStatusSummary } from "@/lib/order/order-status-summary";
+import { resolveCustomerOrderDisplayStatus } from "@/lib/order/customer-order-display-status";
 import { OrderDeliveryOptionPanel } from "./OrderDeliveryOptionPanel";
 import { OrderReceivingChoicePanel } from "./OrderReceivingChoicePanel";
 import { AuthInvitationCard } from "@/components/auth/AuthInvitationCard";
@@ -170,6 +171,11 @@ export function OrderDetailsContent({ orderNumber }: OrderDetailsContentProps) {
   const addressLines = formatAddressLines(order);
   const trackHref = `/track/${encodeURIComponent(order.id)}`;
   const statusSummary = buildCompactOrderStatusSummary(order);
+  const displayStatusLabel = resolveCustomerOrderDisplayStatus({
+    status: order.status,
+    progress: order.progress,
+    receivingChoice: order.receivingChoice,
+  });
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
@@ -211,7 +217,7 @@ export function OrderDetailsContent({ orderNumber }: OrderDetailsContentProps) {
 
           <div className="flex flex-wrap items-center gap-2">
             <PaymentStatusBadge status={order.paymentStatus} />
-            <OrderStatusBadge status={order.status} />
+            <OrderStatusBadge status={order.status} label={displayStatusLabel} />
           </div>
         </div>
 

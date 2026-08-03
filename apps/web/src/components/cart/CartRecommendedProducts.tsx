@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { ProductGrid } from "@/components/catalog/ProductGrid";
-import { productService } from "@/lib/services/product-service.client";
+import { fetchClientCatalogProducts } from "@/lib/catalog/client-catalog";
+import { buildCartRecommendedProducts } from "@/lib/cart/cart-recommendations";
 import type { Product } from "@/lib/types/catalog";
 
 interface CartRecommendedProductsProps {
@@ -16,21 +17,16 @@ export function CartRecommendedProducts({ limit = 8 }: CartRecommendedProductsPr
   useEffect(() => {
     let cancelled = false;
 
-    void productService
-      .list()
+    void fetchClientCatalogProducts()
       .then((catalog) => {
         if (cancelled) return;
 
-        const featured = [...catalog]
-          .sort((left, right) => {
-            if (left.featured !== right.featured) {
-              return left.featured ? -1 : 1;
-            }
-            return right.rating - left.rating;
-          })
-          .slice(0, limit);
-
-        setProducts(featured);
+        setProducts(buildCartRecommendedProducts(catalog, limit));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setProducts([]);
+        }
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);

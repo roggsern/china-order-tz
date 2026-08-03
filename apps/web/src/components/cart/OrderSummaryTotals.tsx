@@ -13,6 +13,8 @@ interface OrderSummaryTotalsProps {
   variant?: "default" | "cart";
   /** Override the final total row label (e.g. "Estimated Total"). */
   totalLabel?: string;
+  /** Hide the shipping row (China import cart display). */
+  hideShipping?: boolean;
 }
 
 export function OrderSummaryTotals({
@@ -21,6 +23,7 @@ export function OrderSummaryTotals({
   hideZeroDiscount = false,
   variant = "default",
   totalLabel,
+  hideShipping = false,
 }: OrderSummaryTotalsProps) {
   const isCart = variant === "cart";
   const serviceFee = isCart ? calculateProductDetailServiceFee(totals.productTotal) : 0;
@@ -70,12 +73,14 @@ export function OrderSummaryTotals({
           </div>
         )}
 
-        <div className="flex items-center justify-between">
-          <dt className="text-zinc-600">Shipping</dt>
-          <dd className="font-semibold tabular-nums text-zinc-900">
-            {formatPrice(totals.shippingTotal)}
-          </dd>
-        </div>
+        {!hideShipping ? (
+          <div className="flex items-center justify-between">
+            <dt className="text-zinc-600">Shipping</dt>
+            <dd className="font-semibold tabular-nums text-zinc-900">
+              {formatPrice(totals.shippingTotal)}
+            </dd>
+          </div>
+        ) : null}
 
         {isCart && serviceFee > 0 && (
           <div className="flex items-center justify-between">

@@ -331,8 +331,8 @@ export function CheckoutPageContent() {
   }, [form.customer]);
 
   const displayTotals = useMemo(
-    () => resolveCheckoutDisplayTotals(totals, shippingChoice),
-    [totals, shippingChoice],
+    () => resolveCheckoutDisplayTotals(totals, shippingChoice, selectedShippingMethod),
+    [totals, shippingChoice, selectedShippingMethod],
   );
 
   const scrollToFirstError = () => {

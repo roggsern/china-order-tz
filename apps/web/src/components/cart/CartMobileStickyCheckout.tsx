@@ -1,12 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
 import { useCartState } from "@/lib/cart/context";
+import { resolveCartDisplayTotals } from "@/lib/cart/display-totals";
 import { formatPrice } from "@/lib/catalog/utils";
 import { ProceedToCheckoutButton } from "./ProceedToCheckoutButton";
 
 export function CartMobileStickyCheckout() {
   const { items, totals, isHydrated } = useCartState();
+  const displayTotals = useMemo(
+    () => resolveCartDisplayTotals(totals, items),
+    [totals, items],
+  );
 
   if (!isHydrated || items.length === 0) return null;
 
@@ -18,7 +24,7 @@ export function CartMobileStickyCheckout() {
             Estimated total
           </p>
           <p className="truncate text-lg font-extrabold tabular-nums text-zinc-900">
-            {formatPrice(totals.grandTotal)}
+            {formatPrice(displayTotals.grandTotal)}
           </p>
         </div>
         <div className="flex min-w-0 flex-[1.4] flex-col gap-2">

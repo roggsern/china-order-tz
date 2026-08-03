@@ -28,6 +28,7 @@ export type OrderOverviewCardData = {
   id: string;
   orderNumber: string;
   status: OrderStatus;
+  displayStatusLabel: string;
   paymentStatus: PaymentStatus;
   createdAt: string;
   grandTotal: number;
@@ -76,7 +77,11 @@ export function OrderOverviewCard({ order, className = "" }: OrderOverviewCardPr
             </p>
             <OrderCommerceSourceBadge source={order.source} />
             <PaymentStatusBadge status={order.paymentStatus} size="sm" />
-            <OrderStatusBadge status={order.status} size="sm" />
+            <OrderStatusBadge
+              status={order.status}
+              label={order.displayStatusLabel}
+              size="sm"
+            />
           </div>
 
           <p className="mt-2 line-clamp-2 text-sm font-semibold leading-snug text-zinc-800">

@@ -12,6 +12,7 @@ import {
   parseCustomerOrderProgress,
 } from "@/lib/order/customer-progress";
 import { splitCustomerTrackingTimeline } from "@/lib/order/customer-tracking-events";
+import { resolveCustomerOrderDisplayStatus } from "@/lib/order/customer-order-display-status";
 import { formatTrackingTimestamp } from "@/lib/order/tracking-format";
 import { useOrderTracking } from "@/lib/order/use-order-tracking";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment/constants";
@@ -22,6 +23,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { PaymentStatusBadge } from "@/components/payment/PaymentStatusBadge";
 import { CopyOrderNumber } from "./CopyOrderNumber";
 import { OrderConfidenceBanner } from "./OrderConfidenceBanner";
+import { OrderReceivingChoicePanel } from "./OrderReceivingChoicePanel";
 import { OrderStatusBadge } from "./OrderStatusBadge";
 import { OrderTrackingItemsSummary } from "./OrderTrackingItemsSummary";
 import { OrderTrackingStepper } from "./OrderTrackingStepper";
@@ -32,7 +34,7 @@ interface TrackOrderLiveContentProps {
 }
 
 export function TrackOrderLiveContent({ orderId }: TrackOrderLiveContentProps) {
-  const { order, tracking, isLoading, isLive, needsAuth } = useOrderTracking(orderId);
+  const { order, tracking, isLoading, isLive, needsAuth, refresh } = useOrderTracking(orderId);
 
   const shippingMethods = useMemo(() => {
     if (!order) return [];
@@ -87,7 +89,16 @@ export function TrackOrderLiveContent({ orderId }: TrackOrderLiveContentProps) {
       ? PAYMENT_METHOD_LABELS[order.paymentMethod]
       : order?.paymentMethod || "—";
 
+  const displayStatusLabel = order
+    ? resolveCustomerOrderDisplayStatus({
+        status: order.status,
+        progress,
+        receivingChoice: order.receivingChoice,
+      })
+    : null;
+
   const currentStatusLabel =
+    displayStatusLabel ??
     tracking?.current_status_label ??
     progress?.current_label ??
     tracking?.current_status ??
@@ -152,7 +163,11 @@ export function TrackOrderLiveContent({ orderId }: TrackOrderLiveContentProps) {
         <div className="flex flex-col items-start gap-2 sm:items-end">
           <div className="flex flex-wrap gap-2">
             <PaymentStatusBadge status={order.paymentStatus} size="sm" />
-            <OrderStatusBadge status={order.status} size="sm" />
+            <OrderStatusBadge
+              status={order.status}
+              label={displayStatusLabel ?? undefined}
+              size="sm"
+            />
           </div>
           <span
             className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
@@ -193,6 +208,12 @@ export function TrackOrderLiveContent({ orderId }: TrackOrderLiveContentProps) {
         </section>
 
         <TrackingWhatHappensNext guidance={whatHappensNext} />
+
+        <OrderReceivingChoicePanel
+          orderNumber={order.orderNumber}
+          receivingChoice={order.receivingChoice}
+          onUpdated={refresh}
+        />
 
         {shipment ? (
           <section

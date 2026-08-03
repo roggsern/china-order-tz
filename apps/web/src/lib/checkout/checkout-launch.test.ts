@@ -21,15 +21,36 @@ describe("resolveCheckoutDisplayTotals", () => {
     grandTotal: 125_000,
   };
 
-  it("zeros shipping for customer own agent", () => {
-    const totals = resolveCheckoutDisplayTotals(baseTotals, "customer_agent");
+  it("zeros shipping when no shipping choice is selected", () => {
+    const totals = resolveCheckoutDisplayTotals(baseTotals, null, null);
 
     assert.equal(totals.shippingTotal, 0);
     assert.equal(totals.grandTotal, 100_000);
   });
 
-  it("keeps company shipping totals", () => {
-    const totals = resolveCheckoutDisplayTotals(baseTotals, "company_shipping");
+  it("zeros shipping for customer own agent", () => {
+    const totals = resolveCheckoutDisplayTotals(baseTotals, "customer_agent", null);
+
+    assert.equal(totals.shippingTotal, 0);
+    assert.equal(totals.grandTotal, 100_000);
+  });
+
+  it("zeros shipping for company shipping before Air or Sea is selected", () => {
+    const totals = resolveCheckoutDisplayTotals(baseTotals, "company_shipping", null);
+
+    assert.equal(totals.shippingTotal, 0);
+    assert.equal(totals.grandTotal, 100_000);
+  });
+
+  it("includes shipping for company shipping with Air selected", () => {
+    const totals = resolveCheckoutDisplayTotals(baseTotals, "company_shipping", "air_freight");
+
+    assert.equal(totals.shippingTotal, 25_000);
+    assert.equal(totals.grandTotal, 125_000);
+  });
+
+  it("includes shipping for company shipping with Sea selected", () => {
+    const totals = resolveCheckoutDisplayTotals(baseTotals, "company_shipping", "sea_freight");
 
     assert.equal(totals.shippingTotal, 25_000);
     assert.equal(totals.grandTotal, 125_000);

@@ -331,6 +331,7 @@ export function normalizeOrder(raw: Partial<Order> & Pick<Order, "orderNumber">)
     },
     timeline: raw.timeline ?? [],
     progress: parseCustomerOrderProgress(raw.progress),
+    receivingChoice: raw.receivingChoice ?? null,
     statusHistory: ensureStatusHistory({
       ...(raw as Order),
       timeline: raw.timeline ?? [],

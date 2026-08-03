@@ -3,7 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { ProductGrid } from "@/components/catalog/ProductGrid";
 import { ProductHorizontalScroll } from "@/components/catalog/product-mobile/ProductHorizontalScroll";
-import { productService } from "@/lib/services/product-service.client";
+import { fetchClientCatalogProducts } from "@/lib/catalog/client-catalog";
+import {
+  buildFrequentlyBoughtTogetherProducts,
+  type CartRecommendationCartItem,
+} from "@/lib/cart/cart-recommendations";
 import { useCartState } from "@/lib/cart/context";
 import type { Product } from "@/lib/types/catalog";
 
@@ -18,12 +22,12 @@ export function CartFrequentlyBoughtTogether({
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const cartIdsKey = useMemo(
+  const cartItemsKey = useMemo(
     () =>
       items
-        .map((item) => item.productId)
-        .sort((a, b) => a - b)
-        .join(","),
+        .map((item) => `${item.productId}:${item.slug}:${item.catalogProductId ?? ""}`)
+        .sort()
+        .join("|"),
     [items],
   );
   const categoriesKey = useMemo(
@@ -41,7 +45,7 @@ export function CartFrequentlyBoughtTogether({
   );
 
   useEffect(() => {
-    if (!cartIdsKey) {
+    if (!cartItemsKey) {
       setProducts([]);
       setIsLoading(false);
       return;
@@ -50,38 +54,25 @@ export function CartFrequentlyBoughtTogether({
     let cancelled = false;
     setIsLoading(true);
 
-    const cartProductIds = new Set(
-      cartIdsKey
-        .split(",")
-        .filter(Boolean)
-        .map((id) => Number.parseInt(id, 10)),
-    );
+    const cartItems: CartRecommendationCartItem[] = items.map((item) => ({
+      productId: item.productId,
+      slug: item.slug,
+      catalogProductId: item.catalogProductId,
+    }));
     const categorySlugs = categoriesKey.split(",").filter(Boolean);
 
-    void productService
-      .list()
+    void fetchClientCatalogProducts()
       .then((catalog) => {
         if (cancelled) return;
 
-        const byCategory = catalog.filter(
-          (product) =>
-            !cartProductIds.has(product.id) &&
-            categorySlugs.includes(product.categorySlug),
+        setProducts(
+          buildFrequentlyBoughtTogetherProducts(catalog, cartItems, categorySlugs, limit),
         );
-
-        const pool =
-          byCategory.length > 0
-            ? [...byCategory].reverse()
-            : [...catalog]
-                .filter((product) => !cartProductIds.has(product.id))
-                .sort((left, right) => {
-                  if (left.featured !== right.featured) {
-                    return left.featured ? -1 : 1;
-                  }
-                  return right.rating - left.rating;
-                });
-
-        setProducts(pool.slice(0, limit));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setProducts([]);
+        }
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -90,9 +81,9 @@ export function CartFrequentlyBoughtTogether({
     return () => {
       cancelled = true;
     };
-  }, [cartIdsKey, categoriesKey, limit]);
+  }, [cartItemsKey, categoriesKey, items, limit]);
 
-  if (!cartIdsKey) return null;
+  if (!cartItemsKey) return null;
 
   if (isLoading) {
     return (

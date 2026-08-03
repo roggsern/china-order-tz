@@ -23,6 +23,7 @@ function toOverviewCard(order: CustomerOrderListItem): OrderOverviewCardData {
     id: order.id,
     orderNumber: order.orderNumber,
     status: order.status,
+    displayStatusLabel: order.displayStatusLabel,
     paymentStatus: order.paymentStatus,
     createdAt: order.createdAt,
     grandTotal: order.grandTotal,

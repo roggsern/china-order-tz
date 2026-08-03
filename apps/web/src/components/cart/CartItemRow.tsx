@@ -7,6 +7,10 @@ import type { CartLineItem } from "@/lib/types/cart";
 import { formatPrice } from "@/lib/catalog/utils";
 import { getOriginLabel } from "@/lib/catalog/delivery";
 import { LOCAL_DELIVERY_NEGOTIATED_LABEL } from "@/lib/catalog/product-type";
+import {
+  CHINA_CART_SHIPPING_AT_CHECKOUT_LABEL,
+  isChinaImportCartLine,
+} from "@/lib/cart/display-totals";
 import { getLineProductSavings, getLineTotal } from "@/lib/cart/utils";
 import {
   discoverNextMoqTier,
@@ -66,7 +70,9 @@ function CartItemRowComponent({ item }: CartItemRowProps) {
 
   const maxQuantity = Math.min(item.stock, 99);
   const lineTotal = getLineTotal(item);
-  const itemTotal = lineTotal + (item.origin === "tz" ? 0 : item.shippingCost);
+  const isChinaImport = isChinaImportCartLine(item);
+  const itemTotal =
+    lineTotal + (item.origin === "tz" || isChinaImport ? 0 : item.shippingCost);
   const lineSavings = getLineProductSavings(item);
   const hasConfiguration = Boolean(item.configurationId);
 
@@ -297,7 +303,7 @@ function CartItemRowComponent({ item }: CartItemRowProps) {
                   −{formatPrice(lineSavings)}
                 </dd>
               </div>
-              {item.origin === "china" ? (
+              {!isChinaImport && item.origin !== "tz" ? (
                 <div className="flex items-center justify-between gap-3">
                   <dt className="text-zinc-600">Shipping</dt>
                   <dd className="font-medium tabular-nums text-zinc-900">
@@ -311,6 +317,9 @@ function CartItemRowComponent({ item }: CartItemRowProps) {
                   {formatPrice(itemTotal)}
                 </dd>
               </div>
+              {isChinaImport ? (
+                <p className="text-xs text-zinc-500">{CHINA_CART_SHIPPING_AT_CHECKOUT_LABEL}</p>
+              ) : null}
             </dl>
           ) : (
             <>
@@ -323,22 +332,34 @@ function CartItemRowComponent({ item }: CartItemRowProps) {
               <p className="mt-1 text-xs text-zinc-500">
                 {item.origin === "tz"
                   ? LOCAL_DELIVERY_NEGOTIATED_LABEL
-                  : `Includes ${formatPrice(item.shippingCost)} shipping`}
+                  : isChinaImport
+                    ? CHINA_CART_SHIPPING_AT_CHECKOUT_LABEL
+                    : `Includes ${formatPrice(item.shippingCost)} shipping`}
               </p>
             </>
           )}
         </div>
       </div>
 
-      <CartItemShippingSummary
-        shippingMethod={item.shippingMethod}
-        shippingCost={item.origin === "tz" ? null : item.shippingCost}
-        estimatedDeliveryDays={item.estimatedDeliveryDays}
-        origin={item.origin}
-        className="mt-4"
-      />
+      {isChinaImport ? null : (
+        <CartItemShippingSummary
+          shippingMethod={item.shippingMethod}
+          shippingCost={item.origin === "tz" ? null : item.shippingCost}
+          estimatedDeliveryDays={item.estimatedDeliveryDays}
+          origin={item.origin}
+          className="mt-4"
+        />
+      )}
 
-      {item.origin === "china" ? (
+      {item.origin === "tz" ? (
+        <div className="mt-4">
+          <LocalDeliveryBadge
+            shippingMethod={item.shippingMethod}
+            shippingCost={null}
+            estimatedDeliveryDays={item.estimatedDeliveryDays}
+          />
+        </div>
+      ) : isChinaImport ? null : (
         <CartItemShippingSelector
           itemId={item.id}
           origin={item.origin}
@@ -351,14 +372,6 @@ function CartItemRowComponent({ item }: CartItemRowProps) {
           quantity={item.quantity}
           selectedMethod={item.shippingMethod}
         />
-      ) : (
-        <div className="mt-4">
-          <LocalDeliveryBadge
-            shippingMethod={item.shippingMethod}
-            shippingCost={null}
-            estimatedDeliveryDays={item.estimatedDeliveryDays}
-          />
-        </div>
       )}
 
       <div className="mt-4 flex flex-wrap gap-4 border-t border-zinc-100 pt-3 text-sm">

@@ -1,8 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useCart } from "@/lib/cart/context";
+import {
+  resolveCartDisplayTotals,
+  shouldHideCartShippingDisplay,
+} from "@/lib/cart/display-totals";
 import { CartEmptyState } from "./CartEmptyState";
 import { CartItemRow } from "./CartItemRow";
 import { CartFrequentlyBoughtTogether } from "./CartFrequentlyBoughtTogether";
@@ -13,6 +18,11 @@ import { CartPageSkeleton } from "@/components/ui/PageSkeletons";
 
 export function CartPageContent() {
   const { items, savedForLater, totals, isHydrated } = useCart();
+  const displayTotals = useMemo(
+    () => resolveCartDisplayTotals(totals, items),
+    [totals, items],
+  );
+  const hideShipping = shouldHideCartShippingDisplay(items);
 
   if (!isHydrated) {
     return <CartPageSkeleton />;
@@ -80,7 +90,7 @@ export function CartPageContent() {
 
             {hasItems && (
               <div className="hidden lg:block">
-                <OrderSummary totals={totals} />
+                <OrderSummary totals={displayTotals} hideShipping={hideShipping} />
               </div>
             )}
           </div>
@@ -89,7 +99,11 @@ export function CartPageContent() {
 
           {hasItems && (
             <div className="mt-8 lg:hidden">
-              <OrderSummary totals={totals} showCheckoutAction={false} />
+              <OrderSummary
+                totals={displayTotals}
+                showCheckoutAction={false}
+                hideShipping={hideShipping}
+              />
             </div>
           )}
         </>

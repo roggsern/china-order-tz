@@ -12,6 +12,7 @@ interface OrderSummaryProps {
   className?: string;
   showCheckoutAction?: boolean;
   showClearCart?: boolean;
+  hideShipping?: boolean;
 }
 
 export function OrderSummary({
@@ -19,6 +20,7 @@ export function OrderSummary({
   className = "",
   showCheckoutAction = true,
   showClearCart = true,
+  hideShipping = false,
 }: OrderSummaryProps) {
   const { clearCart } = useCartActions();
 
@@ -37,7 +39,12 @@ export function OrderSummary({
             : "Products, shipping, and your running cart total."}
         </p>
 
-        <OrderSummaryTotals totals={totals} variant="cart" className="mt-5" />
+        <OrderSummaryTotals
+          totals={totals}
+          variant="cart"
+          className="mt-5"
+          hideShipping={hideShipping}
+        />
 
         {showCheckoutAction && (
           <div className="mt-6 space-y-3">

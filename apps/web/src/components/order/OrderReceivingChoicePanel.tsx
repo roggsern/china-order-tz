@@ -85,22 +85,32 @@ export function OrderReceivingChoicePanel({
           <p className="mt-2 text-sm leading-relaxed text-zinc-600">
             Your order has arrived in Tanzania. Please choose how you would like to receive it.
           </p>
-          <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <button
               type="button"
               disabled={busyMethod !== null}
               onClick={() => void handleSelect("self_pickup")}
-              className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-zinc-900 px-4 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex min-h-11 flex-col items-start rounded-xl bg-zinc-900 px-4 py-3 text-left transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {busyMethod === "self_pickup" ? "Saving..." : "Self Pickup"}
+              <span className="text-sm font-semibold text-white">
+                {busyMethod === "self_pickup" ? "Saving..." : "Self Pickup"}
+              </span>
+              <span className="mt-1 text-xs leading-relaxed text-zinc-300">
+                I will collect my order from CHINA ORDER TZ
+              </span>
             </button>
             <button
               type="button"
               disabled={busyMethod !== null}
               onClick={() => void handleSelect("negotiated_delivery")}
-              className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold text-zinc-900 transition hover:border-[#c9a227]/60 hover:bg-[#fffdf7] disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex min-h-11 flex-col items-start rounded-xl border border-zinc-300 bg-white px-4 py-3 text-left transition hover:border-[#c9a227]/60 hover:bg-[#fffdf7] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {busyMethod === "negotiated_delivery" ? "Saving..." : "Arrange Delivery"}
+              <span className="text-sm font-semibold text-zinc-900">
+                {busyMethod === "negotiated_delivery" ? "Saving..." : "Arrange Delivery"}
+              </span>
+              <span className="mt-1 text-xs leading-relaxed text-zinc-600">
+                I want CHINA ORDER TZ to arrange delivery
+              </span>
             </button>
           </div>
         </>

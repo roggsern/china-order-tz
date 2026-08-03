@@ -5,6 +5,8 @@ import { ORDER_STATUS_LABELS } from "@/lib/payment/constants";
 
 interface OrderStatusBadgeProps {
   status: OrderStatus;
+  /** Customer-facing label from progress projection; overrides status label when set. */
+  label?: string;
   size?: "sm" | "md";
 }
 
@@ -39,21 +41,37 @@ const STATUS_DOTS: Record<string, string> = {
   refunded: "bg-red-500",
 };
 
-export function OrderStatusBadge({ status, size = "md" }: OrderStatusBadgeProps) {
-  const label = ORDER_STATUS_LABELS[status] ?? status;
+const ARRIVAL_LABEL_STYLE = "bg-teal-50 text-teal-800 ring-teal-600/25";
+const ARRIVAL_LABEL_DOT = "bg-teal-500";
+const WAITING_LABEL_STYLE = "bg-sky-50 text-sky-800 ring-sky-600/25";
+const WAITING_LABEL_DOT = "bg-sky-500";
+
+function resolveBadgePresentation(status: OrderStatus, label: string) {
+  if (label === "Arrived in Tanzania") {
+    return { style: ARRIVAL_LABEL_STYLE, dot: ARRIVAL_LABEL_DOT };
+  }
+
+  if (label === "Waiting for pickup" || label === "Delivery arrangement pending") {
+    return { style: WAITING_LABEL_STYLE, dot: WAITING_LABEL_DOT };
+  }
+
+  return {
+    style: STATUS_STYLES[status] ?? "bg-zinc-50 text-zinc-700 ring-zinc-300/40",
+    dot: STATUS_DOTS[status] ?? "bg-zinc-400",
+  };
+}
+
+export function OrderStatusBadge({ status, label, size = "md" }: OrderStatusBadgeProps) {
+  const resolvedLabel = label ?? ORDER_STATUS_LABELS[status] ?? status;
+  const presentation = resolveBadgePresentation(status, resolvedLabel);
   const sizeClasses = size === "sm" ? "px-2 py-0.5 text-[11px]" : "px-2.5 py-1 text-xs";
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full font-semibold ring-1 ${sizeClasses} ${
-        STATUS_STYLES[status] ?? "bg-zinc-50 text-zinc-700 ring-zinc-300/40"
-      }`}
+      className={`inline-flex items-center gap-1.5 rounded-full font-semibold ring-1 ${sizeClasses} ${presentation.style}`}
     >
-      <span
-        className={`h-1.5 w-1.5 rounded-full ${STATUS_DOTS[status] ?? "bg-zinc-400"}`}
-        aria-hidden
-      />
-      {label}
+      <span className={`h-1.5 w-1.5 rounded-full ${presentation.dot}`} aria-hidden />
+      {resolvedLabel}
     </span>
   );
 }

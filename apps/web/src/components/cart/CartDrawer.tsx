@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useCartActions, useCartState } from "@/lib/cart/context";
+import {
+  resolveCartDisplayTotals,
+  shouldHideCartShippingDisplay,
+} from "@/lib/cart/display-totals";
 import { useCartDrawer } from "@/lib/cart/drawer-context";
 import { resolveCheckoutRoute } from "@/lib/cart/checkout-navigation";
 import { clearCheckoutDraft } from "@/lib/checkout/draft";
@@ -36,6 +40,11 @@ export function CartDrawer() {
   const { items, totals, isHydrated, syncError } = useCartState();
   const { clearSyncError } = useCartActions();
   const [mounted, setMounted] = useState(false);
+  const displayTotals = useMemo(
+    () => resolveCartDisplayTotals(totals, items),
+    [totals, items],
+  );
+  const hideShipping = shouldHideCartShippingDisplay(items);
 
   useEffect(() => {
     setMounted(true);
@@ -99,7 +108,12 @@ export function CartDrawer() {
         </div>
 
         {isHydrated && items.length > 0 && (
-          <DrawerFooter totals={totals} onCheckout={handleCheckout} onClose={close} />
+          <DrawerFooter
+            totals={displayTotals}
+            hideShipping={hideShipping}
+            onCheckout={handleCheckout}
+            onClose={close}
+          />
         )}
       </motion.aside>
     </div>,
@@ -201,16 +215,23 @@ function DrawerBody({
 
 function DrawerFooter({
   totals,
+  hideShipping,
   onCheckout,
   onClose,
 }: {
   totals: ReturnType<typeof useCartState>["totals"];
+  hideShipping: boolean;
   onCheckout: () => void;
   onClose: () => void;
 }) {
   return (
     <div className="shrink-0 border-t border-zinc-100 bg-white px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:px-6">
-      <OrderSummaryTotals totals={totals} variant="cart" hideZeroDiscount />
+      <OrderSummaryTotals
+        totals={totals}
+        variant="cart"
+        hideZeroDiscount
+        hideShipping={hideShipping}
+      />
 
       <button
         type="button"

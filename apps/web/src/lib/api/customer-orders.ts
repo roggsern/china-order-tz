@@ -12,6 +12,7 @@ import {
   type CustomerOrderProgress,
 } from "@/lib/order/customer-progress";
 import { parseReceivingChoiceSnapshot } from "@/lib/api/customer-receiving-choice";
+import { resolveCustomerOrderDisplayStatus } from "@/lib/order/customer-order-display-status";
 import { productService } from "@/lib/services/product-service.client";
 import { durationDaysFromSnapshots } from "@/lib/shipping/durations";
 import type { ShippingMethodCode } from "@/lib/shipping/types";
@@ -41,6 +42,8 @@ export type ApiCustomerOrder = {
   total: number | string;
   created_at: string;
   preview?: ApiCustomerOrderPreview;
+  progress?: CustomerOrderProgress | null;
+  receiving_choice?: ReturnType<typeof parseReceivingChoiceSnapshot>;
 };
 
 export type CustomerOrdersListResponse = {
@@ -59,6 +62,7 @@ export type CustomerOrderListItem = {
   id: string;
   orderNumber: string;
   status: OrderStatus;
+  displayStatusLabel: string;
   paymentStatus: PaymentStatus;
   createdAt: string;
   grandTotal: number;
@@ -67,6 +71,8 @@ export type CustomerOrderListItem = {
   imageUrl?: string;
   /** Raw commerce source from API (China/Dar/china/local). */
   source: string | null;
+  progress?: CustomerOrderProgress | null;
+  receivingChoice?: ReturnType<typeof parseReceivingChoiceSnapshot>;
 };
 
 export type CustomerOrdersFetchResult = {
@@ -475,11 +481,19 @@ export function mapApiCustomerOrderToListItem(order: ApiCustomerOrder): Customer
   const { orderStatus } = mapBackendStatuses(order.status);
   const paymentStatus = mapApiPaymentStatus(order.payment_status, order.status);
   const previewFields = resolveListItemPreview(order);
+  const progress = parseCustomerOrderProgress(order.progress);
+  const receivingChoice = parseReceivingChoiceSnapshot(order.receiving_choice);
+  const displayStatusLabel = resolveCustomerOrderDisplayStatus({
+    status: orderStatus,
+    progress,
+    receivingChoice,
+  });
 
   return {
     id: order.id,
     orderNumber: order.order_number,
     status: orderStatus,
+    displayStatusLabel,
     paymentStatus,
     createdAt: order.created_at,
     grandTotal: parseAmount(order.total),
@@ -487,6 +501,8 @@ export function mapApiCustomerOrderToListItem(order: ApiCustomerOrder): Customer
     itemCount: previewFields.itemCount,
     imageUrl: previewFields.imageUrl,
     source: order.source ?? null,
+    progress,
+    receivingChoice,
   };
 }
 

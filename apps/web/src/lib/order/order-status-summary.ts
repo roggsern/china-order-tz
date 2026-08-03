@@ -3,6 +3,7 @@ import {
   parseCustomerOrderProgress,
   type CustomerOrderProgress,
 } from "@/lib/order/customer-progress";
+import { resolveCustomerOrderDisplayStatus } from "@/lib/order/customer-order-display-status";
 import type { Order } from "@/lib/types/order";
 import type { PaymentStatus } from "@/lib/types/payment";
 import { ORDER_STATUS_LABELS } from "@/lib/payment/constants";
@@ -59,7 +60,7 @@ function fallbackCurrentStatus(order: Pick<Order, "status">): string {
 }
 
 export function buildCompactOrderStatusSummary(
-  order: Pick<Order, "status" | "paymentStatus" | "progress">,
+  order: Pick<Order, "status" | "paymentStatus" | "progress" | "receivingChoice">,
 ): CompactOrderStatusSummary {
   const progress = parseCustomerOrderProgress(order.progress);
   const completedLines: CompactOrderStatusLine[] = [];
@@ -78,7 +79,11 @@ export function buildCompactOrderStatusSummary(
 
     return {
       completedLines,
-      currentStatus: progress.current_label,
+      currentStatus: resolveCustomerOrderDisplayStatus({
+        status: order.status,
+        progress,
+        receivingChoice: order.receivingChoice,
+      }),
     };
   }
 
