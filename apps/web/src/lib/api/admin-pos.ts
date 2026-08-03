@@ -2,7 +2,7 @@ export type PosCatalogItem = {
   product_id: string;
   product_name: string;
   product_sku: string | null;
-  product_variant_id: string;
+  product_variant_id: string | null;
   variant_name: string | null;
   variant_sku: string | null;
   barcode: string | null;
@@ -10,6 +10,13 @@ export type PosCatalogItem = {
   currency: string;
   available_stock: number;
   in_stock: boolean;
+  is_simple?: boolean;
+  primary_image?: {
+    id?: string;
+    url?: string | null;
+    path?: string | null;
+    alt_text?: string | null;
+  } | null;
 };
 
 export type PosCartLine = PosCatalogItem & {

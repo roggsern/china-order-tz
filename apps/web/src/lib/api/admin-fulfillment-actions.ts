@@ -293,6 +293,16 @@ export async function executeFulfillmentAction(
       });
     }
 
+    case "CONFIRM_ARRIVED_TANZANIA": {
+      const shipmentId = String(action.meta?.shipment_id ?? model.shipment?.id ?? "");
+      if (!shipmentId) {
+        throw new AdminFulfillmentActionError("Shipment id is required.");
+      }
+      return postAdminTrackingEvent(shipmentId, {
+        event_type: String(action.meta?.event_type ?? "arrived_destination"),
+      });
+    }
+
     case "COMPLETE_DELIVERY": {
       const shipmentId = String(action.meta?.shipment_id ?? model.shipment?.id ?? "");
       if (!shipmentId) {

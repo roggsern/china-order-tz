@@ -339,4 +339,29 @@ class CompanyShippingReceivingChoiceTest extends TestCase
         ])->assertUnprocessable()
             ->assertJsonValidationErrors(['receiving_method']);
     }
+
+    public function test_order_detail_exposes_receiving_choice_after_arrival(): void
+    {
+        [$order] = $this->makeArrivedCompanyShippingOrder();
+        Sanctum::actingAs($order->user);
+
+        $this->getJson("/api/v1/orders/{$order->id}")
+            ->assertOk()
+            ->assertJsonPath('data.receiving_choice.eligible', true)
+            ->assertJsonPath('data.receiving_choice.can_select', true)
+            ->assertJsonPath('data.progress.current_key', CustomerOrderProgressKey::ArrivedTanzania->value);
+    }
+
+    public function test_order_list_includes_progress_and_receiving_choice_after_arrival(): void
+    {
+        [$order] = $this->makeArrivedCompanyShippingOrder();
+        Sanctum::actingAs($order->user);
+
+        $this->getJson('/api/v1/orders')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $order->id)
+            ->assertJsonPath('data.0.receiving_choice.eligible', true)
+            ->assertJsonPath('data.0.receiving_choice.can_select', true)
+            ->assertJsonPath('data.0.progress.current_key', CustomerOrderProgressKey::ArrivedTanzania->value);
+    }
 }

@@ -67,6 +67,11 @@ export async function getChinaStorefrontCategories(): Promise<ApiCatalogCategory
   return payload.data ?? [];
 }
 
+export async function getChinaStorefrontFeaturedCollections(): Promise<ApiCatalogCategory[]> {
+  const payload = await fetchJson<{ data?: ApiCatalogCategory[] }>("/featured-collections");
+  return payload.data ?? [];
+}
+
 export async function getChinaStorefrontBrands(category?: string): Promise<ApiCatalogBrand[]> {
   const search = new URLSearchParams();
   if (category?.trim()) search.set("category", category.trim());

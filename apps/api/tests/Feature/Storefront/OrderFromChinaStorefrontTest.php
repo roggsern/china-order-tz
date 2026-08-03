@@ -239,6 +239,70 @@ class OrderFromChinaStorefrontTest extends TestCase
         $this->assertContains($product->slug, $slugs);
     }
 
+    public function test_featured_collections_returns_china_categories_with_purchasable_products_only(): void
+    {
+        $this->seed(CategorySeeder::class);
+
+        $phones = Category::query()->where('slug', 'electronics-phones')->firstOrFail();
+        $brand = Brand::factory()->create(['is_active' => true]);
+        $product = $this->makeProduct($phones, $brand, 'featured-collection-phone', $this->china);
+        $this->ensureChinaListable($product);
+
+        $response = $this->getJson('/api/v1/storefront/china/featured-collections')
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $slugs = collect($response->json('data'))->pluck('slug')->all();
+
+        $this->assertContains('electronics', $slugs);
+        $this->assertNotContains('building-materials', $slugs);
+    }
+
+    public function test_featured_collections_excludes_tz_store_categories(): void
+    {
+        $this->seed(CategorySeeder::class);
+
+        $phones = Category::query()->where('slug', 'electronics-phones')->firstOrFail();
+        $brand = Brand::factory()->create(['is_active' => true]);
+        $product = $this->makeProduct($phones, $brand, 'featured-collection-guard', $this->china);
+        $this->ensureChinaListable($product);
+
+        $store = app(StoreService::class)->create([
+            'code' => 'ZION',
+            'name' => 'ZION MODE',
+            'slug' => 'zion-mode',
+            'is_active' => true,
+            'storefront_enabled' => true,
+            'storefront_visible' => true,
+        ]);
+
+        Category::query()->create([
+            'name' => 'Bras',
+            'slug' => 'zion-bras-featured-leak',
+            'origin' => CatalogOrigin::Tz,
+            'store_id' => $store->id,
+            'parent_id' => null,
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+
+        $names = collect($this->getJson('/api/v1/storefront/china/featured-collections')->assertOk()->json('data'))
+            ->pluck('name')
+            ->all();
+
+        $this->assertNotContains('Bras', $names);
+    }
+
+    public function test_featured_collections_is_empty_when_no_purchasable_products_exist(): void
+    {
+        $this->seed(CategorySeeder::class);
+
+        $this->getJson('/api/v1/storefront/china/featured-collections')
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data', []);
+    }
+
     public function test_tz_catalog_listing_is_unaffected_by_china_safety_filters(): void
     {
         $this->seed(StoreSeeder::class);

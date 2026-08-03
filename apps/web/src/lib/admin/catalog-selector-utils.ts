@@ -9,17 +9,21 @@ export type CategoryTreeSelection = {
 export function buildCategoryTreeOptions(
   categories: AdminCategory[],
 ): AdminAsyncOption[] {
+  const categoryIds = new Set(categories.map((item) => item.id));
+
   const roots = categories
-    .filter((item) => !item.parentId)
+    .filter((item) => !item.parentId || !categoryIds.has(item.parentId))
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const options: AdminAsyncOption[] = [];
 
   for (const root of roots) {
+    const isOrphan = Boolean(root.parentId && !categoryIds.has(root.parentId));
+
     options.push({
       id: root.id,
       label: root.name,
-      description: "Category",
+      description: isOrphan ? "Subcategory" : "Category",
       indent: 0,
     });
 

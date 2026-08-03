@@ -521,6 +521,57 @@ export function resolveFulfillmentStatusLabel(
   return STATUS_LABELS[status] ?? status.replaceAll("_", " ");
 }
 
+export type AdminFulfillmentPresentationInput = {
+  fulfillmentStatus: string;
+  fulfillmentStatusLabel?: string | null;
+  shipmentArrivedAt?: string | null;
+  journey?: "china" | "local";
+};
+
+/** Customer-facing operational label layered over unchanged fulfilment status. */
+export function resolveAdminFulfillmentPresentationStatus(
+  input: AdminFulfillmentPresentationInput,
+): string {
+  if (input.shipmentArrivedAt && input.fulfillmentStatus === "shipped") {
+    return "Arrived in Tanzania";
+  }
+
+  return resolveFulfillmentStatusLabel(
+    input.fulfillmentStatus,
+    input.fulfillmentStatusLabel,
+    { journey: input.journey },
+  );
+}
+
+/** Last-mile receiving preference chosen by the customer after Tanzania arrival. */
+export function resolveAdminCustomerReceivingChoiceLabel(
+  method?: string | null,
+): string | null {
+  const normalized = (method ?? "").trim().toLowerCase();
+
+  if (normalized === "self_pickup") {
+    return "Customer selected Self Pickup";
+  }
+
+  if (normalized === "negotiated_delivery") {
+    return "Customer requested delivery";
+  }
+
+  return null;
+}
+
+export function resolveAdminShipmentPresentationStatus(shipment: {
+  status: string;
+  status_label?: string | null;
+  arrived_at?: string | null;
+}): string {
+  if (shipment.arrived_at) {
+    return "Arrived in Tanzania";
+  }
+
+  return shipment.status_label?.trim() || shipment.status.replaceAll("_", " ");
+}
+
 export function resolveHistorySourceLabel(source?: string | null): string {
   if (!source) {
     return "System";
@@ -815,16 +866,22 @@ export function resolveRequiredAction(input: RequiredActionInput): {
       return { label: "Complete order when fulfilled", category: "needs_warehouse" };
     }
 
-    if (journey === "china" && isCompanyShippingDeliveryType(delivery_type) && shipment?.arrived_at) {
-      const method = (last_mile_receiving_method ?? "").toLowerCase();
-      if (!method) {
-        return { label: "Await customer choice", category: "needs_shipment" };
+    if (journey === "china" && isCompanyShippingDeliveryType(delivery_type)) {
+      if (shipment && !shipment.arrived_at) {
+        return { label: "Await Tanzania arrival confirmation", category: "needs_shipment" };
       }
-      if (method === "self_pickup") {
-        return { label: "Await customer collection", category: "needs_shipment" };
-      }
-      if (method === "negotiated_delivery") {
-        return { label: "Await delivery completion", category: "needs_shipment" };
+
+      if (shipment?.arrived_at) {
+        const method = (last_mile_receiving_method ?? "").toLowerCase();
+        if (!method) {
+          return { label: "Await customer receiving choice", category: "needs_shipment" };
+        }
+        if (method === "self_pickup") {
+          return { label: "Customer will pick up order", category: "needs_shipment" };
+        }
+        if (method === "negotiated_delivery") {
+          return { label: "Customer requested delivery", category: "needs_shipment" };
+        }
       }
     }
 
@@ -858,7 +915,12 @@ export function mapAdminFulfillmentToQueueRow(
     additionalItemCount: product?.additional_item_count ?? 0,
     journeyLabel: resolveFulfillmentJourneyLabel(row.strategy, source),
     journeyKey,
-    currentStage: resolveFulfillmentStatusLabel(row.status, row.status_label),
+    currentStage: resolveAdminFulfillmentPresentationStatus({
+      fulfillmentStatus: row.status,
+      fulfillmentStatusLabel: row.status_label,
+      shipmentArrivedAt: row.shipment_arrived_at,
+      journey: journeyKey,
+    }),
     status: row.status,
     requiredAction: label,
     actionCategory: category,
@@ -899,10 +961,12 @@ export function mapOperationalModelToQueueRow(
     additionalItemCount: product?.additional_item_count ?? 0,
     journeyLabel: resolveFulfillmentJourneyLabel(model.fulfillment.strategy, source),
     journeyKey,
-    currentStage: resolveFulfillmentStatusLabel(
-      model.fulfillment.status,
-      model.fulfillment.status_label,
-    ),
+    currentStage: resolveAdminFulfillmentPresentationStatus({
+      fulfillmentStatus: model.fulfillment.status,
+      fulfillmentStatusLabel: model.fulfillment.status_label,
+      shipmentArrivedAt: model.shipment?.arrived_at,
+      journey: journeyKey,
+    }),
     status: model.fulfillment.status,
     requiredAction: label,
     actionCategory: category,

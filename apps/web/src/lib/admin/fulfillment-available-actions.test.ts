@@ -929,6 +929,57 @@ describe("Local manual logistics actions", () => {
     assert.equal(actions.some((action) => action.key === "MARK_CUSTOMER_COLLECTED"), false);
   });
 
+  it("offers confirm arrived tanzania when shipped and shipment has not arrived", () => {
+    const actions = resolve({
+      model: baseModel({
+        fulfillment: { id: "ff-1", status: "shipped", strategy: "china" },
+        order: {
+          id: "ord-1",
+          order_number: "COTZ-001",
+          delivery_type: "company_shipping",
+        },
+        shipment: {
+          id: "ship-1",
+          status: "in_transit",
+        },
+      }),
+      permissions: ["orders.ship"],
+    });
+
+    const arrived = actions.find((action) => action.key === "CONFIRM_ARRIVED_TANZANIA");
+    assert.ok(arrived?.available);
+    assert.equal(arrived?.label, "Confirm Arrived Tanzania");
+    assert.equal(arrived?.meta?.event_type, "arrived_destination");
+    assert.equal(
+      selectPrimaryFulfillmentAction(actions)?.key,
+      "CONFIRM_ARRIVED_TANZANIA",
+    );
+  });
+
+  it("does not offer confirm arrived tanzania after shipment arrival is recorded", () => {
+    const actions = resolve({
+      model: baseModel({
+        fulfillment: { id: "ff-1", status: "shipped", strategy: "china" },
+        order: {
+          id: "ord-1",
+          order_number: "COTZ-001",
+          delivery_type: "company_shipping",
+        },
+        shipment: {
+          id: "ship-1",
+          status: "arrived",
+          arrived_at: "2026-07-28T08:00:00.000Z",
+        },
+      }),
+      permissions: ["orders.ship"],
+    });
+
+    assert.equal(
+      actions.some((action) => action.key === "CONFIRM_ARRIVED_TANZANIA" && action.available),
+      false,
+    );
+  });
+
   it("hides complete delivery for company shipping before handover completion", () => {
     const actions = resolve({
       model: baseModel({
@@ -946,6 +997,7 @@ describe("Local manual logistics actions", () => {
       permissions: ["orders.ship"],
     });
 
+    assert.ok(actions.some((action) => action.key === "CONFIRM_ARRIVED_TANZANIA" && action.available));
     assert.equal(actions.some((action) => action.key === "COMPLETE_DELIVERY"), false);
     assert.equal(actions.some((action) => action.key === "MARK_CUSTOMER_COLLECTED"), false);
     assert.equal(actions.some((action) => action.key === "MARK_CUSTOMER_DELIVERED"), false);

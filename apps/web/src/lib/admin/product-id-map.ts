@@ -21,7 +21,8 @@ export type CatalogProductEditTab =
   | "specifications"
   | "variants"
   | "shipping"
-  | "stock";
+  | "stock"
+  | "commercial-availability";
 
 const EDIT_TABS = new Set<CatalogProductEditTab>([
   "details",
@@ -30,6 +31,7 @@ const EDIT_TABS = new Set<CatalogProductEditTab>([
   "variants",
   "shipping",
   "stock",
+  "commercial-availability",
 ]);
 
 /** Same hash used by `mapAdminApiProductToProduct` for legacy `Product.id`. */

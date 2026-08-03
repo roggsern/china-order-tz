@@ -1,6 +1,28 @@
 import type { ProductPublishReadinessResult } from "@/lib/admin/product-publish-readiness";
 import type { CommerceJourney } from "@/lib/api/admin-catalog";
 
+export type ProductCreationPricingModel = "simple" | "variants";
+
+export type ApiProductPricingModel = "simple" | "variant";
+
+export function mapWizardPricingModelToApi(
+  pricingModel: ProductCreationPricingModel,
+): ApiProductPricingModel {
+  return pricingModel === "variants" ? "variant" : "simple";
+}
+
+export function mapApiPricingModelToWizard(
+  pricingModel: string | null | undefined,
+): ProductCreationPricingModel {
+  return pricingModel === "variant" ? "variants" : "simple";
+}
+
+export function resolveWizardPricingModelFromProduct(
+  pricingModel: string | null | undefined,
+): ProductCreationPricingModel {
+  return mapApiPricingModelToWizard(pricingModel);
+}
+
 export type ProductCreationWizardStepId =
   | "basic"
   | "media"
@@ -20,6 +42,7 @@ export type ProductCreationWizardFormSnapshot = {
   id?: string;
   name: string;
   commerceJourney: CommerceJourney | "";
+  pricingModel: ProductCreationPricingModel;
   departmentId: string;
   categoryId: string;
   subcategoryId: string;
@@ -55,32 +78,94 @@ const WIZARD_STEP_STORAGE_PREFIX = "admin-product-wizard-step:";
 
 export function resolveProductCreationWizardSteps(
   commerceJourney: CommerceJourney | "",
+  pricingModel: ProductCreationPricingModel = "simple",
 ): ProductCreationWizardStep[] {
-  const core: ProductCreationWizardStep[] = [
+  if (commerceJourney !== "china" && commerceJourney !== "tz") {
+    return [{ id: "basic", label: "Basic information" }];
+  }
+
+  const basic: ProductCreationWizardStep[] = [
     { id: "basic", label: "Basic information" },
     { id: "media", label: "Media" },
+  ];
+
+  if (pricingModel === "variants") {
+    if (commerceJourney === "china") {
+      return [
+        ...basic,
+        { id: "variants", label: "Variants" },
+        { id: "shipping", label: "Shipping" },
+        { id: "china-import", label: "China import" },
+        { id: "review", label: "Review & publish" },
+      ];
+    }
+
+    return [
+      ...basic,
+      { id: "variants", label: "Variants" },
+      { id: "review", label: "Review & publish" },
+    ];
+  }
+
+  const simpleCore: ProductCreationWizardStep[] = [
+    ...basic,
     { id: "pricing", label: "Pricing" },
-    { id: "variants", label: "Variants" },
   ];
 
   if (commerceJourney === "china") {
     return [
-      ...core,
+      ...simpleCore,
       { id: "shipping", label: "Shipping" },
       { id: "china-import", label: "China import" },
       { id: "review", label: "Review & publish" },
     ];
   }
 
-  if (commerceJourney === "tz") {
-    return [
-      ...core,
-      { id: "store", label: "Store" },
-      { id: "review", label: "Review & publish" },
-    ];
+  return [...simpleCore, { id: "review", label: "Review & publish" }];
+}
+
+export function inferProductCreationPricingModel(input: {
+  persistedPricingModel?: string | null;
+  variantCount: number;
+  sellableVariantCount: number;
+  price: number;
+  hasSimpleInventoryPolicy: boolean;
+}): ProductCreationPricingModel {
+  if (input.persistedPricingModel === "simple" || input.persistedPricingModel === "variant") {
+    return mapApiPricingModelToWizard(input.persistedPricingModel);
   }
 
-  return [{ id: "basic", label: "Basic information" }];
+  if (input.sellableVariantCount > 0 || input.variantCount > 0) {
+    return "variants";
+  }
+
+  if (input.price > 0 || input.hasSimpleInventoryPolicy) {
+    return "simple";
+  }
+
+  return "simple";
+}
+
+export function wizardSavePricingFields(
+  pricingModel: ProductCreationPricingModel,
+  price: number,
+  costPrice: number | null,
+): { price: number; cost_price: number | null } {
+  if (pricingModel === "variants") {
+    return { price: 0, cost_price: null };
+  }
+
+  return { price, cost_price: costPrice };
+}
+
+function hasBasicTaxonomyScope(form: ProductCreationWizardFormSnapshot): boolean {
+  if (form.commerceJourney === "tz") {
+    return form.storeId.trim().length > 0;
+  }
+  if (form.commerceJourney === "china") {
+    return form.departmentId.trim().length > 0;
+  }
+  return false;
 }
 
 export function isWizardStepComplete(
@@ -95,7 +180,7 @@ export function isWizardStepComplete(
         input.form.name.trim().length > 0 &&
         (input.form.id !== undefined ||
           (input.form.commerceJourney === "china" || input.form.commerceJourney === "tz")) &&
-        input.form.departmentId.trim().length > 0 &&
+        hasBasicTaxonomyScope(input.form) &&
         leafCategoryId.trim().length > 0 &&
         input.form.catalogProductTypeId.trim().length > 0
       );
@@ -173,7 +258,10 @@ export function validateWizardBasicStep(form: ProductCreationWizardFormSnapshot)
   if (!form.id && form.commerceJourney !== "china" && form.commerceJourney !== "tz") {
     return "Select a commerce context.";
   }
-  if (!form.departmentId.trim()) {
+  if (form.commerceJourney === "tz" && !form.storeId.trim()) {
+    return "Store is required.";
+  }
+  if (form.commerceJourney === "china" && !form.departmentId.trim()) {
     return "Department is required.";
   }
   if (!form.subcategoryId.trim() && !form.categoryId.trim()) {
@@ -181,6 +269,12 @@ export function validateWizardBasicStep(form: ProductCreationWizardFormSnapshot)
   }
   if (!form.catalogProductTypeId.trim()) {
     return "Product type is required.";
+  }
+  if (
+    form.pricingModel !== "simple" &&
+    form.pricingModel !== "variants"
+  ) {
+    return "Select whether this product uses simple pricing or variants.";
   }
   return null;
 }
@@ -194,9 +288,6 @@ export function validateWizardStepBeforeContinue(
   }
   if (stepId === "china-import" && form.commerceJourney === "china" && !form.supplierId.trim()) {
     return "Select a supplier for China import products.";
-  }
-  if (stepId === "store" && form.commerceJourney === "tz" && !form.storeId.trim()) {
-    return "Select a store for Buy From Tanzania products.";
   }
   return null;
 }

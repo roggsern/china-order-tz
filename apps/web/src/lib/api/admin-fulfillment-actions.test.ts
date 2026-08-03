@@ -351,4 +351,42 @@ describe("admin fulfilment action execution feedback", () => {
     assert.match(sanitized, /Complete fulfilment preparation/i);
     assert.equal(sanitized.toLowerCase().includes("pickup"), false);
   });
+
+  it("records arrived_destination tracking event for confirm arrived tanzania", async () => {
+    const originalFetch = globalThis.fetch;
+    let trackingBody: unknown;
+
+    globalThis.fetch = mock.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/shipments/ship-1/tracking")) {
+        trackingBody = init?.body ? JSON.parse(String(init.body)) : null;
+        return Response.json({ success: true, data: { id: "evt-1" } });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    const shippedModel: FulfillmentOperationalModel = {
+      ...model,
+      fulfillment: { id: "ff-1", status: "shipped", strategy: "china" },
+      shipment: { id: "ship-1", status: "in_transit" },
+    };
+
+    try {
+      await executeFulfillmentAction(shippedModel, {
+        key: "CONFIRM_ARRIVED_TANZANIA",
+        label: "Confirm Arrived Tanzania",
+        description: "Record Tanzania arrival",
+        requires_confirmation: true,
+        available: true,
+        meta: {
+          shipment_id: "ship-1",
+          event_type: "arrived_destination",
+        },
+      });
+
+      assert.deepEqual(trackingBody, { event_type: "arrived_destination" });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

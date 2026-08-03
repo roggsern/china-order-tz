@@ -15,7 +15,9 @@ import {
   resolveOperationalHealth,
   resolvePaymentStatusLabel,
   resolveRequiredAction,
-  resolveFulfillmentStatusLabel,
+  resolveAdminCustomerReceivingChoiceLabel,
+  resolveAdminFulfillmentPresentationStatus,
+  resolveAdminShipmentPresentationStatus,
   type FulfillmentOperationalModel,
 } from "@/lib/admin/fulfillment-operational";
 import { buildCustomerProgressDisplayTimeline } from "@/lib/order/customer-progress";
@@ -230,10 +232,14 @@ export function AdminFulfillmentOperationalWorkspace({
     model.order?.source ?? model.order?.journey,
   );
   const journeyKey = showChina ? "china" : "local";
-  const statusLabel = resolveFulfillmentStatusLabel(
-    model.fulfillment.status,
-    model.fulfillment.status_label,
-    { journey: journeyKey },
+  const statusLabel = resolveAdminFulfillmentPresentationStatus({
+    fulfillmentStatus: model.fulfillment.status,
+    fulfillmentStatusLabel: model.fulfillment.status_label,
+    shipmentArrivedAt: model.shipment?.arrived_at,
+    journey: journeyKey,
+  });
+  const receivingChoiceLabel = resolveAdminCustomerReceivingChoiceLabel(
+    model.order?.last_mile_receiving_method,
   );
   const paymentLabel = resolvePaymentStatusLabel(model.order?.status);
   const ageLabel = formatFulfillmentAge(model.fulfillment.created_at);
@@ -243,6 +249,7 @@ export function AdminFulfillmentOperationalWorkspace({
     strategy: model.fulfillment.strategy,
     source: model.order?.source ?? model.order?.journey,
     delivery_type: model.order?.delivery_type,
+    last_mile_receiving_method: model.order?.last_mile_receiving_method,
     china: model.china,
     warehouse: model.warehouse,
     shipment: model.shipment,
@@ -276,6 +283,9 @@ export function AdminFulfillmentOperationalWorkspace({
               <MetricCard label="Fulfilment status" value={statusLabel} />
               <MetricCard label="Payment status" value={paymentLabel} />
               <MetricCard label="Age" value={ageLabel} />
+              {receivingChoiceLabel ? (
+                <MetricCard label="Customer receiving" value={receivingChoiceLabel} />
+              ) : null}
             </div>
           </div>
 
@@ -462,7 +472,7 @@ export function AdminFulfillmentOperationalWorkspace({
             <div className="grid gap-3 sm:grid-cols-2">
               <MetricCard
                 label="Status"
-                value={model.shipment.status_label ?? model.shipment.status}
+                value={resolveAdminShipmentPresentationStatus(model.shipment)}
               />
               <MetricCard label="Carrier" value={model.shipment.carrier ?? "—"} />
               <MetricCard label="Tracking" value={model.shipment.tracking_number ?? "—"} />
@@ -471,6 +481,7 @@ export function AdminFulfillmentOperationalWorkspace({
                 value={model.shipment.transport_mode?.replaceAll("_", " ") ?? "—"}
               />
               <MetricCard label="Booked" value={formatTimestamp(model.shipment.booked_at)} />
+              <MetricCard label="Arrived" value={formatTimestamp(model.shipment.arrived_at)} />
               <MetricCard label="Delivered" value={formatTimestamp(model.shipment.delivered_at)} />
             </div>
           ) : (

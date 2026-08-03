@@ -80,18 +80,31 @@ class AdminProductCreationWizardTest extends TestCase
         ]);
     }
 
-    public function test_create_tz_draft_without_store_succeeds_for_wizard_flow(): void
+    public function test_create_tz_draft_with_store_taxonomy_succeeds(): void
     {
         Sanctum::actingAs(
             Admin::factory()->withPermissions([AdminPermissions::CATALOG_CREATE])->create(),
         );
 
-        ['catalogType' => $catalogType, 'tzChannelId' => $tzChannelId] = $this->catalogFixture();
+        $store = Store::query()->create([
+            'code' => 'WIZTZ',
+            'name' => 'Wizard TZ Store',
+            'slug' => 'wizard-tz-store',
+            'is_active' => true,
+        ]);
+        $root = Category::factory()->forStore($store)->create(['name' => 'Wigs', 'parent_id' => null]);
+        $subcategory = Category::factory()->forStore($store)->child($root)->create(['name' => 'Lace Wigs']);
+        $catalogType = CatalogProductType::factory()->create([
+            'subcategory_id' => $subcategory->id,
+            'is_active' => true,
+        ]);
+        $tzChannelId = CommerceChannel::query()->where('code', 'TZ_LOCAL')->value('id');
 
         $this->postJson('/api/v1/admin/products', [
             'name' => 'Wizard Draft TZ',
             'catalog_product_type_id' => $catalogType->id,
             'commerce_channel_id' => $tzChannelId,
+            'store_id' => $store->id,
             'lifecycle_status' => ProductLifecycleStatus::Draft->value,
             'price' => 0,
         ])
@@ -100,7 +113,7 @@ class AdminProductCreationWizardTest extends TestCase
 
         $product = Product::query()->where('name', 'Wizard Draft TZ')->first();
         $this->assertNotNull($product);
-        $this->assertNull($product->store_id);
+        $this->assertSame($store->id, $product->store_id);
     }
 
     public function test_update_draft_step_fields_without_store_or_supplier_succeeds(): void
@@ -167,18 +180,37 @@ class AdminProductCreationWizardTest extends TestCase
             ])->create(),
         );
 
-        ['catalogType' => $catalogType, 'tzChannelId' => $tzChannelId] = $this->catalogFixture();
+        ['catalogType' => $catalogType, 'tzChannelId' => $tzChannelId, 'store' => $store] = array_merge(
+            $this->catalogFixture(),
+            [
+                'store' => Store::query()->create([
+                    'code' => 'PUBTZ',
+                    'name' => 'Publish TZ Store',
+                    'slug' => 'publish-tz-store',
+                    'is_active' => true,
+                ]),
+            ],
+        );
+
+        $root = Category::factory()->forStore($store)->create(['parent_id' => null]);
+        $subcategory = Category::factory()->forStore($store)->child($root)->create();
+        $tzCatalogType = CatalogProductType::factory()->create([
+            'subcategory_id' => $subcategory->id,
+            'is_active' => true,
+        ]);
 
         $create = $this->postJson('/api/v1/admin/products', [
             'name' => 'Publish Guard TZ',
-            'catalog_product_type_id' => $catalogType->id,
+            'catalog_product_type_id' => $tzCatalogType->id,
             'commerce_channel_id' => $tzChannelId,
+            'store_id' => $store->id,
             'lifecycle_status' => ProductLifecycleStatus::Draft->value,
         ])->assertCreated();
 
         $productId = $create->json('data.id');
 
         $this->putJson('/api/v1/admin/products/'.$productId, [
+            'store_id' => null,
             'lifecycle_status' => ProductLifecycleStatus::Active->value,
         ])
             ->assertUnprocessable()

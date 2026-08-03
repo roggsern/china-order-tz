@@ -214,6 +214,8 @@ export type Product = {
   emoji: string;
   categorySlug: string;
   stock: number;
+  /** Customer API commerce channel code (e.g. CHINA_IMPORT, TZ_LOCAL). */
+  commerceChannelCode?: string | null;
   /** Policy-level purchase eligibility from customer product detail API. */
   isPurchasable?: boolean;
   availabilityStatus?: import("@/lib/catalog/product-availability").ProductAvailabilityStatus;

@@ -36,10 +36,13 @@ class TzStoreCategorySeeder extends Seeder
                 'Rings',
             ],
             'rovi-beauty' => [
-                'Wigs',
-                'Skincare',
-                'Lotions',
-                'Beauty Accessories',
+                ['name' => 'Wigs', 'slug' => 'rovi-beauty-wigs'],
+                ['name' => 'Hair Care', 'slug' => 'rovi-beauty-hair-care'],
+                ['name' => 'Skin Care', 'slug' => 'rovi-beauty-skincare'],
+                ['name' => 'Body Lotion', 'slug' => 'rovi-beauty-lotions'],
+                ['name' => 'Makeup', 'slug' => 'rovi-beauty-makeup'],
+                ['name' => 'Perfume', 'slug' => 'rovi-beauty-perfume'],
+                ['name' => 'Beauty Accessories', 'slug' => 'rovi-beauty-beauty-accessories'],
             ],
         ];
 
@@ -49,9 +52,12 @@ class TzStoreCategorySeeder extends Seeder
                 continue;
             }
 
-            foreach (array_values($names) as $index => $name) {
-                // Global slug uniqueness — prefix with store so China taxonomy is untouched.
-                $slug = Str::slug($storeSlug.'-'.Str::slug($name));
+            foreach (array_values($names) as $index => $entry) {
+                $name = is_array($entry) ? $entry['name'] : $entry;
+                $slug = is_array($entry)
+                    ? $entry['slug']
+                    : Str::slug($storeSlug.'-'.Str::slug($name));
+
                 Category::query()->updateOrCreate(
                     ['slug' => $slug],
                     [

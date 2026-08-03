@@ -9,6 +9,10 @@ export type ProductUnavailabilityReason =
   | "no_purchasable_path"
   | "unavailable";
 
+function isChinaImportChannel(commerceChannelCode?: string | null): boolean {
+  return commerceChannelCode === "CHINA_IMPORT";
+}
+
 export function isProductPurchaseUnavailable(product: {
   isPurchasable?: boolean;
   availabilityStatus?: ProductAvailabilityStatus;
@@ -27,6 +31,7 @@ export function isProductPurchaseUnavailable(product: {
 export function isProductCardPurchaseDisabled(product: {
   isPurchasable?: boolean;
   availabilityStatus?: ProductAvailabilityStatus;
+  commerceChannelCode?: string | null;
   stock: number;
 }): boolean {
   if (product.availabilityStatus === "unavailable" || product.availabilityStatus === "out_of_stock") {
@@ -38,6 +43,10 @@ export function isProductCardPurchaseDisabled(product: {
   }
 
   if (product.availabilityStatus === "available") {
+    return false;
+  }
+
+  if (isChinaImportChannel(product.commerceChannelCode)) {
     return false;
   }
 
@@ -72,6 +81,7 @@ export function resolvePurchaseDisabledLabel(input: {
 export function resolveProductCardAvailabilityOverlay(product: {
   isPurchasable?: boolean;
   availabilityStatus?: ProductAvailabilityStatus;
+  commerceChannelCode?: string | null;
   stock: number;
 }): string | null {
   if (product.availabilityStatus === "unavailable") {
@@ -86,7 +96,7 @@ export function resolveProductCardAvailabilityOverlay(product: {
     return "Currently unavailable";
   }
 
-  if (product.stock <= 0) {
+  if (product.stock <= 0 && !isChinaImportChannel(product.commerceChannelCode)) {
     return "Out of Stock";
   }
 

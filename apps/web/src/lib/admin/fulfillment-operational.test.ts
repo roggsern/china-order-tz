@@ -15,6 +15,9 @@ import {
   resolveOperationalHealth,
   resolveQueueRowVisualIndicator,
   resolveRequiredAction,
+  resolveAdminCustomerReceivingChoiceLabel,
+  resolveAdminFulfillmentPresentationStatus,
+  resolveAdminShipmentPresentationStatus,
 } from "@/lib/admin/fulfillment-operational";
 
 const NOW = Date.parse("2026-07-27T08:00:00.000Z");
@@ -333,7 +336,7 @@ describe("fulfillment-operational RC1 queue required actions", () => {
     });
 
     const awaitingChoice = mapAdminFulfillmentToQueueRow(baseRow, NOW);
-    assert.equal(awaitingChoice.requiredAction, "Await customer choice");
+    assert.equal(awaitingChoice.requiredAction, "Await customer receiving choice");
 
     const awaitingCollection = mapAdminFulfillmentToQueueRow(
       {
@@ -345,7 +348,7 @@ describe("fulfillment-operational RC1 queue required actions", () => {
       },
       NOW,
     );
-    assert.equal(awaitingCollection.requiredAction, "Await customer collection");
+    assert.equal(awaitingCollection.requiredAction, "Customer will pick up order");
 
     const awaitingDelivery = mapAdminFulfillmentToQueueRow(
       {
@@ -357,7 +360,60 @@ describe("fulfillment-operational RC1 queue required actions", () => {
       },
       NOW,
     );
-    assert.equal(awaitingDelivery.requiredAction, "Await delivery completion");
+    assert.equal(awaitingDelivery.requiredAction, "Customer requested delivery");
+  });
+
+  it("maps shipped company orders without arrival to Tanzania arrival confirmation", () => {
+    const row = mapAdminFulfillmentToQueueRow(
+      makeListRow({
+        strategy: "china",
+        status: "shipped",
+        shipment_status: "in_transit",
+        order: {
+          id: "ord-1",
+          order_number: "COTZ-20260725-000001",
+          source: "china_import",
+          delivery_type: "company_shipping",
+          product: { name: "iPhone 16 Pro", quantity: 1 },
+          customer: { id: "u1", name: "Jane Doe", email: "jane@example.com" },
+        },
+      }),
+      NOW,
+    );
+
+    assert.equal(row.requiredAction, "Await Tanzania arrival confirmation");
+  });
+
+  it("resolves required action for shipped company orders awaiting Tanzania arrival", () => {
+    const action = resolveRequiredAction({
+      status: "shipped",
+      strategy: "china",
+      source: "china_import",
+      delivery_type: "company_shipping",
+      shipment: {
+        status: "in_transit",
+        arrived_at: null,
+      },
+    });
+
+    assert.equal(action.label, "Await Tanzania arrival confirmation");
+    assert.equal(action.category, "needs_shipment");
+  });
+
+  it("resolves required action for arrived company orders awaiting receiving choice", () => {
+    const action = resolveRequiredAction({
+      status: "shipped",
+      strategy: "china",
+      source: "china_import",
+      delivery_type: "company_shipping",
+      shipment: {
+        status: "arrived",
+        arrived_at: "2026-07-28T08:00:00.000Z",
+      },
+    });
+
+    assert.equal(action.label, "Await customer receiving choice");
+    assert.equal(action.category, "needs_shipment");
   });
 
   it("keeps TZ local required actions unchanged", () => {
@@ -393,7 +449,83 @@ describe("fulfillment-operational RC1 queue required actions", () => {
       },
     });
 
-    assert.equal(action.label, "Await customer collection");
+    assert.equal(action.label, "Customer will pick up order");
     assert.equal(action.category, "needs_shipment");
+  });
+});
+
+describe("admin fulfilment presentation layer", () => {
+  it("shows Arrived in Tanzania when shipment arrived_at is set", () => {
+    const label = resolveAdminFulfillmentPresentationStatus({
+      fulfillmentStatus: "shipped",
+      fulfillmentStatusLabel: "Shipped",
+      shipmentArrivedAt: "2026-07-28T08:00:00.000Z",
+      journey: "china",
+    });
+
+    assert.equal(label, "Arrived in Tanzania");
+  });
+
+  it("keeps Shipped label before Tanzania arrival", () => {
+    const label = resolveAdminFulfillmentPresentationStatus({
+      fulfillmentStatus: "shipped",
+      fulfillmentStatusLabel: "Shipped",
+      shipmentArrivedAt: null,
+      journey: "china",
+    });
+
+    assert.equal(label, "Shipped");
+  });
+
+  it("maps queue row current stage to Arrived in Tanzania after arrival", () => {
+    const row = mapAdminFulfillmentToQueueRow(
+      makeListRow({
+        strategy: "china",
+        status: "shipped",
+        status_label: "Shipped",
+        shipment_arrived_at: "2026-07-28T08:00:00.000Z",
+        order: {
+          id: "ord-1",
+          order_number: "COTZ-20260725-000001",
+          source: "china_import",
+          delivery_type: "company_shipping",
+          product: { name: "iPhone 16 Pro", quantity: 1 },
+          customer: { id: "u1", name: "Jane Doe", email: "jane@example.com" },
+        },
+      }),
+      NOW,
+    );
+
+    assert.equal(row.currentStage, "Arrived in Tanzania");
+    assert.equal(row.status, "shipped");
+  });
+
+  it("shows shipment card status as Arrived in Tanzania when arrived_at exists", () => {
+    const status = resolveAdminShipmentPresentationStatus({
+      status: "in_transit",
+      status_label: "In transit",
+      arrived_at: "2026-07-28T08:00:00.000Z",
+    });
+
+    assert.equal(status, "Arrived in Tanzania");
+  });
+
+  it("displays customer self pickup selection", () => {
+    assert.equal(
+      resolveAdminCustomerReceivingChoiceLabel("self_pickup"),
+      "Customer selected Self Pickup",
+    );
+  });
+
+  it("displays customer delivery request selection", () => {
+    assert.equal(
+      resolveAdminCustomerReceivingChoiceLabel("negotiated_delivery"),
+      "Customer requested delivery",
+    );
+  });
+
+  it("returns null when customer has not selected receiving method", () => {
+    assert.equal(resolveAdminCustomerReceivingChoiceLabel(null), null);
+    assert.equal(resolveAdminCustomerReceivingChoiceLabel(""), null);
   });
 });

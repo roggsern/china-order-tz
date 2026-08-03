@@ -14,6 +14,7 @@ export type FulfillmentActionKey =
   | "MARK_EXPORT_READY"
   | "CREATE_SHIPMENT"
   | "DISPATCH_SHIPMENT"
+  | "CONFIRM_ARRIVED_TANZANIA"
   | "MARK_READY"
   | "ASSIGN_DELIVERY"
   | "COMPLETE_DELIVERY"
@@ -554,6 +555,33 @@ function resolveCompanyShippingActions(
     );
   }
 
+  if (
+    shipment &&
+    fulfillment.status === "shipped" &&
+    !shipment.arrived_at &&
+    isCompanyShippingDelivery(order?.delivery_type)
+  ) {
+    pushAction(
+      actions,
+      {
+        key: "CONFIRM_ARRIVED_TANZANIA",
+        label: "Confirm Arrived Tanzania",
+        description: "Record Tanzania arrival and notify the customer to choose pickup or delivery.",
+        requires_confirmation: true,
+        confirmation_title: "Confirm arrived in Tanzania?",
+        confirmation_message:
+          "This records an arrival tracking event, notifies the customer, and opens the last-mile receiving choice.",
+        available: true,
+        permission: "orders.ship",
+        meta: {
+          shipment_id: shipment.id,
+          event_type: "arrived_destination",
+        },
+      },
+      permissions,
+    );
+  }
+
   if (isCompanyHandoverReady(model)) {
     const receivingMethod = (order?.last_mile_receiving_method ?? "").toLowerCase();
 
@@ -946,6 +974,7 @@ export function selectPrimaryFulfillmentAction(
     byKey.get("MARK_EXPORT_READY"),
     byKey.get("CREATE_SHIPMENT"),
     byKey.get("DISPATCH_SHIPMENT"),
+    byKey.get("CONFIRM_ARRIVED_TANZANIA"),
     byKey.get("MARK_CUSTOMER_COLLECTED"),
     byKey.get("MARK_CUSTOMER_DELIVERED"),
     byKey.get("COMPLETE_DELIVERY"),
@@ -997,6 +1026,8 @@ const ACTION_IMPACT: Partial<Record<FulfillmentActionKey, string>> = {
   MARK_EXPORT_READY: "Marks goods export-ready for shipment eligibility.",
   CREATE_SHIPMENT: "Generates shipment and starts logistics tracking for the customer.",
   DISPATCH_SHIPMENT: "Moves shipment in transit and updates customer shipping progress.",
+  CONFIRM_ARRIVED_TANZANIA:
+    "Records Tanzania arrival, notifies the customer, and opens last-mile receiving choice.",
   MARK_CUSTOMER_COLLECTED: "Confirms customer collection and completes China company shipping fulfilment.",
   MARK_CUSTOMER_DELIVERED: "Confirms customer delivery and completes China company shipping fulfilment.",
   MARK_READY: "Completes warehouse prep and moves fulfilment toward shipping.",

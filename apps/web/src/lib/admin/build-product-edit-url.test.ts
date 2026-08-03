@@ -79,6 +79,8 @@ test("Case 2: AdminCatalogProduct missing policy fields => legacy URL", () => {
     slug: "catalog-phone",
     sku: null,
     price: 1000,
+    pricingModel: "simple",
+    costPrice: null,
     shortDescription: "",
     description: "",
     status: "draft",

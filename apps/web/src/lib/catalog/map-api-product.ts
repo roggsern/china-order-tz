@@ -223,6 +223,7 @@ export function mapApiProductCardToCatalogProduct(product: ApiCatalogProductCard
     emoji: DEFAULT_EMOJI,
     categorySlug: product.category?.slug ?? "uncategorized",
     stock,
+    commerceChannelCode: product.commerce_channel_code,
     airCost,
     seaCost,
     shippingOptions: shippingOptions.length > 0 ? shippingOptions : undefined,
@@ -274,6 +275,7 @@ export function mapApiProductDetailToCatalogProduct(product: ApiCatalogProductDe
   return {
     ...card,
     stock,
+    commerceChannelCode: product.commerce_channel?.code ?? product.commerce_channel_code,
     badges: resolveProductBadges(card.badge, stock),
     description: product.description?.trim() || card.description,
     shortDescription: product.short_description?.trim() || card.shortDescription,

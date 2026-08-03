@@ -6,6 +6,7 @@ use App\Enums\CatalogOrigin;
 use App\Models\Admin;
 use App\Models\Category;
 use App\Models\CommerceChannel;
+use App\Models\Department;
 use App\Models\Product;
 use App\Models\ProductType;
 use App\Models\Supplier;
@@ -24,15 +25,16 @@ class AdminProductCatalogEngineTest extends TestCase
         Sanctum::actingAs(Admin::factory()->create());
 
         $type = ProductType::query()->where('slug', 'phones')->firstOrFail();
+        $department = Department::factory()->create();
 
-        $root = Category::factory()->create([
+        $root = Category::factory()->forDepartment($department)->create([
             'origin' => CatalogOrigin::China,
             'product_type_id' => $type->id,
             'name' => 'Electronics',
             'slug' => 'electronics-root-engine',
         ]);
 
-        $leaf = Category::factory()->child($root)->create([
+        $leaf = Category::factory()->forDepartment($department)->child($root)->create([
             'origin' => CatalogOrigin::China,
             'name' => 'Smartphones',
             'slug' => 'electronics-smartphones-engine',

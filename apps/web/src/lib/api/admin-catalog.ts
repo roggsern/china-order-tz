@@ -158,7 +158,9 @@ export type AdminApiProduct = {
   description?: string | null;
   short_description?: string | null;
   price: string | number;
+  pricing_model?: string | null;
   compare_at_price?: string | number | null;
+  cost_price?: string | number | null;
   commerce_channel_id?: string | null;
   store_id?: string | null;
   fulfillment_source?: string | null;
@@ -240,6 +242,8 @@ export type AdminCatalogProduct = {
   slug: string;
   sku: string | null;
   price: number;
+  pricingModel: "simple" | "variants";
+  costPrice: number | null;
   shortDescription: string;
   description: string;
   status: "draft" | "active" | "archived" | "out_of_stock";
@@ -292,6 +296,8 @@ export type AdminCatalogProductWritePayload = {
   supplier_id?: string | null;
   sku?: string | null;
   price?: number;
+  pricing_model?: "simple" | "variant";
+  cost_price?: number | null;
   short_description?: string | null;
   description?: string | null;
   status?: "draft" | "active" | "archived";
@@ -798,6 +804,7 @@ export async function fetchAdminProducts(
 
 export type AdminCategoryListParams = {
   departmentId?: string;
+  storeId?: string;
   origin?: "china" | "tz";
   parentId?: string | null;
   rootsOnly?: boolean;
@@ -813,6 +820,9 @@ export async function fetchAdminCategories(
 
   if (params.departmentId) {
     query.department_id = params.departmentId;
+  }
+  if (params.storeId) {
+    query.store_id = params.storeId;
   }
   if (params.origin) {
     query.origin = params.origin;
@@ -2150,6 +2160,11 @@ export function mapAdminApiCatalogProduct(product: AdminApiProduct): AdminCatalo
     slug: product.slug,
     sku: product.sku ?? null,
     price: parseMoney(product.price),
+    pricingModel: product.pricing_model === "variant" ? "variants" : "simple",
+    costPrice:
+      product.cost_price == null || product.cost_price === ""
+        ? null
+        : parseMoney(product.cost_price),
     shortDescription: product.short_description?.trim() || "",
     description: product.description?.trim() || "",
     status,
@@ -2484,6 +2499,107 @@ export async function updateAdminProductStock(
   );
 
   return mapAdminApiProductStock(data.inventory);
+}
+
+export type AdminProductCommercialStock = import("@/lib/admin/product-commercial-stock-sync").AdminProductCommercialStock;
+
+function mapAdminCommercialStockPayload(data: {
+  path?: string;
+  simple?: {
+    commercial_stock_id?: string | null;
+    available_quantity?: number;
+    reserved_quantity?: number;
+    ordered_quantity?: number;
+  } | null;
+  variants?: Array<{
+    variant_id?: string;
+    name?: string;
+    sku?: string;
+    is_active?: boolean;
+    available_quantity?: number;
+    reserved_quantity?: number;
+    ordered_quantity?: number;
+    commercial_stock_id?: string | null;
+  }>;
+}): AdminProductCommercialStock {
+  return {
+    path: data.path === "variant" ? "variant" : "simple",
+    simple: data.simple
+      ? {
+          commercialStockId: data.simple.commercial_stock_id ?? null,
+          availableQuantity: Math.max(0, Number(data.simple.available_quantity ?? 0)),
+          reservedQuantity: Math.max(0, Number(data.simple.reserved_quantity ?? 0)),
+          orderedQuantity: Math.max(0, Number(data.simple.ordered_quantity ?? 0)),
+        }
+      : null,
+    variants: (data.variants ?? []).map((variant) => ({
+      variantId: variant.variant_id ?? "",
+      name: variant.name ?? "Variant",
+      sku: variant.sku ?? "",
+      isActive: Boolean(variant.is_active),
+      availableQuantity: Math.max(0, Number(variant.available_quantity ?? 0)),
+      reservedQuantity: Math.max(0, Number(variant.reserved_quantity ?? 0)),
+      orderedQuantity: Math.max(0, Number(variant.ordered_quantity ?? 0)),
+      commercialStockId: variant.commercial_stock_id ?? null,
+    })),
+  };
+}
+
+export async function fetchAdminProductCommercialStock(
+  productId: string,
+): Promise<AdminProductCommercialStock> {
+  const trimmed = productId.trim();
+
+  if (!trimmed) {
+    throw new AdminCatalogApiError("Product id is required.", 422);
+  }
+
+  const response = await fetch(
+    `/api/admin/products/${encodeURIComponent(trimmed)}/commercial-stock`,
+    {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    },
+  );
+
+  const payload = await parseJsonResponse<{
+    success?: boolean;
+    message?: string;
+    data?: Parameters<typeof mapAdminCommercialStockPayload>[0];
+  }>(response);
+
+  if (!response.ok || payload.success === false || !payload.data) {
+    throw new AdminCatalogApiError(
+      payload.message?.trim() || "Unable to load commercial availability.",
+      response.status,
+    );
+  }
+
+  return mapAdminCommercialStockPayload(payload.data);
+}
+
+export async function updateAdminProductCommercialStock(
+  productId: string,
+  body: { available_quantity: number },
+): Promise<void> {
+  await mutateAdminJson(
+    `/api/admin/products/${encodeURIComponent(productId)}/commercial-stock`,
+    "PATCH",
+    body,
+    "Unable to update commercial availability.",
+  );
+}
+
+export async function updateAdminVariantCommercialStock(
+  variantId: string,
+  body: { available_quantity: number },
+): Promise<void> {
+  await mutateAdminJson(
+    `/api/admin/variants/${encodeURIComponent(variantId)}/commercial-stock`,
+    "PATCH",
+    body,
+    "Unable to update variant commercial availability.",
+  );
 }
 
 export async function syncAdminProductShippingOptions(

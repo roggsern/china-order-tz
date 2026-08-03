@@ -44,7 +44,16 @@ class CategoryFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'parent_id' => $parent->id,
             'department_id' => $parent->department_id,
+            'store_id' => $parent->store_id,
             'origin' => $parent->origin ?? CatalogOrigin::China,
+        ]);
+    }
+
+    public function forStore(\App\Models\Store $store): static
+    {
+        return $this->tz()->state(fn () => [
+            'store_id' => $store->id,
+            'department_id' => null,
         ]);
     }
 

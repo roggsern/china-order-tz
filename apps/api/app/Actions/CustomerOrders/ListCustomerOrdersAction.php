@@ -18,6 +18,11 @@ class ListCustomerOrdersAction
                 'items.product.commerceChannel',
                 'payments',
                 'paymentTransactions',
+                'deliveryOption',
+                'fulfillment.shipment',
+                'fulfillment.warehouseJob',
+                'shipments',
+                'warehouseJob',
             ]);
 
         if ($filter === 'active') {

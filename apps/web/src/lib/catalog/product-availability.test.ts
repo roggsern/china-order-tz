@@ -95,6 +95,28 @@ test("isProductCardPurchaseDisabled respects availability_status", () => {
   );
 });
 
+test("CHINA_IMPORT product with stock 0 is not purchase-disabled", () => {
+  const product = {
+    commerceChannelCode: "CHINA_IMPORT",
+    stock: 0,
+    availabilityStatus: "available" as const,
+    isPurchasable: true,
+  };
+
+  assert.equal(isProductCardPurchaseDisabled(product), false);
+  assert.equal(resolveProductCardAvailabilityOverlay(product), null);
+});
+
+test("TZ_LOCAL product with stock 0 remains Out of Stock", () => {
+  const product = {
+    commerceChannelCode: "TZ_LOCAL",
+    stock: 0,
+  };
+
+  assert.equal(isProductCardPurchaseDisabled(product), true);
+  assert.equal(resolveProductCardAvailabilityOverlay(product), "Out of Stock");
+});
+
 test("card mapping preserves listing availability fields", () => {
   const mapped = mapApiProductCardToCatalogProduct({
     id: "019f99db-3b6b-720d-b5d6-f4666a6444ed",

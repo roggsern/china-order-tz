@@ -74,6 +74,7 @@ use App\Http\Controllers\Admin\AdminOrderController;
 use App\Http\Controllers\Admin\AdminPaymentController;
 use App\Http\Controllers\Admin\AdminCatalogHealthController;
 use App\Http\Controllers\Admin\AdminProductBulkController;
+use App\Http\Controllers\Admin\AdminVariantBulkController;
 use App\Http\Controllers\Admin\AdminProductController;
 use App\Http\Controllers\Admin\AdminProductImageController;
 use App\Http\Controllers\Admin\AdminProductAttributeController;
@@ -82,6 +83,7 @@ use App\Http\Controllers\Admin\AdminProductShippingOptionController;
 use App\Http\Controllers\Admin\AdminProductVariantController;
 use App\Http\Controllers\Admin\AdminVariantPriceController;
 use App\Http\Controllers\Admin\AdminVariantInventoryController;
+use App\Http\Controllers\Admin\AdminChinaCommercialStockController;
 use App\Http\Controllers\Admin\AuthController as AdminAuthController;
 use App\Http\Controllers\Admin\AdminAlertsController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
@@ -208,6 +210,7 @@ Route::prefix('storefront/tz')->group(function () {
 Route::prefix('storefront/china')->group(function () {
     Route::get('/menu', [ChinaStorefrontController::class, 'menu']);
     Route::get('/categories', [ChinaStorefrontController::class, 'categories']);
+    Route::get('/featured-collections', [ChinaStorefrontController::class, 'featuredCollections']);
     Route::get('/brands', [ChinaStorefrontController::class, 'brands']);
     Route::get('/products', [ChinaStorefrontController::class, 'products']);
 });
@@ -634,6 +637,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin', 'admin.active'])->prefix('adm
     Route::get('/products/{product}/variants', [AdminProductVariantController::class, 'index']);
     Route::post('/products/{product}/variants', [AdminProductVariantController::class, 'store']);
     Route::post('/products/{product}/variants/generate', [AdminProductVariantController::class, 'generate']);
+    Route::post('/products/{product}/variants/bulk-action', [AdminVariantBulkController::class, 'execute']);
     Route::put('/products/{product}/variants/{variant}', [AdminProductVariantController::class, 'update']);
     Route::delete('/products/{product}/variants/{variant}', [AdminProductVariantController::class, 'destroy']);
     Route::get('/products/{product}/shipping-options', [AdminProductShippingOptionController::class, 'index']);
@@ -667,6 +671,9 @@ Route::middleware(['auth:sanctum', 'ensure.admin', 'admin.active'])->prefix('adm
     Route::get('/inventory/channel-stock', [AdminInventoryController::class, 'channelStock']);
     Route::get('/inventory/low-stock', [AdminInventoryController::class, 'lowStock']);
     Route::patch('/products/{product}/stock', [AdminProductController::class, 'updateStock']);
+    Route::get('/products/{product}/commercial-stock', [AdminChinaCommercialStockController::class, 'show']);
+    Route::patch('/products/{product}/commercial-stock', [AdminChinaCommercialStockController::class, 'updateProduct']);
+    Route::patch('/variants/{variant}/commercial-stock', [AdminChinaCommercialStockController::class, 'updateVariant']);
     Route::get('/products/{product}/inventory/movements', [AdminProductController::class, 'indexInventoryMovements']);
     Route::post('/products/{product}/quote', [AdminProductController::class, 'quote']);
     Route::put('/products/{product}/price-tiers', [AdminProductController::class, 'syncPriceTiers']);

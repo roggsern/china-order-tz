@@ -23,6 +23,12 @@ class ChinaStorefrontController extends Controller
             ->additional(['success' => true]);
     }
 
+    public function featuredCollections(): AnonymousResourceCollection
+    {
+        return CustomerCategoryResource::collection($this->catalog->featuredCollectionCategories())
+            ->additional(['success' => true]);
+    }
+
     public function brands(Request $request): AnonymousResourceCollection
     {
         $category = $request->query('category');
