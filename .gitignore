@@ -174,3 +174,4 @@ apps/api/storage/backups/
 *.swo
 .DS_Store
 Thumbs.db
+local-backups/
