@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\CommerceChannelCode;
 use App\Enums\ProductLifecycleStatus;
+use App\Enums\ProductPricingModel;
 use App\Enums\ProductVisibility;
 use App\Models\Concerns\HasUuidPrimaryKey;
 use Database\Factories\ProductFactory;
@@ -35,6 +36,7 @@ class Product extends Model
         'description',
         'short_description',
         'price',
+        'pricing_model',
         'air_shipping_price',
         'sea_shipping_price',
         'compare_at_price',
@@ -55,6 +57,7 @@ class Product extends Model
     {
         return [
             'price' => 'decimal:2',
+            'pricing_model' => ProductPricingModel::class,
             'air_shipping_price' => 'decimal:2',
             'sea_shipping_price' => 'decimal:2',
             'compare_at_price' => 'decimal:2',

@@ -6,6 +6,7 @@ use App\Actions\Concerns\GuardsActiveProductSubResourceIntegrity;
 use App\Http\Requests\Admin\UpdateVariantPriceRequest;
 use App\Http\Resources\VariantPriceResource;
 use App\Models\VariantPrice;
+use App\Services\AdminProducts\ClearSimpleProductCommerceOnVariantPathActivation;
 use App\Services\ProductPurchasability\ProductPurchasabilityPolicy;
 use Illuminate\Support\Facades\DB;
 
@@ -15,6 +16,7 @@ class UpdateVariantPriceAction
 
     public function __construct(
         private readonly ProductPurchasabilityPolicy $purchasabilityPolicy,
+        private readonly ClearSimpleProductCommerceOnVariantPathActivation $simpleCommerceCleaner,
     ) {}
 
     /**
@@ -37,8 +39,9 @@ class UpdateVariantPriceAction
             $price->fill($data);
             $price->save();
 
-            $this->assertActiveProductIntegrityAfterMutation(
+            $this->afterVariantPurchasabilityMutation(
                 $this->purchasabilityPolicy,
+                $this->simpleCommerceCleaner,
                 $product,
                 $hadSellableVariants,
             );

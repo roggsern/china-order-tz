@@ -8,6 +8,7 @@ use App\Models\Inventory;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\VariantInventory;
+use App\Services\ProductPurchasability\ProductPurchasabilityPolicy;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -22,6 +23,8 @@ final class AdminInventoryApplicationService
     public function __construct(
         private readonly InventoryMutationGate $gate,
         private readonly CanonicalVariantInventoryInitializer $canonicalInitializer,
+        private readonly TzLocalInventoryScope $tzLocalScope,
+        private readonly ProductPurchasabilityPolicy $purchasabilityPolicy,
     ) {}
 
     /**
@@ -42,6 +45,9 @@ final class AdminInventoryApplicationService
         array $data,
         ?Admin $actor = null,
     ): VariantInventory {
+        $variant->loadMissing('product.commerceChannel', 'product.store');
+        $data = $this->tzLocalScope->applyVariantInventoryDefaults($variant->product, $data);
+
         $warehouse = strtoupper((string) ($data['warehouse_code'] ?? 'MAIN'));
         $requested = array_key_exists('on_hand', $data) ? max(0, (int) $data['on_hand']) : null;
         $targetReserved = max(0, (int) ($data['reserved'] ?? 0));
@@ -58,6 +64,7 @@ final class AdminInventoryApplicationService
 
         return $this->canonicalInitializer->ensure($variant, [
             'warehouse_code' => $warehouse,
+            'inventory_location_id' => $data['inventory_location_id'] ?? null,
             'requested_on_hand' => $requested,
             'reserved' => $targetReserved,
             'reorder_level' => (int) ($data['reorder_level'] ?? 5),
@@ -234,8 +241,9 @@ final class AdminInventoryApplicationService
         ?string $productVariantId = null,
     ): Inventory {
         $targetQuantity = max(0, $targetQuantity);
+        $product->loadMissing('commerceChannel', 'store', 'variants.prices', 'variants.inventories', 'inventory');
 
-        return DB::transaction(function () use (
+        $inventory = DB::transaction(function () use (
             $product,
             $targetQuantity,
             $reason,
@@ -287,5 +295,72 @@ final class AdminInventoryApplicationService
 
             return $locked->fresh() ?? $locked;
         });
+
+        if ($this->tzLocalScope->appliesTo($product)) {
+            if ($productVariantId !== null) {
+                $variant = ProductVariant::query()
+                    ->whereKey($productVariantId)
+                    ->where('product_id', $product->id)
+                    ->first();
+
+                if ($variant !== null) {
+                    $this->setTzLocalVariantStockAtStore(
+                        variant: $variant,
+                        targetOnHand: $targetQuantity,
+                        actor: $actor,
+                        reason: $reason ?? 'TZ local variant stock mirror — store location',
+                    );
+                }
+            } elseif ($productVariantId === null && ! $this->purchasabilityPolicy->hasSellableVariants($product)) {
+                $defaultVariant = $this->tzLocalScope->ensurePosDefaultVariant($product);
+                $this->setTzLocalVariantStockAtStore(
+                    variant: $defaultVariant,
+                    targetOnHand: $targetQuantity,
+                    actor: $actor,
+                    reason: $reason ?? 'TZ local simple stock mirror — store location',
+                );
+            }
+        }
+
+        return $inventory;
+    }
+
+    public function setTzLocalVariantStockAtStore(
+        ProductVariant $variant,
+        int $targetOnHand,
+        ?Admin $actor = null,
+        ?string $reason = null,
+        ?string $idempotencyKey = null,
+    ): VariantInventory {
+        $variant->loadMissing('product.commerceChannel', 'product.store');
+        $product = $variant->product;
+
+        if (! $this->tzLocalScope->appliesTo($product)) {
+            throw ValidationException::withMessages([
+                'product' => ['Store-location stock applies to TZ_LOCAL products only.'],
+            ]);
+        }
+
+        $data = $this->tzLocalScope->applyVariantInventoryDefaults($product, [
+            'on_hand' => max(0, $targetOnHand),
+        ]);
+
+        $warehouse = strtoupper((string) $data['warehouse_code']);
+        $locationId = $data['inventory_location_id'] ?? null;
+
+        $existing = VariantInventory::query()
+            ->where('product_variant_id', $variant->id)
+            ->where('warehouse_code', $warehouse)
+            ->when($locationId !== null, fn ($q) => $q->where('inventory_location_id', $locationId))
+            ->first();
+
+        if ($existing === null) {
+            return $this->createVariantInventory($variant, $data, $actor);
+        }
+
+        return $this->updateVariantInventory($existing, [
+            'on_hand' => max(0, $targetOnHand),
+            'idempotency_key' => $idempotencyKey,
+        ], $actor);
     }
 }

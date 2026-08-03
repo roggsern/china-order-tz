@@ -4,6 +4,7 @@ namespace App\Http\Requests\Admin;
 
 use App\Enums\CommerceChannelCode;
 use App\Enums\ProductLifecycleStatus;
+use App\Enums\ProductPricingModel;
 use App\Enums\ProductVisibility;
 use App\Enums\ShippingMethod;
 use App\Http\Requests\Concerns\AuthorizesAdminPermission;
@@ -44,6 +45,7 @@ class StoreProductRequest extends FormRequest
             'supplier_id' => ['nullable', 'uuid', Rule::exists('suppliers', 'id')->where('is_active', true)],
             'sku' => ['nullable', 'string', 'max:100', 'unique:products,sku'],
             'price' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'pricing_model' => ['sometimes', 'string', Rule::in(array_column(ProductPricingModel::cases(), 'value'))],
             'compare_at_price' => ['nullable', 'numeric', 'min:0'],
             'cost_price' => ['nullable', 'numeric', 'min:0'],
             'air_shipping_price' => ['nullable', 'numeric', 'min:0'],

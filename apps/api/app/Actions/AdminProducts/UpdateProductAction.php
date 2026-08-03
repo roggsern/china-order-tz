@@ -22,6 +22,7 @@ use App\Services\ProductConfiguration\SyncProductConfigurations;
 use App\Enums\ProductLifecycleStatus;
 use App\Services\ProductPurchasability\ProductPurchasabilityPolicy;
 use App\Services\ProductShipping\ProductShippingOptionEngine;
+use App\Support\Catalog\ProductTaxonomyValidator;
 use App\Support\ProductLifecycle;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -166,6 +167,16 @@ class UpdateProductAction
             [$category, $catalogProductTypeId] = $this->resolveCategoryAndCatalogType(
                 $validated,
                 $product,
+            );
+
+            $effectiveStoreId = array_key_exists('store_id', $productData)
+                ? ($productData['store_id'] ?? null)
+                : ($product->store_id ?? null);
+
+            ProductTaxonomyValidator::assertCategoryMatchesChannel(
+                $category,
+                $effectiveChannelCode,
+                $effectiveStoreId,
             );
 
             $productData['category_id'] = $category->id;

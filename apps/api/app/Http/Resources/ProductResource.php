@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Services\AdminProducts\AdminProductListSummaryPresenter;
+use App\Enums\ProductPricingModel;
 use App\Services\Catalog\CustomerProductMediaResolver;
 use App\Services\Inventory\CatalogStockPresenter;
 use App\Services\ProductConfiguration\LegacyConfigurationProductDetector;
@@ -27,7 +28,9 @@ class ProductResource extends JsonResource
             'description' => $this->description,
             'short_description' => $this->short_description,
             'price' => $this->price,
+            'pricing_model' => $this->pricing_model?->value ?? ProductPricingModel::Simple->value,
             'compare_at_price' => $this->compare_at_price,
+            'cost_price' => $this->cost_price,
             'air_shipping_price' => $this->air_shipping_price,
             'sea_shipping_price' => $this->sea_shipping_price,
             'shipping_options' => ProductShippingOptionResource::collection($this->whenLoaded('shippingOptions')),

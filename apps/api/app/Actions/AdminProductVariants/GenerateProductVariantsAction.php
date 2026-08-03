@@ -14,6 +14,7 @@ use App\Services\Catalog\GenerateVariantSku;
 use App\Services\Catalog\SyncVariantCatalogAttributeValues;
 use App\Services\Inventory\CanonicalVariantInventoryInitializer;
 use App\Services\Inventory\StockResolver;
+use App\Services\Inventory\TzLocalInventoryScope;
 use App\Services\Pricing\CommercePricingResolver;
 use App\Services\ProductPurchasability\ProductPurchasabilityPolicy;
 use Illuminate\Support\Facades\DB;
@@ -32,6 +33,7 @@ class GenerateProductVariantsAction
         private readonly CanonicalVariantInventoryInitializer $inventoryInitializer,
         private readonly CommercePricingResolver $pricing,
         private readonly StockResolver $stock,
+        private readonly TzLocalInventoryScope $tzLocalScope,
     ) {}
 
     /**
@@ -181,13 +183,25 @@ class GenerateProductVariantsAction
 
                 $this->syncAttributeValues->handle($variant, $rows, $allowedById);
 
-                // Inventory foundation only — zero stock, no invented quantity.
-                $this->inventoryInitializer->ensure($variant, [
-                    'warehouse_code' => 'MAIN',
+                $inventoryOptions = [
                     'requested_on_hand' => 0,
-                    'reason' => 'Variant generation — MAIN inventory foundation (zero stock)',
-                    'idempotency_key' => 'variant-generate:'.$variant->id.':MAIN',
-                ]);
+                    'reason' => 'Variant generation — inventory foundation (zero stock)',
+                    'idempotency_key' => 'variant-generate:'.$variant->id,
+                ];
+
+                $product->loadMissing('commerceChannel', 'store');
+                if ($this->tzLocalScope->appliesTo($product)) {
+                    $inventoryOptions = array_merge(
+                        $inventoryOptions,
+                        $this->tzLocalScope->applyVariantInventoryDefaults($product, []),
+                    );
+                    $inventoryOptions['idempotency_key'] .= ':'.($inventoryOptions['warehouse_code'] ?? 'MAIN');
+                } else {
+                    $inventoryOptions['warehouse_code'] = 'MAIN';
+                    $inventoryOptions['idempotency_key'] .= ':MAIN';
+                }
+
+                $this->inventoryInitializer->ensure($variant, $inventoryOptions);
 
                 $existingSignatures[$signature] = true;
                 $createdVariantIds[] = $variant->id;

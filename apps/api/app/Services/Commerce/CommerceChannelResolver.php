@@ -162,6 +162,11 @@ class CommerceChannelResolver
         return $this->resolveProductChannelCode($product) === CommerceChannelCode::ChinaImport;
     }
 
+    public function isTzLocalProduct(Product $product): bool
+    {
+        return $this->resolveProductChannelCode($product) === CommerceChannelCode::TzLocal;
+    }
+
     public function isChinaImportOrder(Order $order): bool
     {
         return CommerceChannelCode::tryFrom($this->resolveOrderChannel($order)->code) === CommerceChannelCode::ChinaImport;

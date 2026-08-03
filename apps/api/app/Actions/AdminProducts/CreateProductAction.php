@@ -19,8 +19,10 @@ use App\Services\Pricing\SyncConfigurationPriceTiers;
 use App\Services\ProductConfiguration\ResolveTypeFromCategory;
 use App\Services\ProductConfiguration\SyncProductConfigurations;
 use App\Enums\ProductLifecycleStatus;
+use App\Enums\ProductPricingModel;
 use App\Services\ProductPurchasability\ProductPurchasabilityPolicy;
 use App\Services\ProductShipping\ProductShippingOptionEngine;
+use App\Support\Catalog\ProductTaxonomyValidator;
 use App\Support\ProductLifecycle;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -118,6 +120,12 @@ class CreateProductAction
                 $storeId = null;
             }
 
+            ProductTaxonomyValidator::assertCategoryMatchesChannel(
+                $category,
+                $channelCode,
+                $storeId,
+            );
+
             $product = Product::create([
                 'name' => $name,
                 'slug' => $slug,
@@ -131,6 +139,8 @@ class CreateProductAction
                 'product_type_id' => $productType?->id,
                 'sku' => $sku,
                 'price' => $validated['price'] ?? 0,
+                'pricing_model' => ProductPricingModel::tryFromMixed($validated['pricing_model'] ?? null)
+                    ?? ProductPricingModel::Simple,
                 'compare_at_price' => $validated['compare_at_price'] ?? null,
                 'cost_price' => $validated['cost_price'] ?? null,
                 'air_shipping_price' => $channelCode === CommerceChannelCode::ChinaImport

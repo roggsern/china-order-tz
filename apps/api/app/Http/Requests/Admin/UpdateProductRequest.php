@@ -52,7 +52,8 @@ class UpdateProductRequest extends FormRequest
             }
         }
 
-        if ($this->exists('price') || $this->exists('price_tiers') || $this->exists('compare_at_price')) {
+        if ($this->exists('price') || $this->exists('price_tiers') || $this->exists('compare_at_price')
+            || $this->exists('cost_price')) {
             if (! $user->hasAdminPermission(AdminPermissions::PRICING_MANAGE)
                 && ! $user->hasAdminPermission(AdminPermissions::CATALOG_UPDATE)) {
                 return false;

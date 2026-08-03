@@ -28,6 +28,7 @@ final class StockResolver
     public function __construct(
         private readonly CommerceChannelResolver $commerceChannels,
         private readonly ChinaCommercialStockService $commercialStock,
+        private readonly TzLocalInventoryScope $tzLocalScope,
     ) {}
 
     /**
@@ -123,12 +124,20 @@ final class StockResolver
             ? $variant->product
             : Product::query()->find($productId);
 
+        if ($product !== null) {
+            $product->loadMissing('commerceChannel', 'store');
+        }
+
         if ($product !== null && $this->commerceChannels->isChinaImportProduct($product)) {
             return $this->resolveCommercialStock($product, $variant, PurchasabilityPath::Variant, $context);
         }
 
-        // Customer commerce sellable stock is MAIN-only. China / in-transit never sell.
-        if ($context->commerceSellableOnly && ! InventoryWarehouseCode::isSellableCommerceCode($warehouse)) {
+        $warehouse = $product !== null
+            ? $this->tzLocalScope->resolveCommerceWarehouse($product, $context->warehouseCode())
+            : $context->warehouseCode();
+
+        // Customer commerce sellable stock is MAIN-only (China import). TZ store codes are sellable for TZ_LOCAL.
+        if ($context->commerceSellableOnly && ! $this->isSellableCommerceWarehouse($product, $warehouse)) {
             return StockResolutionResult::unresolved(
                 path: PurchasabilityPath::Variant,
                 source: 'variant_inventories',
@@ -144,7 +153,14 @@ final class StockResolver
             );
         }
 
-        $row = $this->findVariantInventory($variant, $warehouse);
+        $row = $this->findVariantInventory($variant, $warehouse, $product);
+
+        if ($row === null
+            && $product !== null
+            && $this->tzLocalScope->appliesTo($product)
+            && $warehouse !== 'MAIN') {
+            $row = $this->findVariantInventory($variant, 'MAIN', $product);
+        }
 
         if ($row === null) {
             // Inactive/invalid canonical row at this warehouse wins: never fall back to legacy.
@@ -280,11 +296,11 @@ final class StockResolver
             ->first();
     }
 
-    private function findVariantInventory(ProductVariant $variant, string $warehouse): ?VariantInventory
+    private function findVariantInventory(ProductVariant $variant, string $warehouse, ?Product $product = null): ?VariantInventory
     {
         if ($variant->relationLoaded('inventories')) {
             $row = $variant->inventories->first(
-                fn ($row) => $row->warehouse_code === $warehouse && $row->is_active,
+                fn ($row) => $this->inventoryRowMatchesWarehouse($row, $warehouse, $product) && $row->is_active,
             );
 
             if ($row !== null) {
@@ -293,15 +309,23 @@ final class StockResolver
         }
 
         $row = $variant->inventories()
-            ->where('warehouse_code', $warehouse)
             ->where('is_active', true)
+            ->where(function ($query) use ($warehouse, $product) {
+                $query->where('warehouse_code', $warehouse);
+                if ($product !== null && $this->tzLocalScope->appliesTo($product)) {
+                    $location = $this->tzLocalScope->storeLocation($product);
+                    if ($location !== null) {
+                        $query->orWhere('inventory_location_id', $location->id);
+                    }
+                }
+            })
             ->first();
 
         if ($row !== null) {
             return $row;
         }
 
-        // Preserve ResolveCartPurchasable fallback: mainInventory() when collection miss.
+        // Preserve ResolveCartPurchasable fallback: mainInventory() when collection miss (China / legacy).
         if ($warehouse === 'MAIN') {
             return $variant->mainInventory();
         }
@@ -309,10 +333,31 @@ final class StockResolver
         return null;
     }
 
-    /**
-     * True when any Catalog Stock row exists for the warehouse (active or inactive).
-     * Inactive rows block legacy fallback so canonical authority wins.
-     */
+    private function inventoryRowMatchesWarehouse(VariantInventory $row, string $warehouse, ?Product $product): bool
+    {
+        if ($row->warehouse_code === $warehouse) {
+            return true;
+        }
+
+        if ($product !== null && $this->tzLocalScope->appliesTo($product)) {
+            $location = $this->tzLocalScope->storeLocation($product);
+
+            return $location !== null
+                && (string) $row->inventory_location_id === (string) $location->id;
+        }
+
+        return false;
+    }
+
+    private function isSellableCommerceWarehouse(?Product $product, string $warehouse): bool
+    {
+        if (InventoryWarehouseCode::isSellableCommerceCode($warehouse)) {
+            return true;
+        }
+
+        return $product !== null && $this->tzLocalScope->isStoreCommerceWarehouse($product, $warehouse);
+    }
+
     private function hasWarehouseVariantInventory(ProductVariant $variant, string $warehouse): bool
     {
         if ($variant->relationLoaded('inventories')) {

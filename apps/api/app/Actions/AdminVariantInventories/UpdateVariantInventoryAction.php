@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\UpdateVariantInventoryRequest;
 use App\Http\Resources\VariantInventoryResource;
 use App\Models\Admin;
 use App\Models\VariantInventory;
+use App\Services\AdminProducts\ClearSimpleProductCommerceOnVariantPathActivation;
 use App\Services\Inventory\AdminInventoryApplicationService;
 use App\Services\ProductPurchasability\ProductPurchasabilityPolicy;
 use Illuminate\Support\Facades\Auth;
@@ -19,6 +20,7 @@ class UpdateVariantInventoryAction
     public function __construct(
         private readonly AdminInventoryApplicationService $adminInventory,
         private readonly ProductPurchasabilityPolicy $purchasabilityPolicy,
+        private readonly ClearSimpleProductCommerceOnVariantPathActivation $simpleCommerceCleaner,
     ) {}
 
     /**
@@ -41,8 +43,9 @@ class UpdateVariantInventoryAction
                 $admin,
             );
 
-            $this->assertActiveProductIntegrityAfterMutation(
+            $this->afterVariantPurchasabilityMutation(
                 $this->purchasabilityPolicy,
+                $this->simpleCommerceCleaner,
                 $product,
                 $hadSellableVariants,
             );

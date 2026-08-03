@@ -29,6 +29,29 @@ class ChinaStorefrontCatalog
     ) {}
 
     /**
+     * Homepage featured collection roots — same navigation taxonomy as the mega menu,
+     * limited to categories with at least one purchasable China-import product.
+     *
+     * @return Collection<int, Category>
+     */
+    public function featuredCollectionCategories(int $limit = 6): Collection
+    {
+        $limit = max(1, min(12, $limit));
+
+        return $this->navigationCategories()
+            ->filter(fn (Category $root) => $this->categoryHasPurchasableProducts($root->slug))
+            ->take($limit)
+            ->values();
+    }
+
+    private function categoryHasPurchasableProducts(string $categorySlug): bool
+    {
+        return $this->chinaPublishedProductQuery(
+            $this->applyDiscoveryCategoryFilter(Product::query(), $categorySlug),
+        )->exists();
+    }
+
+    /**
      * Navigation category tree for the ORDER FROM CHINA mega menu.
      *
      * @return Collection<int, Category>

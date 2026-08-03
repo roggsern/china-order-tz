@@ -43,6 +43,11 @@ class GetAdminCategoriesAction
             $query->where('department_id', $departmentId);
         }
 
+        $storeId = request()->query('store_id');
+        if (is_string($storeId) && $storeId !== '') {
+            $query->where('store_id', $storeId);
+        }
+
         $origin = request()->query('origin');
         if (is_string($origin) && $origin !== '') {
             $query->where('origin', $origin);
