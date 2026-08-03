@@ -21,6 +21,10 @@ import {
   type PosSessionSummary,
   type PosStore,
 } from "@/lib/api/admin-pos";
+import { beginPosReceiptPrintWindow, completePosReceiptPrintWindow } from "@/lib/admin/pos/open-pos-receipt-print-window";
+import { addPosCartLine, posCartLineTotal } from "@/lib/admin/pos/pos-cart-lines";
+import { posCatalogItemRowKey } from "@/lib/admin/pos/pos-catalog-image";
+import { ProductImageDisplay } from "@/components/catalog/ProductImageDisplay";
 import {
   fetchLoyaltyRewards,
   lookupPosLoyalty,
@@ -33,7 +37,7 @@ function money(value: string | number | null | undefined): string {
 }
 
 function lineTotal(unit: string, qty: number): string {
-  return (Number(unit) * qty).toFixed(2);
+  return posCartLineTotal(unit, qty);
 }
 
 export function PosCashierPanel() {
@@ -91,6 +95,7 @@ export function PosCashierPanel() {
     setStores(storeList);
     setSession(current);
     setSummary(current?.summary ?? null);
+    setMethods(payMethods);
     if (payMethods[0] && !paymentCode) {
       setPaymentCode(payMethods[0].code);
     }
@@ -142,29 +147,19 @@ export function PosCashierPanel() {
 
   const addToCart = (item: PosCatalogItem) => {
     if (!item.in_stock) return;
-    setCart((prev) => {
-      const existing = prev.find((l) => l.product_variant_id === item.product_variant_id);
-      if (existing) {
-        const quantity = Math.min(existing.quantity + 1, item.available_stock);
-        return prev.map((l) =>
-          l.product_variant_id === item.product_variant_id
-            ? { ...l, quantity, line_total: lineTotal(l.unit_price, quantity) }
-            : l,
-        );
-      }
-      return [{ ...item, quantity: 1, line_total: lineTotal(item.unit_price, 1) }];
-    });
+    setCart((prev) => addPosCartLine(prev, item));
   };
 
-  const updateQty = (variantId: string, quantity: number) => {
+  const updateQty = (lineId: string, quantity: number) => {
     setCart((prev) =>
       prev
-        .map((l) => {
-          if (l.product_variant_id !== variantId) return l;
-          const qty = Math.max(0, Math.min(quantity, l.available_stock));
-          return { ...l, quantity: qty, line_total: lineTotal(l.unit_price, qty) };
+        .map((line) => {
+          const currentLineId = line.product_variant_id ?? line.product_id;
+          if (currentLineId !== lineId) return line;
+          const qty = Math.max(0, Math.min(quantity, line.available_stock));
+          return { ...line, quantity: qty, line_total: lineTotal(line.unit_price, qty) };
         })
-        .filter((l) => l.quantity > 0),
+        .filter((line) => line.quantity > 0),
     );
   };
 
@@ -302,7 +297,11 @@ export function PosCashierPanel() {
     setLastSale(null);
     try {
       const method = methods.find((m) => m.code === paymentCode);
-      const handler = method?.config?.handler ?? "manual_confirm";
+      const handler =
+        method?.config?.handler ?? (paymentCode === "CASH" ? "cash_with_change" : "manual_confirm");
+      const isCashPayment = paymentCode === "CASH" || handler === "cash_with_change";
+      const grandTotal =
+        quote?.grand_total ?? cart.reduce((sum, line) => sum + Number(line.line_total), 0).toFixed(2);
       const result = await completePosSale({
         items: cart.map((line) => ({
           product_id: line.product_id,
@@ -310,9 +309,10 @@ export function PosCashierPanel() {
           quantity: line.quantity,
         })),
         payment_method: paymentCode,
-        amount_received:
-          handler === "cash_with_change" ? Number(amountReceived || quote?.grand_total || 0) : undefined,
-        manual_confirmed: handler !== "cash_with_change" ? true : undefined,
+        amount_received: isCashPayment
+          ? Number(amountReceived.trim() !== "" ? amountReceived : grandTotal)
+          : undefined,
+        manual_confirmed: !isCashPayment ? true : undefined,
         customer_id: customer?.id,
         promotion_code: promotionCode || undefined,
       });
@@ -391,15 +391,13 @@ export function PosCashierPanel() {
               disabled={busy}
               className="rounded-md border border-zinc-300 bg-white px-3 py-1 text-sm"
               onClick={async () => {
+                let printWindow: Window | null = null;
                 try {
-                  const printed = await printPosReceipt(lastReceipt.id, "thermal_80");
-                  const win = window.open("", "_blank", "noopener,noreferrer,width=420,height=720");
-                  if (!win) return;
-                  win.document.write(printed.data.html);
-                  win.document.close();
-                  win.focus();
-                  setTimeout(() => win.print(), 250);
+                  printWindow = beginPosReceiptPrintWindow();
+                  await printPosReceipt(lastReceipt.id, "thermal_80");
+                  await completePosReceiptPrintWindow(printWindow, lastReceipt.id, "thermal_80");
                 } catch (e) {
+                  printWindow?.close();
                   setError(e instanceof Error ? e.message : "Unable to print receipt.");
                 }
               }}
@@ -554,13 +552,21 @@ export function PosCashierPanel() {
             <div className="max-h-[520px] space-y-2 overflow-y-auto">
               {results.map((item) => (
                 <button
-                  key={item.product_variant_id}
+                  key={posCatalogItemRowKey(item)}
                   type="button"
                   disabled={!item.in_stock}
                   onClick={() => addToCart(item)}
-                  className="flex w-full items-start justify-between gap-3 rounded-md border border-zinc-200 px-3 py-2.5 text-left hover:border-zinc-400 disabled:opacity-40"
+                  className="flex w-full items-start gap-3 rounded-md border border-zinc-200 px-3 py-2.5 text-left hover:border-zinc-400 disabled:opacity-40"
                 >
-                  <div>
+                  <ProductImageDisplay
+                    product={{
+                      name: item.product_name,
+                      primary_image: item.primary_image ?? undefined,
+                    }}
+                    className="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-zinc-100"
+                    emojiClassName="text-2xl"
+                  />
+                  <div className="min-w-0 flex-1">
                     <p className="font-medium text-zinc-900">{item.product_name}</p>
                     <p className="text-xs text-zinc-500">
                       {item.variant_name || "Default"} · {item.variant_sku || item.product_sku}
@@ -582,39 +588,51 @@ export function PosCashierPanel() {
               <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Cart</h2>
               <div className="mt-2 space-y-2">
                 {cart.map((line) => (
-                  <div key={line.product_variant_id} className="rounded-md border border-zinc-100 px-2 py-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-medium text-zinc-900">{line.product_name}</p>
-                        <p className="text-xs text-zinc-500">{line.variant_name || line.variant_sku}</p>
+                  <div key={posCatalogItemRowKey(line)} className="rounded-md border border-zinc-100 px-2 py-2">
+                    <div className="flex items-start gap-2">
+                      <ProductImageDisplay
+                        product={{
+                          name: line.product_name,
+                          primary_image: line.primary_image ?? undefined,
+                        }}
+                        className="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-zinc-100"
+                        emojiClassName="text-lg"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-medium text-zinc-900">{line.product_name}</p>
+                            <p className="text-xs text-zinc-500">{line.variant_name || line.variant_sku}</p>
+                          </div>
+                          <button
+                            type="button"
+                            className="text-xs text-red-600"
+                            onClick={() => updateQty(line.product_variant_id ?? line.product_id, 0)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              className="h-7 w-7 rounded border border-zinc-300 text-sm"
+                              onClick={() => updateQty(line.product_variant_id ?? line.product_id, line.quantity - 1)}
+                            >
+                              −
+                            </button>
+                            <span className="w-8 text-center text-sm">{line.quantity}</span>
+                            <button
+                              type="button"
+                              className="h-7 w-7 rounded border border-zinc-300 text-sm"
+                              onClick={() => updateQty(line.product_variant_id ?? line.product_id, line.quantity + 1)}
+                            >
+                              +
+                            </button>
+                          </div>
+                          <p className="text-sm font-medium">{money(line.line_total)}</p>
+                        </div>
                       </div>
-                      <button
-                        type="button"
-                        className="text-xs text-red-600"
-                        onClick={() => updateQty(line.product_variant_id, 0)}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          className="h-7 w-7 rounded border border-zinc-300 text-sm"
-                          onClick={() => updateQty(line.product_variant_id, line.quantity - 1)}
-                        >
-                          −
-                        </button>
-                        <span className="w-8 text-center text-sm">{line.quantity}</span>
-                        <button
-                          type="button"
-                          className="h-7 w-7 rounded border border-zinc-300 text-sm"
-                          onClick={() => updateQty(line.product_variant_id, line.quantity + 1)}
-                        >
-                          +
-                        </button>
-                      </div>
-                      <p className="text-sm font-medium">{money(line.line_total)}</p>
                     </div>
                   </div>
                 ))}
@@ -753,7 +771,8 @@ export function PosCashierPanel() {
               </div>
             </div>
 
-            {methods.find((m) => m.code === paymentCode)?.config?.handler === "cash_with_change" ? (
+            {paymentCode === "CASH" ||
+            methods.find((m) => m.code === paymentCode)?.config?.handler === "cash_with_change" ? (
               <label className="block text-sm text-zinc-700">
                 Amount received
                 <input

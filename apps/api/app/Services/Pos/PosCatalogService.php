@@ -4,12 +4,15 @@ namespace App\Services\Pos;
 
 use App\Enums\CommerceChannelCode;
 use App\Enums\VariantPriceType;
+use App\Models\Inventory;
 use App\Models\InventoryLocation;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Store;
 use App\Models\VariantInventory;
 use App\Models\VariantPrice;
+use App\Services\Catalog\CustomerProductMediaResolver;
+use App\Services\Inventory\TzLocalInventoryScope;
 use App\Services\Stores\StoreService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -17,12 +20,15 @@ use Illuminate\Support\Collection;
 
 /**
  * Store-scoped TZ_LOCAL catalog for POS cashiers.
- * Prices from VariantPrice (Pricing Engine). Stock from store inventory location.
+ * Prices from VariantPrice (Pricing Engine) or product base price for simple items.
+ * Stock from store inventory location.
  */
 class PosCatalogService
 {
     public function __construct(
         private readonly StoreService $stores,
+        private readonly TzLocalInventoryScope $tzLocalScope,
+        private readonly CustomerProductMediaResolver $mediaResolver,
     ) {}
 
     /**
@@ -35,13 +41,19 @@ class PosCatalogService
 
         $productsQuery = Product::query()
             ->with([
+                ...CustomerProductMediaResolver::catalogEagerLoads(),
                 'category:id,name,slug',
-                'variants' => fn ($v) => $v->where('is_active', true)->orderBy('sort_order'),
-                'variants.prices',
-                'variants.inventories' => fn ($i) => $i->where(function ($w) use ($location) {
-                    $w->where('inventory_location_id', $location->id)
-                        ->orWhere('warehouse_code', $location->code);
-                }),
+                'inventory',
+                'variants' => fn ($v) => $v->where('is_active', true)
+                    ->orderBy('sort_order')
+                    ->with([
+                        'prices',
+                        'inventories' => fn ($i) => $i->where(function ($w) use ($location) {
+                            $w->where('inventory_location_id', $location->id)
+                                ->orWhere('warehouse_code', $location->code);
+                        }),
+                        ...CustomerProductMediaResolver::variantMediaEagerLoads(),
+                    ]),
             ])
             ->where('store_id', $store->id)
             ->where('is_active', true)
@@ -77,11 +89,17 @@ class PosCatalogService
     private function mapProductRows(Product $product, InventoryLocation $location): Collection
     {
         $variants = $product->variants;
-        if ($variants->isEmpty()) {
-            return collect();
+        $pricedVariants = $variants->filter(
+            fn (ProductVariant $variant) => $this->resolveRetailAmount($variant) !== null,
+        );
+
+        if ($pricedVariants->isEmpty()) {
+            $simple = $this->mapSimpleProductRow($product, $location);
+
+            return $simple !== null ? collect([$simple]) : collect();
         }
 
-        return $variants->map(function (ProductVariant $variant) use ($product, $location) {
+        return $pricedVariants->map(function (ProductVariant $variant) use ($product, $location) {
             $price = $this->resolveRetailAmount($variant);
             $stock = $this->availableAtLocation($variant, $location);
 
@@ -98,8 +116,95 @@ class PosCatalogService
                 'currency' => 'TZS',
                 'available_stock' => $stock,
                 'in_stock' => $stock > 0,
+                'is_simple' => false,
+                'primary_image' => $this->mapPrimaryImage($product, $variant),
             ];
         })->filter(fn (array $row) => $row['unit_price'] !== null);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function mapSimpleProductRow(Product $product, InventoryLocation $location): ?array
+    {
+        $price = $this->resolveSimpleRetailAmount($product);
+        if ($price === null) {
+            return null;
+        }
+
+        $stock = $this->availableSimpleAtLocation($product, $location);
+
+        return [
+            'product_id' => $product->id,
+            'product_name' => $product->name,
+            'product_sku' => $product->sku,
+            'category' => $product->category?->only(['id', 'name', 'slug']),
+            'product_variant_id' => null,
+            'variant_name' => null,
+            'variant_sku' => null,
+            'barcode' => null,
+            'unit_price' => $price,
+            'currency' => 'TZS',
+            'available_stock' => $stock,
+            'in_stock' => $stock > 0,
+            'is_simple' => true,
+            'primary_image' => $this->mapPrimaryImage($product, null),
+        ];
+    }
+
+    /**
+     * @return array{id: string, url: string|null, path: string|null, alt_text: string|null}|null
+     */
+    private function mapPrimaryImage(Product $product, ?ProductVariant $variant): ?array
+    {
+        $primary = $this->mediaResolver->resolvePrimary($product, $variant);
+
+        if ($primary === null) {
+            return null;
+        }
+
+        return [
+            'id' => (string) $primary['id'],
+            'url' => filled($primary['url'] ?? null) ? (string) $primary['url'] : null,
+            'path' => filled($primary['path'] ?? null) ? (string) $primary['path'] : null,
+            'alt_text' => filled($primary['alt_text'] ?? null) ? (string) $primary['alt_text'] : null,
+        ];
+    }
+
+    public function resolveSimpleRetailAmount(Product $product): ?string
+    {
+        if ($product->price === null || (float) $product->price <= 0) {
+            return null;
+        }
+
+        return number_format((float) $product->price, 2, '.', '');
+    }
+
+    public function availableSimpleAtLocation(Product $product, InventoryLocation $location): int
+    {
+        $defaultVariant = ProductVariant::query()
+            ->where('product_id', $product->id)
+            ->where('is_active', true)
+            ->orderByDesc('is_default')
+            ->orderBy('sort_order')
+            ->first();
+
+        if ($defaultVariant !== null) {
+            $variantStock = $this->availableAtLocation($defaultVariant, $location);
+            if ($variantStock > 0) {
+                return $variantStock;
+            }
+        }
+
+        /** @var Inventory|null $simple */
+        $simple = $product->relationLoaded('inventory')
+            ? $product->inventory->first(fn (Inventory $row) => $row->product_variant_id === null)
+            : Inventory::query()
+                ->where('product_id', $product->id)
+                ->whereNull('product_variant_id')
+                ->first();
+
+        return max(0, (int) ($simple?->availableQuantity() ?? 0));
     }
 
     public function resolveRetailAmount(ProductVariant $variant): ?string
@@ -140,5 +245,37 @@ class PosCatalogService
                 ->first();
 
         return $inventory?->available() ?? 0;
+    }
+
+    public function hasPricedVariants(Product $product): bool
+    {
+        return $product->variants
+            ->filter(fn (ProductVariant $variant) => (bool) $variant->is_active)
+            ->contains(fn (ProductVariant $variant) => $this->resolveRetailAmount($variant) !== null);
+    }
+
+    public function resolveSaleVariant(Product $product, ?string $variantId = null): ProductVariant
+    {
+        if ($variantId !== null && $variantId !== '') {
+            $variant = ProductVariant::query()
+                ->whereKey($variantId)
+                ->where('product_id', $product->id)
+                ->where('is_active', true)
+                ->first();
+
+            if ($variant === null) {
+                throw new \InvalidArgumentException('Product variant not found.');
+            }
+
+            return $variant;
+        }
+
+        $product->loadMissing(['variants.prices']);
+
+        if ($this->hasPricedVariants($product)) {
+            throw new \InvalidArgumentException('Product variant is required.');
+        }
+
+        return $this->tzLocalScope->ensurePosDefaultVariant($product);
     }
 }

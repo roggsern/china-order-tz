@@ -12,15 +12,7 @@ import {
   type PosReceipt,
   type PosStore,
 } from "@/lib/api/admin-pos";
-
-function openPrintWindow(html: string) {
-  const win = window.open("", "_blank", "noopener,noreferrer,width=420,height=720");
-  if (!win) return;
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  setTimeout(() => win.print(), 250);
-}
+import { beginPosReceiptPrintWindow, completePosReceiptPrintWindow } from "@/lib/admin/pos/open-pos-receipt-print-window";
 
 export function PosReceiptsManager() {
   const [stores, setStores] = useState<PosStore[]>([]);
@@ -59,14 +51,17 @@ export function PosReceiptsManager() {
   const handlePrint = async (receipt: PosReceipt, reprint = false) => {
     setBusy(true);
     setError(null);
+    let printWindow: Window | null = null;
     try {
+      printWindow = beginPosReceiptPrintWindow();
       const result = reprint
         ? await reprintPosReceipt(receipt.id, previewLayout)
         : await printPosReceipt(receipt.id, previewLayout);
-      openPrintWindow(result.data.html);
       setSelected(result.data.receipt);
+      await completePosReceiptPrintWindow(printWindow, receipt.id, previewLayout);
       await load();
     } catch (e) {
+      printWindow?.close();
       setError(e instanceof Error ? e.message : "Print failed.");
     } finally {
       setBusy(false);

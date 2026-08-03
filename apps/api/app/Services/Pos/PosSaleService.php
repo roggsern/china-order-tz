@@ -33,6 +33,7 @@ use App\Services\Orders\OrderNumberGenerator;
 use App\Services\Orders\OrderSnapshotEngine;
 use App\Services\Promotions\DiscountResolver;
 use App\Services\Promotions\PromotionUsageService;
+use App\Services\Inventory\AdminInventoryApplicationService;
 use App\Services\Inventory\InventoryControlEngine;
 use App\Services\Stores\ActiveStoreContext;
 use App\Services\Stores\StoreService;
@@ -62,6 +63,7 @@ class PosSaleService
         private readonly PosSessionCashService $sessionCash,
         private readonly InventoryControlEngine $inventoryControl,
         private readonly OrderLifecycleEngine $lifecycle,
+        private readonly AdminInventoryApplicationService $adminInventory,
     ) {}
 
     /**
@@ -516,16 +518,22 @@ class PosSaleService
                 ]);
             }
 
-            $variantId = $line['product_variant_id'] ?? null;
-            $variant = $variantId
-                ? ProductVariant::query()->with('prices')->whereKey($variantId)->where('product_id', $product->id)->first()
-                : $product->variants()->with('prices')->where('is_active', true)->orderBy('sort_order')->first();
+            $requestedVariantId = filled($line['product_variant_id'] ?? null)
+                ? (string) $line['product_variant_id']
+                : null;
+            $product->loadMissing(['variants.prices']);
+            $isExplicitSimple = $requestedVariantId === null
+                && ! $this->catalog->hasPricedVariants($product);
 
-            if ($variant === null) {
+            try {
+                $variant = $this->catalog->resolveSaleVariant($product, $requestedVariantId);
+            } catch (\InvalidArgumentException) {
                 throw ValidationException::withMessages([
                     "items.{$index}.product_variant_id" => ['Product variant is required.'],
                 ]);
             }
+
+            $variant->loadMissing('prices');
 
             $qty = max(1, (int) ($line['quantity'] ?? 1));
             $inventoryQuery = VariantInventory::query()
@@ -542,14 +550,30 @@ class PosSaleService
             $inventory = $inventoryQuery->first();
             $available = $inventory?->available() ?? 0;
 
+            if ($inventory === null && $isExplicitSimple) {
+                $available = $this->catalog->availableSimpleAtLocation($product, $location);
+                if ($available >= $qty) {
+                    $inventory = $this->adminInventory->setTzLocalVariantStockAtStore(
+                        variant: $variant,
+                        targetOnHand: $available,
+                    );
+                    $available = $inventory->available();
+                }
+            } elseif ($inventory !== null) {
+                $available = $inventory->available();
+            }
+
             if ($inventory === null || $available < $qty) {
                 PosErrors::insufficientInventory("items.{$index}.quantity");
             }
 
             $unit = $this->catalog->resolveRetailAmount($variant);
+            if ($unit === null && $isExplicitSimple) {
+                $unit = $this->catalog->resolveSimpleRetailAmount($product);
+            }
             if ($unit === null) {
                 throw ValidationException::withMessages([
-                    "items.{$index}.product_variant_id" => ['No active retail price found for this variant.'],
+                    "items.{$index}.product_variant_id" => ['No active retail price found for this product.'],
                 ]);
             }
 
