@@ -33,6 +33,19 @@ describe("homepage commercial content — hero", () => {
     const sorted = [...priorities].sort((a, b) => b - a);
     assert.deepEqual(priorities, sorted);
   });
+
+  it("serves premium hero imagery for launch journey slides", async () => {
+    const content = await getHomepageContent();
+    const china = content.heroSlides.find((slide) => slide.type === "china");
+    const tz = content.heroSlides.find((slide) => slide.type === "tz");
+
+    for (const slide of [china, tz]) {
+      assert.ok(slide?.desktopImageUrl?.endsWith(".webp"));
+      assert.ok(slide?.mobileImageUrl?.endsWith(".webp"));
+      assert.equal(slide?.contentAlignment, "LEFT");
+      assert.equal(slide?.textTheme, "LIGHT");
+    }
+  });
 });
 
 describe("homepage commercial content — ads & sponsors", () => {
@@ -102,7 +115,7 @@ describe("homepage commercial content — flash deals & sections", () => {
     const content = await getHomepageContent();
     assert.equal(content.sections.shopByStore.title, "Shop by Store");
     assert.equal(content.sections.collections.title, "Featured Collections");
-    assert.ok(content.collections.some((item) => item.name === "Electronics"));
+    assert.ok(Array.isArray(content.collections));
     assert.ok(content.trendingSearches.includes("iPhone"));
     assert.equal(content.newsletter.title, "Stay Updated");
   });

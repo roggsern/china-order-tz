@@ -254,6 +254,41 @@ describe("map-cms-homepage — hero mapping", () => {
     assert.equal(mapped.type, "china");
     assert.equal(mapped.status, "active");
   });
+
+  it("maps hero media, alignment, and theme fields from CMS", () => {
+    const mapped = mapCmsHeroSlide(
+      {
+        id: "s2",
+        headline: "Premium hero",
+        subheadline: "Import",
+        eyebrow_text: null,
+        description: "Desc",
+        desktop_media: {
+          id: "m1",
+          url: "https://cdn.example.com/desktop.jpg",
+          alt_text: "Desktop hero",
+        },
+        mobile_media: {
+          id: "m2",
+          url: "https://cdn.example.com/mobile.jpg",
+          alt_text: "Mobile hero",
+        },
+        content_alignment: "CENTER",
+        text_theme: "AUTO",
+        primary_cta: null,
+        secondary_cta: null,
+        position: 1,
+      },
+      1,
+    );
+
+    assert.equal(mapped.desktopImageUrl, "https://cdn.example.com/desktop.jpg");
+    assert.equal(mapped.mobileImageUrl, "https://cdn.example.com/mobile.jpg");
+    assert.equal(mapped.imageAlt, "Desktop hero");
+    assert.equal(mapped.contentAlignment, "CENTER");
+    assert.equal(mapped.textTheme, "AUTO");
+    assert.ok(mapped.backgroundClass.startsWith("bg-gradient-to-br"));
+  });
 });
 
 describe("map-cms-homepage — featured product mapping", () => {

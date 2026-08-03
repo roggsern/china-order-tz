@@ -1,3 +1,4 @@
+import { buildPremiumJourneyHeroSlides } from "./hero-brand-content";
 import type { HomepageContent } from "./types";
 
 const FAR_FUTURE = "2099-12-31T23:59:59.000Z";
@@ -6,40 +7,7 @@ const FAR_PAST = "2020-01-01T00:00:00.000Z";
 /** Seed commercial homepage content — replace via CMS without changing section components. */
 export const homepageContentSeed: HomepageContent = {
   heroSlides: [
-    {
-      id: "hero-china",
-      type: "china",
-      title: "Order from China",
-      subtitle: "China Campaign",
-      description: "Import carefully selected products directly from China.",
-      ctaLabel: "Explore China Catalog",
-      ctaHref: "/products?origin=china",
-      secondaryCtaLabel: "How it works",
-      secondaryCtaHref: "/#why-choose-us",
-      backgroundClass:
-        "bg-gradient-to-br from-zinc-950 via-zinc-900 to-[#3a1510]",
-      accent: "china",
-      displayStart: FAR_PAST,
-      displayEnd: FAR_FUTURE,
-      priority: 100,
-      status: "active",
-    },
-    {
-      id: "hero-tz",
-      type: "tz",
-      title: "Buy from TZ",
-      subtitle: "Local Stores",
-      description: "Shop trusted Tanzanian stores with local delivery.",
-      ctaLabel: "Explore TZ Stores",
-      ctaHref: "/buy-from-tz",
-      backgroundClass:
-        "bg-gradient-to-br from-zinc-950 via-zinc-900 to-[#0d2a1a]",
-      accent: "tz",
-      displayStart: FAR_PAST,
-      displayEnd: FAR_FUTURE,
-      priority: 90,
-      status: "active",
-    },
+    ...buildPremiumJourneyHeroSlides(),
     {
       id: "hero-sponsor-nmb",
       type: "sponsor",
@@ -208,62 +176,7 @@ export const homepageContentSeed: HomepageContent = {
       priority: 70,
     },
   ],
-  collections: [
-    {
-      id: "col-electronics",
-      name: "Electronics",
-      slug: "electronics",
-      description: "Phones, audio, and gadgets",
-      href: "/products?origin=china&category=electronics",
-      icon: "📱",
-      gradient: "from-sky-500/20 to-zinc-100",
-    },
-    {
-      id: "col-beauty",
-      name: "Beauty",
-      slug: "beauty",
-      description: "Skincare and personal care",
-      href: "/buy-from-tz",
-      icon: "💄",
-      gradient: "from-rose-400/20 to-zinc-100",
-    },
-    {
-      id: "col-fashion",
-      name: "Fashion",
-      slug: "fashion",
-      description: "Apparel and accessories",
-      href: "/products?search=fashion",
-      icon: "👗",
-      gradient: "from-violet-400/20 to-zinc-100",
-    },
-    {
-      id: "col-kitchen",
-      name: "Kitchen",
-      slug: "kitchen",
-      description: "Home and cooking essentials",
-      href: "/products?search=kitchen",
-      icon: "🍽️",
-      gradient: "from-amber-400/20 to-zinc-100",
-    },
-    {
-      id: "col-kids",
-      name: "Kids",
-      slug: "kids",
-      description: "Toys, care, and school",
-      href: "/products?search=kids",
-      icon: "🧸",
-      gradient: "from-emerald-400/20 to-zinc-100",
-    },
-    {
-      id: "col-office",
-      name: "Office",
-      slug: "office",
-      description: "Work and study gear",
-      href: "/products?search=office",
-      icon: "💼",
-      gradient: "from-blue-400/20 to-zinc-100",
-    },
-  ],
+  collections: [],
   whyChooseUs: [
     {
       id: "why-import",

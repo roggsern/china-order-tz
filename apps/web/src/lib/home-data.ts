@@ -2,7 +2,11 @@ export { categories, megaMenuCategories, getSubcategories, getFeaturedForCategor
 export { buyFromTzBrands } from "@/lib/catalog/brands";
 export { formatPrice } from "@/lib/catalog/utils";
 
-import { buyFromTzBrands } from "@/lib/catalog/brands";
+import {
+  defaultFooterBuyFromTzLinks,
+  FOOTER_ABOUT_LINKS,
+  FOOTER_CONTACT_LINKS,
+} from "@/lib/storefront/footer-content";
 
 export const navLinks = [
   { label: "How It Works", href: "/#how-it-works" },
@@ -92,16 +96,8 @@ export const whyChooseUs = [
 ] as const;
 
 export const footerLinks = {
-  about: [
-    { label: "Our Story", href: "/#about" },
-    { label: "Why Choose Us", href: "/#about" },
-    { label: "Order from China", href: "/#order-from-china" },
-  ],
-  contact: [
-    { label: "hello@chinaordertz.com", href: "mailto:hello@chinaordertz.com" },
-    { label: "+255 123 456 789", href: "tel:+255123456789" },
-    { label: "Dar es Salaam, Tanzania", href: "/#contact" },
-  ],
+  about: [...FOOTER_ABOUT_LINKS],
+  contact: [...FOOTER_CONTACT_LINKS],
   quickLinks: [
     { label: "My Orders", href: "/orders" },
     { label: "Order from China", href: "/products?origin=china" },
@@ -109,11 +105,5 @@ export const footerLinks = {
     { label: "Featured Products", href: "/#products" },
     { label: "Sign In", href: "/login" },
   ],
-  buyFromTz: [
-    { label: "All stores", href: "/buy-from-tz" },
-    ...buyFromTzBrands.map((brand) => ({
-      label: brand.label,
-      href: `/buy-from-tz/${brand.slug}`,
-    })),
-  ],
+  buyFromTz: defaultFooterBuyFromTzLinks(),
 };

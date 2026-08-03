@@ -23,6 +23,10 @@ export type AdvertisementStatus = "draft" | "active" | "paused" | "expired";
 
 export type HeroSlideType = "china" | "tz" | "sponsor" | "seasonal";
 
+export type HeroContentAlignment = "LEFT" | "CENTER" | "RIGHT";
+
+export type HeroTextTheme = "LIGHT" | "DARK" | "AUTO";
+
 export type HomepageAdvertisement = {
   id: string;
   title: string;
@@ -58,6 +62,9 @@ export type HomepageHeroSlide = {
   advertisementId?: string;
   desktopImageUrl?: string | null;
   mobileImageUrl?: string | null;
+  imageAlt?: string | null;
+  contentAlignment?: HeroContentAlignment;
+  textTheme?: HeroTextTheme;
   backgroundClass: string;
   sponsorName?: string | null;
   accent?: "china" | "tz" | "gold" | "sponsor";

@@ -3,6 +3,10 @@ import { getCmsHomepage } from "@/lib/api/cms-homepage";
 import type { TzStorefrontStore } from "@/lib/api/tz-stores";
 import type { Product } from "@/lib/types/catalog";
 import { applyStorefrontLaunchPresentation } from "./apply-storefront-launch";
+import {
+  fetchHomepageFeaturedCollectionsFromCatalog,
+  resolveHomepageFeaturedCollections,
+} from "./homepage-collections";
 import { mapCmsHomepageResponse, mergeCmsMappedIntoSeed } from "./map-cms-homepage";
 import type { HomepageCampaignMeta } from "./map-cms-homepage";
 import { homepageContentSeed } from "./seed";
@@ -74,6 +78,7 @@ export async function getHomepageContent(
 const getHomepageContentCached = cache(async (nowIso: string): Promise<ResolvedHomepageContent> => {
   const now = new Date(nowIso);
   const seedBase = resolveSeedContent(now);
+  const catalogCollections = await fetchHomepageFeaturedCollectionsFromCatalog().catch(() => []);
 
   try {
     const cms = await getCmsHomepage({
@@ -86,14 +91,23 @@ const getHomepageContentCached = cache(async (nowIso: string): Promise<ResolvedH
     if (!mapped.appliedCmsSections) {
       return applyStorefrontLaunchPresentation({
         ...seedBase,
+        collections: resolveHomepageFeaturedCollections(undefined, catalogCollections),
         campaign: mapped.campaign,
         source: "fallback",
       });
     }
 
-    return applyStorefrontLaunchPresentation(mergeCmsMappedIntoSeed(seedBase, mapped));
+    const merged = mergeCmsMappedIntoSeed(seedBase, mapped);
+
+    return applyStorefrontLaunchPresentation({
+      ...merged,
+      collections: resolveHomepageFeaturedCollections(merged.collections, catalogCollections),
+    });
   } catch {
-    return applyStorefrontLaunchPresentation(seedBase);
+    return applyStorefrontLaunchPresentation({
+      ...seedBase,
+      collections: resolveHomepageFeaturedCollections(undefined, catalogCollections),
+    });
   }
 });
 

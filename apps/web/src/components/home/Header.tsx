@@ -134,6 +134,13 @@ export function Header() {
                   badgeClassName="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#c9a227] px-0.5 text-[9px] font-bold text-zinc-900"
                 />
 
+                <AccountNavigation
+                  audience={audience}
+                  variant="mobile"
+                  className={mobileHeaderIconClass}
+                  iconClassName="h-5 w-5"
+                />
+
                 <button
                   type="button"
                   onClick={mobileOpen ? closeMobile : openMobile}

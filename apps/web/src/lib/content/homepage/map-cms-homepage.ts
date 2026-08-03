@@ -23,6 +23,10 @@ import type {
   HomepageSectionCopy,
   HeroSlideType,
 } from "./types";
+import {
+  normalizeHeroContentAlignment,
+  normalizeHeroTextTheme,
+} from "./hero-presentation";
 import type { ResolvedHomepageContent } from "./get-homepage-content";
 
 const FAR_FUTURE = "2099-12-31T23:59:59.000Z";
@@ -96,6 +100,12 @@ function mediaUrl(media: CmsHomepageHeroSlide["desktop_media"]): string | null {
   return url || null;
 }
 
+function mediaAlt(media: CmsHomepageHeroSlide["desktop_media"]): string | null {
+  if (!media) return null;
+  const alt = media.alt_text?.trim();
+  return alt || null;
+}
+
 function inferHeroType(slide: CmsHomepageHeroSlide, index: number): HeroSlideType {
   const hay = `${slide.headline ?? ""} ${slide.subheadline ?? ""} ${slide.eyebrow_text ?? ""}`.toLowerCase();
   if (hay.includes("tanzania") || hay.includes("buy from tz") || hay.includes(" tz")) {
@@ -131,6 +141,9 @@ export function mapCmsHeroSlide(
     (type === "tz" ? "/buy-from-tz" : "/products?origin=china");
   const secondaryHref = resolveCtaHref(slide.secondary_cta) ?? undefined;
 
+  const desktopImageUrl = mediaUrl(slide.desktop_media);
+  const mobileImageUrl = mediaUrl(slide.mobile_media) ?? desktopImageUrl;
+
   return {
     id: slide.id,
     type,
@@ -141,8 +154,11 @@ export function mapCmsHeroSlide(
     ctaHref: primaryHref,
     secondaryCtaLabel: slide.secondary_cta?.label?.trim() || undefined,
     secondaryCtaHref: secondaryHref,
-    desktopImageUrl: mediaUrl(slide.desktop_media),
-    mobileImageUrl: mediaUrl(slide.mobile_media) ?? mediaUrl(slide.desktop_media),
+    desktopImageUrl,
+    mobileImageUrl,
+    imageAlt: mediaAlt(slide.desktop_media) ?? mediaAlt(slide.mobile_media) ?? undefined,
+    contentAlignment: normalizeHeroContentAlignment(slide.content_alignment),
+    textTheme: normalizeHeroTextTheme(slide.text_theme),
     backgroundClass: DEFAULT_HERO_BACKGROUNDS[index % DEFAULT_HERO_BACKGROUNDS.length]!,
     accent: accentForType(type),
     displayStart: FAR_PAST,

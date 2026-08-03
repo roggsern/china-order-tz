@@ -1,75 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
 import { HomepageAdRail } from "@/components/home/commercial/HomepageAdBanner";
 import { OfficialLogoImage } from "@/components/branding/OfficialLogoImage";
 import { useTzStores } from "@/lib/catalog/use-tz-stores";
 import { filterActiveScheduled, getAdsByPlacement, homepageContentSeed, isLaunchAdvertisementPlacementVisible } from "@/lib/content/homepage";
 import { useCustomerSession } from "@/lib/customer/use-customer-session";
+import {
+  buildFooterBuyFromTzLinks,
+  defaultFooterBuyFromTzLinks,
+  FOOTER_BRAND_CREDIT,
+  normalizeFooterColumn,
+} from "@/lib/storefront/footer-content";
 import { resolveStorefrontNavAudience } from "@/lib/storefront/navigation-policy";
 import { useStorefrontNavigation } from "@/lib/storefront/use-storefront-navigation";
-import { ArrowRightIcon } from "./icons";
-
-const socialLinks = [
-  { label: "Facebook", href: "#", abbr: "Fb" },
-  { label: "LinkedIn", href: "#", abbr: "In" },
-  { label: "X", href: "#", abbr: "X" },
-  { label: "Instagram", href: "#", abbr: "Ig" },
-] as const;
-
-function FooterNewsletter() {
-  const [email, setEmail] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (email.trim()) {
-      setSubmitted(true);
-      setEmail("");
-    }
-  }
-
-  return (
-    <div id="order-from-china">
-      <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-[#c9a227]">Newsletter</h3>
-      <p className="mt-3 text-sm leading-relaxed text-zinc-400">
-        Get exclusive deals, new arrivals, and import tips delivered to your inbox.
-      </p>
-
-      {submitted ? (
-        <div className="mt-5 rounded-2xl border border-[#c9a227]/25 bg-[#c9a227]/10 px-4 py-4">
-          <p className="text-sm font-semibold text-[#e8c547]">You&apos;re subscribed!</p>
-          <p className="mt-1 text-xs text-zinc-500">Check your inbox for a welcome offer.</p>
-        </div>
-      ) : (
-        <form onSubmit={handleSubmit} className="mt-5">
-          <label className="sr-only" htmlFor="footer-newsletter-email">
-            Email address
-          </label>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <input
-              id="footer-newsletter-email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Your email address"
-              className="min-w-0 flex-1 rounded-xl border border-zinc-800 bg-zinc-900/80 px-4 py-2.5 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-[#c9a227]/50 focus:ring-2 focus:ring-[#c9a227]/15"
-            />
-            <button
-              type="submit"
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#c9a227] px-5 py-2.5 text-sm font-bold text-zinc-900 transition hover:bg-[#e8c547]"
-            >
-              Subscribe
-              <ArrowRightIcon className="h-4 w-4" />
-            </button>
-          </div>
-        </form>
-      )}
-    </div>
-  );
-}
 
 export function Footer() {
   const { isLoggedIn, isReady } = useCustomerSession();
@@ -86,7 +31,6 @@ export function Footer() {
 
   const columns = navigation.footerColumns;
 
-  /** Prefer CMS-hydrated TZ stores; else live Store Engine; else column links already in fallback. */
   const buyFromTzColumn = useMemo(() => {
     const cmsTz = columns.find(
       (col) =>
@@ -105,30 +49,21 @@ export function Footer() {
             logo_url: store.logo_url ?? null,
           }));
 
-    // When CMS provided a TZ mega column with stores, keep it.
-    if (cmsTz && navigation.footerTzStores.length > 0) {
-      return cmsTz;
-    }
+    const links =
+      stores.length > 0
+        ? buildFooterBuyFromTzLinks(stores)
+        : defaultFooterBuyFromTzLinks();
 
-    // When we have live/CMS stores, rebuild the Buy From TZ column from Store Engine.
-    if (stores.length > 0) {
-      return {
-        key: cmsTz?.key ?? "buyFromTz",
-        title: cmsTz?.title ?? "Buy From TZ",
-        links: [
-          { label: "All stores", href: "/buy-from-tz" },
-          ...stores.slice(0, 8).map((store) => ({
-            label: store.name,
-            href: `/buy-from-tz/${store.slug}`,
-          })),
-        ],
-      };
-    }
-
-    return cmsTz ?? null;
+    return {
+      key: cmsTz?.key ?? "buyFromTz",
+      title: cmsTz?.title ?? "Buy From TZ",
+      links,
+    };
   }, [columns, navigation.footerTzStores, liveTzStores]);
 
-  const otherColumns = columns.filter((col) => col.key !== buyFromTzColumn?.key);
+  const otherColumns = columns
+    .filter((col) => col.key !== buyFromTzColumn.key)
+    .map(normalizeFooterColumn);
 
   return (
     <footer id="contact" className="relative bg-zinc-950 text-zinc-400">
@@ -141,73 +76,84 @@ export function Footer() {
           </div>
         ) : null}
 
-        <div className="grid gap-12 lg:grid-cols-12 lg:gap-8">
-          <div className="lg:col-span-4">
+        <div className="grid gap-12 lg:grid-cols-12 lg:gap-x-12 lg:gap-y-10">
+          <div className="lg:col-span-3">
             <OfficialLogoImage variant="footer" height={72} />
             <p className="mt-5 max-w-sm text-sm leading-relaxed">
               Tanzania&apos;s premium platform for importing quality products directly from China.
               Trusted by shoppers and businesses nationwide.
             </p>
-            <div className="mt-8 flex gap-2">
-              {socialLinks.map((social) => (
-                <Link
-                  key={social.label}
-                  href={social.href}
-                  aria-label={social.label}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900/50 text-[11px] font-bold uppercase text-zinc-500 transition hover:border-[#c9a227]/40 hover:text-[#c9a227]"
+          </div>
+
+          <div className="grid grid-cols-1 gap-10 lg:col-span-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(12rem,1.6fr)_minmax(0,0.95fr)] lg:gap-x-12 xl:gap-x-16">
+            {otherColumns.slice(0, 3).map((column) => {
+              const isContactColumn = column.title.toLowerCase().includes("contact");
+
+              return (
+                <div
+                  key={column.key}
+                  className={
+                    isContactColumn ? "min-w-0 lg:max-w-none lg:pr-2" : "min-w-0"
+                  }
                 >
-                  {social.abbr}
-                </Link>
-              ))}
+                  <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-[#c9a227]">
+                    {column.title}
+                  </h3>
+                  <ul className="mt-4 space-y-3">
+                    {column.links.map((link) => (
+                      <li key={`${column.key}-${link.label}-${link.href}`}>
+                        <Link
+                          href={link.href}
+                          className={`text-sm transition hover:text-white${
+                            isContactColumn
+                              ? " block max-w-full break-all sm:break-words lg:whitespace-nowrap"
+                              : ""
+                          }`}
+                        >
+                          {link.label}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="min-w-0 lg:col-span-3">
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-[#c9a227]">
+                {buyFromTzColumn.title}
+              </h3>
+              <ul className="mt-4 space-y-3">
+                {buyFromTzColumn.links.map((link) => (
+                  <li key={`${buyFromTzColumn.key}-${link.label}-${link.href}`}>
+                    <Link href={link.href} className="text-sm transition hover:text-white">
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             </div>
-          </div>
-
-          <div className="grid gap-10 sm:grid-cols-2 lg:col-span-5 lg:grid-cols-3">
-            {otherColumns.slice(0, 3).map((column) => (
-              <div key={column.key}>
-                <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-[#c9a227]">
-                  {column.title}
-                </h3>
-                <ul className="mt-4 space-y-3">
-                  {column.links.map((link) => (
-                    <li key={`${column.key}-${link.label}-${link.href}`}>
-                      <Link href={link.href} className="text-sm transition hover:text-white">
-                        {link.label}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-
-          <div className="grid gap-10 sm:grid-cols-2 lg:col-span-3 lg:grid-cols-1">
-            {buyFromTzColumn ? (
-              <div>
-                <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-[#c9a227]">
-                  {buyFromTzColumn.title}
-                </h3>
-                <ul className="mt-4 space-y-3">
-                  {buyFromTzColumn.links.map((link) => (
-                    <li key={`${buyFromTzColumn.key}-${link.label}-${link.href}`}>
-                      <Link href={link.href} className="text-sm transition hover:text-white">
-                        {link.label}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-            <FooterNewsletter />
           </div>
         </div>
 
-        <div className="mt-14 flex flex-col items-center justify-between gap-4 border-t border-zinc-800/80 pt-8 sm:flex-row">
+        <div className="mt-14 grid gap-4 border-t border-zinc-800/80 pt-8 text-center sm:grid-cols-3 sm:items-center sm:text-left">
           <p className="text-xs text-zinc-600">
             &copy; {new Date().getFullYear()} CHINA ORDER TZ. All rights reserved.
           </p>
-          <div className="flex gap-6 text-xs text-zinc-600">
+
+          <div className="text-xs leading-relaxed text-zinc-600 sm:text-center">
+            <p>{FOOTER_BRAND_CREDIT.line1}</p>
+            <a
+              href={FOOTER_BRAND_CREDIT.phoneHref}
+              className="mt-0.5 inline-block transition hover:text-[#c9a227]"
+            >
+              {FOOTER_BRAND_CREDIT.phone}
+            </a>
+          </div>
+
+          <div className="flex justify-center gap-6 text-xs text-zinc-600 sm:justify-end">
             <Link href="#" className="transition hover:text-[#c9a227]">
               Terms of Service
             </Link>

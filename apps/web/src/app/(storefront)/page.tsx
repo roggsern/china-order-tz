@@ -9,7 +9,6 @@ import { NewArrivalsSplit } from "@/components/home/commercial/NewArrivalsSplit"
 import { BestSellers } from "@/components/home/commercial/BestSellers";
 import { CommercialWhyChooseUs } from "@/components/home/commercial/CommercialWhyChooseUs";
 import { TrustIndicators } from "@/components/home/commercial/TrustIndicators";
-import { CommercialNewsletter } from "@/components/home/commercial/CommercialNewsletter";
 import { FeaturedProducts } from "@/components/home/FeaturedProducts";
 import { ProductGridSkeleton } from "@/components/catalog/ProductGridSkeleton";
 import {
@@ -168,8 +167,6 @@ export default async function Home() {
       />
 
       <TrustIndicators items={content.trustIndicators} copy={content.sections.trust} />
-
-      <CommercialNewsletter copy={content.newsletter} />
     </>
   );
 }

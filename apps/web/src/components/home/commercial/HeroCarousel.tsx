@@ -4,6 +4,13 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CountryFlag } from "@/components/storefront/CountryFlag";
 import type { HomepageHeroSlide } from "@/lib/content/homepage";
+import {
+  heroContentAlignmentClasses,
+  heroDecorativeOverlayVisible,
+  heroReadabilityOverlayClass,
+  heroTextThemeClasses,
+  resolveHeroPresentation,
+} from "@/lib/content/homepage/hero-presentation";
 import { ArrowRightIcon } from "../icons";
 
 type HeroCarouselProps = {
@@ -30,6 +37,55 @@ function SlideAccent({ slide }: { slide: HomepageHeroSlide }) {
   );
 }
 
+function HeroSlideBackground({ slide }: { slide: HomepageHeroSlide }) {
+  const presentation = resolveHeroPresentation(slide);
+  const { background, textMode } = presentation;
+  const useResponsiveSources =
+    background.desktop &&
+    background.mobile &&
+    background.desktop !== background.mobile;
+
+  return (
+    <>
+      <div className={`absolute inset-0 ${slide.backgroundClass}`} aria-hidden />
+
+      {background.hasImage ? (
+        <picture className="absolute inset-0 block">
+          {useResponsiveSources ? (
+            <source media="(max-width: 767px)" srcSet={background.mobile!} />
+          ) : null}
+          <img
+            src={background.desktop || background.mobile || undefined}
+            alt={slide.imageAlt || ""}
+            className="h-full w-full object-cover"
+            decoding="async"
+            fetchPriority="high"
+          />
+        </picture>
+      ) : null}
+
+      <div
+        className={`pointer-events-none absolute inset-0 ${heroReadabilityOverlayClass(
+          background.hasImage,
+          textMode,
+        )}`}
+        aria-hidden
+      />
+
+      {heroDecorativeOverlayVisible(background.hasImage) ? (
+        <div
+          className="pointer-events-none absolute inset-0 opacity-30"
+          aria-hidden
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 20% 20%, rgba(201,162,39,0.25), transparent 40%), radial-gradient(circle at 80% 70%, rgba(255,255,255,0.06), transparent 35%)",
+          }}
+        />
+      ) : null}
+    </>
+  );
+}
+
 export function HeroCarousel({ slides, autoPlayMs = 6500 }: HeroCarouselProps) {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -39,6 +95,10 @@ export function HeroCarousel({ slides, autoPlayMs = 6500 }: HeroCarouselProps) {
   const count = slides.length;
   const safeIndex = count === 0 ? 0 : index % count;
   const active = slides[safeIndex];
+  const activePresentation = active ? resolveHeroPresentation(active) : null;
+  const activeThemeClasses = activePresentation
+    ? heroTextThemeClasses(activePresentation.textMode)
+    : heroTextThemeClasses("light-text");
 
   const goTo = useCallback(
     (next: number) => {
@@ -111,6 +171,16 @@ export function HeroCarousel({ slides, autoPlayMs = 6500 }: HeroCarouselProps) {
       <div className="relative min-h-[420px] sm:min-h-[460px] lg:min-h-[520px]">
         {slides.map((slide, slideIndex) => {
           const isActive = slideIndex === safeIndex;
+          const presentation = resolveHeroPresentation(slide);
+          const alignmentClasses = heroContentAlignmentClasses(presentation.alignment);
+          const themeClasses = heroTextThemeClasses(presentation.textMode);
+          const eyebrowRowClass =
+            presentation.alignment === "CENTER"
+              ? "justify-center w-full"
+              : presentation.alignment === "RIGHT"
+                ? "justify-end w-full"
+                : "";
+
           return (
             <article
               key={slide.id}
@@ -119,38 +189,42 @@ export function HeroCarousel({ slides, autoPlayMs = 6500 }: HeroCarouselProps) {
                 isActive ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
               }`}
             >
-              <div className={`absolute inset-0 ${slide.backgroundClass}`} aria-hidden />
-              <div
-                className="pointer-events-none absolute inset-0 opacity-30"
-                aria-hidden
-                style={{
-                  backgroundImage:
-                    "radial-gradient(circle at 20% 20%, rgba(201,162,39,0.25), transparent 40%), radial-gradient(circle at 80% 70%, rgba(255,255,255,0.06), transparent 35%)",
-                }}
-              />
+              <div className="absolute inset-0 z-0">
+                <HeroSlideBackground slide={slide} />
+              </div>
 
-              <div className="relative mx-auto flex min-h-[420px] max-w-7xl flex-col justify-center px-4 py-16 sm:min-h-[460px] sm:px-6 sm:py-20 lg:min-h-[520px] lg:px-8">
-                <div className="max-w-xl">
-                  <div className="mb-5 inline-flex items-center gap-2.5">
+              <div
+                className={`relative z-[1] mx-auto flex min-h-[420px] max-w-7xl flex-col justify-center px-4 py-16 sm:min-h-[460px] sm:px-6 sm:py-20 lg:min-h-[520px] lg:px-8 ${alignmentClasses.row}`}
+              >
+                <div className={alignmentClasses.block}>
+                  <div className={`mb-5 inline-flex items-center gap-2.5 ${eyebrowRowClass}`}>
                     <SlideAccent slide={slide} />
                     {slide.subtitle ? (
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#e8c547]">
+                      <p
+                        className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${themeClasses.eyebrow}`}
+                      >
                         {slide.subtitle}
                       </p>
                     ) : null}
                   </div>
 
-                  <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl lg:text-[3.25rem]">
+                  <h1
+                    className={`text-4xl font-bold tracking-tight sm:text-5xl lg:text-[3.25rem] ${themeClasses.title}`}
+                  >
                     {slide.title}
                   </h1>
-                  <p className="mt-4 max-w-lg text-base leading-relaxed text-zinc-300 sm:text-lg">
+                  <p
+                    className={`mt-4 max-w-lg text-base leading-relaxed sm:text-lg ${themeClasses.description}`}
+                  >
                     {slide.description}
                   </p>
 
-                  <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <div
+                    className={`mt-8 flex flex-col gap-3 sm:flex-row sm:items-center ${alignmentClasses.ctas}`}
+                  >
                     <Link
                       href={slide.ctaHref}
-                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-[#c9a227] px-7 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-[#e8c547]"
+                      className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-7 py-3 text-sm font-semibold transition ${themeClasses.primaryCta}`}
                     >
                       {slide.ctaLabel}
                       <ArrowRightIcon className="h-4 w-4" />
@@ -158,7 +232,7 @@ export function HeroCarousel({ slides, autoPlayMs = 6500 }: HeroCarouselProps) {
                     {slide.secondaryCtaLabel && slide.secondaryCtaHref ? (
                       <Link
                         href={slide.secondaryCtaHref}
-                        className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/20 bg-white/5 px-7 py-3 text-sm font-semibold text-white transition hover:border-[#c9a227]/50 hover:bg-white/10"
+                        className={`inline-flex min-h-11 items-center justify-center rounded-full border px-7 py-3 text-sm font-semibold transition ${themeClasses.secondaryCta}`}
                       >
                         {slide.secondaryCtaLabel}
                       </Link>
@@ -183,8 +257,8 @@ export function HeroCarousel({ slides, autoPlayMs = 6500 }: HeroCarouselProps) {
                 onClick={() => goTo(slideIndex)}
                 className={`pointer-events-auto h-2.5 rounded-full transition ${
                   slideIndex === safeIndex
-                    ? "w-8 bg-[#c9a227]"
-                    : "w-2.5 bg-white/35 hover:bg-white/60"
+                    ? `w-8 ${activeThemeClasses.dotActive}`
+                    : `w-2.5 ${activeThemeClasses.dotIdle}`
                 }`}
               />
             ))}
@@ -194,7 +268,7 @@ export function HeroCarousel({ slides, autoPlayMs = 6500 }: HeroCarouselProps) {
             type="button"
             aria-label="Previous slide"
             onClick={prev}
-            className="absolute left-3 top-1/2 z-10 hidden min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/30 text-white backdrop-blur-sm transition hover:bg-black/50 sm:flex"
+            className={`absolute left-3 top-1/2 z-10 hidden min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-full border transition sm:flex ${activeThemeClasses.control}`}
           >
             ‹
           </button>
@@ -202,7 +276,7 @@ export function HeroCarousel({ slides, autoPlayMs = 6500 }: HeroCarouselProps) {
             type="button"
             aria-label="Next slide"
             onClick={next}
-            className="absolute right-3 top-1/2 z-10 hidden min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/30 text-white backdrop-blur-sm transition hover:bg-black/50 sm:flex"
+            className={`absolute right-3 top-1/2 z-10 hidden min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-full border transition sm:flex ${activeThemeClasses.control}`}
           >
             ›
           </button>

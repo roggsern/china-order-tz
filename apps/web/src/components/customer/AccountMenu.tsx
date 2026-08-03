@@ -8,25 +8,16 @@ import { resolveCustomerDisplayName } from "@/lib/customer/display-name";
 import { logoutCustomer } from "@/lib/customer/logout-customer";
 import { useFeatureAvailability } from "@/hooks/use-feature-availability";
 import { useCustomerSession } from "@/lib/customer/use-customer-session";
+import {
+  resolveAuthenticatedAccountMenuItems,
+  resolveGuestAccountMenuItems,
+  type AccountMenuItem,
+  type AccountMenuPreset,
+} from "@/lib/storefront/account-menu-config";
+import type { AccountMenuGuestBehavior } from "@/lib/storefront/account-menu-presentation";
 
 const mobileIconButtonClass =
   "inline-flex shrink-0 items-center justify-center gap-1 rounded-lg p-2 text-zinc-600 transition hover:bg-zinc-50 hover:text-zinc-900 active:bg-zinc-100";
-
-type AccountMenuItem =
-  | { type: "link"; label: string; href: string }
-  | { type: "logout"; label: string };
-
-const ACCOUNT_MENU_ITEMS: AccountMenuItem[] = [
-  { type: "link", label: "My Account", href: "/account" },
-  { type: "link", label: "My Orders", href: "/orders" },
-  { type: "link", label: "Wishlist", href: "/wishlist" },
-  { type: "link", label: "Saved Addresses", href: "/account/addresses" },
-  { type: "link", label: "Loyalty & Rewards", href: "/account/loyalty" },
-  { type: "link", label: "Support", href: "/account/support" },
-  { type: "link", label: "Notifications", href: "/account/notifications" },
-  { type: "link", label: "Security", href: "/account/security" },
-  { type: "logout", label: "Sign Out" },
-];
 
 function ChevronDownIcon({ className }: { className?: string }) {
   return (
@@ -45,6 +36,72 @@ interface AccountMenuProps {
   iconClassName?: string;
   showLabel?: boolean;
   labelClassName?: string;
+  preset?: AccountMenuPreset;
+  guestBehavior?: AccountMenuGuestBehavior;
+}
+
+function AccountMenuDropdown({
+  menuId,
+  items,
+  onClose,
+  onLogout,
+  displayName,
+  email,
+}: {
+  menuId: string;
+  items: AccountMenuItem[];
+  onClose: () => void;
+  onLogout: () => void;
+  displayName?: string;
+  email?: string | null;
+}) {
+  return (
+    <div
+      id={menuId}
+      role="menu"
+      aria-label="Account menu"
+      className="absolute right-0 top-[calc(100%+0.5rem)] z-[70] w-72 max-w-[calc(100vw-1rem)] overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-[0_12px_40px_rgba(0,0,0,0.12)] animate-fade-in"
+    >
+      {displayName ? (
+        <div className="border-b border-zinc-100 bg-zinc-50/80 px-4 py-3.5">
+          <p className="truncate text-sm font-bold text-zinc-900">{displayName}</p>
+          {email ? <p className="mt-0.5 truncate text-xs text-zinc-500">{email}</p> : null}
+        </div>
+      ) : null}
+
+      <div className="p-1.5">
+        {items.map((item) => {
+          if (item.type === "link") {
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                role="menuitem"
+                className="flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 hover:text-zinc-900"
+                onClick={onClose}
+              >
+                {item.label}
+              </Link>
+            );
+          }
+
+          return (
+            <div key={item.label}>
+              <MenuDivider />
+              <button
+                type="button"
+                role="menuitem"
+                className="flex w-full items-center rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                onClick={onLogout}
+              >
+                {item.label}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 export function AccountMenu({
@@ -52,6 +109,8 @@ export function AccountMenu({
   iconClassName = "h-5 w-5",
   showLabel = false,
   labelClassName = "text-[11px] font-semibold leading-none",
+  preset = "full",
+  guestBehavior = "link",
 }: AccountMenuProps) {
   const router = useRouter();
   const menuId = useId();
@@ -60,16 +119,17 @@ export function AccountMenu({
   const { session, isLoggedIn, isReady } = useCustomerSession();
   const { wishlist: wishlistEnabled, isReady: featuresReady } = useFeatureAvailability();
 
-  const menuItems = ACCOUNT_MENU_ITEMS.filter(
-    (item) =>
-      item.type !== "link" ||
-      item.href !== "/wishlist" ||
-      !featuresReady ||
-      wishlistEnabled,
-  );
+  const authenticatedMenuItems = resolveAuthenticatedAccountMenuItems({
+    preset,
+    wishlistEnabled,
+    featuresReady,
+  });
+  const guestMenuItems = resolveGuestAccountMenuItems();
 
   const label = isLoggedIn ? "My Account" : "Sign In";
   const displayName = resolveCustomerDisplayName(session?.name, session?.email);
+  const menuItems = isLoggedIn ? authenticatedMenuItems : guestMenuItems;
+  const showGuestMenu = !isLoggedIn && guestBehavior === "menu";
 
   const closeMenu = useCallback(() => {
     setOpen(false);
@@ -109,12 +169,12 @@ export function AccountMenu({
   }, [closeMenu, open]);
 
   useEffect(() => {
-    if (!isLoggedIn) {
+    if (!isLoggedIn && guestBehavior === "link") {
       closeMenu();
     }
-  }, [closeMenu, isLoggedIn]);
+  }, [closeMenu, guestBehavior, isLoggedIn]);
 
-  if (!isLoggedIn) {
+  if (!isLoggedIn && guestBehavior === "link") {
     return (
       <Link
         href="/login"
@@ -136,7 +196,7 @@ export function AccountMenu({
       <button
         type="button"
         className={className}
-        aria-label={label}
+        aria-label={showGuestMenu ? "Account" : label}
         aria-expanded={open}
         aria-haspopup="menu"
         aria-controls={menuId}
@@ -146,62 +206,27 @@ export function AccountMenu({
         {showLabel ? (
           <span className={labelClassName}>{label}</span>
         ) : (
-          <span className="sr-only">{label}</span>
+          <span className="sr-only">{showGuestMenu ? "Account" : label}</span>
         )}
-        <ChevronDownIcon
-          className={`hidden h-3.5 w-3.5 shrink-0 text-zinc-400 transition-transform sm:block ${
-            open ? "rotate-180" : ""
-          }`}
-          aria-hidden
-        />
+        {showLabel ? (
+          <ChevronDownIcon
+            className={`hidden h-3.5 w-3.5 shrink-0 text-zinc-400 transition-transform sm:block ${
+              open ? "rotate-180" : ""
+            }`}
+            aria-hidden
+          />
+        ) : null}
       </button>
 
       {open ? (
-        <div
-          id={menuId}
-          role="menu"
-          aria-label="Account menu"
-          className="absolute right-0 top-[calc(100%+0.5rem)] z-[70] w-72 max-w-[calc(100vw-1rem)] overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-[0_12px_40px_rgba(0,0,0,0.12)] animate-fade-in"
-        >
-          <div className="border-b border-zinc-100 bg-zinc-50/80 px-4 py-3.5">
-            <p className="truncate text-sm font-bold text-zinc-900">{displayName}</p>
-            {session?.email ? (
-              <p className="mt-0.5 truncate text-xs text-zinc-500">{session.email}</p>
-            ) : null}
-          </div>
-
-          <div className="p-1.5">
-            {menuItems.map((item) => {
-              if (item.type === "link") {
-                return (
-                  <Link
-                    key={item.label}
-                    href={item.href}
-                    role="menuitem"
-                    className="flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 hover:text-zinc-900"
-                    onClick={closeMenu}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              }
-
-              return (
-                <div key={item.label}>
-                  <MenuDivider />
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="flex w-full items-center rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-red-600 transition hover:bg-red-50"
-                    onClick={handleLogout}
-                  >
-                    {item.label}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <AccountMenuDropdown
+          menuId={menuId}
+          items={menuItems}
+          onClose={closeMenu}
+          onLogout={handleLogout}
+          displayName={isLoggedIn ? displayName : undefined}
+          email={isLoggedIn ? session?.email : undefined}
+        />
       ) : null}
     </div>
   );
