@@ -55,8 +55,8 @@ describe("PosCashierPanel catalog thumbnails", () => {
     );
 
     assert.match(source, /ProductImageDisplay/);
-    assert.match(source, /primary_image: item\.primary_image/);
-    assert.match(source, /primary_image: line\.primary_image/);
+    assert.match(source, /src=\{resolvePosCatalogItemImageSrc\(item\)\}/);
+    assert.match(source, /src=\{resolvePosCatalogItemImageSrc\(line\)\}/);
     assert.match(source, /posCatalogItemRowKey/);
   });
 });

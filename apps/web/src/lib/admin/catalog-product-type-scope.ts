@@ -30,12 +30,12 @@ export function productTypeMatchesCategoryScope(
   return categoryAncestorIds(scopeCategoryId, categories).has(typeSubcategoryId);
 }
 
-export function filterCatalogProductTypesForCategoryScope(input: {
-  productTypes: Array<{ id: string; subcategoryId: string }>;
+export function filterCatalogProductTypesForCategoryScope<T extends { id: string; subcategoryId: string }>(input: {
+  productTypes: T[];
   categoryId: string;
   subcategoryId: string;
   categories: AdminCategory[];
-}): Array<{ id: string; subcategoryId: string }> {
+}): T[] {
   const scopeId = input.subcategoryId || input.categoryId;
   if (!scopeId) {
     return [];

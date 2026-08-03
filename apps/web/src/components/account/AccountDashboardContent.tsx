@@ -19,7 +19,6 @@ import { AccountPageSkeleton } from "@/components/ui/PageSkeletons";
 import { Skeleton } from "@/components/ui/Skeleton";
 import {
   fetchCustomerOrders,
-  type CustomerOrderListItem,
 } from "@/lib/api/customer-orders";
 import { fetchCustomerUnreadCount } from "@/lib/api/customer-notifications";
 import { getCustomerApiToken } from "@/lib/api/customer-auth";
@@ -29,6 +28,7 @@ import {
 } from "@/lib/customer/arrival-signal";
 import { useFeatureAvailability } from "@/hooks/use-feature-availability";
 import { useCustomerSession } from "@/lib/customer/use-customer-session";
+import { mapCustomerOrderToOverviewCard } from "@/lib/order/order-overview-card";
 import { useWishlist } from "@/lib/wishlist/use-wishlist";
 
 function resolveDisplayName(name: string | undefined, email: string | undefined): string {
@@ -44,23 +44,6 @@ function resolveDisplayName(name: string | undefined, email: string | undefined)
   }
 
   return "there";
-}
-
-function toOverviewCard(order: CustomerOrderListItem): OrderOverviewCardData {
-  return {
-    id: order.id,
-    orderNumber: order.orderNumber,
-    status: order.status,
-    paymentStatus: order.paymentStatus,
-    createdAt: order.createdAt,
-    grandTotal: order.grandTotal,
-    productName: order.itemPreview,
-    quantity: order.itemCount,
-    source: order.source,
-    imageUrl: order.imageUrl,
-    imageEmoji: "📦",
-    imageGradient: "from-[#c9a227]/15 to-zinc-100",
-  };
 }
 
 type SummaryCard = {
@@ -176,7 +159,7 @@ export function AccountDashboardContent() {
     try {
       const { orders, total } = await fetchCustomerOrders();
       setOrderCount(total);
-      setRecentOrders(orders.slice(0, 3).map(toOverviewCard));
+      setRecentOrders(orders.slice(0, 3).map(mapCustomerOrderToOverviewCard));
     } catch {
       setRecentOrders([]);
       setOrderCount(0);

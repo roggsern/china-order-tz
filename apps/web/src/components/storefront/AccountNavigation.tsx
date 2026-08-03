@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import { AccountMenu } from "@/components/customer/AccountMenu";
+import { STOREFRONT_NAV_LABELS, type StorefrontNavAudience } from "@/lib/storefront/navigation-policy";
 import {
-  shouldShowGuestAuthActions,
-  STOREFRONT_NAV_LABELS,
-  type StorefrontNavAudience,
-} from "@/lib/storefront/navigation-policy";
-import { resolveAccountMenuPresentation } from "@/lib/storefront/account-menu-presentation";
+  isAccountMenuPresentation,
+  resolveAccountMenuPresentation,
+} from "@/lib/storefront/account-menu-presentation";
 import { storefrontTypography } from "@/lib/storefront/typography";
 
 type AccountNavigationProps = {
@@ -31,7 +30,7 @@ export function AccountNavigation({
 }: AccountNavigationProps) {
   const presentation = resolveAccountMenuPresentation(audience, variant);
 
-  if ("kind" in presentation && presentation.kind === "guest-links") {
+  if (!isAccountMenuPresentation(presentation)) {
     return (
       <div className="flex shrink-0 items-center gap-3 lg:gap-4">
         <Link

@@ -24,12 +24,16 @@ function product(overrides: Partial<Product> & Pick<Product, "id" | "slug" | "na
     stock: 5,
     images: [],
     features: [],
+    specifications: [],
+    customerReviews: [],
     featured: false,
     status: "active",
     origin: "china",
     isPurchasable: true,
     availabilityStatus: "available",
     catalogProductId: `catalog-${overrides.id}`,
+    badges: [],
+    trustBadges: [],
     ...overrides,
   };
 }

@@ -23,7 +23,7 @@ import {
 } from "@/lib/api/admin-pos";
 import { beginPosReceiptPrintWindow, completePosReceiptPrintWindow } from "@/lib/admin/pos/open-pos-receipt-print-window";
 import { addPosCartLine, posCartLineTotal } from "@/lib/admin/pos/pos-cart-lines";
-import { posCatalogItemRowKey } from "@/lib/admin/pos/pos-catalog-image";
+import { posCatalogItemRowKey, resolvePosCatalogItemImageSrc } from "@/lib/admin/pos/pos-catalog-image";
 import { ProductImageDisplay } from "@/components/catalog/ProductImageDisplay";
 import {
   fetchLoyaltyRewards,
@@ -559,10 +559,7 @@ export function PosCashierPanel() {
                   className="flex w-full items-start gap-3 rounded-md border border-zinc-200 px-3 py-2.5 text-left hover:border-zinc-400 disabled:opacity-40"
                 >
                   <ProductImageDisplay
-                    product={{
-                      name: item.product_name,
-                      primary_image: item.primary_image ?? undefined,
-                    }}
+                    src={resolvePosCatalogItemImageSrc(item)}
                     className="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-zinc-100"
                     emojiClassName="text-2xl"
                   />
@@ -591,10 +588,7 @@ export function PosCashierPanel() {
                   <div key={posCatalogItemRowKey(line)} className="rounded-md border border-zinc-100 px-2 py-2">
                     <div className="flex items-start gap-2">
                       <ProductImageDisplay
-                        product={{
-                          name: line.product_name,
-                          primary_image: line.primary_image ?? undefined,
-                        }}
+                        src={resolvePosCatalogItemImageSrc(line)}
                         className="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-zinc-100"
                         emojiClassName="text-lg"
                       />

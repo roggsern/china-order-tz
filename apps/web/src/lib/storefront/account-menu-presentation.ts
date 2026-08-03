@@ -12,6 +12,12 @@ export type AccountMenuPresentation = {
   showLabel: boolean;
 };
 
+export function isAccountMenuPresentation(
+  presentation: AccountMenuPresentation | { kind: "guest-links" },
+): presentation is AccountMenuPresentation {
+  return !("kind" in presentation);
+}
+
 export function resolveAccountMenuPresentation(
   audience: StorefrontNavAudience,
   variant: "desktop" | "mobile",

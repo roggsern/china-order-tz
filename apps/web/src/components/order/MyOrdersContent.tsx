@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import {
   CustomerOrdersApiError,
   fetchCustomerOrders,
-  type CustomerOrderListItem,
 } from "@/lib/api/customer-orders";
 import { AuthInvitationCard } from "@/components/auth/AuthInvitationCard";
 import {
@@ -17,24 +16,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { OrderListCardsSkeleton } from "@/components/ui/PageSkeletons";
 import { OrdersSummaryIcon } from "@/components/account/AccountIcons";
 import { OrderOverviewCard, type OrderOverviewCardData } from "./OrderOverviewCard";
-
-function toOverviewCard(order: CustomerOrderListItem): OrderOverviewCardData {
-  return {
-    id: order.id,
-    orderNumber: order.orderNumber,
-    status: order.status,
-    displayStatusLabel: order.displayStatusLabel,
-    paymentStatus: order.paymentStatus,
-    createdAt: order.createdAt,
-    grandTotal: order.grandTotal,
-    productName: order.itemPreview,
-    quantity: order.itemCount,
-    source: order.source,
-    imageUrl: order.imageUrl,
-    imageEmoji: "📦",
-    imageGradient: "from-[#c9a227]/15 to-zinc-100",
-  };
-}
+import { mapCustomerOrderToOverviewCard } from "@/lib/order/order-overview-card";
 
 export function MyOrdersContent() {
   const [orders, setOrders] = useState<OrderOverviewCardData[]>([]);
@@ -56,7 +38,7 @@ export function MyOrdersContent() {
 
     try {
       const nextOrders = await fetchCustomerOrders();
-      setOrders(nextOrders.orders.map(toOverviewCard));
+      setOrders(nextOrders.orders.map(mapCustomerOrderToOverviewCard));
     } catch (error) {
       setOrders([]);
 

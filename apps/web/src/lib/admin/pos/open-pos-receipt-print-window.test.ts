@@ -86,7 +86,7 @@ describe("POS receipt print window helper", () => {
 
   it("loads the preview URL after popup creation and prints after load", async () => {
     const events: string[] = [];
-    let loadHandler: (() => void) | null = null;
+    const loadHandlers: Array<() => void> = [];
 
     const fakeWindow = {
       closed: false,
@@ -99,7 +99,7 @@ describe("POS receipt print window helper", () => {
       },
       addEventListener(type: string, handler: () => void) {
         if (type === "load") {
-          loadHandler = handler;
+          loadHandlers.push(handler);
         }
       },
       get document() {
@@ -113,7 +113,7 @@ describe("POS receipt print window helper", () => {
       "/api/admin/pos/receipts/receipt-789/preview?layout=thermal_80",
     );
 
-    loadHandler?.();
+    loadHandlers[0]?.();
     await navigation;
 
     assert.deepEqual(events, ["focus", "print"]);
