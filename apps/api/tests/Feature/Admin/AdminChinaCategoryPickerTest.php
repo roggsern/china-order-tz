@@ -82,6 +82,7 @@ class AdminChinaCategoryPickerTest extends TestCase
 
     public function test_tz_local_admin_categories_filter_by_store_and_active_flag_unchanged(): void
     {
+        $this->seed(\Database\Seeders\StoreSeeder::class);
         $this->seed(TzStoreCategorySeeder::class);
 
         $wigs = Category::query()->where('slug', 'rovi-beauty-wigs')->firstOrFail();
@@ -107,11 +108,35 @@ class AdminChinaCategoryPickerTest extends TestCase
         $this->seed(DepartmentSeeder::class);
         $this->seed(CategorySeeder::class);
         $this->seed(SubcategorySeeder::class);
+        $this->seed(\Database\Seeders\CommerceChannelSeeder::class);
 
         Category::query()
             ->where('origin', CatalogOrigin::China)
             ->whereNotNull('department_id')
             ->update(['is_active' => true]);
+
+        // Crosswalk visibility for bible roots mapped via department_slugs requires a
+        // listable china product under that department — not a department starter root.
+        $clothing = Category::query()->where('slug', 'mens-fashion-clothing-t-shirts')->firstOrFail();
+        $channel = \App\Models\CommerceChannel::query()
+            ->where('code', \App\Enums\CommerceChannelCode::ChinaImport->value)
+            ->firstOrFail();
+        $brand = \App\Models\Brand::factory()->create(['is_active' => true]);
+        $product = \App\Models\Product::factory()->create([
+            'category_id' => $clothing->id,
+            'brand_id' => $brand->id,
+            'commerce_channel_id' => $channel->id,
+            'store_id' => null,
+            'is_active' => true,
+            'is_demo' => false,
+            'lifecycle_status' => \App\Enums\ProductLifecycleStatus::Active,
+            'visibility' => \App\Enums\ProductVisibility::Public,
+            'price' => 45000,
+        ]);
+        \App\Models\Inventory::query()->updateOrCreate(
+            ['product_id' => $product->id, 'product_variant_id' => null],
+            ['quantity' => 5, 'reserved_quantity' => 0, 'low_stock_threshold' => 1],
+        );
 
         $response = $this->getJson('/api/v1/storefront/china/categories')
             ->assertOk()
@@ -127,6 +152,7 @@ class AdminChinaCategoryPickerTest extends TestCase
 
         $this->assertContains('mens-fashion', $slugs);
         $this->assertNotContains('mens-fashion-clothing', $slugs);
+        $this->assertNotContains('home-appliances-refrigerators-freezers', $slugs);
         $this->assertNotContains('Clothing', $names);
         $this->assertNotContains('T-Shirts', $names);
     }

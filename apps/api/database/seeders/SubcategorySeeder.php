@@ -108,6 +108,82 @@ class SubcategorySeeder extends Seeder
                     'Cables',
                 ],
             ],
+            'home-appliances' => [
+                'Cooking Appliances' => [
+                    'Cookers & Ovens',
+                    'Microwaves',
+                    'Electric Stoves',
+                    'Air Fryers',
+                ],
+                'Kitchen Appliances' => [
+                    'Blenders',
+                    'Mixers',
+                    'Juicers',
+                    'Food Processors',
+                    'Electric Kettles',
+                    'Coffee Makers',
+                ],
+            ],
+            'beauty-personal-care' => [
+                'Hair Care' => [
+                    'Shampoo & Conditioner',
+                    'Hair Treatments',
+                    'Hair Styling Products',
+                ],
+                'Skin Care' => [
+                    'Facial Cleansers',
+                    'Moisturizers',
+                    'Serums',
+                    'Sunscreen',
+                    'Face Masks',
+                ],
+                'Beauty Tools' => [
+                    'Makeup Brushes',
+                    'Mirrors',
+                    'Facial Tools',
+                ],
+            ],
+            'jewelry-watches' => [
+                'Watches' => [
+                    "Men's Watches",
+                    "Women's Watches",
+                    'Smart Watches',
+                    'Watch Accessories',
+                ],
+            ],
+            'sports-outdoors' => [
+                'Fitness & Exercise' => [
+                    'Gym Equipment',
+                    'Yoga Equipment',
+                    'Fitness Accessories',
+                ],
+                'Team Sports' => [
+                    'Football',
+                    'Basketball',
+                    'Volleyball',
+                ],
+            ],
+            'automotive' => [
+                'Car Electronics' => [
+                    'Car Audio',
+                    'Dash Cameras',
+                    'GPS & Tracking',
+                    'Car Chargers',
+                ],
+                'Car Care' => [
+                    'Cleaning Products',
+                    'Polishing & Detailing',
+                    'Repair & Maintenance',
+                ],
+            ],
+            'toys-kids' => [
+                'Baby Products' => [
+                    'Baby Feeding',
+                    'Baby Care',
+                    'Strollers & Carriers',
+                    'Nursery Products',
+                ],
+            ],
             'professional-audio' => [
                 'PA Systems' => [
                     'Portable PA Systems',
