@@ -16,6 +16,7 @@ import { resolveBrandLeafCategoryId } from "@/lib/admin/catalog-selector-utils";
 import { filterCatalogProductTypesForCategoryScope } from "@/lib/admin/catalog-product-type-scope";
 import {
   calculateProductCreationWizardProgress,
+  canSelectWizardStep,
   mapWizardMissingSummary,
   nextWizardStepId,
   normalizeWizardStepId,
@@ -23,8 +24,10 @@ import {
   previousWizardStepId,
   readPersistedWizardStep,
   resolveProductCreationWizardSteps,
+  resolveWizardStepStatus,
   type ProductCreationPricingModel,
   type ProductCreationWizardStepId,
+  type ProductCreationWizardStepStatus,
   validateWizardStepBeforeContinue,
 } from "@/lib/admin/product-creation-wizard";
 import type { ProductPublishReadinessResult } from "@/lib/admin/product-publish-readiness";
@@ -288,6 +291,38 @@ export function AdminProductCreationWizard({
 
   const missingSummary = mapWizardMissingSummary(progress);
 
+  const stepStatuses = useMemo(() => {
+    const progressInput = {
+      form,
+      mediaCount,
+      hasPrimaryImage,
+      variantCount: publishVariantCount,
+      sellableVariantCount: publishSellableVariantCount,
+      hasPublishableShipping,
+      publishReadiness,
+    };
+    return Object.fromEntries(
+      steps.map((step) => [step.id, resolveWizardStepStatus(step.id, progressInput)]),
+    ) as Record<ProductCreationWizardStepId, ProductCreationWizardStepStatus>;
+  }, [
+    steps,
+    form,
+    mediaCount,
+    hasPrimaryImage,
+    publishVariantCount,
+    publishSellableVariantCount,
+    hasPublishableShipping,
+    publishReadiness,
+  ]);
+
+  const handleSelectStep = (stepId: ProductCreationWizardStepId) => {
+    if (!canSelectWizardStep(stepId, steps, form.id)) {
+      return;
+    }
+    setStepError(null);
+    setCurrentStepId(stepId);
+  };
+
   const handleSaveDraft = async () => {
     setStepError(null);
     const saved = await onSaveDraft({ strictStepValidation: false });
@@ -330,6 +365,9 @@ export function AdminProductCreationWizard({
         currentStepId={currentStepId}
         percent={progress.percent}
         missingSummary={missingSummary}
+        stepStatuses={stepStatuses}
+        canSelectStep={(stepId) => canSelectWizardStep(stepId, steps, form.id)}
+        onSelectStep={handleSelectStep}
       />
 
       {actionError ? (

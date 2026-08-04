@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   calculateProductCreationWizardProgress,
+  canFreelyNavigateWizardSteps,
+  canSelectWizardStep,
   inferProductCreationPricingModel,
   isWizardStepComplete,
   mapApiPricingModelToWizard,
@@ -11,6 +13,7 @@ import {
   previousWizardStepId,
   resolveProductCreationWizardSteps,
   resolveWizardPricingModelFromProduct,
+  resolveWizardStepStatus,
   shouldUseProductCreationWizard,
   validateWizardBasicStep,
   validateWizardStepBeforeContinue,
@@ -226,7 +229,9 @@ describe("product creation wizard", () => {
       },
     });
 
-    assert.ok(progress.percent < 100);
+    // China simple actionable steps: basic, media, pricing, shipping, china-import (5).
+    // Draft-only complete → 1/5 = 20%.
+    assert.equal(progress.percent, 20);
     assert.ok(progress.missingPublishLabels.includes("Base price greater than zero"));
     assert.equal(
       isWizardStepComplete("basic", {
@@ -247,6 +252,64 @@ describe("product creation wizard", () => {
     );
   });
 
+  it("increases completion percent as media pricing shipping and china-import complete", () => {
+    const base = {
+      steps: chinaSimpleSteps,
+      form: {
+        id: "prod-1",
+        ...basicFormFields,
+        commerceJourney: "china" as const,
+        pricingModel: "simple" as const,
+        price: 0,
+        supplierId: "",
+      },
+      mediaCount: 0,
+      hasPrimaryImage: false,
+      variantCount: 0,
+      sellableVariantCount: 0,
+      hasPublishableShipping: false,
+      publishReadiness: null,
+    };
+
+    const draftOnly = calculateProductCreationWizardProgress(base);
+    assert.equal(draftOnly.percent, 20);
+
+    const withMedia = calculateProductCreationWizardProgress({
+      ...base,
+      mediaCount: 2,
+      hasPrimaryImage: true,
+    });
+    assert.equal(withMedia.percent, 40);
+    assert.ok(withMedia.percent > draftOnly.percent);
+
+    const withPricing = calculateProductCreationWizardProgress({
+      ...base,
+      form: { ...base.form, price: 25000 },
+      mediaCount: 2,
+      hasPrimaryImage: true,
+    });
+    assert.equal(withPricing.percent, 60);
+
+    const withShipping = calculateProductCreationWizardProgress({
+      ...base,
+      form: { ...base.form, price: 25000 },
+      mediaCount: 2,
+      hasPrimaryImage: true,
+      hasPublishableShipping: true,
+    });
+    assert.equal(withShipping.percent, 80);
+
+    const withChinaImport = calculateProductCreationWizardProgress({
+      ...base,
+      form: { ...base.form, price: 25000, supplierId: "sup-1" },
+      mediaCount: 2,
+      hasPrimaryImage: true,
+      hasPublishableShipping: true,
+    });
+    assert.equal(withChinaImport.percent, 100);
+    assert.ok(withChinaImport.percent > withShipping.percent);
+  });
+
   it("requires supplier on china-import step", () => {
     assert.match(
       validateWizardStepBeforeContinue("china-import", {
@@ -264,5 +327,150 @@ describe("product creation wizard", () => {
     assert.equal(shouldUseProductCreationWizard({ isNewProduct: true, status: "draft" }), true);
     assert.equal(shouldUseProductCreationWizard({ isNewProduct: false, status: "draft" }), true);
     assert.equal(shouldUseProductCreationWizard({ isNewProduct: false, status: "active" }), false);
+  });
+
+  it("before draft only basic section is selectable", () => {
+    assert.equal(canFreelyNavigateWizardSteps(undefined), false);
+    assert.equal(canSelectWizardStep("basic", chinaSimpleSteps, undefined), true);
+    assert.equal(canSelectWizardStep("media", chinaSimpleSteps, undefined), false);
+    assert.equal(canSelectWizardStep("pricing", chinaSimpleSteps, ""), false);
+    assert.equal(canSelectWizardStep("shipping", chinaSimpleSteps, undefined), false);
+    assert.equal(canSelectWizardStep("review", chinaSimpleSteps, undefined), false);
+  });
+
+  it("after draft every journey section is selectable", () => {
+    assert.equal(canFreelyNavigateWizardSteps("prod-1"), true);
+    for (const step of chinaSimpleSteps) {
+      assert.equal(canSelectWizardStep(step.id, chinaSimpleSteps, "prod-1"), true);
+    }
+    for (const step of tzVariantSteps) {
+      assert.equal(canSelectWizardStep(step.id, tzVariantSteps, "prod-1"), true);
+    }
+    assert.equal(canSelectWizardStep("pricing", tzVariantSteps, "prod-1"), false);
+    assert.equal(canSelectWizardStep("china-import", tzSimpleSteps, "prod-1"), false);
+  });
+
+  it("allows free jump order across unlocked sections", () => {
+    const draftId = "prod-jump";
+    const path: Array<(typeof chinaSimpleSteps)[number]["id"]> = [
+      "media",
+      "shipping",
+      "pricing",
+      "media",
+    ];
+    for (const stepId of path) {
+      assert.equal(canSelectWizardStep(stepId, chinaSimpleSteps, draftId), true);
+      assert.equal(normalizeWizardStepId(stepId, chinaSimpleSteps), stepId);
+    }
+  });
+
+  it("keeps publish blocked while readiness is incomplete", () => {
+    const progress = calculateProductCreationWizardProgress({
+      steps: chinaSimpleSteps,
+      form: {
+        id: "prod-1",
+        ...basicFormFields,
+        commerceJourney: "china",
+        pricingModel: "simple",
+        price: 1000,
+        supplierId: "sup-1",
+      },
+      mediaCount: 1,
+      hasPrimaryImage: true,
+      variantCount: 0,
+      sellableVariantCount: 0,
+      hasPublishableShipping: true,
+      publishReadiness: {
+        ready: false,
+        items: [],
+        missing: [{ id: "inventory", label: "Inventory policy configured", met: false }],
+        completed: [],
+        path: "simple",
+      },
+    });
+    assert.equal(progress.readyToPublish, false);
+    assert.equal(
+      isWizardStepComplete("review", {
+        form: {
+          id: "prod-1",
+          ...basicFormFields,
+          commerceJourney: "china",
+          pricingModel: "simple",
+        },
+        mediaCount: 1,
+        hasPrimaryImage: true,
+        variantCount: 0,
+        sellableVariantCount: 0,
+        hasPublishableShipping: true,
+        publishReadiness: {
+          ready: false,
+          items: [],
+          missing: [{ id: "inventory", label: "Inventory policy configured", met: false }],
+          completed: [],
+          path: "simple",
+        },
+      }),
+      false,
+    );
+  });
+
+  it("marks section statuses from draft and content rules", () => {
+    const emptyDraft = {
+      form: {
+        id: "prod-1",
+        ...basicFormFields,
+        commerceJourney: "china" as const,
+        pricingModel: "simple" as const,
+      },
+      mediaCount: 0,
+      hasPrimaryImage: false,
+      variantCount: 0,
+      sellableVariantCount: 0,
+      hasPublishableShipping: false,
+      publishReadiness: null,
+    };
+    assert.equal(resolveWizardStepStatus("basic", emptyDraft), "complete");
+    assert.equal(resolveWizardStepStatus("media", emptyDraft), "not_started");
+    assert.equal(resolveWizardStepStatus("pricing", emptyDraft), "not_started");
+
+    assert.equal(
+      resolveWizardStepStatus("media", {
+        ...emptyDraft,
+        mediaCount: 1,
+        hasPrimaryImage: false,
+      }),
+      "incomplete",
+    );
+    assert.equal(
+      resolveWizardStepStatus("variants", {
+        ...emptyDraft,
+        form: { ...emptyDraft.form, pricingModel: "variants" },
+        variantCount: 0,
+      }),
+      "not_started",
+    );
+    assert.equal(
+      resolveWizardStepStatus("variants", {
+        ...emptyDraft,
+        form: { ...emptyDraft.form, pricingModel: "variants" },
+        variantCount: 6,
+      }),
+      "complete",
+    );
+  });
+
+  it("hides china-only and pricing sections for tz variant journey", () => {
+    assert.equal(
+      tzVariantSteps.some((step) => step.id === "china-import"),
+      false,
+    );
+    assert.equal(
+      tzVariantSteps.some((step) => step.id === "pricing"),
+      false,
+    );
+    assert.equal(
+      chinaSimpleSteps.some((step) => step.id === "china-import"),
+      true,
+    );
   });
 });

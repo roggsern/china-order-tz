@@ -65,6 +65,8 @@ export type ProductCreationWizardProgressInput = {
   publishReadiness: ProductPublishReadinessResult | null;
 };
 
+export type ProductCreationWizardStepStatus = "not_started" | "incomplete" | "complete";
+
 export type ProductCreationWizardProgress = {
   percent: number;
   completedStepIds: ProductCreationWizardStepId[];
@@ -73,6 +75,99 @@ export type ProductCreationWizardProgress = {
   readyForReview: boolean;
   readyToPublish: boolean;
 };
+
+/** Free section navigation is available only after the first draft save. */
+export function canFreelyNavigateWizardSteps(productId: string | undefined): boolean {
+  return Boolean(productId?.trim());
+}
+
+/**
+ * Before draft: only Basic is selectable.
+ * After draft: every step in the current journey list is selectable.
+ */
+export function canSelectWizardStep(
+  stepId: ProductCreationWizardStepId,
+  steps: ProductCreationWizardStep[],
+  productId: string | undefined,
+): boolean {
+  if (!steps.some((step) => step.id === stepId)) {
+    return false;
+  }
+  if (!canFreelyNavigateWizardSteps(productId)) {
+    return stepId === "basic";
+  }
+  return true;
+}
+
+function wizardStepHasPartialProgress(
+  stepId: ProductCreationWizardStepId,
+  input: Omit<ProductCreationWizardProgressInput, "steps">,
+): boolean {
+  switch (stepId) {
+    case "basic":
+      return (
+        input.form.name.trim().length > 0 ||
+        input.form.commerceJourney === "china" ||
+        input.form.commerceJourney === "tz" ||
+        input.form.departmentId.trim().length > 0 ||
+        input.form.storeId.trim().length > 0 ||
+        input.form.categoryId.trim().length > 0 ||
+        input.form.subcategoryId.trim().length > 0 ||
+        input.form.catalogProductTypeId.trim().length > 0
+      );
+    case "media":
+      return input.mediaCount > 0;
+    case "pricing":
+      return input.form.price > 0 || input.sellableVariantCount > 0;
+    case "variants":
+      return input.variantCount > 0;
+    case "shipping":
+      return input.hasPublishableShipping;
+    case "china-import":
+      return input.form.supplierId.trim().length > 0;
+    case "store":
+      return input.form.storeId.trim().length > 0;
+    case "review":
+      return (input.publishReadiness?.items.length ?? 0) > 0;
+    default:
+      return false;
+  }
+}
+
+export function resolveWizardStepStatus(
+  stepId: ProductCreationWizardStepId,
+  input: Omit<ProductCreationWizardProgressInput, "steps">,
+): ProductCreationWizardStepStatus {
+  if (isWizardStepComplete(stepId, input)) {
+    return "complete";
+  }
+  if (wizardStepHasPartialProgress(stepId, input)) {
+    return "incomplete";
+  }
+  return "not_started";
+}
+
+export function wizardStepStatusLabel(status: ProductCreationWizardStepStatus): string {
+  switch (status) {
+    case "complete":
+      return "Complete";
+    case "incomplete":
+      return "Incomplete";
+    default:
+      return "Not Started";
+  }
+}
+
+export function wizardStepStatusGlyph(status: ProductCreationWizardStepStatus): string {
+  switch (status) {
+    case "complete":
+      return "✔";
+    case "incomplete":
+      return "⚠";
+    default:
+      return "○";
+  }
+}
 
 const WIZARD_STEP_STORAGE_PREFIX = "admin-product-wizard-step:";
 
@@ -158,32 +253,14 @@ export function wizardSavePricingFields(
   return { price, cost_price: costPrice };
 }
 
-function hasBasicTaxonomyScope(form: ProductCreationWizardFormSnapshot): boolean {
-  if (form.commerceJourney === "tz") {
-    return form.storeId.trim().length > 0;
-  }
-  if (form.commerceJourney === "china") {
-    return form.departmentId.trim().length > 0;
-  }
-  return false;
-}
-
 export function isWizardStepComplete(
   stepId: ProductCreationWizardStepId,
   input: Omit<ProductCreationWizardProgressInput, "steps">,
 ): boolean {
-  const leafCategoryId = input.form.subcategoryId || input.form.categoryId;
-
   switch (stepId) {
     case "basic":
-      return (
-        input.form.name.trim().length > 0 &&
-        (input.form.id !== undefined ||
-          (input.form.commerceJourney === "china" || input.form.commerceJourney === "tz")) &&
-        hasBasicTaxonomyScope(input.form) &&
-        leafCategoryId.trim().length > 0 &&
-        input.form.catalogProductTypeId.trim().length > 0
-      );
+      // Sprint 1: Basic is complete once the draft product record exists.
+      return Boolean(input.form.id?.trim());
     case "media":
       return input.form.id !== undefined && input.mediaCount > 0 && input.hasPrimaryImage;
     case "pricing":
@@ -192,7 +269,9 @@ export function isWizardStepComplete(
       }
       return input.form.price > 0;
     case "variants":
-      return true;
+      // Variant path: complete after generation produced at least one variant.
+      // Simple path omits this step from the journey list.
+      return input.variantCount > 0;
     case "shipping":
       return input.hasPublishableShipping;
     case "china-import":
