@@ -21,13 +21,27 @@ class CreateCatalogAttributeOptionAction
         }
 
         $validated = $request->validated();
+        $value = trim((string) $validated['value']);
+        $normalized = mb_strtolower($value);
+
+        $duplicateExists = CatalogAttributeOption::query()
+            ->where('catalog_attribute_id', $catalogAttribute->id)
+            ->whereRaw('LOWER(TRIM(value)) = ?', [$normalized])
+            ->exists();
+
+        if ($duplicateExists) {
+            throw ValidationException::withMessages([
+                'value' => ['An option with this value already exists for this attribute.'],
+            ]);
+        }
+
         $slugSource = isset($validated['slug']) && is_string($validated['slug']) && trim($validated['slug']) !== ''
             ? $validated['slug']
-            : $validated['value'];
+            : $value;
 
         return CatalogAttributeOption::create([
             'catalog_attribute_id' => $catalogAttribute->id,
-            'value' => $validated['value'],
+            'value' => $value,
             'slug' => $this->uniqueSlug($catalogAttribute->id, Str::slug($slugSource)),
             'sort_order' => $validated['sort_order'] ?? 0,
         ]);

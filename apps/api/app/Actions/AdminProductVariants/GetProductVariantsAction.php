@@ -33,8 +33,9 @@ class GetProductVariantsAction
                     ? $attribute->type
                     : CatalogAttributeType::tryFrom((string) $attribute->type);
 
-                return in_array($type, [CatalogAttributeType::Select, CatalogAttributeType::Multiselect], true)
-                    && $attribute->options->isNotEmpty();
+                // Include select attributes even with zero options so the wizard can
+                // offer inline "+ Add New" for the first option without leaving the page.
+                return in_array($type, [CatalogAttributeType::Select, CatalogAttributeType::Multiselect], true);
             })
             ->sortBy(fn ($attribute) => (int) ($attribute->pivot?->sort_order ?? $attribute->sort_order ?? 0))
             ->map(fn ($attribute) => [

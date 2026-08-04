@@ -1,11 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { InlineCreateAttributeOptionModal } from "@/components/admin/InlineCreateAttributeOptionModal";
+import { VariantAttributeImageApply } from "@/components/admin/VariantAttributeImageApply";
 import { VariantBulkActionBar } from "@/components/admin/VariantBulkActionBar";
 import { VariantInventoryManager } from "@/components/admin/VariantInventoryManager";
 import { VariantMediaManager } from "@/components/admin/VariantMediaManager";
 import { VariantPricingManager } from "@/components/admin/VariantPricingManager";
 import { useAdminPermissions } from "@/hooks/use-admin-permissions";
+import {
+  INLINE_ATTRIBUTE_OPTION_UX,
+  canCreateCatalogAttributeOptions,
+  mergeCreatedAttributeOption,
+  selectOptionForGenerate,
+  selectOptionForManualForm,
+  toVariantAttributeOption,
+} from "@/lib/admin/inline-attribute-option";
 import {
   canManageVariantMedia,
   formatVariantImageCount,
@@ -19,6 +29,7 @@ import {
   fetchAdminProductVariants,
   generateAdminProductVariants,
   updateAdminProductVariant,
+  type AdminCatalogAttributeOption,
   type AdminProductVariant,
   type AdminVariantAttribute,
 } from "@/lib/api/admin-catalog";
@@ -54,6 +65,7 @@ export function ProductVariantsManager({
   const isChinaImport = commerceChannelCode === "CHINA_IMPORT";
   const { permissions } = useAdminPermissions();
   const canUpdateMedia = canManageVariantMedia(permissions);
+  const canAddAttributeOptions = canCreateCatalogAttributeOptions(permissions);
   const [variants, setVariants] = useState<AdminProductVariant[]>([]);
   const [attributes, setAttributes] = useState<AdminVariantAttribute[]>([]);
   const [imageCounts, setImageCounts] = useState<Record<string, number>>({});
@@ -69,6 +81,38 @@ export function ProductVariantsManager({
   const [inventoryVariantId, setInventoryVariantId] = useState<string | null>(null);
   const [mediaVariantId, setMediaVariantId] = useState<string | null>(null);
   const [selectedVariantIds, setSelectedVariantIds] = useState<string[]>([]);
+  const [addOptionAttributeId, setAddOptionAttributeId] = useState<string | null>(null);
+
+  const addOptionAttribute = useMemo(
+    () => attributes.find((attr) => attr.catalogAttributeId === addOptionAttributeId) ?? null,
+    [attributes, addOptionAttributeId],
+  );
+
+  const handleInlineOptionCreated = (created: AdminCatalogAttributeOption) => {
+    if (!addOptionAttributeId) {
+      return;
+    }
+
+    const attributeId = addOptionAttributeId;
+    const attributeName =
+      attributes.find((attr) => attr.catalogAttributeId === attributeId)?.name ?? "attribute";
+    const option = toVariantAttributeOption(created);
+    setAttributes((current) => mergeCreatedAttributeOption(current, attributeId, option));
+    setGenerateSelected((current) =>
+      selectOptionForGenerate(current, attributeId, option.id),
+    );
+    setForm((current) => ({
+      ...current,
+      optionByAttribute: selectOptionForManualForm(
+        current.optionByAttribute,
+        attributeId,
+        option.id,
+      ),
+    }));
+    setSuccess(`Added “${option.value}” to ${attributeName}.`);
+    setError(null);
+    setAddOptionAttributeId(null);
+  };
 
   const selectedCount = selectedVariantIds.length;
   const allVariantIds = useMemo(() => variants.map((variant) => variant.id), [variants]);
@@ -348,6 +392,23 @@ export function ProductVariantsManager({
           ? ". For China Import products, set customer availability in Commercial Availability."
           : " and Inventory for warehouse stock."}
       </p>
+
+      <VariantAttributeImageApply
+        productId={productId}
+        attributes={attributes}
+        variants={variants}
+        canUpdate={canUpdateMedia}
+        disabled={busy}
+        onApplied={(summary) => {
+          setError(null);
+          setSuccess(summary);
+          void loadImageCounts(variants);
+        }}
+        onError={(message) => {
+          setSuccess(null);
+          setError(message);
+        }}
+      />
 
       <div className="overflow-x-auto rounded-lg border border-zinc-200">
         <table className="min-w-full text-left text-sm">
@@ -639,9 +700,21 @@ export function ProductVariantsManager({
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             {attributes.map((attr) => (
               <div key={attr.catalogAttributeId}>
-                <label className="admin-label" htmlFor={`variant-attr-${attr.catalogAttributeId}`}>
-                  {attr.name}
-                </label>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="admin-label" htmlFor={`variant-attr-${attr.catalogAttributeId}`}>
+                    {attr.name}
+                  </label>
+                  {canAddAttributeOptions ? (
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-zinc-700 hover:underline"
+                      disabled={busy}
+                      onClick={() => setAddOptionAttributeId(attr.catalogAttributeId)}
+                    >
+                      {INLINE_ATTRIBUTE_OPTION_UX.addNewLabel}
+                    </button>
+                  ) : null}
+                </div>
                 <select
                   id={`variant-attr-${attr.catalogAttributeId}`}
                   className="admin-input mt-1"
@@ -709,10 +782,27 @@ export function ProductVariantsManager({
           <div className="mt-3 space-y-3">
             {attributes.map((attr) => (
               <div key={attr.catalogAttributeId}>
-                <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                  {attr.name}
-                </p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                    {attr.name}
+                  </p>
+                  {canAddAttributeOptions ? (
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-zinc-700 hover:underline"
+                      disabled={busy}
+                      onClick={() => setAddOptionAttributeId(attr.catalogAttributeId)}
+                    >
+                      {INLINE_ATTRIBUTE_OPTION_UX.addNewLabel}
+                    </button>
+                  ) : null}
+                </div>
                 <div className="mt-1 flex flex-wrap gap-3">
+                  {attr.options.length === 0 ? (
+                    <p className="text-xs text-zinc-500">
+                      No options yet. Use {INLINE_ATTRIBUTE_OPTION_UX.addNewLabel} to create one.
+                    </p>
+                  ) : null}
                   {attr.options.map((option) => {
                     const checked = (
                       generateSelected[attr.catalogAttributeId] ?? []
@@ -762,6 +852,17 @@ export function ProductVariantsManager({
           </span>
         </div>
       </div>
+
+      {addOptionAttribute ? (
+        <InlineCreateAttributeOptionModal
+          open
+          attributeId={addOptionAttribute.catalogAttributeId}
+          attributeName={addOptionAttribute.name}
+          existingOptions={addOptionAttribute.options}
+          onClose={() => setAddOptionAttributeId(null)}
+          onCreated={handleInlineOptionCreated}
+        />
+      ) : null}
     </div>
   );
 }
