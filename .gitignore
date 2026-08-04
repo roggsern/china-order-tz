@@ -175,3 +175,7 @@ apps/api/storage/backups/
 .DS_Store
 Thumbs.db
 local-backups/
+
+# Local SQL backups (never commit)
+*.sql
+*.sql.gz
