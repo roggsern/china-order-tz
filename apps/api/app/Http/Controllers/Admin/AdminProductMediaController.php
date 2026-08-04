@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Actions\AdminProductMedia\ApplyAttributeOptionMediaAction;
 use App\Actions\AdminProductMedia\CreateProductMediaAction;
 use App\Actions\AdminProductMedia\DeleteProductMediaAction;
 use App\Actions\AdminProductMedia\GetProductMediaAction;
 use App\Actions\AdminProductMedia\SetPrimaryProductMediaAction;
 use App\Actions\AdminProductMedia\UpdateProductMediaAction;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\ApplyAttributeOptionMediaRequest;
 use App\Http\Requests\Admin\IndexProductMediaRequest;
 use App\Http\Requests\Admin\StoreProductMediaRequest;
 use App\Http\Requests\Admin\UpdateProductMediaRequest;
@@ -40,6 +42,32 @@ class AdminProductMediaController extends Controller
         return response()->json([
             'success' => true,
             'data' => new ProductMediaResource($action->handle($request, $product)),
+        ], 201);
+    }
+
+    public function applyToAttributeOption(
+        ApplyAttributeOptionMediaRequest $request,
+        Product $product,
+        ApplyAttributeOptionMediaAction $action,
+    ): JsonResponse {
+        $result = $action->handle($request, $product);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'catalog_attribute_option_id' => $result['catalog_attribute_option_id'],
+                'option_value' => $result['option_value'],
+                'attribute_name' => $result['attribute_name'],
+                'url' => $result['url'],
+                'matched_variant_count' => $result['matched_variant_count'],
+                'applied_count' => $result['applied_count'],
+                'skipped_count' => $result['skipped_count'],
+                'skipped_variant_ids' => $result['skipped_variant_ids'],
+                'media' => $result['media']
+                    ->map(fn ($media) => (new ProductMediaResource($media))->resolve())
+                    ->values()
+                    ->all(),
+            ],
         ], 201);
     }
 

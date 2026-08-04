@@ -626,6 +626,8 @@ Route::middleware(['auth:sanctum', 'ensure.admin', 'admin.active'])->prefix('adm
     Route::get('/products/{product}/media', [AdminProductMediaController::class, 'index']);
     Route::post('/products/{product}/media', [AdminProductMediaController::class, 'store'])
         ->middleware('throttle:uploads');
+    Route::post('/products/{product}/media/apply-to-attribute-option', [AdminProductMediaController::class, 'applyToAttributeOption'])
+        ->middleware('throttle:uploads');
     Route::put('/products/{product}/media/{media}', [AdminProductMediaController::class, 'update'])
         ->middleware('throttle:uploads');
     Route::delete('/products/{product}/media/{media}', [AdminProductMediaController::class, 'destroy'])

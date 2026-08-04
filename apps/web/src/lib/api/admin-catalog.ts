@@ -2760,6 +2760,88 @@ export async function uploadAdminProductMediaImage(
   return mapAdminApiProductMedia(payload.data);
 }
 
+export type AdminAttributeOptionMediaApplyResult = {
+  catalogAttributeOptionId: string;
+  optionValue: string;
+  attributeName: string | null;
+  url: string;
+  matchedVariantCount: number;
+  appliedCount: number;
+  skippedCount: number;
+  skippedVariantIds: string[];
+  media: AdminProductMedia[];
+};
+
+type AdminApiAttributeOptionMediaApplyResult = {
+  catalog_attribute_option_id?: string;
+  option_value?: string;
+  attribute_name?: string | null;
+  url?: string;
+  matched_variant_count?: number;
+  applied_count?: number;
+  skipped_count?: number;
+  skipped_variant_ids?: string[];
+  media?: AdminApiProductMedia[];
+};
+
+export async function applyAdminProductMediaToAttributeOption(
+  productId: string,
+  file: File,
+  options: {
+    catalogAttributeOptionId: string;
+    altText?: string;
+    title?: string;
+  },
+): Promise<AdminAttributeOptionMediaApplyResult> {
+  const formData = new FormData();
+  formData.append("catalog_attribute_option_id", options.catalogAttributeOptionId);
+  formData.append("file", file, file.name);
+  if (options.altText) formData.append("alt_text", options.altText);
+  if (options.title) formData.append("title", options.title);
+
+  const response = await fetch(
+    `/api/admin/products/${encodeURIComponent(productId)}/media/apply-to-attribute-option`,
+    {
+      method: "POST",
+      headers: { Accept: "application/json" },
+      body: formData,
+      cache: "no-store",
+    },
+  );
+
+  const payload = await parseJsonResponse<{
+    success?: boolean;
+    message?: string;
+    data?: AdminApiAttributeOptionMediaApplyResult;
+    errors?: Record<string, string[]>;
+  }>(response);
+
+  if (!response.ok || payload.success === false || !payload.data) {
+    const firstError = payload.errors
+      ? Object.values(payload.errors).flat()[0]
+      : undefined;
+    throw new AdminCatalogApiError(
+      firstError?.trim() ||
+        payload.message?.trim() ||
+        "Unable to apply image to attribute option.",
+      response.status,
+    );
+  }
+
+  const data = payload.data;
+  return {
+    catalogAttributeOptionId: data.catalog_attribute_option_id ?? options.catalogAttributeOptionId,
+    optionValue: data.option_value ?? "",
+    attributeName: data.attribute_name ?? null,
+    url: data.url ?? "",
+    matchedVariantCount: Number(data.matched_variant_count ?? 0),
+    appliedCount: Number(data.applied_count ?? 0),
+    skippedCount: Number(data.skipped_count ?? 0),
+    skippedVariantIds: data.skipped_variant_ids ?? [],
+    media: (data.media ?? []).map(mapAdminApiProductMedia),
+  };
+}
+
 export async function createAdminProductMediaVideo(
   productId: string,
   url: string,
