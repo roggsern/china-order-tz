@@ -49,6 +49,15 @@ function attachGlobalCallbacks(callbacks: NmbHostedCheckoutCallbacks): void {
   };
 
   host.errorCallback = (error: unknown) => {
+    // TEMP diagnostics — remove after Hosted Checkout error is identified
+    const err = error as { cause?: unknown; explanation?: unknown; message?: unknown } | null;
+    console.group("=== NMB Hosted Checkout Error ===");
+    console.error("Raw error:", error);
+    console.error("Cause:", err?.cause);
+    console.error("Explanation:", err?.explanation);
+    console.error("Message:", err?.message);
+    console.groupEnd();
+
     callbacks.onError?.(parseHostedCheckoutError(error));
   };
 
@@ -108,6 +117,11 @@ export function configureMpgsHostedCheckout(config: MpgsCheckoutConfigureInput):
     throw new Error("NMB Hosted Checkout SDK is not loaded.");
   }
 
+  // TEMP diagnostics — remove after Hosted Checkout error is identified
+  console.group("=== NMB Checkout Configure ===");
+  console.log(config);
+  console.groupEnd();
+
   window.Checkout.configure(config);
 }
 
@@ -115,6 +129,9 @@ export function showMpgsPaymentPage(): void {
   if (!window.Checkout) {
     throw new Error("NMB Hosted Checkout SDK is not loaded.");
   }
+
+  // TEMP diagnostics — remove after Hosted Checkout error is identified
+  console.log("Calling Checkout.showPaymentPage()");
 
   window.Checkout.showPaymentPage();
 }
