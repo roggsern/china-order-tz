@@ -65,6 +65,20 @@ class ProductResource extends JsonResource
             'variants_count' => $listSummary->variantsCount($this->resource),
             'price_range' => $listSummary->priceRange($this->resource),
             'stock_summary' => $listSummary->stockSummary($this->resource),
+            // Surface legacy integrity issues (active variants under a trashed parent).
+            'catalog_integrity' => $this->when(
+                $this->resource->trashed(),
+                function () {
+                    $orphans = array_key_exists('orphaned_active_variants_count', $this->resource->getAttributes())
+                        ? (int) $this->resource->getAttribute('orphaned_active_variants_count')
+                        : (int) $this->resource->variants()->count();
+
+                    return [
+                        'orphaned_active_variants_count' => $orphans,
+                        'has_orphaned_active_variants' => $orphans > 0,
+                    ];
+                },
+            ),
             'product_type' => new ProductTypeResource($this->whenLoaded('productType')),
             'catalog_product_type' => $this->whenLoaded('catalogProductType', fn () => [
                 'id' => $this->catalogProductType?->id,

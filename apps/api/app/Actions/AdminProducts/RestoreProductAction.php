@@ -3,15 +3,18 @@
 namespace App\Actions\AdminProducts;
 
 use App\Models\Product;
+use App\Services\AdminProducts\ProductDeletionLifecycle;
 
 class RestoreProductAction
 {
+    public function __construct(
+        private readonly ProductDeletionLifecycle $lifecycle,
+    ) {}
+
     public function handle(string $id): Product
     {
         $product = Product::onlyTrashed()->findOrFail($id);
 
-        $product->restore();
-
-        return $product->load(['category', 'brand', 'inventory']);
+        return $this->lifecycle->restore($product);
     }
 }

@@ -46,10 +46,42 @@ class GetAdminProductsAction
 
         $sortField = in_array($sort, $allowedSorts, true) ? $sort : null;
 
+        $trashed = request()->boolean('trashed');
+
         $query = Product::query();
         $this->legacyConfigurationDetector->applyExistsSelect($query);
-        $query->withCount('variants');
-        $query->with(array_merge([
+
+        if ($trashed) {
+            // Soft-deleted parents + soft-deleted (or legacy orphan active) variants.
+            // Parent relation must use withTrashed or variant->product is null.
+            $query->onlyTrashed();
+            $query->withCount([
+                'variants as variants_count' => fn (Builder $q) => $q->withTrashed(),
+                'variants as orphaned_active_variants_count',
+            ]);
+            $query->with(array_merge([
+                'commerceChannel',
+                'store',
+                'category.department',
+                'category.parent',
+                'brand',
+                'supplier',
+                'catalogProductType.subcategory',
+                'inventory',
+                'priceTiers',
+                'variants' => fn ($q) => $q->withTrashed(),
+                'variants.attributeValues',
+                'variants.inventory',
+                'variants.inventories',
+                'variants.prices',
+                'variants.priceTiers',
+                'variants.product' => fn ($q) => $q->withTrashed(),
+            ], CustomerProductMediaResolver::catalogEagerLoads()));
+        } else {
+            // Active listing: SoftDeletes on Product excludes trashed parents, so their
+            // variants are never serialized here.
+            $query->withCount('variants');
+            $query->with(array_merge([
                 'commerceChannel',
                 'store',
                 'category.department',
@@ -66,9 +98,6 @@ class GetAdminProductsAction
                 'variants.priceTiers',
                 'variants.product',
             ], CustomerProductMediaResolver::catalogEagerLoads()));
-
-        if (request()->boolean('trashed')) {
-            $query->onlyTrashed();
         }
 
         return $query

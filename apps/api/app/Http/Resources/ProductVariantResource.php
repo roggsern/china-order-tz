@@ -25,7 +25,7 @@ class ProductVariantResource extends JsonResource
             'weight' => $this->weight,
             'is_active' => $this->is_active,
             'effective_price' => $this->when(
-                $this->relationLoaded('product'),
+                $this->relationLoaded('product') || $this->relationLoaded('prices'),
                 fn () => $this->effectivePrice()
             ),
             'attribute_values' => ProductAttributeValueResource::collection($this->whenLoaded('attributeValues')),

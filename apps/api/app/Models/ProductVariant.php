@@ -162,14 +162,36 @@ class ProductVariant extends Model
             ->first();
     }
 
-    /** Legacy fallback — prefer VariantPrice via retailPrice(). */
-    public function effectivePrice(): string
+    /**
+     * Legacy fallback — prefer VariantPrice via retailPrice().
+     *
+     * Returns null when no retail / legacy variant / parent price is available.
+     * Soft-deleted parents are not loaded by product() — never dereference null.
+     */
+    public function effectivePrice(): ?string
     {
         $retail = $this->retailPrice();
         if ($retail !== null) {
             return (string) $retail->amount;
         }
 
-        return (string) ($this->price ?? $this->product->price);
+        if ($this->price !== null && $this->price !== '') {
+            return (string) $this->price;
+        }
+
+        $product = $this->relationLoaded('product')
+            ? $this->product
+            : $this->product()->first();
+
+        if ($product === null && filled($this->product_id)) {
+            // Trash / orphan safety: parent may be soft-deleted.
+            $product = Product::withTrashed()->find($this->product_id);
+        }
+
+        if ($product !== null && $product->price !== null && $product->price !== '') {
+            return (string) $product->price;
+        }
+
+        return null;
     }
 }

@@ -38,7 +38,7 @@ class CreateOrderAction
                     : null;
 
                 $unitPrice = $variant
-                    ? $variant->effectivePrice()
+                    ? ($variant->effectivePrice() ?? (string) $product->price)
                     : (string) $product->price;
 
                 $quantity = (int) $item['quantity'];

@@ -3,11 +3,16 @@
 namespace App\Actions\AdminProducts;
 
 use App\Models\Product;
+use App\Services\AdminProducts\ProductDeletionLifecycle;
 
 class DeleteProductAction
 {
+    public function __construct(
+        private readonly ProductDeletionLifecycle $lifecycle,
+    ) {}
+
     public function handle(Product $product): void
     {
-        $product->delete();
+        $this->lifecycle->softDelete($product);
     }
 }
