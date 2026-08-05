@@ -68,9 +68,12 @@ class PaymentTransactionCompletionService
                     : $locked->completed_at,
             ])->save();
 
-            if ($result->status === PaymentTransactionStatus::Successful) {
-                $this->markOrderPaid($locked);
+            if ($result->status !== PaymentTransactionStatus::Successful || ! $result->ok) {
+                // Never mark the order paid unless the provider reports a strict Successful outcome.
+                return $locked->fresh(['order']) ?? $locked;
             }
+
+            $this->markOrderPaid($locked);
 
             return $locked->fresh(['order']) ?? $locked;
         });

@@ -119,12 +119,21 @@ class NmbProductionReadinessTest extends TestCase
         Http::fake([
             'sandbox.nmb.test/*' => Http::response([
                 'result' => 'SUCCESS',
+                'response' => ['gatewayCode' => 'APPROVED'],
                 'order' => [
                     'id' => 'PAY-2026-000444',
                     'amount' => '75000.00',
                     'currency' => 'TZS',
+                    'status' => 'CAPTURED',
+                    'authenticationStatus' => 'AUTHENTICATION_SUCCESSFUL',
+                    'totalAuthorizedAmount' => '75000.00',
+                    'totalCapturedAmount' => '75000.00',
                 ],
-                'transaction' => ['id' => 'TRANS000444'],
+                'transaction' => [
+                    'id' => 'TRANS000444',
+                    'type' => 'PAYMENT',
+                    'result' => 'SUCCESS',
+                ],
             ]),
         ]);
 

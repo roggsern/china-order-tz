@@ -50,6 +50,7 @@ class NmbVerificationService
 
             if (! $result->verified
                 && ! $result->transientFailure
+                && ! $result->pending
                 && $lockedPayment->status === PaymentStatus::Initiated) {
                 $lockedPayment->update([
                     'status' => PaymentStatus::Failed,

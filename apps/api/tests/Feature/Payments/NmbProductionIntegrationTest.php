@@ -77,6 +77,40 @@ class NmbProductionIntegrationTest extends TestCase
         });
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    private function settledOrderResponse(string $orderId, string $transactionId = 'TXN-SETTLED'): array
+    {
+        $amount = number_format(
+            (float) PaymentTransaction::query()
+                ->where('merchant_reference', $orderId)
+                ->value('amount'),
+            2,
+            '.',
+            '',
+        );
+
+        return [
+            'result' => 'SUCCESS',
+            'response' => ['gatewayCode' => 'APPROVED'],
+            'order' => [
+                'id' => $orderId,
+                'amount' => $amount,
+                'currency' => 'TZS',
+                'status' => 'CAPTURED',
+                'authenticationStatus' => 'AUTHENTICATION_SUCCESSFUL',
+                'totalAuthorizedAmount' => $amount,
+                'totalCapturedAmount' => $amount,
+            ],
+            'transaction' => [
+                'id' => $transactionId,
+                'type' => 'PAYMENT',
+                'result' => 'SUCCESS',
+            ],
+        ];
+    }
+
     public function test_production_config_is_loaded_for_initiation(): void
     {
         $this->fakeNmbApi([
@@ -137,24 +171,7 @@ class NmbProductionIntegrationTest extends TestCase
                 'id' => 'SESSION-OK-1',
                 'successIndicator' => 'ind-ok',
             ],
-            fn (string $orderId): array => [
-                'result' => 'SUCCESS',
-                'order' => [
-                    'id' => $orderId,
-                    'amount' => number_format(
-                        (float) PaymentTransaction::query()
-                            ->where('merchant_reference', $orderId)
-                            ->value('amount'),
-                        2,
-                        '.',
-                        '',
-                    ),
-                    'currency' => 'TZS',
-                ],
-                'transaction' => [
-                    'id' => 'TXN-OK-1',
-                ],
-            ],
+            fn (string $orderId): array => $this->settledOrderResponse($orderId, 'TXN-OK-1'),
         );
 
         $user = User::factory()->create();
@@ -224,22 +241,7 @@ class NmbProductionIntegrationTest extends TestCase
                 'id' => 'SESSION-DUP-1',
                 'successIndicator' => 'ind-dup',
             ],
-            fn (string $orderId): array => [
-                'result' => 'SUCCESS',
-                'order' => [
-                    'id' => $orderId,
-                    'amount' => number_format(
-                        (float) PaymentTransaction::query()
-                            ->where('merchant_reference', $orderId)
-                            ->value('amount'),
-                        2,
-                        '.',
-                        '',
-                    ),
-                    'currency' => 'TZS',
-                ],
-                'transaction' => ['id' => 'TXN-DUP-1'],
-            ],
+            fn (string $orderId): array => $this->settledOrderResponse($orderId, 'TXN-DUP-1'),
         );
 
         $user = User::factory()->create();
@@ -287,22 +289,7 @@ class NmbProductionIntegrationTest extends TestCase
                 'id' => 'SESSION-REF-1',
                 'successIndicator' => 'ind-ref',
             ],
-            fn (string $orderId): array => [
-                'result' => 'SUCCESS',
-                'order' => [
-                    'id' => $orderId,
-                    'amount' => number_format(
-                        (float) PaymentTransaction::query()
-                            ->where('merchant_reference', $orderId)
-                            ->value('amount'),
-                        2,
-                        '.',
-                        '',
-                    ),
-                    'currency' => 'TZS',
-                ],
-                'transaction' => ['id' => 'TXN-REF-1'],
-            ],
+            fn (string $orderId): array => $this->settledOrderResponse($orderId, 'TXN-REF-1'),
         );
 
         $user = User::factory()->create();

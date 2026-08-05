@@ -30,13 +30,20 @@ class NmbVerificationMapperTest extends TestCase
 
         $result = $this->mapper->fromResponse([
             'result' => 'SUCCESS',
+            'response' => ['gatewayCode' => 'APPROVED'],
             'order' => [
                 'id' => 'PAY-2026-000123',
                 'amount' => '75000.00',
                 'currency' => 'TZS',
+                'status' => 'CAPTURED',
+                'authenticationStatus' => 'AUTHENTICATION_SUCCESSFUL',
+                'totalAuthorizedAmount' => '75000.00',
+                'totalCapturedAmount' => '75000.00',
             ],
             'transaction' => [
                 'id' => 'TRANS000123',
+                'result' => 'SUCCESS',
+                'type' => 'PAYMENT',
             ],
         ], $payment);
 
@@ -55,14 +62,45 @@ class NmbVerificationMapperTest extends TestCase
 
         $result = $this->mapper->fromResponse([
             'result' => 'SUCCESS',
+            'response' => ['gatewayCode' => 'APPROVED'],
             'order' => [
                 'id' => 'PAY-2026-000999',
                 'amount' => '75000.00',
                 'currency' => 'TZS',
+                'status' => 'CAPTURED',
+                'totalAuthorizedAmount' => '75000.00',
+                'totalCapturedAmount' => '75000.00',
             ],
         ], $payment);
 
         $this->assertFalse($result->verified);
+    }
+
+    public function test_pending_authentication_is_not_verified_and_is_pending(): void
+    {
+        $payment = Payment::factory()->nmb()->create([
+            'reference' => 'COTZ-PAY-20260805-000123',
+            'amount' => 45000,
+            'currency' => 'TZS',
+        ]);
+
+        $result = $this->mapper->fromResponse([
+            'result' => 'SUCCESS',
+            'response' => ['gatewayCode' => 'PENDING'],
+            'order' => [
+                'id' => 'COTZ-PAY-20260805-000123',
+                'amount' => '45000.00',
+                'currency' => 'TZS',
+                'status' => 'AUTHENTICATION_INITIATED',
+                'authenticationStatus' => 'AUTHENTICATION_PENDING',
+                'totalAuthorizedAmount' => 0,
+                'totalCapturedAmount' => 0,
+            ],
+            'transaction' => ['id' => 'TXN-PENDING-1'],
+        ], $payment);
+
+        $this->assertFalse($result->verified);
+        $this->assertTrue($result->pending);
     }
 
     public function test_rejects_gateway_failure(): void

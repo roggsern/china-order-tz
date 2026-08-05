@@ -6,12 +6,22 @@ use App\Models\Payment;
 
 class NmbVerificationMapper
 {
+    public function __construct(
+        private readonly NmbPaymentOutcomeEvaluator $outcomeEvaluator,
+    ) {}
+
     /**
      * @param  array<string, mixed>  $response
      */
     public function fromResponse(array $response, Payment $payment): NmbVerificationResult
     {
-        $result = isset($response['result']) ? (string) $response['result'] : null;
+        $evaluated = $this->outcomeEvaluator->evaluate(
+            $response,
+            expectedOrderId: (string) $payment->reference,
+            expectedAmount: number_format((float) $payment->amount, 2, '.', ''),
+            expectedCurrency: (string) $payment->currency,
+        );
+
         $order = is_array($response['order'] ?? null) ? $response['order'] : [];
         $transaction = is_array($response['transaction'] ?? null) ? $response['transaction'] : [];
 
@@ -19,72 +29,25 @@ class NmbVerificationMapper
         $amount = isset($order['amount']) ? (string) $order['amount'] : null;
         $currency = isset($order['currency']) ? (string) $order['currency'] : null;
         $transactionId = isset($transaction['id']) ? (string) $transaction['id'] : null;
+        $topLevelResult = isset($response['result']) ? (string) $response['result'] : null;
 
-        if (strtoupper($result ?? '') !== 'SUCCESS') {
-            return new NmbVerificationResult(
-                verified: false,
-                message: (string) (
-                    $response['error']['explanation']
-                    ?? $response['error']['cause']
-                    ?? 'NMB order verification did not succeed.'
-                ),
-                result: $result,
-                orderId: $orderId,
-                transactionId: $transactionId,
-                amount: $amount,
-                currency: $currency,
-                rawResponse: $response,
-            );
-        }
-
-        if ($orderId !== (string) $payment->reference) {
-            return new NmbVerificationResult(
-                verified: false,
-                message: 'Verified order id does not match payment reference.',
-                result: $result,
-                orderId: $orderId,
-                transactionId: $transactionId,
-                amount: $amount,
-                currency: $currency,
-                rawResponse: $response,
-            );
-        }
-
-        if ($amount !== null && bccomp($amount, number_format((float) $payment->amount, 2, '.', ''), 2) !== 0) {
-            return new NmbVerificationResult(
-                verified: false,
-                message: 'Verified amount does not match payment amount.',
-                result: $result,
-                orderId: $orderId,
-                transactionId: $transactionId,
-                amount: $amount,
-                currency: $currency,
-                rawResponse: $response,
-            );
-        }
-
-        if ($currency !== null && strtoupper($currency) !== strtoupper((string) $payment->currency)) {
-            return new NmbVerificationResult(
-                verified: false,
-                message: 'Verified currency does not match payment currency.',
-                result: $result,
-                orderId: $orderId,
-                transactionId: $transactionId,
-                amount: $amount,
-                currency: $currency,
-                rawResponse: $response,
-            );
-        }
+        $pending = $evaluated->outcome === NmbPaymentOutcome::Processing;
+        $verified = $evaluated->outcome->isVerifiedPaid();
 
         return new NmbVerificationResult(
-            verified: true,
-            message: 'NMB transaction verified successfully.',
-            result: $result,
+            verified: $verified,
+            message: $evaluated->message,
+            result: $topLevelResult,
             orderId: $orderId,
             transactionId: $transactionId,
             amount: $amount,
             currency: $currency,
-            rawResponse: $response,
+            rawResponse: array_merge($response, [
+                'nmb_outcome' => $evaluated->outcome->value,
+                'nmb_outcome_context' => $evaluated->context,
+            ]),
+            transientFailure: false,
+            pending: $pending,
         );
     }
 }

@@ -9,6 +9,7 @@ use App\Payments\Gateways\Nmb\NmbApiClient;
 use App\Payments\Gateways\Nmb\NmbApiException;
 use App\Payments\Gateways\Nmb\NmbCheckoutSessionMapper;
 use App\Payments\Gateways\Nmb\NmbConfig;
+use App\Payments\Gateways\Nmb\NmbPaymentOutcomeEvaluator;
 use App\Services\Payments\Orchestration\Contracts\PaymentProviderInterface;
 use App\Services\Payments\Orchestration\DTOs\PaymentInitiationRequest;
 use App\Services\Payments\Orchestration\DTOs\PaymentProviderResult;
@@ -23,6 +24,7 @@ class NmbPaymentProvider implements PaymentProviderInterface
     public function __construct(
         private readonly NmbApiClient $apiClient,
         private readonly NmbCheckoutSessionMapper $sessionMapper,
+        private readonly NmbPaymentOutcomeEvaluator $outcomeEvaluator,
     ) {}
 
     public function key(): string
@@ -250,91 +252,35 @@ class NmbPaymentProvider implements PaymentProviderInterface
         array $response,
         array $requestPayload,
     ): PaymentProviderResult {
-        $result = isset($response['result']) ? (string) $response['result'] : null;
         $order = is_array($response['order'] ?? null) ? $response['order'] : [];
         $txn = is_array($response['transaction'] ?? null) ? $response['transaction'] : [];
-
-        $orderId = isset($order['id']) ? (string) $order['id'] : null;
-        $amount = isset($order['amount']) ? (string) $order['amount'] : null;
-        $currency = isset($order['currency']) ? (string) $order['currency'] : null;
         $transactionId = isset($txn['id']) ? (string) $txn['id'] : null;
 
+        $evaluated = $this->outcomeEvaluator->evaluate(
+            $response,
+            expectedOrderId: (string) $transaction->merchant_reference,
+            expectedAmount: number_format((float) $transaction->amount, 2, '.', ''),
+            expectedCurrency: (string) $transaction->currency,
+        );
+
         $verificationPayload = [
-            'result' => $result,
-            'order_id' => $orderId,
+            'result' => $response['result'] ?? null,
+            'order_id' => $order['id'] ?? null,
             'transaction_id' => $transactionId,
-            'amount' => $amount,
-            'currency' => $currency,
+            'amount' => $order['amount'] ?? null,
+            'currency' => $order['currency'] ?? null,
+            'outcome' => $evaluated->outcome->value,
+            'outcome_context' => $evaluated->context,
             'raw' => $response,
             'verified_at' => now()->toIso8601String(),
+            'verified' => $evaluated->outcome->isVerifiedPaid(),
         ];
 
-        if (strtoupper($result ?? '') !== 'SUCCESS') {
-            $failedStatuses = ['FAILURE', 'FAILED', 'ERROR'];
-            $status = in_array(strtoupper($result ?? ''), $failedStatuses, true)
-                ? PaymentTransactionStatus::Failed
-                : PaymentTransactionStatus::Processing;
-
-            return new PaymentProviderResult(
-                ok: false,
-                status: $status,
-                providerReference: $transaction->provider_reference,
-                externalTransactionId: $transactionId,
-                requestPayload: $requestPayload,
-                responsePayload: $response,
-                verificationPayload: $verificationPayload,
-                message: (string) (
-                    $response['error']['explanation']
-                    ?? $response['error']['cause']
-                    ?? 'NMB order verification did not succeed.'
-                ),
-            );
-        }
-
-        if ($orderId !== null && $orderId !== (string) $transaction->merchant_reference) {
-            return new PaymentProviderResult(
-                ok: false,
-                status: PaymentTransactionStatus::Failed,
-                providerReference: $transaction->provider_reference,
-                externalTransactionId: $transactionId,
-                requestPayload: $requestPayload,
-                responsePayload: $response,
-                verificationPayload: $verificationPayload,
-                message: 'Verified order id does not match merchant reference.',
-            );
-        }
-
-        if ($amount !== null && bccomp($amount, number_format((float) $transaction->amount, 2, '.', ''), 2) !== 0) {
-            return new PaymentProviderResult(
-                ok: false,
-                status: PaymentTransactionStatus::Failed,
-                providerReference: $transaction->provider_reference,
-                externalTransactionId: $transactionId,
-                requestPayload: $requestPayload,
-                responsePayload: $response,
-                verificationPayload: $verificationPayload,
-                message: 'Verified amount does not match transaction amount.',
-            );
-        }
-
-        if ($currency !== null && strtoupper($currency) !== strtoupper((string) $transaction->currency)) {
-            return new PaymentProviderResult(
-                ok: false,
-                status: PaymentTransactionStatus::Failed,
-                providerReference: $transaction->provider_reference,
-                externalTransactionId: $transactionId,
-                requestPayload: $requestPayload,
-                responsePayload: $response,
-                verificationPayload: $verificationPayload,
-                message: 'Verified currency does not match transaction currency.',
-            );
-        }
-
-        $verificationPayload['verified'] = true;
+        $status = $evaluated->outcome->toTransactionStatus();
 
         return new PaymentProviderResult(
-            ok: true,
-            status: PaymentTransactionStatus::Successful,
+            ok: $evaluated->outcome->isVerifiedPaid(),
+            status: $status,
             providerReference: $transaction->provider_reference,
             externalTransactionId: $transactionId,
             checkoutUrl: $transaction->checkout_url,
@@ -342,7 +288,7 @@ class NmbPaymentProvider implements PaymentProviderInterface
             requestPayload: $requestPayload,
             responsePayload: $response,
             verificationPayload: $verificationPayload,
-            message: 'NMB payment verified successfully.',
+            message: $evaluated->message,
         );
     }
 

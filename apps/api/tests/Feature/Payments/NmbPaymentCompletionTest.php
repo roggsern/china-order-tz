@@ -37,16 +37,25 @@ class NmbPaymentCompletionTest extends TestCase
 
     private function fakeRetrieveOrderSuccess(string $reference, float $amount = 75000): void
     {
+        $formatted = number_format($amount, 2, '.', '');
+
         Http::fake([
             'sandbox.nmb.test/*' => Http::response([
                 'result' => 'SUCCESS',
+                'response' => ['gatewayCode' => 'APPROVED'],
                 'order' => [
                     'id' => $reference,
-                    'amount' => number_format($amount, 2, '.', ''),
+                    'amount' => $formatted,
                     'currency' => 'TZS',
+                    'status' => 'CAPTURED',
+                    'authenticationStatus' => 'AUTHENTICATION_SUCCESSFUL',
+                    'totalAuthorizedAmount' => $formatted,
+                    'totalCapturedAmount' => $formatted,
                 ],
                 'transaction' => [
                     'id' => 'TRANS000123',
+                    'type' => 'PAYMENT',
+                    'result' => 'SUCCESS',
                 ],
             ]),
         ]);

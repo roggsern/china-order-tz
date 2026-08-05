@@ -41,13 +41,20 @@ class NmbPaymentVerificationTest extends TestCase
     {
         $response = [
             'result' => 'SUCCESS',
+            'response' => ['gatewayCode' => 'APPROVED'],
             'order' => [
                 'id' => $reference,
                 'amount' => '75000.00',
                 'currency' => 'TZS',
+                'status' => 'CAPTURED',
+                'authenticationStatus' => 'AUTHENTICATION_SUCCESSFUL',
+                'totalAuthorizedAmount' => '75000.00',
+                'totalCapturedAmount' => '75000.00',
             ],
             'transaction' => [
                 'id' => $transactionId,
+                'result' => 'SUCCESS',
+                'type' => 'PAYMENT',
             ],
         ];
 
