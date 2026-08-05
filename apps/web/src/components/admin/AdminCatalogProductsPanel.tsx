@@ -104,6 +104,7 @@ type ProductFormState = {
   categoryId: string;
   subcategoryId: string;
   catalogProductTypeId: string;
+  productCondition: string;
   brandId: string;
   supplierId: string;
   status: "draft" | "active" | "archived";
@@ -126,6 +127,7 @@ const emptyForm = (): ProductFormState => ({
   categoryId: "",
   subcategoryId: "",
   catalogProductTypeId: "",
+  productCondition: "",
   brandId: "",
   supplierId: "",
   status: "draft",
@@ -432,6 +434,7 @@ export function AdminCatalogProductsPanel() {
         categoryId: category?.id ?? "",
         subcategoryId: subcategory?.id ?? product.categoryId ?? "",
         catalogProductTypeId: product.catalogProductTypeId ?? "",
+        productCondition: product.productCondition ?? "",
         brandId: product.brandId ?? "",
         supplierId: product.supplierId ?? "",
         status:
@@ -842,6 +845,7 @@ export function AdminCatalogProductsPanel() {
         {
           name: form.name.trim(),
           catalog_product_type_id: form.catalogProductTypeId,
+          product_condition: form.productCondition || null,
           brand_id: form.brandId || null,
           sku: form.sku.trim() || null,
           price: pricingFields.price,
@@ -922,6 +926,7 @@ export function AdminCatalogProductsPanel() {
       await updateAdminCatalogProduct(form.id, {
         name: form.name.trim(),
         catalog_product_type_id: form.catalogProductTypeId,
+        product_condition: form.productCondition || null,
         brand_id: form.brandId || null,
         sku: form.sku.trim() || null,
         price: pricingFields.price,
@@ -1432,9 +1437,17 @@ export function AdminCatalogProductsPanel() {
                 className="admin-input mt-1.5"
                 value={form.catalogProductTypeId}
                 disabled={!form.subcategoryId && !form.categoryId}
-                onChange={(event) =>
-                  setForm({ ...form, catalogProductTypeId: event.target.value })
-                }
+                onChange={(event) => {
+                  const nextTypeId = event.target.value;
+                  const nextType = formTypes.find((type) => type.id === nextTypeId);
+                  setForm({
+                    ...form,
+                    catalogProductTypeId: nextTypeId,
+                    productCondition: nextType?.supportsProductCondition
+                      ? form.productCondition || "BRAND_NEW"
+                      : "",
+                  });
+                }}
               >
                 <option value="">Select product type</option>
                 {formTypes.map((type) => (
@@ -1444,6 +1457,35 @@ export function AdminCatalogProductsPanel() {
                 ))}
               </select>
             </div>
+            {formTypes.find((type) => type.id === form.catalogProductTypeId)?.supportsProductCondition ? (
+              <div className="sm:col-span-2">
+                <p className="admin-label">Product Condition</p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  {[
+                    { value: "BRAND_NEW", label: "Brand New" },
+                    { value: "OPEN_BOX", label: "Open Box" },
+                    { value: "REFURBISHED", label: "Refurbished" },
+                    { value: "USED", label: "Used / Second Hand" },
+                  ].map((option) => (
+                    <label
+                      key={option.value}
+                      className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800"
+                    >
+                      <input
+                        type="radio"
+                        name="form-product-condition"
+                        value={option.value}
+                        checked={(form.productCondition || "BRAND_NEW") === option.value}
+                        onChange={() =>
+                          setForm({ ...form, productCondition: option.value })
+                        }
+                      />
+                      {option.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <div className="sm:col-span-2">
               <label className="admin-label" htmlFor="product-short">
                 Short description

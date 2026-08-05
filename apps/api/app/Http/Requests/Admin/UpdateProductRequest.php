@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Enums\ProductCondition;
 use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductVisibility;
 use App\Enums\ShippingMethod;
@@ -87,6 +88,7 @@ class UpdateProductRequest extends FormRequest
             'store_id' => ['sometimes', 'nullable', 'uuid', 'exists:stores,id'],
             'category_id' => ['sometimes', 'nullable', 'uuid', 'exists:categories,id'],
             'catalog_product_type_id' => ['sometimes', 'nullable', 'uuid', 'exists:catalog_product_types,id'],
+            'product_condition' => ['sometimes', 'nullable', 'string', Rule::in(ProductCondition::values())],
             'brand_id' => ['nullable', 'uuid', 'exists:brands,id'],
             'supplier_id' => ['nullable', 'uuid', Rule::exists('suppliers', 'id')->where('is_active', true)],
             'sku' => ['sometimes', 'nullable', 'string', 'max:100', Rule::unique('products', 'sku')->ignore($product)],

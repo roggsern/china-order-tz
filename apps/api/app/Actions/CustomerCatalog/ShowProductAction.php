@@ -23,6 +23,7 @@ class ShowProductAction
             'commerceChannel:id,name,code,description,is_active',
             'category:id,name,slug',
             'brand:id,name,slug',
+            'catalogProductType:id,name',
             'shippingOptions' => fn ($query) => $query->available()->ordered(),
             'variants' => fn ($query) => $query
                 ->where('is_active', true)

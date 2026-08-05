@@ -210,6 +210,9 @@ export type AdminApiProduct = {
   sort_order?: number;
   product_type_id?: string | null;
   catalog_product_type_id?: string | null;
+  product_condition?: string | null;
+  product_condition_label?: string | null;
+  product_condition_eligible?: boolean;
   legacy_configuration_product?: boolean;
   catalog_product_type?: {
     id?: string | null;
@@ -257,6 +260,9 @@ export type AdminCatalogProduct = {
   supplierName: string | null;
   catalogProductTypeId: string | null;
   catalogProductTypeName: string | null;
+  productCondition: string | null;
+  productConditionLabel: string | null;
+  productConditionEligible: boolean;
   categoryId: string | null;
   categoryName: string | null;
   departmentId: string | null;
@@ -292,6 +298,7 @@ export type AdminCatalogProduct = {
 export type AdminCatalogProductWritePayload = {
   name: string;
   catalog_product_type_id: string;
+  product_condition?: string | null;
   brand_id?: string | null;
   supplier_id?: string | null;
   sku?: string | null;
@@ -600,6 +607,8 @@ export function mapAdminApiProductToProduct(product: AdminApiProduct): Product {
     catalogProductId: product.id,
     catalogProductTypeId:
       product.catalog_product_type_id ?? product.catalog_product_type?.id ?? null,
+    productCondition: (product.product_condition as Product["productCondition"]) ?? null,
+    productConditionLabel: product.product_condition_label ?? null,
     legacyConfigurationProduct: product.legacy_configuration_product === true,
     categoryId: product.category?.id,
     parentCategoryId: product.category?.parent_id ?? undefined,
@@ -1241,6 +1250,7 @@ export type AdminApiCatalogProductType = {
   description?: string | null;
   sort_order?: number;
   is_active?: boolean;
+  supports_product_condition?: boolean;
   products_count?: number;
   attributes_count?: number;
   subcategory?: {
@@ -1280,6 +1290,7 @@ export type AdminCatalogProductType = {
   image: string | null;
   sortOrder: number;
   isActive: boolean;
+  supportsProductCondition: boolean;
   productsCount: number;
   attributesCount: number;
   deletedAt?: string | null;
@@ -1303,6 +1314,7 @@ export function mapAdminApiCatalogProductType(
     image: item.image ?? null,
     sortOrder: item.sort_order ?? 0,
     isActive: item.is_active !== false,
+    supportsProductCondition: item.supports_product_condition === true,
     productsCount: item.products_count ?? 0,
     attributesCount: item.attributes_count ?? 0,
     deletedAt: item.deleted_at ?? null,
@@ -2179,6 +2191,9 @@ export function mapAdminApiCatalogProduct(product: AdminApiProduct): AdminCatalo
     catalogProductTypeId:
       product.catalog_product_type_id ?? product.catalog_product_type?.id ?? null,
     catalogProductTypeName: product.catalog_product_type?.name ?? null,
+    productCondition: product.product_condition ?? null,
+    productConditionLabel: product.product_condition_label ?? null,
+    productConditionEligible: product.product_condition_eligible === true,
     categoryId: product.category?.id ?? null,
     categoryName: product.category?.name ?? null,
     departmentId: product.category?.department_id ?? null,

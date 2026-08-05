@@ -19,6 +19,12 @@ export type ProductPriceTierDraft = {
 
 export type ProductOrigin = "china" | "tz";
 
+export type ProductCondition =
+  | "BRAND_NEW"
+  | "OPEN_BOX"
+  | "REFURBISHED"
+  | "USED";
+
 /**
  * @deprecated Ambiguous name (ADR 052). Prefer ProductOrigin ("china" | "tz").
  * Marketplace UI historically used `local` as a display alias for Buy From TZ
@@ -205,6 +211,9 @@ export type Product = {
   badge: string;
   badges: ProductBadgeType[];
   trustBadges: TrustBadgeType[];
+  /** Product-level sell condition (never a variant axis). */
+  productCondition?: ProductCondition | null;
+  productConditionLabel?: string | null;
   type?: ProductType;
   origin: ProductOrigin;
   brand?: string;

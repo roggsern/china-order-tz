@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use Database\Support\CatalogAttributeDomainMap;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -35,6 +36,9 @@ class CatalogProductTypeResource extends JsonResource
             'description' => $this->description,
             'sort_order' => $this->sort_order,
             'is_active' => $this->is_active,
+            'supports_product_condition' => CatalogAttributeDomainMap::supportsProductCondition(
+                (string) $this->name,
+            ),
             'products_count' => $this->whenCounted('products'),
             'attributes_count' => $this->whenCounted('attributes'),
             'subcategory' => $subcategory === null ? null : [

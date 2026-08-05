@@ -101,6 +101,8 @@ export type OrderLineItem = {
   brand?: string;
   brandSlug?: string;
   categorySlug?: string;
+  productCondition?: string | null;
+  productConditionLabel?: string | null;
   /** Selected size at checkout — frozen from cart; null when not applicable. */
   selectedSize: string | null;
   variant?: OrderItemVariant;

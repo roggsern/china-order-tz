@@ -1,6 +1,7 @@
 import type { Category } from "@/lib/types/catalog";
 import type { Product } from "@/lib/types/catalog";
 import { ProductBadges } from "./ProductBadge";
+import { ProductConditionBadge } from "./ProductConditionBadge";
 import { FeatureGatedRatingStars } from "./FeatureGatedRatingStars";
 import { StockStatus } from "./StockStatus";
 import { ProductOriginBadge } from "./ProductOriginBadge";
@@ -20,6 +21,11 @@ export function ProductDetailHeader({ product, category, className = "" }: Produ
   return (
     <header className={className}>
       <div className="flex flex-wrap items-center gap-2">
+        <ProductConditionBadge
+          condition={product.productCondition}
+          label={product.productConditionLabel}
+          size="md"
+        />
         <ProductBadges badges={product.badges} />
         {category && (
           <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-600">

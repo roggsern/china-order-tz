@@ -52,13 +52,13 @@ final class CatalogAttributeDomainMap
     ];
 
     /**
-     * Exact type names eligible for a future Product Condition specification.
-     * Not attached in this sprint — reserved for the next sprint.
+     * Exact catalog product type names eligible for product-level Product Condition.
+     * Never attached as a catalog/variant attribute.
      *
      * @var list<string>
      */
     public const PRODUCT_CONDITION_ELIGIBLE_TYPE_NAMES = [
-        // phones / computers / consumer electronics / PA / appliances / automotive / industrial
+        // Phones / tablets
         'Android Smartphone',
         'iPhone',
         'Foldable Phone',
@@ -66,20 +66,34 @@ final class CatalogAttributeDomainMap
         'Feature Phone',
         'Android Tablet',
         'iPad',
+        // Computers
         'Gaming Laptop',
         'Business Laptop',
         'Ultrabook',
         'Tower Desktop',
         'All-in-One PC',
         'Mini PC',
+        'Office Monitor',
+        'Gaming Monitor',
+        'Professional Monitor',
+        // Consumer electronics
         'LED TV',
         'OLED TV',
         'Smart TV',
+        'Bluetooth Speaker',
+        'Soundbar',
+        'Wireless Headphones',
         'DSLR Camera',
         'Mirrorless Camera',
         'Action Camera',
         'Smart Watch',
+        'Fitness Smart Watch',
+        'Smart Speaker',
+        'Smart Home Hub',
         'Gaming Console',
+        'Gaming Controller',
+        'Gaming Headset',
+        // Professional audio
         'Portable PA System',
         'Complete Sound System',
         'Active PA Speaker',
@@ -90,6 +104,16 @@ final class CatalogAttributeDomainMap
         'DJ Mixer',
         'Power Amplifier',
         'Integrated Amplifier',
+        'Passive Speaker',
+        'Studio Monitor',
+        'Ceiling Speaker',
+        'Studio Monitor Speaker',
+        'DJ Controller',
+        'DJ Turntable',
+        'USB Audio Interface',
+        'Thunderbolt Audio Interface',
+        'Audio Interface',
+        // Home appliances
         'Refrigerator',
         'Chest Freezer',
         'Mini Fridge',
@@ -98,10 +122,41 @@ final class CatalogAttributeDomainMap
         'Clothes Dryer',
         'Split Air Conditioner',
         'Portable Air Conditioner',
+        'Electric Cooker',
+        'Gas Cooker',
+        'Microwave Oven',
+        'Electric Oven',
+        'Countertop Microwave',
+        'Grill Microwave',
+        'Electric Hot Plate',
+        'Induction Cooker',
+        'Air Fryer',
+        'Air Fryer Oven',
+        'Electric Water Heater',
+        'Instant Water Heater',
+        'Water Dispenser',
+        'Canister Vacuum Cleaner',
+        'Robot Vacuum Cleaner',
+        'Handheld Vacuum Cleaner',
+        // Automotive / vehicle electronics & parts
         'Jump Starter',
         'OBD Scanner',
         'Dash Camera',
         'Dual Channel Dash Camera',
+        'Car Stereo',
+        'Car Speaker',
+        'Car Amplifier',
+        'GPS Tracker',
+        'Car GPS Navigator',
+        'Tyre Inflator',
+        'Car Vacuum',
+        'Brake Pad',
+        'Air Filter',
+        'Spark Plug',
+        'Wiper Blade',
+        'Car Tyre',
+        'Alloy Wheel',
+        // Industrial / power tools
         'Electric Drill',
         'Angle Grinder',
         'Circular Saw',
@@ -110,7 +165,13 @@ final class CatalogAttributeDomainMap
         'Air Compressor',
         'Industrial Generator',
         'Hydraulic Jack',
+        'Concrete Mixer',
     ];
+
+    public static function supportsProductCondition(string $productTypeName): bool
+    {
+        return in_array($productTypeName, self::PRODUCT_CONDITION_ELIGIBLE_TYPE_NAMES, true);
+    }
 
     /**
      * @return list<string> attribute slugs for the type, or empty for non-China / unmapped

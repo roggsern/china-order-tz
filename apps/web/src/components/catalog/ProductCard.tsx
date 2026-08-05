@@ -6,6 +6,7 @@ import { PriceDisplay } from "./PriceDisplay";
 import { FeatureGatedRatingStars } from "./FeatureGatedRatingStars";
 import { AddToCartButton } from "./AddToCartButton";
 import { ProductCardBadges } from "./ProductCardBadges";
+import { ProductConditionBadge } from "./ProductConditionBadge";
 import { ProductImageDisplay } from "./ProductImageDisplay";
 import { ProductCardFooter } from "./ProductCardFooter";
 import { WishlistButton } from "./WishlistButton";
@@ -52,7 +53,11 @@ export function ProductCard({ product, variant = "default" }: ProductCardProps) 
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent opacity-70 transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100" />
         </Link>
 
-        <div className="absolute left-2.5 top-2.5 z-10 sm:left-3 sm:top-3">
+        <div className="absolute left-2.5 top-2.5 z-10 flex flex-col gap-1 sm:left-3 sm:top-3">
+          <ProductConditionBadge
+            condition={product.productCondition}
+            label={product.productConditionLabel}
+          />
           <ProductCardBadges badges={product.badges} discount={discount} />
         </div>
 

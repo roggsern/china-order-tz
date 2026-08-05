@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\CommerceChannelCode;
+use App\Enums\ProductCondition;
 use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductPricingModel;
 use App\Enums\ProductVisibility;
@@ -29,6 +30,7 @@ class Product extends Model
         'supplier_id',
         'product_type_id',
         'catalog_product_type_id',
+        'product_condition',
         'fulfillment_source',
         'name',
         'slug',
@@ -58,6 +60,7 @@ class Product extends Model
         return [
             'price' => 'decimal:2',
             'pricing_model' => ProductPricingModel::class,
+            'product_condition' => ProductCondition::class,
             'air_shipping_price' => 'decimal:2',
             'sea_shipping_price' => 'decimal:2',
             'compare_at_price' => 'decimal:2',

@@ -23,6 +23,7 @@ class GetAdminProductsAction
         $department = request()->query('department_id');
         $brand = request()->query('brand_id') ?? request()->query('brand');
         $catalogProductType = request()->query('catalog_product_type_id');
+        $productCondition = request()->query('product_condition');
         $status = request()->query('status');
         $sort = request()->query('sort');
         $direction = strtolower((string) request()->query('direction', 'desc'));
@@ -107,6 +108,21 @@ class GetAdminProductsAction
             ->when(filled($catalogProductType), function (Builder $query) use ($catalogProductType) {
                 $query->where('catalog_product_type_id', $catalogProductType);
             })
+            ->when(
+                is_string($productCondition) && $productCondition !== '',
+                function (Builder $query) use ($productCondition) {
+                    $values = array_values(array_filter(array_map(
+                        'trim',
+                        explode(',', $productCondition),
+                    )));
+
+                    if ($values === []) {
+                        return;
+                    }
+
+                    $query->whereIn('product_condition', $values);
+                },
+            )
             ->when(in_array($status, ['0', '1'], true), fn (Builder $query) => $query->where('is_active', $status === '1'))
             ->when(
                 in_array($status, ['draft', 'active', 'out_of_stock', 'archived'], true),

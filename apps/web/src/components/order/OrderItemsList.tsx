@@ -6,6 +6,7 @@ import { getMethodByCode } from "@/lib/shipping/engine";
 import { ProductImageDisplay } from "@/components/catalog/ProductImageDisplay";
 import { resolveOrderLineItemImage } from "@/lib/order/resolve-order-item-image";
 import { VariantLabel } from "@/components/catalog/VariantLabel";
+import { ProductConditionBadge } from "@/components/catalog/ProductConditionBadge";
 
 interface OrderItemsListProps {
   items: OrderLineItem[];
@@ -36,6 +37,14 @@ export function OrderItemsList({ items, showShipping = true }: OrderItemsListPro
               <p className="line-clamp-2 text-sm font-semibold leading-snug text-zinc-900">
                 {item.name}
               </p>
+              {item.productCondition ? (
+                <div className="mt-1">
+                  <ProductConditionBadge
+                    condition={item.productCondition}
+                    label={item.productConditionLabel}
+                  />
+                </div>
+              ) : null}
               {(item.configurationLabel || item.variant) && (
                 item.configurationLabel ? (
                   <p className="mt-0.5 text-xs text-zinc-500">{item.configurationLabel}</p>

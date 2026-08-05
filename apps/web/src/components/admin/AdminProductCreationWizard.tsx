@@ -58,6 +58,7 @@ export type ProductCreationWizardFormState = {
   categoryId: string;
   subcategoryId: string;
   catalogProductTypeId: string;
+  productCondition: string;
   brandId: string;
   supplierId: string;
   status: "draft" | "active" | "archived";
@@ -568,6 +569,7 @@ export function AdminProductCreationWizard({
                   categoryId: selection.categoryId,
                   subcategoryId: selection.subcategoryId,
                   catalogProductTypeId: "",
+                  productCondition: "",
                 }))
               }
             />
@@ -587,9 +589,17 @@ export function AdminProductCreationWizard({
               className="admin-input mt-1.5"
               value={form.catalogProductTypeId}
               disabled={!form.subcategoryId && !form.categoryId}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, catalogProductTypeId: event.target.value }))
-              }
+              onChange={(event) => {
+                const nextTypeId = event.target.value;
+                const nextType = formTypes.find((type) => type.id === nextTypeId);
+                setForm((current) => ({
+                  ...current,
+                  catalogProductTypeId: nextTypeId,
+                  productCondition: nextType?.supportsProductCondition
+                    ? current.productCondition || "BRAND_NEW"
+                    : "",
+                }));
+              }}
             >
               <option value="">Select product type</option>
               {formTypes.map((type) => (
@@ -599,6 +609,38 @@ export function AdminProductCreationWizard({
               ))}
             </select>
           </div>
+          {formTypes.find((type) => type.id === form.catalogProductTypeId)?.supportsProductCondition ? (
+            <div className="sm:col-span-2">
+              <p className="admin-label">Product Condition</p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {[
+                  { value: "BRAND_NEW", label: "Brand New" },
+                  { value: "OPEN_BOX", label: "Open Box" },
+                  { value: "REFURBISHED", label: "Refurbished" },
+                  { value: "USED", label: "Used / Second Hand" },
+                ].map((option) => (
+                  <label
+                    key={option.value}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-800"
+                  >
+                    <input
+                      type="radio"
+                      name="wizard-product-condition"
+                      value={option.value}
+                      checked={(form.productCondition || "BRAND_NEW") === option.value}
+                      onChange={() =>
+                        setForm((current) => ({
+                          ...current,
+                          productCondition: option.value,
+                        }))
+                      }
+                    />
+                    {option.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <div>
             <label className="admin-label" htmlFor="wizard-brand">
               Brand

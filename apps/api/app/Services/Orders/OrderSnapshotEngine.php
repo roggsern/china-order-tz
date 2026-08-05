@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\ProductShippingOption;
 use App\Models\ProductVariant;
 use App\Services\Shipping\ShippingDurationResolver;
+use App\Support\Catalog\ProductConditionResolver;
 
 /**
  * Order Snapshot Engine — captures immutable commercial data at checkout.
@@ -29,6 +30,7 @@ class OrderSnapshotEngine
     {
         $item->loadMissing([
             'product.brand',
+            'product.catalogProductType',
             'product.images',
             'product.media',
             'product.shippingOptions',
@@ -57,6 +59,9 @@ class OrderSnapshotEngine
             productName: (string) ($product?->name ?? 'Product'),
             productSlug: $product?->slug,
             brandName: $product?->brand?->name,
+            productCondition: $product !== null
+                ? ProductConditionResolver::effectiveForProduct($product)?->value
+                : null,
             variantName: $resolved['variant_name'],
             variantSku: $resolved['variant_sku'],
             sku: $resolved['sku'],
@@ -92,7 +97,7 @@ class OrderSnapshotEngine
         ?string $shippingMode = null,
         ?string $shippingPrice = null,
     ): array {
-        $product->loadMissing(['brand', 'images', 'media', 'shippingOptions']);
+        $product->loadMissing(['brand', 'catalogProductType', 'images', 'media', 'shippingOptions']);
         $variant?->loadMissing([
             'attributeValues.attribute',
             'catalogAttributeValues.attribute',
@@ -130,6 +135,7 @@ class OrderSnapshotEngine
             productName: (string) $product->name,
             productSlug: $product->slug,
             brandName: $product->brand?->name,
+            productCondition: ProductConditionResolver::effectiveForProduct($product)?->value,
             variantName: $resolved['variant_name'],
             variantSku: $resolved['variant_sku'],
             sku: $resolved['sku'],
@@ -160,6 +166,7 @@ class OrderSnapshotEngine
         string $productName,
         ?string $productSlug,
         ?string $brandName,
+        ?string $productCondition,
         ?string $variantName,
         ?string $variantSku,
         ?string $sku,
@@ -186,6 +193,7 @@ class OrderSnapshotEngine
             'product_slug_snapshot' => $productSlug,
             'sku_snapshot' => $sku,
             'brand_name_snapshot' => $brandName,
+            'product_condition_snapshot' => $productCondition,
             'variant_name_snapshot' => $variantName,
             'variant_sku_snapshot' => $variantSku,
             'barcode_snapshot' => $barcode,

@@ -105,6 +105,8 @@ export type ApiCustomerOrderItem = {
   product_name_snapshot?: string | null;
   product_slug_snapshot?: string | null;
   brand_name_snapshot?: string | null;
+  product_condition_snapshot?: string | null;
+  product_condition_label?: string | null;
   variant_name_snapshot?: string | null;
   variant_sku_snapshot?: string | null;
   barcode_snapshot?: string | null;
@@ -336,6 +338,8 @@ function mapApiOrderItem(item: ApiCustomerOrderItem, index: number): OrderLineIt
     productId: numericProductId,
     slug: item.product_slug_snapshot || String(item.product_id),
     name,
+    productCondition: item.product_condition_snapshot ?? null,
+    productConditionLabel: item.product_condition_label ?? null,
     configurationLabel:
       item.variant_name_snapshot || attributeLabel || undefined,
     configurationSku: item.variant_sku_snapshot || item.sku_snapshot || undefined,

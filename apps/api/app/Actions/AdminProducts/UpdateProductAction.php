@@ -22,6 +22,7 @@ use App\Services\ProductConfiguration\SyncProductConfigurations;
 use App\Enums\ProductLifecycleStatus;
 use App\Services\ProductPurchasability\ProductPurchasabilityPolicy;
 use App\Services\ProductShipping\ProductShippingOptionEngine;
+use App\Support\Catalog\ProductConditionResolver;
 use App\Support\Catalog\ProductTaxonomyValidator;
 use App\Support\ProductLifecycle;
 use Illuminate\Support\Facades\Auth;
@@ -182,6 +183,25 @@ class UpdateProductAction
             $productData['category_id'] = $category->id;
             if (array_key_exists('catalog_product_type_id', $validated) || $catalogProductTypeId !== null) {
                 $productData['catalog_product_type_id'] = $catalogProductTypeId;
+            }
+
+            $effectiveCatalogTypeId = $productData['catalog_product_type_id'] ?? $product->catalog_product_type_id;
+            $effectiveCatalogType = filled($effectiveCatalogTypeId)
+                ? CatalogProductType::query()->find($effectiveCatalogTypeId)
+                : null;
+
+            if (
+                array_key_exists('product_condition', $validated)
+                || array_key_exists('catalog_product_type_id', $validated)
+            ) {
+                $submittedCondition = array_key_exists('product_condition', $validated)
+                    ? ($validated['product_condition'] ?? null)
+                    : ($product->product_condition?->value ?? $product->product_condition);
+
+                $productData['product_condition'] = ProductConditionResolver::resolveForPersist(
+                    $submittedCondition,
+                    $effectiveCatalogType,
+                );
             }
 
             $productType = $this->resolveTypeFromCategory->handle($category);

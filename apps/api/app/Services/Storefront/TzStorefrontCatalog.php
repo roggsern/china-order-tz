@@ -74,6 +74,7 @@ class TzStorefrontCatalog
                 'category:id,name,slug,store_id',
                 'brand:id,name,slug',
                 'store:id,name,slug,code',
+                'catalogProductType:id,name',
             ], CustomerProductMediaResolver::catalogEagerLoads(), CatalogStockPresenter::catalogListingEagerLoads()))
             ->withAvg(
                 ['reviews as average_rating' => fn ($query) => $query->where('is_approved', true)],
@@ -114,6 +115,7 @@ class TzStorefrontCatalog
                 'category:id,name,slug,store_id',
                 'brand:id,name,slug',
                 'store:id,name,slug,code,theme_color,logo_path',
+                'catalogProductType:id,name',
                 'variants' => fn ($query) => $query
                     ->where('is_active', true)
                     ->with(['product', 'attributeValues.attribute', 'inventories', 'inventory']),

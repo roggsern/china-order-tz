@@ -7,6 +7,7 @@ use App\Enums\ProductPricingModel;
 use App\Services\Catalog\CustomerProductMediaResolver;
 use App\Services\Inventory\CatalogStockPresenter;
 use App\Services\ProductConfiguration\LegacyConfigurationProductDetector;
+use App\Support\Catalog\ProductConditionResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -19,6 +20,7 @@ class ProductResource extends JsonResource
         $legacyConfigurationDetector = app(LegacyConfigurationProductDetector::class);
         $listSummary = app(AdminProductListSummaryPresenter::class);
         $mediaResolver = app(CustomerProductMediaResolver::class);
+        $effectiveCondition = ProductConditionResolver::effectiveForProduct($this->resource);
 
         return [
             'id' => $this->id,
@@ -47,6 +49,9 @@ class ProductResource extends JsonResource
             'meta_description' => $this->meta_description,
             'product_type_id' => $this->product_type_id,
             'catalog_product_type_id' => $this->catalog_product_type_id,
+            'product_condition' => $effectiveCondition?->value,
+            'product_condition_label' => ProductConditionResolver::label($effectiveCondition),
+            'product_condition_eligible' => ProductConditionResolver::isEligible($this->catalogProductType),
             'legacy_configuration_product' => $legacyConfigurationDetector->isLegacyConfigurationProduct(
                 $this->resource,
             ),

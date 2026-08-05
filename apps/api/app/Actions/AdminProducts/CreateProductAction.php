@@ -22,6 +22,7 @@ use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductPricingModel;
 use App\Services\ProductPurchasability\ProductPurchasabilityPolicy;
 use App\Services\ProductShipping\ProductShippingOptionEngine;
+use App\Support\Catalog\ProductConditionResolver;
 use App\Support\Catalog\ProductTaxonomyValidator;
 use App\Support\ProductLifecycle;
 use Illuminate\Support\Facades\Auth;
@@ -126,6 +127,14 @@ class CreateProductAction
                 $storeId,
             );
 
+            $catalogType = $catalogProductTypeId !== null
+                ? CatalogProductType::query()->find($catalogProductTypeId)
+                : null;
+            $productCondition = ProductConditionResolver::resolveForPersist(
+                $validated['product_condition'] ?? null,
+                $catalogType,
+            );
+
             $product = Product::create([
                 'name' => $name,
                 'slug' => $slug,
@@ -134,6 +143,7 @@ class CreateProductAction
                 'fulfillment_source' => $channelCode->fulfillmentSource(),
                 'category_id' => $category->id,
                 'catalog_product_type_id' => $catalogProductTypeId,
+                'product_condition' => $productCondition,
                 'brand_id' => $validated['brand_id'] ?? null,
                 'supplier_id' => $validated['supplier_id'] ?? null,
                 'product_type_id' => $productType?->id,

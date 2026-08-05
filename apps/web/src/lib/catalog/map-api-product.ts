@@ -210,6 +210,8 @@ export function mapApiProductCardToCatalogProduct(product: ApiCatalogProductCard
     badge: badgeLabel,
     badges: resolveProductBadges(badgeLabel, stock),
     trustBadges: product.is_featured ? ["Premium"] : [],
+    productCondition: (product.product_condition as Product["productCondition"]) ?? null,
+    productConditionLabel: product.product_condition_label ?? null,
     origin: inferProductOrigin({
       commerceChannelCode: product.commerce_channel_code,
       commerceSourceLabel: product.commerce_source_label,

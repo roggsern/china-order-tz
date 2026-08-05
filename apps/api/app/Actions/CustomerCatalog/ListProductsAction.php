@@ -25,6 +25,7 @@ class ListProductsAction
         $channel = request()->query('commerce_channel');
         $origin = request()->query('origin');
         $featured = request()->query('featured');
+        $productCondition = request()->query('product_condition');
         $perPage = min(max((int) request()->query('per_page', 15), 1), 48);
 
         if ($origin === 'tz' && ! filled($channel)) {
@@ -42,6 +43,7 @@ class ListProductsAction
                 'category:id,name,slug',
                 'brand:id,name,slug',
                 'store:id,name,slug',
+                'catalogProductType:id,name',
             ], CustomerProductMediaResolver::catalogEagerLoads(), CatalogStockPresenter::catalogListingEagerLoads()))
             ->withAvg(
                 ['reviews as average_rating' => fn ($query) => $query->where('is_approved', true)],
@@ -95,6 +97,21 @@ class ListProductsAction
                 $query->whereHas('commerceChannel', fn ($q) => $q->where('code', $channel));
             })
             ->when(in_array($featured, ['1', 'true', 1, true], true), fn ($query) => $query->where('is_featured', true))
+            ->when(
+                is_string($productCondition) && $productCondition !== '',
+                function ($query) use ($productCondition) {
+                    $values = array_values(array_filter(array_map(
+                        'trim',
+                        explode(',', $productCondition),
+                    )));
+
+                    if ($values === []) {
+                        return;
+                    }
+
+                    $query->whereIn('product_condition', $values);
+                },
+            )
             ->latest()
             ->paginate($perPage)
             ->withQueryString();

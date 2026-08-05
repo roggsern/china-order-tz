@@ -21,6 +21,10 @@ class OrderItemResource extends JsonResource
             'product_slug_snapshot' => $this->product_slug_snapshot,
             'sku_snapshot' => $this->sku_snapshot,
             'brand_name_snapshot' => $this->brand_name_snapshot,
+            'product_condition_snapshot' => $this->product_condition_snapshot,
+            'product_condition_label' => $this->product_condition_snapshot
+                ? (\App\Enums\ProductCondition::tryFrom((string) $this->product_condition_snapshot)?->storefrontBadge())
+                : null,
             'variant_name_snapshot' => $this->variant_name_snapshot,
             'variant_sku_snapshot' => $this->variant_sku_snapshot,
             'barcode_snapshot' => $this->barcode_snapshot,

@@ -57,6 +57,8 @@ export type ApiCatalogProductCard = ApiCatalogStockSource & {
   price: string | number;
   compare_at_price: string | number | null;
   is_featured: boolean;
+  product_condition?: string | null;
+  product_condition_label?: string | null;
   primary_image: ApiCatalogImage | null;
   category: ApiCatalogCategory | null;
   brand: ApiCatalogBrand | null;
@@ -168,6 +170,8 @@ export type ProductListParams = {
   origin?: "china" | "tz";
   commerce_channel?: string;
   search?: string;
+  /** Backend filter prep — e.g. BRAND_NEW,REFURBISHED */
+  product_condition?: string;
 };
 
 export class CatalogApiError extends Error {
@@ -262,6 +266,10 @@ function buildProductSearchParams(params?: ProductListParams): URLSearchParams {
 
   if (params?.search?.trim()) {
     searchParams.set("search", params.search.trim());
+  }
+
+  if (params?.product_condition?.trim()) {
+    searchParams.set("product_condition", params.product_condition.trim());
   }
 
   return searchParams;

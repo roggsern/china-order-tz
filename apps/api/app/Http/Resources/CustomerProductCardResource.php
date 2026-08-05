@@ -7,6 +7,7 @@ use App\Http\Resources\Concerns\PresentsCustomerCatalogStock;
 use App\Http\Resources\Concerns\PresentsCustomerCatalogPrice;
 use App\Models\Product;
 use App\Services\Catalog\CustomerProductMediaResolver;
+use App\Support\Catalog\ProductConditionResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -19,6 +20,8 @@ class CustomerProductCardResource extends JsonResource
 
     public function toArray(Request $request): array
     {
+        $effectiveCondition = ProductConditionResolver::effectiveForProduct($this->resource);
+
         return [
             ...$this->customerCatalogAvailability(),
             'id' => $this->id,
@@ -28,6 +31,8 @@ class CustomerProductCardResource extends JsonResource
             'price' => $this->resolvedCatalogDisplayPrice(),
             'compare_at_price' => $this->compare_at_price,
             'is_featured' => $this->is_featured,
+            'product_condition' => $effectiveCondition?->value,
+            'product_condition_label' => $effectiveCondition?->storefrontBadge(),
             'primary_image' => app(CustomerProductMediaResolver::class)->resolvePrimary($this->resource),
             'category' => new CustomerCategoryResource($this->whenLoaded('category')),
             'brand' => new CustomerBrandResource($this->whenLoaded('brand')),

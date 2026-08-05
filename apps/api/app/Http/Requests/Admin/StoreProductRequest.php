@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Admin;
 
 use App\Enums\CommerceChannelCode;
+use App\Enums\ProductCondition;
 use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductPricingModel;
 use App\Enums\ProductVisibility;
@@ -41,6 +42,7 @@ class StoreProductRequest extends FormRequest
             'store_id' => ['sometimes', 'nullable', 'uuid', 'exists:stores,id'],
             'category_id' => ['required_without:catalog_product_type_id', 'nullable', 'uuid', 'exists:categories,id'],
             'catalog_product_type_id' => ['required_without:category_id', 'nullable', 'uuid', 'exists:catalog_product_types,id'],
+            'product_condition' => ['sometimes', 'nullable', 'string', Rule::in(ProductCondition::values())],
             'brand_id' => ['nullable', 'uuid', 'exists:brands,id'],
             'supplier_id' => ['nullable', 'uuid', Rule::exists('suppliers', 'id')->where('is_active', true)],
             'sku' => ['nullable', 'string', 'max:100', 'unique:products,sku'],
