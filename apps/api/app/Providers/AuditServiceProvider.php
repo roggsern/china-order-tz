@@ -15,6 +15,7 @@ use App\Events\Audit\CustomerPasswordResetRequestedAudit;
 use App\Events\Audit\NotificationSent;
 use App\Events\Audit\NotificationTemplateUpdated;
 use App\Events\Audit\OrderCreated;
+use App\Events\Audit\PaymentCheckoutSessionRefreshed;
 use App\Events\Audit\PaymentConfirmed;
 use App\Events\Audit\ProductCreated;
 use App\Events\Audit\ProductUpdated;
@@ -39,6 +40,7 @@ class AuditServiceProvider extends ServiceProvider
         ShippingOptionUpdated::class,
         OrderCreated::class,
         PaymentConfirmed::class,
+        PaymentCheckoutSessionRefreshed::class,
         WarehouseJobCreated::class,
         WarehouseStatusChanged::class,
         ShipmentCreated::class,

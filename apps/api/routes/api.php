@@ -293,6 +293,8 @@ Route::middleware(['auth:sanctum', 'ensure.user', 'user.active'])->group(functio
     Route::get('/payments/{paymentTransaction}', [PaymentOrchestratorController::class, 'show']);
     Route::post('/payments/{paymentTransaction}/refresh', [PaymentOrchestratorController::class, 'refresh'])
         ->middleware('throttle:payments');
+    Route::post('/payments/{paymentTransaction}/nmb/checkout-session', [PaymentOrchestratorController::class, 'retryNmbCheckoutSession'])
+        ->middleware('throttle:payments');
     Route::post('/payments/{payment}/initiate', [PaymentController::class, 'initiate'])
         ->middleware('throttle:payments');
     Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);

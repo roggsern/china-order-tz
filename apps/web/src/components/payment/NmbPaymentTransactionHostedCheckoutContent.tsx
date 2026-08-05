@@ -7,7 +7,9 @@ import { getCustomerApiToken } from "@/lib/api/customer-auth";
 import {
   fetchPaymentTransaction,
   PaymentOrchestratorApiError,
+  retryNmbCheckoutSession,
 } from "@/lib/api/customer-payment-orchestrator";
+import { applyFreshNmbCheckoutSession } from "@/lib/nmb/apply-fresh-checkout-session";
 import {
   patchNmbCheckoutContext,
   readNmbCheckoutContext,
@@ -37,6 +39,7 @@ export function NmbPaymentTransactionHostedCheckoutContent({
   const launchedRef = useRef(false);
   const [phase, setPhase] = useState<CheckoutPhase>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
 
   const redirectToReturn = useCallback(
     (resultIndicator?: string) => {
@@ -65,6 +68,100 @@ export function NmbPaymentTransactionHostedCheckoutContent({
     [router],
   );
 
+  const launchWithSession = useCallback(
+    async (sessionId: string, successIndicator: string | null) => {
+      patchNmbCheckoutContext({
+        paymentId: paymentTransactionId,
+        paymentTransactionId,
+        gatewaySessionId: sessionId,
+        successIndicator,
+      });
+
+      setPhase("redirecting");
+
+      await launchMpgsHostedCheckout({
+        sessionId,
+        callbacks: {
+          onComplete: (resultIndicator) => {
+            patchNmbCheckoutContext({
+              resultIndicator,
+            });
+            redirectToReturn(resultIndicator);
+          },
+          onCancel: () => {
+            setPhase("error");
+            setErrorMessage("Payment was cancelled. You can try again when ready.");
+          },
+          onError: (error) => {
+            setPhase("error");
+            setErrorMessage(describeHostedCheckoutError(error));
+          },
+          onTimeout: () => {
+            setPhase("error");
+            setErrorMessage("The payment session timed out. Please try again.");
+          },
+        },
+      });
+    },
+    [paymentTransactionId, redirectToReturn],
+  );
+
+  const startHostedCheckout = useCallback(
+    async (options?: { forceFreshSession?: boolean }) => {
+      const token = getCustomerApiToken();
+      if (!token) {
+        throw new PaymentOrchestratorApiError("Please sign in to continue with payment.", 401);
+      }
+
+      if (options?.forceFreshSession) {
+        const transaction = await retryNmbCheckoutSession(paymentTransactionId, token);
+        if (transaction.provider !== "nmb") {
+          throw new PaymentOrchestratorApiError("This payment is not an NMB transaction.");
+        }
+        const fresh = applyFreshNmbCheckoutSession(transaction, paymentTransactionId);
+        await launchWithSession(fresh.sessionId, fresh.successIndicator);
+        return;
+      }
+
+      let sessionId = sessionIdProp?.trim() || readNmbCheckoutContext()?.gatewaySessionId?.trim();
+      let successIndicator =
+        successIndicatorProp ?? readNmbCheckoutContext()?.successIndicator ?? null;
+
+      if (!sessionId) {
+        const transaction = await fetchPaymentTransaction(paymentTransactionId, token);
+
+        if (transaction.provider !== "nmb") {
+          throw new PaymentOrchestratorApiError("This payment is not an NMB transaction.");
+        }
+
+        sessionId = transaction.provider_reference?.trim() || undefined;
+        successIndicator = transaction.success_indicator ?? successIndicator;
+
+        if (!sessionId) {
+          throw new PaymentOrchestratorApiError("NMB did not return a checkout session id.");
+        }
+
+        prepareNmbHostedCheckoutLaunch(transaction);
+      } else {
+        saveNmbCheckoutContext({
+          ...(readNmbCheckoutContext() ?? {}),
+          paymentId: paymentTransactionId,
+          paymentTransactionId,
+          gatewaySessionId: sessionId,
+          successIndicator,
+        });
+      }
+
+      await launchWithSession(sessionId, successIndicator);
+    },
+    [
+      launchWithSession,
+      paymentTransactionId,
+      sessionIdProp,
+      successIndicatorProp,
+    ],
+  );
+
   useEffect(() => {
     if (launchedRef.current) {
       return;
@@ -72,74 +169,9 @@ export function NmbPaymentTransactionHostedCheckoutContent({
 
     launchedRef.current = true;
 
-    async function startHostedCheckout() {
+    void (async () => {
       try {
-        const token = getCustomerApiToken();
-        if (!token) {
-          throw new PaymentOrchestratorApiError("Please sign in to continue with payment.", 401);
-        }
-
-        let sessionId = sessionIdProp?.trim() || readNmbCheckoutContext()?.gatewaySessionId?.trim();
-        let successIndicator =
-          successIndicatorProp ?? readNmbCheckoutContext()?.successIndicator ?? null;
-
-        if (!sessionId) {
-          const transaction = await fetchPaymentTransaction(paymentTransactionId, token);
-
-          if (transaction.provider !== "nmb") {
-            throw new PaymentOrchestratorApiError("This payment is not an NMB transaction.");
-          }
-
-          sessionId = transaction.provider_reference?.trim() || undefined;
-          successIndicator = transaction.success_indicator ?? successIndicator;
-
-          if (!sessionId) {
-            throw new PaymentOrchestratorApiError("NMB did not return a checkout session id.");
-          }
-
-          prepareNmbHostedCheckoutLaunch(transaction);
-        } else {
-          saveNmbCheckoutContext({
-            ...(readNmbCheckoutContext() ?? {}),
-            paymentId: paymentTransactionId,
-            paymentTransactionId,
-            gatewaySessionId: sessionId,
-            successIndicator,
-          });
-        }
-
-        patchNmbCheckoutContext({
-          paymentId: paymentTransactionId,
-          paymentTransactionId,
-          gatewaySessionId: sessionId,
-          successIndicator,
-        });
-
-        setPhase("redirecting");
-
-        await launchMpgsHostedCheckout({
-          sessionId,
-          callbacks: {
-            onComplete: (resultIndicator) => {
-              patchNmbCheckoutContext({
-                resultIndicator,
-              });
-              redirectToReturn(resultIndicator);
-            },
-            onCancel: () => {
-              setPhase("error");
-              setErrorMessage("Payment was cancelled. You can try again when ready.");
-            },
-            onError: (error) => {
-              setPhase("error");
-              setErrorMessage(describeHostedCheckoutError(error));
-            },
-            onTimeout: () => {
-              setPhase("error");
-              setErrorMessage("The payment session timed out. Please try again.");
-            },
-          },
-        });
+        await startHostedCheckout();
       } catch (error) {
         launchedRef.current = false;
         setPhase("error");
@@ -151,15 +183,35 @@ export function NmbPaymentTransactionHostedCheckoutContent({
               : "Unable to start NMB Hosted Checkout.",
         );
       }
+    })();
+  }, [startHostedCheckout]);
+
+  const handleRetry = useCallback(async () => {
+    if (retrying) {
+      return;
     }
 
-    void startHostedCheckout();
-  }, [
-    paymentTransactionId,
-    redirectToReturn,
-    sessionIdProp,
-    successIndicatorProp,
-  ]);
+    setRetrying(true);
+    setPhase("loading");
+    setErrorMessage(null);
+    launchedRef.current = true;
+
+    try {
+      await startHostedCheckout({ forceFreshSession: true });
+    } catch (error) {
+      launchedRef.current = false;
+      setPhase("error");
+      setErrorMessage(
+        error instanceof PaymentOrchestratorApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : "Unable to refresh the NMB payment session. Please try again.",
+      );
+    } finally {
+      setRetrying(false);
+    }
+  }, [retrying, startHostedCheckout]);
 
   if (phase === "error") {
     return (
@@ -169,15 +221,13 @@ export function NmbPaymentTransactionHostedCheckoutContent({
         <div className="mt-6 flex flex-wrap gap-3">
           <button
             type="button"
+            disabled={retrying}
             onClick={() => {
-              launchedRef.current = false;
-              setPhase("loading");
-              setErrorMessage(null);
-              window.location.reload();
+              void handleRetry();
             }}
-            className="rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white"
+            className="rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white disabled:opacity-60"
           >
-            Try again
+            {retrying ? "Refreshing session…" : "Try again"}
           </button>
           <Link
             href={`/payments/${encodeURIComponent(paymentTransactionId)}`}

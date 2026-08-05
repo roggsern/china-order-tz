@@ -6,11 +6,13 @@ use App\Enums\DeliveryType;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentProvider;
 use App\Enums\PaymentTransactionStatus;
+use App\Events\Audit\PaymentCheckoutSessionRefreshed;
 use App\Models\Order;
 use App\Models\PaymentTransaction;
 use App\Models\User;
 use App\Services\Payments\Orchestration\Contracts\PaymentProviderInterface;
 use App\Services\Payments\Orchestration\DTOs\PaymentInitiationRequest;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -149,6 +151,116 @@ class PaymentOrchestrator
         return $this->completionService->applyResult($transaction, $result);
     }
 
+    /**
+     * Create a fresh Mastercard Hosted Checkout session for an existing NMB payment.
+     * Preserves payment transaction + order identity; replaces gateway session fields only.
+     */
+    public function retryNmbCheckoutSession(User $user, PaymentTransaction $transaction): PaymentTransaction
+    {
+        $transaction->loadMissing('order');
+        $this->authorizeTransaction($user, $transaction);
+
+        $lock = Cache::lock('payment-nmb-checkout-session:'.$transaction->id, 30);
+
+        return $lock->block(15, function () use ($user, $transaction): PaymentTransaction {
+            /** @var array{
+             *     transaction_id: string,
+             *     order: Order,
+             *     merchant_reference: string,
+             *     amount: string,
+             *     currency: string,
+             *     before: array{provider_reference: ?string, success_indicator: ?string}
+             * } $context
+             */
+            $context = DB::transaction(function () use ($user, $transaction): array {
+                /** @var PaymentTransaction $locked */
+                $locked = PaymentTransaction::query()
+                    ->whereKey($transaction->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                $locked->loadMissing('order');
+                $this->authorizeTransaction($user, $locked);
+                $this->assertNmbCheckoutSessionRetryable($locked);
+
+                $order = $locked->order;
+                if ($order === null) {
+                    throw ValidationException::withMessages([
+                        'payment' => ['Payment transaction has no order.'],
+                    ]);
+                }
+
+                $this->assertOrderPayable($order);
+
+                return [
+                    'transaction_id' => $locked->id,
+                    'order' => $order,
+                    'merchant_reference' => $locked->merchant_reference,
+                    'amount' => (string) $locked->amount,
+                    'currency' => strtoupper((string) $locked->currency),
+                    'before' => [
+                        'provider_reference' => $locked->provider_reference,
+                        'success_indicator' => $locked->success_indicator,
+                    ],
+                ];
+            });
+
+            $provider = $this->resolveProvider(PaymentProvider::Nmb->value);
+            $result = $provider->initiate(new PaymentInitiationRequest(
+                order: $context['order'],
+                merchantReference: $context['merchant_reference'],
+                amount: $context['amount'],
+                currency: $context['currency'],
+                provider: PaymentProvider::Nmb->value,
+            ));
+
+            if (! $result->ok || ! filled($result->providerReference)) {
+                throw ValidationException::withMessages([
+                    'payment' => [
+                        $result->message ?: 'Unable to create a fresh NMB Hosted Checkout session.',
+                    ],
+                ]);
+            }
+
+            return DB::transaction(function () use ($user, $context, $result): PaymentTransaction {
+                /** @var PaymentTransaction $locked */
+                $locked = PaymentTransaction::query()
+                    ->whereKey($context['transaction_id'])
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                $locked->loadMissing('order');
+                $this->authorizeTransaction($user, $locked);
+                $this->assertNmbCheckoutSessionRetryable($locked);
+
+                $locked->fill([
+                    'provider_reference' => $result->providerReference,
+                    'checkout_url' => $result->checkoutUrl,
+                    'success_indicator' => $result->successIndicator,
+                    'status' => PaymentTransactionStatus::Processing,
+                    'request_payload' => $result->requestPayload,
+                    'response_payload' => $result->responsePayload,
+                    'initiated_at' => now(),
+                    'completed_at' => null,
+                ])->save();
+
+                $fresh = $locked->fresh(['order']) ?? $locked;
+
+                event(PaymentCheckoutSessionRefreshed::fromTransaction(
+                    $fresh,
+                    $user,
+                    $context['before'],
+                    [
+                        'provider_reference' => $fresh->provider_reference,
+                        'success_indicator' => $fresh->success_indicator,
+                    ],
+                ));
+
+                return $fresh;
+            });
+        });
+    }
+
     public function resolveProvider(string $key): PaymentProviderInterface
     {
         $key = strtolower($key);
@@ -181,6 +293,35 @@ class PaymentOrchestrator
     {
         if ($transaction->order?->user_id !== $user->id) {
             abort(404);
+        }
+    }
+
+    private function assertNmbCheckoutSessionRetryable(PaymentTransaction $transaction): void
+    {
+        $provider = $transaction->provider instanceof PaymentProvider
+            ? $transaction->provider
+            : PaymentProvider::tryFrom(strtolower((string) $transaction->provider));
+
+        if ($provider !== PaymentProvider::Nmb) {
+            throw ValidationException::withMessages([
+                'provider' => ['Only NMB payment transactions can refresh a Hosted Checkout session.'],
+            ]);
+        }
+
+        $status = $transaction->status instanceof PaymentTransactionStatus
+            ? $transaction->status
+            : PaymentTransactionStatus::tryFrom((string) $transaction->status);
+
+        $retryable = in_array($status, [
+            PaymentTransactionStatus::Pending,
+            PaymentTransactionStatus::Processing,
+            PaymentTransactionStatus::Failed,
+        ], true);
+
+        if (! $retryable) {
+            throw ValidationException::withMessages([
+                'payment' => ['This payment can no longer refresh its Hosted Checkout session.'],
+            ]);
         }
     }
 

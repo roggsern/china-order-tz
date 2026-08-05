@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Payments\RefreshPaymentTransactionAction;
 use App\Actions\Payments\ResolvePaymentReturnTransactionAction;
+use App\Actions\Payments\RetryNmbCheckoutSessionAction;
 use App\Actions\Payments\ShowPaymentTransactionAction;
 use App\Actions\Payments\StartPaymentTransactionAction;
 use App\Http\Requests\Payments\ResolvePaymentReturnRequest;
@@ -65,6 +66,22 @@ class PaymentOrchestratorController extends Controller
             'data' => new PaymentTransactionResource(
                 $action->handle($user, $paymentTransaction)->load('order'),
             ),
+        ]);
+    }
+
+    public function retryNmbCheckoutSession(
+        PaymentTransaction $paymentTransaction,
+        RetryNmbCheckoutSessionAction $action,
+    ): JsonResponse {
+        /** @var User $user */
+        $user = auth()->user();
+
+        $transaction = $action->handle($user, $paymentTransaction);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'NMB Hosted Checkout session refreshed.',
+            'data' => new PaymentTransactionResource($transaction->load('order')),
         ]);
     }
 

@@ -9,6 +9,7 @@ enum ActivityEventType: string
     case ShippingOptionUpdated = 'shipping_option_updated';
     case OrderCreated = 'order_created';
     case PaymentConfirmed = 'payment_confirmed';
+    case PaymentCheckoutSessionRefreshed = 'payment_checkout_session_refreshed';
     case WarehouseJobCreated = 'warehouse_job_created';
     case WarehouseStatusChanged = 'warehouse_status_changed';
     case PickStarted = 'pick_started';
@@ -183,6 +184,7 @@ enum ActivityEventType: string
             self::ShippingOptionUpdated => 'Shipping Option Updated',
             self::OrderCreated => 'Order Created',
             self::PaymentConfirmed => 'Payment Confirmed',
+            self::PaymentCheckoutSessionRefreshed => 'Payment Checkout Session Refreshed',
             self::WarehouseJobCreated => 'Warehouse Job Created',
             self::WarehouseStatusChanged => 'Warehouse Status Changed',
             self::PickStarted => 'Pick Started',
@@ -359,6 +361,7 @@ enum ActivityEventType: string
             self::ShippingOptionUpdated => 'updated',
             self::OrderCreated => 'created',
             self::PaymentConfirmed => 'confirmed',
+            self::PaymentCheckoutSessionRefreshed => 'session_refreshed',
             self::WarehouseJobCreated => 'created',
             self::WarehouseStatusChanged => 'status_changed',
             self::PickStarted => 'started',

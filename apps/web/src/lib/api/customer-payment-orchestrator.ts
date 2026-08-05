@@ -133,6 +133,24 @@ export async function refreshPaymentTransaction(
   );
 }
 
+/**
+ * Create a fresh Mastercard Hosted Checkout session for an existing NMB payment.
+ * Prefer this on explicit retry — do not reuse a stale gateway_session_id.
+ */
+export async function retryNmbCheckoutSession(
+  transactionId: string,
+  token?: string | null,
+): Promise<PaymentTransactionPayload> {
+  return apiFetch<PaymentTransactionPayload>(
+    `/api/payments/${encodeURIComponent(transactionId)}/nmb/checkout-session`,
+    {
+      method: "POST",
+      headers: getAuthHeaders(token),
+    },
+    "Unable to create a fresh NMB checkout session.",
+  );
+}
+
 export async function resolvePaymentReturnTransaction(
   input: { orderId?: string | null; merchantReference?: string | null },
   token?: string | null,
