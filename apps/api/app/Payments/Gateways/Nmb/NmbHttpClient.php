@@ -54,6 +54,14 @@ class NmbHttpClient
                     ? $pendingRequest->asJson()->post($url, $payload ?? [])
                     : $pendingRequest->get($url);
 
+                // TEMP diagnostics — session create only (no auth headers / password)
+                if (str_contains($url, '/session')) {
+                    Log::info('NMB SESSION CREATE RESPONSE', [
+                        'status' => $response->status(),
+                        'body' => $response->json(),
+                    ]);
+                }
+
                 $this->logResponseStatus($method, $url, $response->status());
 
                 return $this->decodeResponse($response);

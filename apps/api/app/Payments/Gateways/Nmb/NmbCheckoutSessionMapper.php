@@ -2,6 +2,8 @@
 
 namespace App\Payments\Gateways\Nmb;
 
+use Illuminate\Support\Facades\Log;
+
 class NmbCheckoutSessionMapper
 {
     /**
@@ -28,7 +30,7 @@ class NmbCheckoutSessionMapper
             );
         }
 
-        return new NmbCheckoutSession(
+        $mapped = new NmbCheckoutSession(
             success: $success,
             sessionId: $sessionId,
             successIndicator: $successIndicator,
@@ -38,6 +40,14 @@ class NmbCheckoutSessionMapper
             rawResponse: $response,
             message: $message,
         );
+
+        // TEMP diagnostics — no credentials
+        Log::info('NMB SESSION MAPPED', [
+            'sessionId' => $mapped->sessionId,
+            'successIndicator' => $mapped->successIndicator,
+        ]);
+
+        return $mapped;
     }
 
     /**
