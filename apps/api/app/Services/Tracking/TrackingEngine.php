@@ -219,15 +219,20 @@ class TrackingEngine
             ? NotificationEventType::OrderDelivered
             : NotificationEventType::TrackingUpdated;
 
-        $key = $idempotencyKey !== null
-            ? 'notify:'.$idempotencyKey
-            : 'notify:tracking:'.$event->id;
+        $orderId = $event->shipment?->order_id;
+        if ($notificationType === NotificationEventType::OrderDelivered && filled($orderId)) {
+            $key = 'order_delivered:'.$orderId.':'.$user->id;
+        } else {
+            $key = $idempotencyKey !== null
+                ? 'notify:'.$idempotencyKey
+                : 'notify:tracking:'.$event->id;
+        }
 
         try {
             $this->notifications->notifyCustomer($notificationType, $user, [
                 'customer_name' => $user->name,
                 'order_number' => $event->shipment?->order?->order_number,
-                'order_id' => $event->shipment?->order_id,
+                'order_id' => $orderId,
                 'shipment_id' => $event->shipment_id,
                 'tracking_status' => $eventType?->label() ?? (string) $event->event_type,
                 'tracking_event' => $eventType?->value ?? (string) $event->event_type,

@@ -102,9 +102,9 @@ final class SettingsDefinitions
                 'short_key' => 'event_channel_map',
                 'type' => SettingType::Json,
                 'default' => [
-                    'order.created' => ['in_app'],
-                    'order.paid' => ['in_app'],
-                    'shipment.delivered' => ['in_app'],
+                    'order.created' => ['in_app', 'whatsapp', 'email'],
+                    'order.paid' => ['in_app', 'whatsapp', 'email'],
+                    'shipment.delivered' => ['in_app', 'whatsapp', 'email'],
                 ],
                 'rules' => ['required', 'array'],
             ],

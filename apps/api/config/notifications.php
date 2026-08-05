@@ -7,12 +7,13 @@ return [
     | Default channels per business event
     |--------------------------------------------------------------------------
     | Business modules publish events only. The platform selects channels.
-    | Only in_app delivers in this phase; other channels log "Not Configured".
+    | Managed admin settings events (order.created / order.paid / shipment.delivered)
+    | also apply enablement + provider availability filtering.
     */
     'event_channels' => [
-        'order_created' => ['in_app'],
+        'order_created' => ['in_app', 'whatsapp', 'email'],
         'order_cancelled' => ['in_app'],
-        'payment_confirmed' => ['in_app'],
+        'payment_confirmed' => ['in_app', 'whatsapp', 'email'],
         'warehouse_picking_started' => ['in_app'],
         'warehouse_pick_assigned' => ['in_app'],
         'warehouse_pick_completed' => ['in_app'],
@@ -21,14 +22,14 @@ return [
         'warehouse_ready_for_pickup' => ['in_app'],
         'warehouse_ready_for_delivery_arrangement' => ['in_app'],
         'shipment_created' => ['in_app'],
-        'shipment_arrived_tanzania' => ['in_app'],
+        'shipment_arrived_tanzania' => ['in_app', 'whatsapp', 'email'],
         'company_handover_pickup_requested' => ['in_app'],
         'company_handover_delivery_requested' => ['in_app'],
         'company_handover_completed_pickup' => ['in_app'],
         'company_handover_completed_delivery' => ['in_app'],
         'tracking_updated' => ['in_app'],
         'shipment_status_updated' => ['in_app'],
-        'order_delivered' => ['in_app'],
+        'order_delivered' => ['in_app', 'whatsapp', 'email'],
         'local_order_completed_pickup' => ['in_app'],
         'local_order_completed_delivery_arrangement' => ['in_app'],
         'password_reset' => ['in_app', 'email'],
@@ -71,8 +72,42 @@ return [
 
     'whatsapp' => [
         // meta_cloud | dialog360 | twilio_whatsapp | ultramsg | greenapi
-        'driver' => env('NOTIFICATION_WHATSAPP_DRIVER', 'meta_cloud'),
+        'driver' => env('WHATSAPP_PROVIDER', env('NOTIFICATION_WHATSAPP_DRIVER', 'meta_cloud')),
         'configured' => (bool) env('NOTIFICATION_WHATSAPP_CONFIGURED', false),
+        'access_token' => env('WHATSAPP_ACCESS_TOKEN'),
+        'phone_number_id' => env('WHATSAPP_PHONE_NUMBER_ID'),
+        'business_account_id' => env('WHATSAPP_BUSINESS_ACCOUNT_ID'),
+        'api_version' => env('WHATSAPP_API_VERSION', 'v21.0'),
+        'default_language' => env('WHATSAPP_DEFAULT_LANGUAGE', 'en'),
+        'timeout' => (int) env('WHATSAPP_HTTP_TIMEOUT', 10),
+        'connect_timeout' => (int) env('WHATSAPP_HTTP_CONNECT_TIMEOUT', 5),
+
+        /*
+        | Meta-approved template names + ordered body parameter keys from notification.data.
+        | These are NOT the DB notification_templates bodies used for in-app/email.
+        */
+        'templates' => [
+            'order_created' => [
+                'name' => env('WHATSAPP_TEMPLATE_ORDER_CREATED', 'order_created'),
+                'language' => env('WHATSAPP_TEMPLATE_ORDER_CREATED_LANG'),
+                'body_params' => ['customer_name', 'order_number', 'order_total', 'currency'],
+            ],
+            'payment_confirmed' => [
+                'name' => env('WHATSAPP_TEMPLATE_PAYMENT_CONFIRMED', 'payment_confirmed'),
+                'language' => env('WHATSAPP_TEMPLATE_PAYMENT_CONFIRMED_LANG'),
+                'body_params' => ['customer_name', 'order_number', 'order_total', 'currency'],
+            ],
+            'shipment_arrived_tanzania' => [
+                'name' => env('WHATSAPP_TEMPLATE_SHIPMENT_ARRIVED_TANZANIA', 'shipment_arrived_tanzania'),
+                'language' => env('WHATSAPP_TEMPLATE_SHIPMENT_ARRIVED_TANZANIA_LANG'),
+                'body_params' => ['customer_name', 'order_number', 'location'],
+            ],
+            'order_delivered' => [
+                'name' => env('WHATSAPP_TEMPLATE_ORDER_DELIVERED', 'order_delivered'),
+                'language' => env('WHATSAPP_TEMPLATE_ORDER_DELIVERED_LANG'),
+                'body_params' => ['customer_name', 'order_number'],
+            ],
+        ],
     ],
 
     'sms' => [

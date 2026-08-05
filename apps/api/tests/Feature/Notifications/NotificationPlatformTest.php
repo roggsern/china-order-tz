@@ -127,9 +127,10 @@ class NotificationPlatformTest extends TestCase
             ['otp_code' => '999111', 'customer_name' => 'Asha'],
         );
 
-        $this->assertCount(2, $created);
+        // Unconfigured/disabled SMS is filtered out; in_app remains deliverable.
+        $this->assertCount(1, $created);
         $this->assertTrue($created->contains(fn (Notification $n) => $n->channel === NotificationChannel::InApp));
-        $this->assertTrue($created->contains(fn (Notification $n) => $n->channel === NotificationChannel::Sms));
+        $this->assertFalse($created->contains(fn (Notification $n) => $n->channel === NotificationChannel::Sms));
     }
 
     public function test_provider_resolution_via_registry(): void

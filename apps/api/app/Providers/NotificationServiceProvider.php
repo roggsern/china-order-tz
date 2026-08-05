@@ -17,6 +17,7 @@ use App\Services\Notifications\Providers\InAppNotificationProvider;
 use App\Services\Notifications\Providers\PushNotificationProvider;
 use App\Services\Notifications\Providers\SMSNotificationProvider;
 use App\Services\Notifications\Providers\WhatsAppNotificationProvider;
+use App\Services\Notifications\WhatsApp\MetaWhatsAppTemplateMapper;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
@@ -30,6 +31,7 @@ class NotificationServiceProvider extends ServiceProvider
         $this->app->singleton(NotificationConfigurationService::class);
         $this->app->singleton(NotificationDispatcher::class);
         $this->app->singleton(NotificationPlatform::class);
+        $this->app->singleton(MetaWhatsAppTemplateMapper::class);
 
         $this->app->singleton(InAppNotificationProvider::class);
         $this->app->singleton(EmailNotificationProvider::class);

@@ -62,7 +62,7 @@ class AdminNotificationConfigurationTest extends TestCase
             ->assertJsonPath('data.channels.in_app_enabled', true)
             ->assertJsonPath('data.channels.email_enabled', false);
 
-        $this->assertSame(['in_app'], $response->json('data.event_channel_map')['order.created'] ?? null);
+        $this->assertSame(['in_app', 'whatsapp', 'email'], $response->json('data.event_channel_map')['order.created'] ?? null);
 
         $this->putJson('/api/v1/admin/notifications/config', [
             'channels' => ['email_enabled' => true],

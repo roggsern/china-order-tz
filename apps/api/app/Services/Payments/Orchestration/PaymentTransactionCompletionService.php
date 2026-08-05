@@ -129,6 +129,7 @@ class PaymentTransactionCompletionService
             $order->loadMissing('user');
             if ($order->user !== null) {
                 try {
+                    $notifyKey = 'payment_confirmed:'.$order->id.':'.$order->user->id;
                     $this->notifications->notifyCustomer(
                         NotificationEventType::PaymentConfirmed,
                         $order->user,
@@ -139,6 +140,8 @@ class PaymentTransactionCompletionService
                             'order_total' => (string) $order->total,
                             'currency' => $order->currency,
                         ],
+                        idempotencyKey: $notifyKey,
+                        correlationKey: $notifyKey,
                     );
                 } catch (\Throwable $e) {
                     Log::warning('notification.payment_confirmed_failed', [

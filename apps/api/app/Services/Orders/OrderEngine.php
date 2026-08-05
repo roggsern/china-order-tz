@@ -222,15 +222,22 @@ class OrderEngine
                 $order = $this->loadOrderPayload($order);
 
                 try {
-                    $this->notifications->notifyCustomer(NotificationEventType::OrderCreated, $user, [
-                        'customer_name' => $user->name,
-                        'order_number' => $order->order_number,
-                        'order_id' => $order->id,
-                        'order_total' => (string) $order->total,
-                        'currency' => $order->currency,
-                        'commerce_channel' => $channelSnapshot['code'] ?? null,
-                        'commerce_channel_label' => $channelSnapshot['customer_label'] ?? null,
-                    ]);
+                    $notifyKey = 'order_created:'.$order->id.':'.$user->id;
+                    $this->notifications->notifyCustomer(
+                        NotificationEventType::OrderCreated,
+                        $user,
+                        [
+                            'customer_name' => $user->name,
+                            'order_number' => $order->order_number,
+                            'order_id' => $order->id,
+                            'order_total' => (string) $order->total,
+                            'currency' => $order->currency,
+                            'commerce_channel' => $channelSnapshot['code'] ?? null,
+                            'commerce_channel_label' => $channelSnapshot['customer_label'] ?? null,
+                        ],
+                        idempotencyKey: $notifyKey,
+                        correlationKey: $notifyKey,
+                    );
                 } catch (\Throwable $e) {
                     Log::warning('notification.order_created_failed', [
                         'order_id' => $order->id,

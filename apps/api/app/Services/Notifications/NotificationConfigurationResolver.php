@@ -220,8 +220,9 @@ final class NotificationConfigurationResolver
             $configured = ['in_app'];
         }
 
-        // Non-managed events keep config/php defaults (NotificationPlatform regression path).
-        return $this->toChannelEnums($configured);
+        // Apply the same enablement + provider-availability filter used for managed events
+        // so stub/unconfigured channels (WhatsApp/email/sms) do not create failed rows.
+        return $this->filterForDelivery($this->toChannelEnums($configured));
     }
 
     /**
@@ -304,9 +305,9 @@ final class NotificationConfigurationResolver
     public function defaultEventChannelMap(): array
     {
         return [
-            'order.created' => ['in_app'],
-            'order.paid' => ['in_app'],
-            'shipment.delivered' => ['in_app'],
+            'order.created' => ['in_app', 'whatsapp', 'email'],
+            'order.paid' => ['in_app', 'whatsapp', 'email'],
+            'shipment.delivered' => ['in_app', 'whatsapp', 'email'],
         ];
     }
 

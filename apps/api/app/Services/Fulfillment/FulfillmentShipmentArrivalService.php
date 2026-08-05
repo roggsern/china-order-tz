@@ -119,7 +119,8 @@ class FulfillmentShipmentArrivalService
             return;
         }
 
-        $key = 'arrival:shipment:'.$shipment->id;
+        $orderId = $fulfillment->order_id ?? $shipment->order_id;
+        $key = 'shipment_arrived_tanzania:'.($orderId ?: $shipment->id).':'.$user->id;
 
         try {
             $this->notifications->notifyCustomer(
@@ -128,7 +129,7 @@ class FulfillmentShipmentArrivalService
                 [
                     'customer_name' => $user->name,
                     'order_number' => $fulfillment->order?->order_number ?? $shipment->order?->order_number,
-                    'order_id' => $fulfillment->order_id ?? $shipment->order_id,
+                    'order_id' => $orderId,
                     'shipment_id' => $shipment->id,
                     'location' => $shipment->destination,
                 ],

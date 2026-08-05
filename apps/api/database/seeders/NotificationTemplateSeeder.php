@@ -17,12 +17,14 @@ class NotificationTemplateSeeder extends Seeder
                 'name' => 'Order Created',
                 'subject' => 'Order {{order_number}} received',
                 'body' => 'Hello {{customer_name}}, your order {{order_number}} has been created. Total: {{order_total}} {{currency}}.',
+                'channels' => [NotificationChannel::InApp, NotificationChannel::Email],
             ],
             [
                 'event' => NotificationEventType::PaymentConfirmed,
                 'name' => 'Payment Confirmed',
                 'subject' => 'Payment confirmed for {{order_number}}',
-                'body' => 'Hello {{customer_name}}, payment for order {{order_number}} has been confirmed.',
+                'body' => 'Hello {{customer_name}}, payment for order {{order_number}} has been confirmed. Total: {{order_total}} {{currency}}.',
+                'channels' => [NotificationChannel::InApp, NotificationChannel::Email],
             ],
             [
                 'event' => NotificationEventType::OrderCancelled,
@@ -40,7 +42,8 @@ class NotificationTemplateSeeder extends Seeder
                 'event' => NotificationEventType::ShipmentArrivedTanzania,
                 'name' => 'Shipment Arrived Tanzania',
                 'subject' => 'Order {{order_number}} has arrived in Tanzania',
-                'body' => 'Your order has arrived in Tanzania. We will notify you about the next steps for receiving your order.',
+                'body' => 'Hello {{customer_name}}, your order {{order_number}} has arrived in Tanzania at {{location}}. We will notify you about the next steps for receiving your order.',
+                'channels' => [NotificationChannel::InApp, NotificationChannel::Email],
             ],
             [
                 'event' => NotificationEventType::CompanyHandoverPickupRequested,
@@ -77,6 +80,7 @@ class NotificationTemplateSeeder extends Seeder
                 'name' => 'Delivered',
                 'subject' => 'Order {{order_number}} delivered',
                 'body' => 'Hello {{customer_name}}, your order {{order_number}} has been delivered.',
+                'channels' => [NotificationChannel::InApp, NotificationChannel::Email],
             ],
             [
                 'event' => NotificationEventType::LocalOrderCompletedPickup,
