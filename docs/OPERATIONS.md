@@ -12,7 +12,8 @@ Production Compose merges `docker-compose.yml` + `docker-compose.prod.yml`. The 
 
 - Starts **all six services by default** — `queue` and `scheduler` are always included (no `--profile workers`).
 - Uses **built images only** — no development bind mounts (`./apps/api`, `./apps/web`).
-- Mounts **persistent volumes** only: `api_storage` (runtime uploads/cache) and `app_backups`.
+- Mounts **persistent volumes**: recovered MySQL data (`china-order-tz_mysql_data_recovered`), `api_storage`, and `app_backups`.
+- **Never publishes MySQL** — `ports: !reset []` clears the base `${MYSQL_PORT:-3306}:3306` binding. Local/dev Compose may still expose MySQL; production must not.
 
 ```bash
 cp .env.production.example .env
@@ -24,12 +25,43 @@ bash scripts/deploy-api-compose.sh
 # Static .env validation only (no containers):
 bash scripts/validate-production-deploy.sh
 
+# Assert production effective Compose never publishes MySQL:
+bash scripts/assert-production-mysql-hardening.sh
+
 # Manual equivalent:
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.yml -f docker-compose.prod.yml exec api php artisan ops:production-env-check
 docker compose -f docker-compose.yml -f docker-compose.prod.yml exec api php artisan nmb:validate-config
 docker compose -f docker-compose.yml -f docker-compose.prod.yml exec api php artisan ops:health
 docker compose -f docker-compose.yml -f docker-compose.prod.yml exec queue php artisan ops:queue-health
+```
+
+### MySQL network isolation & recovered volume
+
+| Concern | Production behavior |
+|---------|---------------------|
+| Host port 3306 | Not published (`docker-compose.prod.yml` resets ports) |
+| Data volume | External named volume `china-order-tz_mysql_data_recovered` |
+| Old compromised volume | Keep `china-order-tz_mysql_data` on disk; do not delete or rename |
+| Temporary incident override | Do **not** depend on `docker-compose.incident-recovery.yml` — hardening lives in `docker-compose.prod.yml` |
+| App DB host | `DB_HOST=mysql` (Docker network DNS only) |
+
+**Transition off the temporary incident override** (once this repo change is on the host):
+
+```bash
+# Stop stack that used the incident overlay (adjust -f flags to match how it was started)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.incident-recovery.yml down
+
+# Confirm recovered volume still exists (do not create empty / do not touch compromised volume)
+docker volume inspect china-order-tz_mysql_data_recovered
+
+# Deploy with tracked production files only
+bash scripts/assert-production-mysql-hardening.sh
+bash scripts/deploy-api-compose.sh
+
+# Verify MySQL is not published on the host
+docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+ss -lntp | grep 3306 || echo "OK: nothing listening on 3306"
 ```
 
 | Service | Role | Healthcheck | Required at launch |
@@ -289,8 +321,10 @@ Document actual host paths and credentials in your secure runbook (not in git).
 - [ ] CI green on target SHA
 - [ ] `.env` populated from `.env.production.example`
 - [ ] `bash scripts/validate-production-deploy.sh` passes (static gate — no containers)
+- [ ] `bash scripts/assert-production-mysql-hardening.sh` passes (MySQL unpublished + recovered volume)
 - [ ] `APP_KEY` generated
 - [ ] `MYSQL_*` and mirrored `DB_*` credentials rotated from defaults (`secret`)
+- [ ] Recovered volume `china-order-tz_mysql_data_recovered` exists on host (`docker volume inspect`)
 - [ ] `php artisan nmb:validate-config` passes (also enforced by deploy script post-start)
 - [ ] SMTP tested (see mail checklist)
 - [ ] Feature flags reviewed (wishlist, reviews, checkout)
@@ -323,6 +357,7 @@ See [RELEASE.md](./RELEASE.md).
 ### Post-deploy validation
 
 - [ ] `docker compose -f docker-compose.yml -f docker-compose.prod.yml ps` — **six services** up: `api`, `queue`, `scheduler`, `nginx`, `web`, `mysql`
+- [ ] Host has **no** published MySQL listener (`ss -lntp | grep 3306` empty; or compose config shows no mysql ports)
 - [ ] `php artisan ops:production-env-check` → exit 0
 - [ ] `php artisan nmb:validate-config` → exit 0
 - [ ] `php artisan ops:health` → exit 0 (API container)

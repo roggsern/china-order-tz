@@ -54,10 +54,10 @@ Optional pre-deploy backup before migrations on **existing** hosts:
 
 ```bash
 PRE_DEPLOY_BACKUP=true bash scripts/deploy-api-compose.sh   # always backup first
-PRE_DEPLOY_BACKUP=auto bash scripts/deploy-api-compose.sh # backup when mysql volume exists
+PRE_DEPLOY_BACKUP=auto bash scripts/deploy-api-compose.sh # backup when recovered mysql volume exists
 ```
 
-Greenfield (`PRE_DEPLOY_BACKUP=false`, default): no backup step.
+Greenfield (`PRE_DEPLOY_BACKUP=false`, default): no backup step. Production MySQL data volume is `china-order-tz_mysql_data_recovered` (external); do not delete the old compromised `china-order-tz_mysql_data` volume.
 
 Equivalent:
 

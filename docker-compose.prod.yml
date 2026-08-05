@@ -1,6 +1,12 @@
 services:
   mysql:
     restart: always
+    # Incident hardening: never publish MySQL on the host in production.
+    # Base docker-compose.yml publishes ${MYSQL_PORT:-3306}:3306 for local/dev only;
+    # without !reset, Compose merges and keeps that published port.
+    ports: !reset []
+    volumes: !override
+      - mysql_data_recovered:/var/lib/mysql
 
   # Shared production Laravel runtime: project-root `.env` via env_file (APP_KEY, SANCTUM_*,
   # SESSION_*, NMB_*, PAYMENT_*, etc.) plus explicit overrides below so api / queue / scheduler
@@ -170,5 +176,10 @@ services:
       - "${WEB_PORT:-3000}:3000"
 
 volumes:
+  # Post-incident recovered data. Keep compromised china-order-tz_mysql_data intact (unused).
+  # external: true — volume must already exist on the host (created during recovery).
+  mysql_data_recovered:
+    name: china-order-tz_mysql_data_recovered
+    external: true
   api_storage:
   app_backups:

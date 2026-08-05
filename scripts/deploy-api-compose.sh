@@ -66,9 +66,8 @@ wait_for_scheduler_health() {
 
 maybe_run_pre_deploy_backup() {
   local mode="${PRE_DEPLOY_BACKUP:-false}"
-  local project_name
-  project_name="$(basename "$ROOT" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')"
-  local mysql_volume="${COMPOSE_PROJECT_NAME:-${project_name}}_mysql_data"
+  # Production permanently uses the post-incident recovered volume (do not delete the old compromised volume).
+  local mysql_volume="${MYSQL_DATA_VOLUME_NAME:-china-order-tz_mysql_data_recovered}"
 
   case "$mode" in
     true|1|yes|YES)
@@ -99,6 +98,7 @@ maybe_run_pre_deploy_backup() {
 
 # ── 1) Fail fast before any production containers start ─────────────────────
 production_preflight_static "${ROOT}/.env"
+bash "${ROOT}/scripts/assert-production-mysql-hardening.sh"
 
 # ── 2) Optional backup before migrations (existing installs only) ───────────
 maybe_run_pre_deploy_backup
