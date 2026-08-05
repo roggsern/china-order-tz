@@ -127,7 +127,10 @@ class RevertFalseNmbPaidCommand extends Command
                     'notes' => 'Recovery: revert false NMB paid state (authentication/settlement incomplete)',
                     'source' => 'payments:revert-false-nmb-paid',
                     'actor_type' => 'system',
-                    'idempotency_key' => 'revert-false-nmb-paid:'.$lockedTxn->id.':'.now()->timestamp,
+                    'idempotency_key' => self::buildIdempotencyKey(
+                        (string) $lockedTxn->id,
+                        (string) now()->timestamp,
+                    ),
                     'metadata' => [
                         'payment_transaction_id' => $lockedTxn->id,
                         'merchant_reference' => $lockedTxn->merchant_reference,
@@ -142,5 +145,14 @@ class RevertFalseNmbPaidCommand extends Command
         $this->comment('Customer can retry Hosted Checkout via the fresh-session endpoint.');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Compact unique key for order_status_history.idempotency_key (varchar 64).
+     * Deterministic digest of the recovery seed — never concatenates raw UUIDs.
+     */
+    public static function buildIdempotencyKey(string $paymentTransactionId, string $timestamp): string
+    {
+        return hash('sha256', 'revert-false-nmb-paid:'.$paymentTransactionId.':'.$timestamp);
     }
 }

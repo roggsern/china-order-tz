@@ -2,12 +2,13 @@
 
 namespace Tests\Feature\Payments;
 
+use App\Console\Commands\RevertFalseNmbPaidCommand;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentProvider;
 use App\Enums\PaymentTransactionStatus;
+use App\Models\OrderStatusHistory;
 use App\Models\PaymentTransaction;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\Sanctum;
@@ -353,5 +354,57 @@ class NmbPaymentOutcomeIntegrityTest extends TestCase
             '--confirm' => 'REVERT_FALSE_PAID_NMB',
         ]);
         $this->assertSame(1, $second);
+    }
+
+    public function test_recovery_idempotency_key_fits_column_for_long_payment_transaction_ids(): void
+    {
+        // Old format: "revert-false-nmb-paid:{uuid}:{timestamp}" exceeds varchar(64).
+        $longPaymentTransactionId = '123e4567-e89b-12d3-a456-426614174000';
+        $timestamp = '1722886500';
+        $legacyKey = 'revert-false-nmb-paid:'.$longPaymentTransactionId.':'.$timestamp;
+        $this->assertGreaterThan(64, strlen($legacyKey));
+
+        $compactKey = RevertFalseNmbPaidCommand::buildIdempotencyKey($longPaymentTransactionId, $timestamp);
+        $this->assertSame(64, strlen($compactKey));
+        $this->assertSame(
+            hash('sha256', 'revert-false-nmb-paid:'.$longPaymentTransactionId.':'.$timestamp),
+            $compactKey,
+        );
+
+        $user = User::factory()->create();
+        $order = $this->createPayableOrder($user, ['total' => 9000, 'currency' => 'TZS']);
+        $transaction = PaymentTransaction::factory()->create([
+            'id' => $longPaymentTransactionId,
+            'order_id' => $order->id,
+            'provider' => PaymentProvider::Nmb,
+            'status' => PaymentTransactionStatus::Successful,
+            'amount' => 9000,
+            'currency' => 'TZS',
+            'merchant_reference' => 'COTZ-PAY-RECOVER-LONG',
+            'provider_reference' => 'SESSION-LONG',
+            'completed_at' => now(),
+        ]);
+        $order->update([
+            'status' => OrderStatus::Paid,
+            'paid_at' => now(),
+        ]);
+
+        $exit = Artisan::call('payments:revert-false-nmb-paid', [
+            '--payment-transaction' => $longPaymentTransactionId,
+            '--force' => true,
+            '--confirm' => 'REVERT_FALSE_PAID_NMB',
+        ]);
+        $this->assertSame(0, $exit);
+
+        $history = OrderStatusHistory::query()
+            ->where('order_id', $order->id)
+            ->where('source', 'payments:revert-false-nmb-paid')
+            ->latest('id')
+            ->first();
+
+        $this->assertNotNull($history);
+        $this->assertNotNull($history->idempotency_key);
+        $this->assertLessThanOrEqual(64, strlen((string) $history->idempotency_key));
+        $this->assertSame(OrderStatus::PendingPayment, $order->fresh()->status);
     }
 }
