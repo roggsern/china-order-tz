@@ -2,7 +2,7 @@
 
 Operational runbook for production deployment, health checks, mail, queue/scheduler, storage, and backups.
 
-**Related:** [PRODUCTION_OWNERSHIP.md](./PRODUCTION_OWNERSHIP.md) · [RELEASE.md](./RELEASE.md)
+**Related:** [PRODUCTION_OWNERSHIP.md](./PRODUCTION_OWNERSHIP.md) · [RELEASE.md](./RELEASE.md) · [PRODUCTION_COMMERCE_CLEANUP.md](./PRODUCTION_COMMERCE_CLEANUP.md)
 
 ---
 
