@@ -104,6 +104,53 @@ class NmbPaymentOutcomeEvaluatorTest extends TestCase
         $this->assertSame(NmbPaymentOutcome::Successful, $result->outcome);
     }
 
+    public function test_mpgs_transaction_list_selects_payment_record_for_successful_capture(): void
+    {
+        $result = $this->evaluator->evaluate(
+            [
+                'result' => 'SUCCESS',
+                'response' => ['gatewayCode' => 'APPROVED'],
+                'order' => [
+                    'id' => 'COTZ-PAY-20260806-000050',
+                    'amount' => '1930000.00',
+                    'currency' => 'TZS',
+                    'status' => 'CAPTURED',
+                    'authenticationStatus' => 'AUTHENTICATION_SUCCESSFUL',
+                    'totalAuthorizedAmount' => '1930000.00',
+                    'totalCapturedAmount' => '1930000.00',
+                ],
+                'transaction' => [
+                    [
+                        'transaction' => [
+                            'id' => 'TXN-AUTHN-1',
+                            'type' => 'AUTHENTICATION',
+                            'result' => 'SUCCESS',
+                        ],
+                    ],
+                    [
+                        'transaction' => [
+                            'id' => 'TXN-PAY-1',
+                            'type' => 'PAYMENT',
+                            'result' => 'SUCCESS',
+                            'response' => [
+                                'gatewayCode' => 'APPROVED',
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+            expectedOrderId: 'COTZ-PAY-20260806-000050',
+            expectedAmount: '1930000.00',
+            expectedCurrency: 'TZS',
+        );
+
+        $this->assertSame(NmbPaymentOutcome::Successful, $result->outcome);
+        $this->assertTrue($result->outcome->isVerifiedPaid());
+        $this->assertSame('TXN-PAY-1', $result->context['transaction_id'] ?? null);
+        $this->assertSame('PAYMENT', $result->context['transaction_type'] ?? null);
+        $this->assertSame('SUCCESS', $result->context['transaction_result'] ?? null);
+    }
+
     public function test_declined_response_is_failed(): void
     {
         $result = $this->evaluator->evaluate(

@@ -20,7 +20,7 @@ final class NmbPaymentOutcomeEvaluator
     ): NmbPaymentOutcomeResult {
         $topLevelResult = $this->upper($response['result'] ?? null);
         $order = is_array($response['order'] ?? null) ? $response['order'] : [];
-        $transaction = is_array($response['transaction'] ?? null) ? $response['transaction'] : [];
+        $transaction = $this->resolvePaymentTransaction($response['transaction'] ?? null);
         $responseBlock = is_array($response['response'] ?? null) ? $response['response'] : [];
         $txnResponse = is_array($transaction['response'] ?? null) ? $transaction['response'] : [];
         $interaction = is_array($response['interaction'] ?? null) ? $response['interaction'] : [];
@@ -155,6 +155,44 @@ final class NmbPaymentOutcomeEvaluator
             'NMB payment verified successfully.',
             $context,
         );
+    }
+
+    /**
+     * Normalize MPGS `transaction` which may be a single object or a list of records.
+     *
+     * @return array<string, mixed>
+     */
+    private function resolvePaymentTransaction(mixed $value): array
+    {
+        if (! is_array($value) || $value === []) {
+            return [];
+        }
+
+        // Format A: single associative transaction object.
+        if (! array_is_list($value)) {
+            return $value;
+        }
+
+        // Format B: list of transaction records (AUTHENTICATION, PAYMENT, …).
+        foreach ($value as $entry) {
+            if (! is_array($entry)) {
+                continue;
+            }
+
+            $candidate = is_array($entry['transaction'] ?? null)
+                ? $entry['transaction']
+                : $entry;
+
+            if (! is_array($candidate) || $candidate === []) {
+                continue;
+            }
+
+            if ($this->upper($candidate['type'] ?? null) === 'PAYMENT') {
+                return $candidate;
+            }
+        }
+
+        return [];
     }
 
     /**
