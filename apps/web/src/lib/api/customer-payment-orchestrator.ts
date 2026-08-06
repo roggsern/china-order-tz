@@ -176,3 +176,34 @@ export async function resolvePaymentReturnTransaction(
     "Unable to resolve payment return context.",
   );
 }
+
+/**
+ * Proof-based NMB browser return reconciliation (no customer session required).
+ * Does not replace authenticated refreshPaymentTransaction.
+ */
+export async function reconcileNmbBrowserReturn(input: {
+  paymentTransactionId: string;
+  merchantReference: string;
+  successIndicator: string;
+  resultIndicator: string;
+  orderId?: string | null;
+}): Promise<PaymentTransactionPayload> {
+  return apiFetch<PaymentTransactionPayload>(
+    "/api/payments/nmb/return-reconcile",
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        payment_transaction_id: input.paymentTransactionId,
+        merchant_reference: input.merchantReference,
+        success_indicator: input.successIndicator,
+        result_indicator: input.resultIndicator,
+        ...(input.orderId?.trim() ? { order_id: input.orderId.trim() } : {}),
+      }),
+    },
+    "Unable to reconcile NMB payment return.",
+  );
+}

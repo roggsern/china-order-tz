@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   buildPaymentReturnPath,
+  canReconcileBrowserReturn,
   getReturnPhaseCopy,
   resolveInitialReturnPhase,
   resolvePaymentReturnRecovery,
@@ -171,4 +172,39 @@ test("notification confirmed and return page both treat successful transaction a
   const phase = resolvePhaseAfterTransaction({ status: "successful" }, "confirming");
   assert.equal(phase, "redirecting");
   assert.equal(getReturnPhaseCopy(phase).title, "Payment confirmed");
+});
+
+test("canReconcileBrowserReturn requires full NMB return proof", () => {
+  assert.equal(
+    canReconcileBrowserReturn({
+      paymentTransactionId: "txn-1",
+      merchantReference: "COTZ-PAY-20260807-000001",
+      successIndicator: "ind-1",
+      resultIndicator: "ind-1",
+      indicatorGate: "ready",
+    }),
+    true,
+  );
+
+  assert.equal(
+    canReconcileBrowserReturn({
+      paymentTransactionId: "txn-1",
+      merchantReference: "COTZ-PAY-20260807-000001",
+      successIndicator: "ind-1",
+      resultIndicator: "ind-1",
+      indicatorGate: "missing",
+    }),
+    false,
+  );
+
+  assert.equal(
+    canReconcileBrowserReturn({
+      paymentTransactionId: "txn-1",
+      merchantReference: null,
+      successIndicator: "ind-1",
+      resultIndicator: "ind-1",
+      indicatorGate: "ready",
+    }),
+    false,
+  );
 });

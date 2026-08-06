@@ -162,6 +162,9 @@ Route::post('/webhooks/nmb', [NmbWebhookController::class, 'receive'])
 Route::post('/payments/nmb/callback', NmbPaymentCallbackController::class)
     ->middleware('throttle:webhooks');
 
+Route::post('/payments/nmb/return-reconcile', [PaymentOrchestratorController::class, 'reconcileNmbBrowserReturn'])
+    ->middleware('throttle:payments');
+
 Route::post('/register', [AuthController::class, 'register'])
     ->middleware('throttle:customer-register');
 

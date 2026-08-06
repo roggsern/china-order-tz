@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Payments\ReconcileNmbBrowserReturnAction;
 use App\Actions\Payments\RefreshPaymentTransactionAction;
 use App\Actions\Payments\ResolvePaymentReturnTransactionAction;
 use App\Actions\Payments\RetryNmbCheckoutSessionAction;
 use App\Actions\Payments\ShowPaymentTransactionAction;
 use App\Actions\Payments\StartPaymentTransactionAction;
+use App\Http\Requests\Payments\ReconcileNmbBrowserReturnRequest;
 use App\Http\Requests\Payments\ResolvePaymentReturnRequest;
 use App\Http\Requests\Payments\StartPaymentTransactionRequest;
 use App\Http\Resources\PaymentTransactionResource;
@@ -102,6 +104,29 @@ class PaymentOrchestratorController extends Controller
             'success' => true,
             'message' => 'Payment return transaction resolved.',
             'data' => new PaymentTransactionResource($transaction),
+        ]);
+    }
+
+    /**
+     * Unauthenticated NMB Hosted Checkout return reconciliation.
+     * Proof-based; does not replace authenticated customer refresh.
+     */
+    public function reconcileNmbBrowserReturn(
+        ReconcileNmbBrowserReturnRequest $request,
+        ReconcileNmbBrowserReturnAction $action,
+    ): JsonResponse {
+        $transaction = $action->handle(
+            (string) $request->validated('payment_transaction_id'),
+            (string) $request->validated('merchant_reference'),
+            (string) $request->validated('success_indicator'),
+            (string) $request->validated('result_indicator'),
+            $request->validated('order_id'),
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Payment return reconciled.',
+            'data' => new PaymentTransactionResource($transaction->load('order')),
         ]);
     }
 }

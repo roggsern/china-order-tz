@@ -135,6 +135,37 @@ class PaymentOrchestrator
         $transaction->loadMissing('order');
         $this->authorizeTransaction($user, $transaction);
 
+        return $this->refreshVerified($transaction);
+    }
+
+    /**
+     * Reconcile an NMB Hosted Checkout browser return without a customer session.
+     *
+     * Authorization is proof-based (not user ownership): the caller must present the
+     * payment transaction id together with the session success indicator, merchant
+     * reference, matching result indicator, and optional order id. Financial success
+     * still comes only from provider verification + PaymentTransactionCompletionService.
+     */
+    public function reconcileNmbBrowserReturn(
+        string $paymentTransactionId,
+        string $merchantReference,
+        string $successIndicator,
+        string $resultIndicator,
+        ?string $orderId = null,
+    ): PaymentTransaction {
+        $transaction = $this->assertNmbBrowserReturnProof(
+            $paymentTransactionId,
+            $merchantReference,
+            $successIndicator,
+            $resultIndicator,
+            $orderId,
+        );
+
+        return $this->refreshVerified($transaction);
+    }
+
+    private function refreshVerified(PaymentTransaction $transaction): PaymentTransaction
+    {
         if (in_array($transaction->status, [
             PaymentTransactionStatus::Successful,
             PaymentTransactionStatus::Cancelled,
@@ -150,6 +181,62 @@ class PaymentOrchestrator
         $result = $provider->refresh($transaction);
 
         return $this->completionService->applyResult($transaction, $result);
+    }
+
+    private function assertNmbBrowserReturnProof(
+        string $paymentTransactionId,
+        string $merchantReference,
+        string $successIndicator,
+        string $resultIndicator,
+        ?string $orderId,
+    ): PaymentTransaction {
+        /** @var PaymentTransaction|null $transaction */
+        $transaction = PaymentTransaction::query()
+            ->with('order')
+            ->whereKey($paymentTransactionId)
+            ->first();
+
+        // Uniform 404 — do not leak whether the transaction id exists.
+        if ($transaction === null) {
+            abort(404);
+        }
+
+        $provider = $transaction->provider instanceof PaymentProvider
+            ? $transaction->provider
+            : PaymentProvider::tryFrom(strtolower((string) $transaction->provider));
+
+        if ($provider !== PaymentProvider::Nmb) {
+            abort(404);
+        }
+
+        $storedSuccessIndicator = (string) ($transaction->success_indicator ?? '');
+        $storedMerchantReference = (string) ($transaction->merchant_reference ?? '');
+
+        if ($storedSuccessIndicator === '' || $storedMerchantReference === '') {
+            abort(404);
+        }
+
+        if (! hash_equals($storedSuccessIndicator, $successIndicator)) {
+            abort(404);
+        }
+
+        if (! hash_equals($storedMerchantReference, $merchantReference)) {
+            abort(404);
+        }
+
+        // MPGS signals a completed hosted interaction when resultIndicator === successIndicator.
+        if (! hash_equals($successIndicator, $resultIndicator)) {
+            abort(404);
+        }
+
+        if ($orderId !== null && $orderId !== '') {
+            $storedOrderId = (string) ($transaction->order_id ?? '');
+            if ($storedOrderId === '' || ! hash_equals($storedOrderId, $orderId)) {
+                abort(404);
+            }
+        }
+
+        return $transaction;
     }
 
     /**

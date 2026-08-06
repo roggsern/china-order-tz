@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { getCustomerApiToken } from "@/lib/api/customer-auth";
 import {
   PaymentOrchestratorApiError,
+  reconcileNmbBrowserReturn,
   refreshPaymentTransaction,
   resolvePaymentReturnTransaction,
 } from "@/lib/api/customer-payment-orchestrator";
@@ -18,6 +19,7 @@ import {
 import {
   buildPaymentReturnPath,
   buildSuccessHref,
+  canReconcileBrowserReturn,
   getReturnPhaseCopy,
   looksLikeMerchantReference,
   resolveIndicatorGate,
@@ -130,7 +132,17 @@ export function NmbPaymentReturnContent() {
       }
 
       const token = getCustomerApiToken();
-      if (!token) {
+      const useBrowserReturn =
+        !token &&
+        canReconcileBrowserReturn({
+          paymentTransactionId,
+          merchantReference: merchantReferenceParam,
+          successIndicator,
+          resultIndicator,
+          indicatorGate,
+        });
+
+      if (!token && !useBrowserReturn) {
         stopPolling();
         setPhase("needs_auth");
         return null;
@@ -141,7 +153,16 @@ export function NmbPaymentReturnContent() {
       }
 
       try {
-        const transaction = await refreshPaymentTransaction(paymentTransactionId, token);
+        const transaction = useBrowserReturn
+          ? await reconcileNmbBrowserReturn({
+              paymentTransactionId,
+              merchantReference: merchantReferenceParam!,
+              successIndicator: successIndicator!,
+              resultIndicator: resultIndicator!,
+              orderId,
+            })
+          : await refreshPaymentTransaction(paymentTransactionId, token);
+
         setRefreshError(null);
 
         const nextPhase = resolvePhaseAfterTransaction(transaction, "confirming");
@@ -173,7 +194,17 @@ export function NmbPaymentReturnContent() {
         return null;
       }
     },
-    [localOrderId, orderId, paymentTransactionId, router, stopPolling],
+    [
+      indicatorGate,
+      localOrderId,
+      merchantReferenceParam,
+      orderId,
+      paymentTransactionId,
+      resultIndicator,
+      router,
+      stopPolling,
+      successIndicator,
+    ],
   );
 
   useEffect(() => {

@@ -189,6 +189,26 @@ export function shouldReconcileReturn(input: {
   return input.indicatorGate !== "failed" && Boolean(input.paymentTransactionId);
 }
 
+/**
+ * Enough return-context proof to call unauthenticated NMB return reconciliation.
+ */
+export function canReconcileBrowserReturn(input: {
+  paymentTransactionId: string | null;
+  merchantReference: string | null;
+  successIndicator: string | null;
+  resultIndicator: string | null;
+  indicatorGate: IndicatorGate;
+}): boolean {
+  return (
+    input.indicatorGate === "ready" &&
+    Boolean(input.paymentTransactionId?.trim()) &&
+    Boolean(input.merchantReference?.trim()) &&
+    Boolean(input.successIndicator?.trim()) &&
+    Boolean(input.resultIndicator?.trim()) &&
+    input.resultIndicator === input.successIndicator
+  );
+}
+
 export function resolvePhaseAfterTransaction(
   transaction: Pick<PaymentTransactionPayload, "status">,
   currentPhase: ReturnPhase,
