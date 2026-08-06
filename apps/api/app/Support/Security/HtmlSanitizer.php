@@ -7,6 +7,9 @@ namespace App\Support\Security;
  *
  * Allowed tags: p, br, strong, b, em, i, u, ul, ol, li, h2–h4, a, span, blockquote.
  * Allowed attributes: href on <a> only (http/https/# / relative paths; never javascript/data).
+ *
+ * loadHTML must receive an explicit UTF-8 charset hint; otherwise libxml treats each
+ * UTF-8 byte as Latin-1 and re-emits mojibake (• → â€¢ / Ã¢â‚¬…).
  */
 final class HtmlSanitizer
 {
@@ -29,8 +32,10 @@ final class HtmlSanitizer
 
         $previous = libxml_use_internal_errors(true);
         $dom = new \DOMDocument('1.0', 'UTF-8');
+        // Meta charset (verified) keeps multi-byte Unicode intact through libxml HTML parsing.
         $dom->loadHTML(
-            '<!DOCTYPE html><html><body><div id="html-sanitizer-root">'.$trimmed.'</div></body></html>',
+            '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>'
+            .'<div id="html-sanitizer-root">'.$trimmed.'</div></body></html>',
             LIBXML_NONET
         );
         libxml_clear_errors();
