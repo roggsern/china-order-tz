@@ -42,7 +42,6 @@ import {
   isCheckoutDeliveryAddressReady,
   mergeProfileIntoCheckoutCustomer,
   resolveInitialCheckoutAddressSelection,
-  shouldSyncDefaultAddressForCheckout,
 } from "@/lib/checkout/address-book";
 import { useCustomerSession } from "@/lib/customer/use-customer-session";
 import {
@@ -101,8 +100,11 @@ export function CheckoutPageContent() {
   const { items, savedForLater, discount, totals, isHydrated, syncError, clearSyncError, updateShippingMethod } =
     useCart();
 
-  const { session: customerSession, isLoggedIn } = useCustomerSession();
+  const { session: customerSession, isLoggedIn, isReady: sessionReady } = useCustomerSession();
   const [form, setForm] = useState<CheckoutFormData>(EMPTY_CHECKOUT_FORM);
+  const [loadedProfile, setLoadedProfile] = useState<Awaited<
+    ReturnType<typeof fetchCustomerProfile>
+  >>(null);
   const [savedAddresses, setSavedAddresses] = useState<CustomerAddress[]>([]);
   const [savedAddressesDefaultId, setSavedAddressesDefaultId] = useState<string | null>(null);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
@@ -155,6 +157,13 @@ export function CheckoutPageContent() {
   useEffect(() => {
     if (!isHydrated || wizardLoaded) return;
 
+    // Wait for local session hydration when authenticated so identity is available
+    // before address mapping runs (address must never win the identity race).
+    const token = getCustomerApiToken();
+    if (token && !sessionReady) {
+      return;
+    }
+
     const savedWizard = getCheckoutWizardState();
     const savedDraft = getCheckoutDraft();
 
@@ -176,10 +185,15 @@ export function CheckoutPageContent() {
       setSelectedShippingMethod(savedDraft.shippingMethod ?? null);
     }
 
+    // Seed identity from session before address book loads.
+    nextForm = {
+      ...nextForm,
+      customer: mergeProfileIntoCheckoutCustomer(nextForm.customer, null, customerSession),
+    };
+
     setForm(nextForm);
     setWizardLoaded(true);
 
-    const token = getCustomerApiToken();
     if (!token) {
       setAddressBookReady(true);
       return;
@@ -192,6 +206,8 @@ export function CheckoutPageContent() {
           fetchCustomerProfile().catch(() => null),
           fetchCustomerAddresses(),
         ]);
+
+        setLoadedProfile(profileResult);
 
         setForm((current) => ({
           ...current,
@@ -228,7 +244,23 @@ export function CheckoutPageContent() {
         setAddressBookReady(true);
       }
     })();
-  }, [isHydrated, wizardLoaded, customerSession]);
+  }, [isHydrated, wizardLoaded, customerSession, sessionReady]);
+
+  // Late session/profile identity merge — fills empty identity only; never uses recipient.
+  useEffect(() => {
+    if (!wizardLoaded || !sessionReady) {
+      return;
+    }
+
+    setForm((current) => ({
+      ...current,
+      customer: mergeProfileIntoCheckoutCustomer(
+        current.customer,
+        loadedProfile,
+        customerSession,
+      ),
+    }));
+  }, [customerSession, loadedProfile, sessionReady, wizardLoaded]);
 
   useEffect(() => {
     if (!isHydrated || !wizardLoaded) return;
@@ -457,7 +489,10 @@ export function CheckoutPageContent() {
 
       const selectedAddress =
         savedAddresses.find((row) => row.id === selectedAddressId) ?? null;
-      if (selectedAddress && shouldSyncDefaultAddressForCheckout(selectedAddress)) {
+
+      // Always sync the selected address book row into delivery_addresses so the
+      // order shipping snapshot uses recipient_name (not account identity).
+      if (selectedAddress) {
         await setDefaultCustomerAddress(selectedAddress.id);
         setSavedAddresses((prev) =>
           prev.map((row) => ({

@@ -32,42 +32,58 @@ export function resolveInitialCheckoutAddressSelection(
   return picked?.id ?? null;
 }
 
+/**
+ * Resolve account identity for checkout from profile/session only.
+ * Never use delivery recipient names here.
+ */
+export function resolveCustomerIdentityNames(
+  profile: CustomerProfile | null,
+  session: CustomerSession | null,
+): Pick<CustomerInformation, "firstName" | "lastName"> {
+  const profileFirst = profile?.first_name?.trim() ?? "";
+  const profileLast = profile?.last_name?.trim() ?? "";
+
+  if (profileFirst || profileLast) {
+    return { firstName: profileFirst, lastName: profileLast };
+  }
+
+  const displayName = profile?.name?.trim() || session?.name?.trim() || "";
+  if (!displayName) {
+    return { firstName: "", lastName: "" };
+  }
+
+  return splitFullName(displayName);
+}
+
 export function mergeProfileIntoCheckoutCustomer(
   current: CustomerInformation,
   profile: CustomerProfile | null,
   session: CustomerSession | null,
 ): CustomerInformation {
-  const sessionName = session?.name?.trim() ?? "";
-  const sessionParts = sessionName ? splitFullName(sessionName) : null;
+  const identity = resolveCustomerIdentityNames(profile, session);
 
-  const firstName =
-    current.firstName.trim() ||
-    profile?.first_name?.trim() ||
-    sessionParts?.firstName ||
-    "";
-  const lastName =
-    current.lastName.trim() ||
-    profile?.last_name?.trim() ||
-    sessionParts?.lastName ||
-    "";
+  const firstName = current.firstName.trim() || identity.firstName;
+  const lastName = current.lastName.trim() || identity.lastName;
   const email = current.email.trim() || profile?.email?.trim() || session?.email?.trim() || "";
   const phone = current.phone.trim() || profile?.phone?.trim() || "";
 
   return { firstName, lastName, email, phone };
 }
 
+/**
+ * Map a saved address into shipping fields (and phone when empty).
+ * Must never mutate account identity first/last name fields.
+ */
 export function applyCustomerAddressToCheckoutForm(
   form: CheckoutFormData,
   address: CustomerAddress,
 ): CheckoutFormData {
-  const { firstName, lastName } = splitFullName(address.recipient_name);
-
   return {
     ...form,
     customer: {
-      firstName: form.customer.firstName.trim() || firstName,
-      lastName: form.customer.lastName.trim() || lastName,
-      email: form.customer.email.trim() || "",
+      firstName: form.customer.firstName,
+      lastName: form.customer.lastName,
+      email: form.customer.email,
       phone: form.customer.phone.trim() || address.phone.trim(),
     },
     shippingAddress: mapCustomerAddressToShipping(address),
@@ -88,9 +104,7 @@ export function buildDeliveryAddressPayloadFromCheckout(
   landmark: string | null;
   postal_code: string | null;
 } {
-  const recipientFromForm = `${form.customer.firstName} ${form.customer.lastName}`.trim();
-  const recipient =
-    selectedAddress?.recipient_name?.trim() || recipientFromForm || "Customer";
+  const recipient = selectedAddress?.recipient_name?.trim() || "Customer";
 
   const phone = selectedAddress?.phone?.trim() || form.customer.phone.trim();
   const shipping = form.shippingAddress;

@@ -1,8 +1,10 @@
 import { getCustomerApiToken } from "@/lib/api/customer-auth";
 
 export type CustomerProfile = {
-  first_name: string;
-  last_name: string;
+  first_name: string | null;
+  last_name: string | null;
+  /** Canonical display name; used when first/last are missing (legacy accounts). */
+  name?: string | null;
   email: string;
   phone: string | null;
 };

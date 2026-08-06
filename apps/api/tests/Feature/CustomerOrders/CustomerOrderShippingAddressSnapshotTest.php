@@ -65,6 +65,81 @@ class CustomerOrderShippingAddressSnapshotTest extends TestCase
         ]);
     }
 
+    public function test_order_shipping_snapshot_uses_recipient_not_account_identity(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'robert.identity@example.com',
+            'first_name' => 'Robert',
+            'last_name' => 'Musa',
+            'name' => 'Robert Musa',
+        ]);
+        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::purchasable(22000);
+
+        $this->seedCart($user, $product->id, $variant->id, 1, 22000);
+
+        UserAddress::factory()->default()->create([
+            'user_id' => $user->id,
+            'recipient_name' => 'Mama Asha',
+            'phone' => '+255700000099',
+            'address_line_1' => 'Recipient Street',
+            'address_line_2' => 'Ilala',
+            'city' => 'Dar es Salaam',
+            'region' => 'Dar es Salaam',
+            'country' => 'Tanzania',
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $sessionId = $this->postJson('/api/v1/checkout/start')->json('data.id');
+        $this->postJson("/api/v1/checkout/{$sessionId}/shipping-choice", [
+            'shipping_choice' => 'self_pickup',
+        ])->assertOk();
+
+        $orderId = $this->postJson("/api/v1/orders/from-checkout/{$sessionId}")
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->assertDatabaseHas('shipping_addresses', [
+            'order_id' => $orderId,
+            'first_name' => 'Mama',
+            'last_name' => 'Asha',
+            'phone' => '+255700000099',
+            'address_line_1' => 'Recipient Street',
+        ]);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'first_name' => 'Robert',
+            'last_name' => 'Musa',
+            'name' => 'Robert Musa',
+        ]);
+    }
+
+    public function test_phone_only_profile_sync_before_order_does_not_require_payment_to_preserve_identity(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'robert.preserve@example.com',
+            'first_name' => 'Robert',
+            'last_name' => 'Musa',
+            'name' => 'Robert Musa',
+            'phone' => '+255711111111',
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->patchJson('/api/v1/profile', [
+            'phone' => '+255733333333',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'first_name' => 'Robert',
+            'last_name' => 'Musa',
+            'name' => 'Robert Musa',
+            'phone' => '+255733333333',
+        ]);
+    }
+
     public function test_checkout_without_any_address_is_rejected(): void
     {
         $user = User::factory()->create();

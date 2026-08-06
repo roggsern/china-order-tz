@@ -1,8 +1,29 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { resolveCheckoutSyncProductResolution } from "./customer-checkout";
+import {
+  buildCheckoutPhoneSyncPayload,
+  resolveCheckoutSyncProductResolution,
+} from "./customer-checkout";
 
 const PRODUCT_ID = "019f7a6e-4d46-7376-aca4-aed79f33519b";
+
+test("checkout continue path never PATCHes profile identity names", async () => {
+  const source = await readFile(new URL("./customer-checkout.ts", import.meta.url), "utf8");
+
+  assert.match(source, /syncCustomerCheckoutPhone/);
+  assert.match(source, /buildCheckoutPhoneSyncPayload/);
+  assert.doesNotMatch(source, /await updateCustomerProfile\(/);
+  assert.doesNotMatch(source, /updateDeliveryAddress\(/);
+  assert.match(
+    source,
+    /Checkout does not PATCH first_name \/ last_name \/ name/,
+  );
+});
+
+test("empty phone skips checkout profile sync", () => {
+  assert.equal(buildCheckoutPhoneSyncPayload("   "), null);
+});
 
 test("CHINA_IMPORT resolves china sync even without freight fields", () => {
   const resolved = resolveCheckoutSyncProductResolution({

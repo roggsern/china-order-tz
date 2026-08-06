@@ -74,8 +74,12 @@ export function splitFullName(fullName: string): { firstName: string; lastName: 
   const trimmed = fullName.trim();
   const parts = trimmed.split(/\s+/).filter(Boolean);
 
-  if (parts.length <= 1) {
-    return { firstName: trimmed, lastName: trimmed };
+  if (parts.length === 0) {
+    return { firstName: "", lastName: "" };
+  }
+
+  if (parts.length === 1) {
+    return { firstName: parts[0] ?? trimmed, lastName: "" };
   }
 
   return {

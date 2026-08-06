@@ -70,6 +70,8 @@ export async function registerCustomer(
     },
     body: JSON.stringify({
       name,
+      first_name: input.firstName.trim(),
+      last_name: input.lastName.trim(),
       email: input.email.trim(),
       phone: input.phone.trim() || undefined,
       password: input.password,

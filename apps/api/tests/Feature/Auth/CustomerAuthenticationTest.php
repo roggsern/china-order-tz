@@ -42,12 +42,54 @@ class CustomerAuthenticationTest extends TestCase
 
         $this->assertDatabaseHas('users', [
             'email' => 'jane@example.com',
+            'name' => 'Jane Customer',
+            'first_name' => 'Jane',
+            'last_name' => 'Customer',
         ]);
 
         $user = User::query()->where('email', 'jane@example.com')->firstOrFail();
         $customerRole = Role::query()->where('slug', 'customer')->firstOrFail();
 
         $this->assertTrue($user->roles()->where('roles.id', $customerRole->id)->exists());
+    }
+
+    public function test_registration_persists_explicit_first_and_last_name(): void
+    {
+        $response = $this->postJson('/api/v1/register', [
+            'name' => 'Robert Musa',
+            'first_name' => 'Robert',
+            'last_name' => 'Musa',
+            'email' => 'robert.musa@example.com',
+            'phone' => '+255712345678',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ]);
+
+        $response->assertCreated();
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'robert.musa@example.com',
+            'name' => 'Robert Musa',
+            'first_name' => 'Robert',
+            'last_name' => 'Musa',
+        ]);
+    }
+
+    public function test_registration_splits_display_name_when_first_last_omitted(): void
+    {
+        $this->postJson('/api/v1/register', [
+            'name' => 'Robert Musa',
+            'email' => 'robert.split@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'robert.split@example.com',
+            'name' => 'Robert Musa',
+            'first_name' => 'Robert',
+            'last_name' => 'Musa',
+        ]);
     }
 
     public function test_registration_requires_unique_email(): void

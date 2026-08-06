@@ -8,6 +8,7 @@ import {
   CHECKOUT_DELIVERY_ADDRESS_REQUIRED,
   isCheckoutDeliveryAddressReady,
   mergeProfileIntoCheckoutCustomer,
+  resolveCustomerIdentityNames,
   resolveInitialCheckoutAddressSelection,
   shouldSyncDefaultAddressForCheckout,
 } from "./address-book";
@@ -51,6 +52,50 @@ describe("resolveInitialCheckoutAddressSelection", () => {
   });
 });
 
+describe("resolveCustomerIdentityNames", () => {
+  it("prefers profile first/last over session display name", () => {
+    const identity = resolveCustomerIdentityNames(
+      {
+        first_name: "Robert",
+        last_name: "Musa",
+        name: "Ignored Name",
+        email: "robert@example.com",
+        phone: null,
+      },
+      { email: "robert@example.com", name: "Session Name" },
+    );
+
+    assert.equal(identity.firstName, "Robert");
+    assert.equal(identity.lastName, "Musa");
+  });
+
+  it("falls back to users.name when first/last are missing (legacy)", () => {
+    const identity = resolveCustomerIdentityNames(
+      {
+        first_name: null,
+        last_name: null,
+        name: "Robert Musa",
+        email: "robert@example.com",
+        phone: null,
+      },
+      null,
+    );
+
+    assert.equal(identity.firstName, "Robert");
+    assert.equal(identity.lastName, "Musa");
+  });
+
+  it("falls back to session name when profile names are absent", () => {
+    const identity = resolveCustomerIdentityNames(null, {
+      email: "robert@example.com",
+      name: "Robert Musa",
+    });
+
+    assert.equal(identity.firstName, "Robert");
+    assert.equal(identity.lastName, "Musa");
+  });
+});
+
 describe("mergeProfileIntoCheckoutCustomer", () => {
   it("fills empty checkout customer fields from profile and session", () => {
     const merged = mergeProfileIntoCheckoutCustomer(
@@ -90,17 +135,78 @@ describe("mergeProfileIntoCheckoutCustomer", () => {
     assert.equal(merged.firstName, "Jane");
     assert.equal(merged.email, "jane@example.com");
   });
+
+  it("late session load fills empty identity without recipient influence", () => {
+    const afterEmpty = mergeProfileIntoCheckoutCustomer(
+      EMPTY_CHECKOUT_FORM.customer,
+      null,
+      null,
+    );
+    assert.equal(afterEmpty.firstName, "");
+    assert.equal(afterEmpty.lastName, "");
+
+    const afterLateSession = mergeProfileIntoCheckoutCustomer(afterEmpty, null, {
+      email: "robert@example.com",
+      name: "Robert Musa",
+    });
+
+    assert.equal(afterLateSession.firstName, "Robert");
+    assert.equal(afterLateSession.lastName, "Musa");
+  });
 });
 
 describe("applyCustomerAddressToCheckoutForm", () => {
-  it("maps saved address into checkout shipping and contact fields", () => {
-    const next = applyCustomerAddressToCheckoutForm(EMPTY_CHECKOUT_FORM, sampleAddress);
+  it("maps saved address into shipping and phone without mutating identity", () => {
+    const withIdentity = {
+      ...EMPTY_CHECKOUT_FORM,
+      customer: {
+        firstName: "Robert",
+        lastName: "Musa",
+        email: "robert@example.com",
+        phone: "",
+      },
+    };
 
-    assert.equal(next.customer.firstName, "Audit");
+    const next = applyCustomerAddressToCheckoutForm(withIdentity, {
+      ...sampleAddress,
+      recipient_name: "Robert",
+    });
+
+    assert.equal(next.customer.firstName, "Robert");
+    assert.equal(next.customer.lastName, "Musa");
     assert.equal(next.customer.phone, "+255712345678");
     assert.equal(next.shippingAddress.addressLine1, "Plot 12 Kariakoo");
-    assert.equal(next.shippingAddress.city, "Dar es Salaam");
-    assert.equal(next.shippingAddress.region, "Dar es Salaam");
+  });
+
+  it("does not copy recipient Mama Asha into account identity fields", () => {
+    const withIdentity = {
+      ...EMPTY_CHECKOUT_FORM,
+      customer: {
+        firstName: "Robert",
+        lastName: "Musa",
+        email: "robert@example.com",
+        phone: "+255700000001",
+      },
+    };
+
+    const next = applyCustomerAddressToCheckoutForm(withIdentity, {
+      ...sampleAddress,
+      recipient_name: "Mama Asha",
+    });
+
+    assert.equal(next.customer.firstName, "Robert");
+    assert.equal(next.customer.lastName, "Musa");
+  });
+
+  it("leaves empty identity empty when only a recipient is applied", () => {
+    const next = applyCustomerAddressToCheckoutForm(EMPTY_CHECKOUT_FORM, {
+      ...sampleAddress,
+      recipient_name: "Robert",
+    });
+
+    assert.equal(next.customer.firstName, "");
+    assert.equal(next.customer.lastName, "");
+    assert.equal(next.customer.phone, "+255712345678");
   });
 });
 
@@ -130,17 +236,31 @@ describe("checkout address integration scenarios", () => {
     assert.equal(selected, "addr-1");
   });
 
-  it("prepares delivery profile payload after customer adds an address at checkout", () => {
+  it("keeps recipient from the selected address book row", () => {
     const created: CustomerAddress = {
       ...sampleAddress,
       id: "addr-new",
+      recipient_name: "Mama Asha",
       street: "New Street",
       is_default: true,
     };
-    const form = applyCustomerAddressToCheckoutForm(EMPTY_CHECKOUT_FORM, created);
+    const form = applyCustomerAddressToCheckoutForm(
+      {
+        ...EMPTY_CHECKOUT_FORM,
+        customer: {
+          firstName: "Robert",
+          lastName: "Musa",
+          email: "robert@example.com",
+          phone: "+255700000001",
+        },
+      },
+      created,
+    );
     const payload = buildDeliveryAddressPayloadFromCheckout(form, created);
 
     assert.equal(payload.street, "New Street");
-    assert.equal(payload.recipient_name, "Audit Customer");
+    assert.equal(payload.recipient_name, "Mama Asha");
+    assert.equal(form.customer.firstName, "Robert");
+    assert.equal(form.customer.lastName, "Musa");
   });
 });

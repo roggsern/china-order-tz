@@ -118,22 +118,8 @@ async function customerApiFetch<T>(
   return payload.data as T;
 }
 
-/** Backend accepts shipping_method only for products that require China freight. */
-function hasCollectableCustomerDetails(customer: CustomerInformation): boolean {
-  return Boolean(
-    customer.firstName.trim() ||
-      customer.lastName.trim() ||
-      customer.phone.trim() ||
-      customer.email.trim(),
-  );
-}
-
-function hasCollectableAddressDetails(shippingAddress: ShippingAddress): boolean {
-  return Boolean(
-    shippingAddress.addressLine1.trim() ||
-      shippingAddress.city.trim() ||
-      shippingAddress.region.trim(),
-  );
+function hasCollectableCheckoutPhone(customer: CustomerInformation): boolean {
+  return Boolean(customer.phone.trim());
 }
 
 function shouldSendChinaShippingMethod(
@@ -225,6 +211,10 @@ async function resolveCatalogProductForSync(item: CartLineItem): Promise<{
   });
 }
 
+/**
+ * Explicit account/profile name updates only — not used by checkout.
+ * Checkout must never send first_name / last_name / name here.
+ */
 export async function updateCustomerProfile(
   customer: CustomerInformation,
   token?: string | null,
@@ -237,7 +227,6 @@ export async function updateCustomerProfile(
       body: JSON.stringify({
         first_name: customer.firstName.trim(),
         last_name: customer.lastName.trim(),
-        email: customer.email.trim(),
         phone: normalizePhoneToE164(customer.phone) ?? customer.phone.trim(),
       }),
     },
@@ -245,31 +234,33 @@ export async function updateCustomerProfile(
   );
 }
 
-export async function updateDeliveryAddress(
-  customer: CustomerInformation,
-  shippingAddress: ShippingAddress,
+/** Phone-only profile sync for checkout — never mutates account identity names. */
+export function buildCheckoutPhoneSyncPayload(phone: string): { phone: string } | null {
+  const normalized = normalizePhoneToE164(phone) ?? phone.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  return { phone: normalized };
+}
+
+export async function syncCustomerCheckoutPhone(
+  phone: string,
   token?: string | null,
 ): Promise<void> {
-  const recipientName = `${customer.firstName} ${customer.lastName}`.trim();
+  const body = buildCheckoutPhoneSyncPayload(phone);
+  if (!body) {
+    return;
+  }
 
   await customerApiFetch(
-    "/api/profile/address",
+    "/api/profile",
     {
       method: "PATCH",
       headers: getAuthHeaders(token),
-      body: JSON.stringify({
-        recipient_name: recipientName,
-        phone: normalizePhoneToE164(customer.phone) ?? customer.phone.trim(),
-        country: shippingAddress.country.trim() || "Tanzania",
-        region: shippingAddress.region.trim(),
-        city: shippingAddress.city.trim(),
-        district: shippingAddress.city.trim(),
-        street: shippingAddress.addressLine1.trim(),
-        landmark: shippingAddress.addressLine2.trim() || null,
-        postal_code: shippingAddress.postalCode.trim() || null,
-      }),
+      body: JSON.stringify(body),
     },
-    "Unable to save your delivery address.",
+    "Unable to save your phone number.",
   );
 }
 
@@ -455,17 +446,16 @@ export type BackendCheckoutInput = {
 
 /**
  * Official production checkout:
- * profile → address → sync cart → checkout/start → shipping-choice → orders/from-checkout.
+ * optional phone sync → sync cart → checkout/start → shipping-choice → orders/from-checkout.
+ *
+ * Delivery recipient comes from the address book / delivery_addresses sync (set-default),
+ * never from account identity names. Checkout does not PATCH first_name / last_name / name.
  */
 export async function runBackendCheckoutFlow(
   input: BackendCheckoutInput,
 ): Promise<BackendOrderConfirmation> {
-  if (hasCollectableCustomerDetails(input.customer)) {
-    await updateCustomerProfile(input.customer, input.token);
-  }
-
-  if (hasCollectableAddressDetails(input.shippingAddress)) {
-    await updateDeliveryAddress(input.customer, input.shippingAddress, input.token);
+  if (hasCollectableCheckoutPhone(input.customer)) {
+    await syncCustomerCheckoutPhone(input.customer.phone, input.token);
   }
 
   await syncCartToServer(input.cart.items, input.token);
