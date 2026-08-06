@@ -5,6 +5,8 @@
 
 const FALLBACK_RETURN_PATH = "/account";
 
+const AUTH_ENTRY_PATHS = new Set(["/login", "/register", "/forgot-password"]);
+
 export function sanitizeReturnUrl(raw: string | null | undefined): string | null {
   if (!raw) return null;
 
@@ -26,15 +28,38 @@ export function sanitizeReturnUrl(raw: string | null | undefined): string | null
 
   // Prefer storefront destinations; avoid looping on auth pages
   const pathOnly = decoded.split("?")[0]?.split("#")[0] ?? decoded;
-  if (
-    pathOnly === "/login" ||
-    pathOnly === "/register" ||
-    pathOnly === "/forgot-password"
-  ) {
+  if (AUTH_ENTRY_PATHS.has(pathOnly)) {
     return null;
   }
 
   return decoded;
+}
+
+/**
+ * Build a safe return path from the current storefront location (pathname + query).
+ * Returns null on auth pages so login does not loop.
+ */
+export function buildCurrentReturnPath(
+  pathname: string | null | undefined,
+  search?: string | null,
+): string | null {
+  const rawPath = (pathname ?? "").trim() || "/";
+  if (!rawPath.startsWith("/") || rawPath.startsWith("//")) {
+    return null;
+  }
+
+  const pathOnly = rawPath.split("?")[0]?.split("#")[0] || "/";
+  if (AUTH_ENTRY_PATHS.has(pathOnly)) {
+    return null;
+  }
+
+  let query = (search ?? "").trim();
+  if (query.startsWith("?")) {
+    query = query.slice(1);
+  }
+
+  const combined = query ? `${pathOnly}?${query}` : pathOnly;
+  return sanitizeReturnUrl(combined);
 }
 
 export function resolvePostAuthRedirect(raw: string | null | undefined): string {
@@ -51,6 +76,32 @@ export function buildRegisterHref(returnUrl?: string | null): string {
   const safe = sanitizeReturnUrl(returnUrl);
   if (!safe) return "/register";
   return `/register?returnUrl=${encodeURIComponent(safe)}`;
+}
+
+/**
+ * Rewrite bare /login or /register hrefs so they preserve post-auth return context.
+ * Leaves all other hrefs unchanged.
+ */
+export function resolveAuthEntryHref(
+  href: string | null | undefined,
+  returnUrl?: string | null,
+): string {
+  const raw = (href ?? "").trim();
+  if (!raw) {
+    return "#";
+  }
+
+  const pathOnly = raw.split("?")[0]?.split("#")[0] ?? raw;
+
+  if (pathOnly === "/login") {
+    return buildLoginHref(returnUrl);
+  }
+
+  if (pathOnly === "/register") {
+    return buildRegisterHref(returnUrl);
+  }
+
+  return raw;
 }
 
 /** Same-origin relative path (single leading slash, not protocol-relative). */

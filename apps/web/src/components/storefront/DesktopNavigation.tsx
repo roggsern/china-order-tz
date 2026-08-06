@@ -6,6 +6,10 @@ import { ActiveOrderBadge } from "@/components/storefront/ActiveOrderBadge";
 import { BuyFromTzMegaMenu } from "@/components/home/BuyFromTzMegaMenu";
 import { MegaMenu } from "@/components/home/MegaMenu";
 import {
+  buildCurrentReturnPath,
+  resolveAuthEntryHref,
+} from "@/lib/auth/return-url";
+import {
   isNavItemActive,
   resolveActiveJourney,
   type StorefrontNavAudience,
@@ -34,6 +38,7 @@ function renderPrimaryItem(
   activeJourney: ReturnType<typeof resolveActiveJourney>,
   showOrderBadge: boolean,
   activeOrderCount: number,
+  returnPath: string | null,
 ) {
   if (item.kind === "china_mega") {
     return (
@@ -67,7 +72,7 @@ function renderPrimaryItem(
     return (
       <div key={item.key} className="flex items-center gap-0.5">
         {(item.children ?? []).map((child) =>
-          renderPrimaryItem(child, activeJourney, showOrderBadge, activeOrderCount),
+          renderPrimaryItem(child, activeJourney, showOrderBadge, activeOrderCount, returnPath),
         )}
       </div>
     );
@@ -80,7 +85,7 @@ function renderPrimaryItem(
   return (
     <Link
       key={item.key}
-      href={item.href || "#"}
+      href={resolveAuthEntryHref(item.href || "#", returnPath)}
       className={`${plainNavClass} ${active ? activeClass : ""}`}
       aria-current={active ? "page" : undefined}
     >
@@ -98,6 +103,7 @@ export function DesktopNavigation({ audience }: DesktopNavigationProps) {
   const pathname = usePathname() || "/";
   const searchParams = useSearchParams();
   const search = searchParams?.toString() ? `?${searchParams.toString()}` : "";
+  const returnPath = buildCurrentReturnPath(pathname, searchParams?.toString());
   const activeJourney = resolveActiveJourney(pathname, search);
   const { navigation } = useStorefrontNavigation(audience);
   const { count: activeOrderCount, show: showOrderBadge } = useActiveOrdersBadge();
@@ -121,12 +127,12 @@ export function DesktopNavigation({ audience }: DesktopNavigationProps) {
                 aria-hidden="true"
               />
             ) : null}
-            {renderPrimaryItem(item, activeJourney, showOrderBadge, activeOrderCount)}
+            {renderPrimaryItem(item, activeJourney, showOrderBadge, activeOrderCount, returnPath)}
           </div>
         ))}
 
         {restItems.map((item) =>
-          renderPrimaryItem(item, activeJourney, showOrderBadge, activeOrderCount),
+          renderPrimaryItem(item, activeJourney, showOrderBadge, activeOrderCount, returnPath),
         )}
       </div>
     </nav>

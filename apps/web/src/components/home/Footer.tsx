@@ -2,10 +2,15 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { HomepageAdRail } from "@/components/home/commercial/HomepageAdBanner";
 import { OfficialLogoImage } from "@/components/branding/OfficialLogoImage";
 import { useTzStores } from "@/lib/catalog/use-tz-stores";
 import { filterActiveScheduled, getAdsByPlacement, homepageContentSeed, isLaunchAdvertisementPlacementVisible } from "@/lib/content/homepage";
+import {
+  buildCurrentReturnPath,
+  resolveAuthEntryHref,
+} from "@/lib/auth/return-url";
 import { useCustomerSession } from "@/lib/customer/use-customer-session";
 import {
   buildFooterBuyFromTzLinks,
@@ -17,6 +22,9 @@ import { resolveStorefrontNavAudience } from "@/lib/storefront/navigation-policy
 import { useStorefrontNavigation } from "@/lib/storefront/use-storefront-navigation";
 
 export function Footer() {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const returnPath = buildCurrentReturnPath(pathname, searchParams.toString());
   const { isLoggedIn, isReady } = useCustomerSession();
   const audience = resolveStorefrontNavAudience({ isLoggedIn: isReady && isLoggedIn });
   const { navigation } = useStorefrontNavigation(audience);
@@ -103,7 +111,7 @@ export function Footer() {
                     {column.links.map((link) => (
                       <li key={`${column.key}-${link.label}-${link.href}`}>
                         <Link
-                          href={link.href}
+                          href={resolveAuthEntryHref(link.href, returnPath)}
                           className={`text-sm transition hover:text-white${
                             isContactColumn
                               ? " block max-w-full break-all sm:break-words lg:whitespace-nowrap"
@@ -128,7 +136,10 @@ export function Footer() {
               <ul className="mt-4 space-y-3">
                 {buyFromTzColumn.links.map((link) => (
                   <li key={`${buyFromTzColumn.key}-${link.label}-${link.href}`}>
-                    <Link href={link.href} className="text-sm transition hover:text-white">
+                    <Link
+                      href={resolveAuthEntryHref(link.href, returnPath)}
+                      className="text-sm transition hover:text-white"
+                    >
                       {link.label}
                     </Link>
                   </li>

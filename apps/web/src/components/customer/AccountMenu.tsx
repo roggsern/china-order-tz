@@ -1,9 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { UserIcon } from "@/components/home/icons";
+import {
+  buildCurrentReturnPath,
+  buildLoginHref,
+  resolveAuthEntryHref,
+} from "@/lib/auth/return-url";
 import { resolveCustomerDisplayName } from "@/lib/customer/display-name";
 import { logoutCustomer } from "@/lib/customer/logout-customer";
 import { useFeatureAvailability } from "@/hooks/use-feature-availability";
@@ -47,6 +52,7 @@ function AccountMenuDropdown({
   onLogout,
   displayName,
   email,
+  returnPath,
 }: {
   menuId: string;
   items: AccountMenuItem[];
@@ -54,6 +60,7 @@ function AccountMenuDropdown({
   onLogout: () => void;
   displayName?: string;
   email?: string | null;
+  returnPath: string | null;
 }) {
   return (
     <div
@@ -75,7 +82,7 @@ function AccountMenuDropdown({
             return (
               <Link
                 key={item.label}
-                href={item.href}
+                href={resolveAuthEntryHref(item.href, returnPath)}
                 role="menuitem"
                 className="flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 hover:text-zinc-900"
                 onClick={onClose}
@@ -113,6 +120,12 @@ export function AccountMenu({
   guestBehavior = "link",
 }: AccountMenuProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const returnPath = useMemo(
+    () => buildCurrentReturnPath(pathname, searchParams.toString()),
+    [pathname, searchParams],
+  );
   const menuId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -177,7 +190,7 @@ export function AccountMenu({
   if (!isLoggedIn && guestBehavior === "link") {
     return (
       <Link
-        href="/login"
+        href={buildLoginHref(returnPath)}
         className={className}
         aria-label={isReady ? "Sign In" : "Account"}
       >
@@ -226,6 +239,7 @@ export function AccountMenu({
           onLogout={handleLogout}
           displayName={isLoggedIn ? displayName : undefined}
           email={isLoggedIn ? session?.email : undefined}
+          returnPath={returnPath}
         />
       ) : null}
     </div>

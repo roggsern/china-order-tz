@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { Header } from "@/components/home/Header";
 import { Footer } from "@/components/home/Footer";
 import { CustomerToastHost } from "@/components/customer/CustomerToastHost";
@@ -10,7 +11,9 @@ export function StorefrontShell({ children }: { children: React.ReactNode }) {
       <CustomerToastHost />
       <Header />
       <main>{children}</main>
-      <Footer />
+      <Suspense fallback={null}>
+        <Footer />
+      </Suspense>
     </div>
   );
 }

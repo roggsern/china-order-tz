@@ -82,14 +82,15 @@ export function Header() {
                   />
                 ) : null}
 
-                <AccountNavigation
-                  audience={audience}
-                  variant="desktop"
-                  className={desktopUtilityClass}
-                  iconClassName="h-[18px] w-[18px] shrink-0"
-                  labelClassName="hidden lg:inline"
-                />
-
+                <Suspense fallback={<div className="h-[52px] w-24 animate-pulse rounded-lg bg-zinc-100" />}>
+                  <AccountNavigation
+                    audience={audience}
+                    variant="desktop"
+                    className={desktopUtilityClass}
+                    iconClassName="h-[18px] w-[18px] shrink-0"
+                    labelClassName="hidden lg:inline"
+                  />
+                </Suspense>
                 <CartIconButton
                   showLabel
                   className={desktopUtilityClass}
@@ -134,12 +135,14 @@ export function Header() {
                   badgeClassName="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#c9a227] px-0.5 text-[9px] font-bold text-zinc-900"
                 />
 
-                <AccountNavigation
-                  audience={audience}
-                  variant="mobile"
-                  className={mobileHeaderIconClass}
-                  iconClassName="h-5 w-5"
-                />
+                <Suspense fallback={<div className="h-11 w-11 animate-pulse rounded-lg bg-zinc-100" />}>
+                  <AccountNavigation
+                    audience={audience}
+                    variant="mobile"
+                    className={mobileHeaderIconClass}
+                    iconClassName="h-5 w-5"
+                  />
+                </Suspense>
 
                 <button
                   type="button"

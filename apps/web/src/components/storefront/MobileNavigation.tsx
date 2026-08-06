@@ -7,6 +7,10 @@ import { ActiveOrderBadge } from "@/components/storefront/ActiveOrderBadge";
 import { BuyFromTzMegaMenu } from "@/components/home/BuyFromTzMegaMenu";
 import { CloseIcon } from "@/components/home/icons";
 import { MegaMenu } from "@/components/home/MegaMenu";
+import {
+  buildCurrentReturnPath,
+  resolveAuthEntryHref,
+} from "@/lib/auth/return-url";
 import { logoutCustomer } from "@/lib/customer/logout-customer";
 import {
   isNavItemActive,
@@ -38,6 +42,7 @@ export function MobileNavigation({
   const pathname = usePathname() || "/";
   const searchParams = useSearchParams();
   const search = searchParams?.toString() ? `?${searchParams.toString()}` : "";
+  const returnPath = buildCurrentReturnPath(pathname, searchParams?.toString());
   const activeJourney = resolveActiveJourney(pathname, search);
   const { navigation } = useStorefrontNavigation(audience);
   const { count: activeOrderCount, show: showOrderBadge } = useActiveOrdersBadge();
@@ -122,7 +127,7 @@ export function MobileNavigation({
     return (
       <li key={item.key}>
         <Link
-          href={item.href || "#"}
+          href={resolveAuthEntryHref(item.href || "#", returnPath)}
           onClick={onClose}
           className={`${rowClass} ${active ? "text-zinc-900" : ""}`}
           aria-current={active ? "page" : undefined}

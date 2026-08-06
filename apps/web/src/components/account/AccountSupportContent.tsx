@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { StorefrontShell } from "@/components/layout/StorefrontShell";
 import { AccountPageSkeleton } from "@/components/ui/PageSkeletons";
+import { buildLoginHref } from "@/lib/auth/return-url";
 import { useCustomerSession } from "@/lib/customer/use-customer-session";
 import { getCustomerApiToken } from "@/lib/api/customer-auth";
 import {
@@ -134,7 +135,10 @@ export function AccountSupportContent() {
     return (
       <div className="rounded-xl border border-zinc-200 bg-white p-6 text-center">
         <p className="text-sm text-zinc-600">Sign in to contact support.</p>
-        <Link href="/login" className="mt-3 inline-block text-sm font-semibold text-[#8b6914] hover:underline">
+        <Link
+          href={buildLoginHref("/account/support")}
+          className="mt-3 inline-block text-sm font-semibold text-[#8b6914] hover:underline"
+        >
           Sign in
         </Link>
       </div>

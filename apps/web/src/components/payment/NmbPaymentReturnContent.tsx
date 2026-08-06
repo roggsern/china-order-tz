@@ -10,6 +10,7 @@ import {
   resolvePaymentReturnTransaction,
   type PaymentTransactionPayload,
 } from "@/lib/api/customer-payment-orchestrator";
+import { buildLoginHref } from "@/lib/auth/return-url";
 import {
   clearNmbCheckoutContext,
   consumeNmbPendingPaymentId,
@@ -296,9 +297,9 @@ export function NmbPaymentReturnContent() {
           <h1 className="text-xl font-semibold text-zinc-900">{copy.title}</h1>
           <p className="mt-3 text-sm leading-6 text-zinc-600">{copy.body}</p>
           <Link
-            href={`/login?returnUrl=${encodeURIComponent(
+            href={buildLoginHref(
               `/payment/return${searchParams.toString() ? `?${searchParams.toString()}` : ""}`,
-            )}`}
+            )}
             className="mt-6 inline-flex rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white"
           >
             Sign in
