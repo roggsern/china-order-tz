@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { parseCatalogProductEditTab, type CatalogProductEditTab } from "@/lib/admin/product-id-map";
 import {
   calculateProductPublishReadiness,
@@ -28,6 +29,7 @@ import { AdminProductCreationWizard } from "@/components/admin/AdminProductCreat
 import { AdminBrandAsyncSelect } from "@/components/admin/AdminBrandAsyncSelect";
 import { AdminCategoryTreeSelect } from "@/components/admin/AdminCategoryTreeSelect";
 import { AdminSupplierAsyncSelect } from "@/components/admin/AdminSupplierAsyncSelect";
+import { ProductForceDeleteDialog } from "@/components/admin/ProductForceDeleteDialog";
 import { ProductMediaManager } from "@/components/admin/ProductMediaManager";
 import { ProductShippingManager } from "@/components/admin/ProductShippingManager";
 import { ProductCommercialAvailabilityManager } from "@/components/admin/ProductCommercialAvailabilityManager";
@@ -89,6 +91,11 @@ import {
   type ProductCreationPricingModel,
 } from "@/lib/admin/product-creation-wizard";
 
+type CatalogProductsView = "active" | "deleted";
+
+function parseCatalogProductsView(raw: string | null): CatalogProductsView {
+  return raw === "deleted" ? "deleted" : "active";
+}
 type ProductFormState = {
   id?: string;
   name: string;
@@ -139,11 +146,17 @@ const emptyForm = (): ProductFormState => ({
 const PAGE_SIZE = 15;
 
 export function AdminCatalogProductsPanel() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const catalogView = parseCatalogProductsView(searchParams.get("view"));
   const { permissions } = useAdminPermissions();
   const canCreateBrand = hasAdminPermission(permissions, "catalog.create");
+  const canForceDelete = hasAdminPermission(permissions, "catalog.force_delete");
   const [products, setProducts] = useState<AdminCatalogProduct[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => createEmptySelection());
-  const [trashed, setTrashed] = useState<AdminCatalogProduct[]>([]);
+  const [activeTotal, setActiveTotal] = useState(0);
+  const [deletedTotal, setDeletedTotal] = useState(0);
   const [departments, setDepartments] = useState<AdminDepartment[]>([]);
   const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [productTypes, setProductTypes] = useState<AdminCatalogProductType[]>([]);
@@ -159,6 +172,7 @@ export function AdminCatalogProductsPanel() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filterDepartmentId, setFilterDepartmentId] = useState("");
@@ -168,7 +182,7 @@ export function AdminCatalogProductsPanel() {
   const [filterBrandId, setFilterBrandId] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "draft" | "active" | "archived">("all");
   const [featuredFilter, setFeaturedFilter] = useState<"all" | "featured" | "standard">("all");
-  const [showTrashed, setShowTrashed] = useState(false);
+  const [forceDeleteTarget, setForceDeleteTarget] = useState<AdminCatalogProduct | null>(null);
   const [form, setForm] = useState<ProductFormState | null>(null);
   const [formTab, setFormTab] = useState<CatalogProductEditTab>("details");
   const [saving, setSaving] = useState(false);
@@ -180,6 +194,22 @@ export function AdminCatalogProductsPanel() {
     AdminProductShippingOption[] | null
   >(null);
   const deepLinkEditHandledRef = useRef<string | null>(null);
+
+  const setCatalogView = useCallback(
+    (view: CatalogProductsView) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (view === "active") {
+        params.delete("view");
+      } else {
+        params.set("view", "deleted");
+      }
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+      setPage(1);
+      setSelectedIds(createEmptySelection());
+    },
+    [pathname, router, searchParams],
+  );
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -197,6 +227,7 @@ export function AdminCatalogProductsPanel() {
     filterBrandId,
     statusFilter,
     featuredFilter,
+    catalogView,
   ]);
 
   const reloadLookups = useCallback(async () => {
@@ -233,33 +264,49 @@ export function AdminCatalogProductsPanel() {
     setIsLoading(true);
     setError(null);
     try {
-      const [pageResult, deleted] = await Promise.all([
-        fetchAdminCatalogProductsPage({
-          page,
-          perPage: PAGE_SIZE,
-          search: debouncedSearch || undefined,
-          departmentId: filterDepartmentId || undefined,
-          categoryId: filterCategoryId || undefined,
-          subcategoryId: filterSubcategoryId || undefined,
-          catalogProductTypeId: filterTypeId || undefined,
-          brandId: filterBrandId || undefined,
-          status: statusFilter === "all" ? undefined : statusFilter,
-          featured:
-            featuredFilter === "featured"
+      const listParams = {
+        page,
+        perPage: PAGE_SIZE,
+        search: debouncedSearch || undefined,
+        departmentId: filterDepartmentId || undefined,
+        categoryId: filterCategoryId || undefined,
+        subcategoryId: filterSubcategoryId || undefined,
+        catalogProductTypeId: filterTypeId || undefined,
+        brandId: filterBrandId || undefined,
+        status:
+          catalogView === "active" && statusFilter !== "all" ? statusFilter : undefined,
+        featured:
+          catalogView === "active"
+            ? featuredFilter === "featured"
               ? true
               : featuredFilter === "standard"
                 ? false
-                : undefined,
+                : undefined
+            : undefined,
+        trashed: catalogView === "deleted",
+      } as const;
+
+      const [pageResult, oppositeBadge] = await Promise.all([
+        fetchAdminCatalogProductsPage(listParams),
+        fetchAdminCatalogProductsPage({
+          trashed: catalogView !== "deleted",
+          perPage: 1,
+          page: 1,
         }),
-        fetchAdminCatalogProductsPage({ trashed: true, perPage: 100 }),
       ]);
+
       setProducts(pageResult.items);
       setTotal(pageResult.total);
       setLastPage(pageResult.lastPage);
-      setTrashed(deleted.items);
+      if (catalogView === "deleted") {
+        setDeletedTotal(pageResult.total);
+        setActiveTotal(oppositeBadge.total);
+      } else {
+        setActiveTotal(pageResult.total);
+        setDeletedTotal(oppositeBadge.total);
+      }
     } catch (err) {
       setProducts([]);
-      setTrashed([]);
       setTotal(0);
       setLastPage(1);
       setError(
@@ -280,6 +327,7 @@ export function AdminCatalogProductsPanel() {
     filterBrandId,
     statusFilter,
     featuredFilter,
+    catalogView,
   ]);
 
   useEffect(() => {
@@ -721,9 +769,7 @@ export function AdminCatalogProductsPanel() {
       setActionError(null);
 
       try {
-        const fromList =
-          products.find((item) => item.id === editId) ??
-          trashed.find((item) => item.id === editId);
+        const fromList = products.find((item) => item.id === editId);
         const product = fromList ?? (await fetchAdminCatalogProduct(editId));
         openEdit(product, tab);
         deepLinkEditHandledRef.current = editId;
@@ -739,13 +785,14 @@ export function AdminCatalogProductsPanel() {
     };
 
     void openDeepLinkEdit();
-  }, [openEdit, products, trashed]);
+  }, [openEdit, products]);
 
   const handleDelete = async (product: AdminCatalogProduct) => {
     if (!window.confirm(`Delete product “${product.name}”? You can restore it later.`)) {
       return;
     }
     setActionError(null);
+    setActionNotice(null);
     try {
       await deleteAdminCatalogProduct(product.id);
       await reload();
@@ -758,8 +805,10 @@ export function AdminCatalogProductsPanel() {
 
   const handleRestore = async (product: AdminCatalogProduct) => {
     setActionError(null);
+    setActionNotice(null);
     try {
       await restoreAdminCatalogProduct(product.id);
+      setActionNotice(`Restored “${product.name}”.`);
       await reload();
     } catch (err) {
       setActionError(
@@ -991,24 +1040,66 @@ export function AdminCatalogProductsPanel() {
             Product Core, Media, Specifications, Variants, Stock, and Shipping (Pricing + Inventory engines).
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="admin-btn-secondary"
-            onClick={() => setShowTrashed((value) => !value)}
-          >
-            {showTrashed ? "Hide trash" : `Trash (${trashed.length})`}
-          </button>
+        {catalogView === "active" ? (
           <button type="button" className="admin-btn-primary" onClick={openCreate}>
             Add product
           </button>
-        </div>
+        ) : null}
       </div>
+
+      <div className="mb-4 flex flex-wrap gap-2 border-b border-zinc-200 pb-3">
+        <button
+          type="button"
+          className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
+            catalogView === "active"
+              ? "bg-zinc-900 text-white"
+              : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
+          }`}
+          onClick={() => setCatalogView("active")}
+        >
+          Active Products
+          <span className="ml-2 rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] font-semibold">
+            {activeTotal}
+          </span>
+        </button>
+        <button
+          type="button"
+          className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
+            catalogView === "deleted"
+              ? "bg-zinc-900 text-white"
+              : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
+          }`}
+          onClick={() => setCatalogView("deleted")}
+        >
+          Deleted Products
+          <span className="ml-2 rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] font-semibold">
+            {deletedTotal}
+          </span>
+        </button>
+      </div>
+
+      {actionNotice ? (
+        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {actionNotice}
+        </div>
+      ) : null}
 
       {actionError ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {actionError}
         </div>
+      ) : null}
+
+      {forceDeleteTarget ? (
+        <ProductForceDeleteDialog
+          product={forceDeleteTarget}
+          open
+          onClose={() => setForceDeleteTarget(null)}
+          onDeleted={(message) => {
+            setActionNotice(message);
+            void reload();
+          }}
+        />
       ) : null}
 
       {form ? (
@@ -1668,22 +1759,26 @@ export function AdminCatalogProductsPanel() {
         </div>
       ) : null}
 
-      <AdminProductBulkActionBar
-        selectedCount={selection.selectedCount}
-        selectedIds={[...selectedIds]}
-        permissions={permissions}
-        onClearSelection={() => setSelectedIds(clearTableSelection())}
-        onCompleted={() => {
-          void reload();
-        }}
-      />
+      {catalogView === "active" ? (
+        <AdminProductBulkActionBar
+          selectedCount={selection.selectedCount}
+          selectedIds={[...selectedIds]}
+          permissions={permissions}
+          onClearSelection={() => setSelectedIds(clearTableSelection())}
+          onCompleted={() => {
+            void reload();
+          }}
+        />
+      ) : null}
 
       <div className="admin-card overflow-hidden">
         <div className="flex flex-wrap gap-3 border-b border-zinc-200 px-4 py-3">
           <input
             type="search"
             className="admin-input min-w-[180px] flex-1"
-            placeholder="Search products…"
+            placeholder={
+              catalogView === "deleted" ? "Search deleted products…" : "Search products…"
+            }
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
@@ -1759,29 +1854,33 @@ export function AdminCatalogProductsPanel() {
               </option>
             ))}
           </select>
-          <select
-            className="admin-input w-auto"
-            value={statusFilter}
-            onChange={(event) =>
-              setStatusFilter(event.target.value as typeof statusFilter)
-            }
-          >
-            <option value="all">All statuses</option>
-            <option value="draft">Draft</option>
-            <option value="active">Active</option>
-            <option value="archived">Archived</option>
-          </select>
-          <select
-            className="admin-input w-auto"
-            value={featuredFilter}
-            onChange={(event) =>
-              setFeaturedFilter(event.target.value as typeof featuredFilter)
-            }
-          >
-            <option value="all">All</option>
-            <option value="featured">Featured</option>
-            <option value="standard">Not featured</option>
-          </select>
+          {catalogView === "active" ? (
+            <>
+              <select
+                className="admin-input w-auto"
+                value={statusFilter}
+                onChange={(event) =>
+                  setStatusFilter(event.target.value as typeof statusFilter)
+                }
+              >
+                <option value="all">All statuses</option>
+                <option value="draft">Draft</option>
+                <option value="active">Active</option>
+                <option value="archived">Archived</option>
+              </select>
+              <select
+                className="admin-input w-auto"
+                value={featuredFilter}
+                onChange={(event) =>
+                  setFeaturedFilter(event.target.value as typeof featuredFilter)
+                }
+              >
+                <option value="all">All</option>
+                <option value="featured">Featured</option>
+                <option value="standard">Not featured</option>
+              </select>
+            </>
+          ) : null}
         </div>
 
         {isLoading ? (
@@ -1793,27 +1892,29 @@ export function AdminCatalogProductsPanel() {
           </div>
         ) : products.length === 0 ? (
           <div className="px-5 py-12 text-center text-sm text-zinc-500">
-            No products configured.
+            {catalogView === "deleted" ? "Trash is empty." : "No products configured."}
           </div>
         ) : (
           <>
-            <div className="flex items-center gap-3 border-b border-zinc-100 bg-zinc-50/60 px-5 py-2">
-              <input
-                type="checkbox"
-                checked={selection.allVisibleSelected}
-                onChange={() =>
-                  setSelectedIds((current) => toggleSelectAllVisible(current, visibleIds))
-                }
-                aria-label="Select all products on this page"
-                className="h-4 w-4 rounded border-zinc-300 text-zinc-900"
-              />
-              <span className="text-xs text-zinc-500">
-                Select all on this page
-                {selection.selectedCount > 0
-                  ? ` · ${selection.selectedCount} selected`
-                  : ""}
-              </span>
-            </div>
+            {catalogView === "active" ? (
+              <div className="flex items-center gap-3 border-b border-zinc-100 bg-zinc-50/60 px-5 py-2">
+                <input
+                  type="checkbox"
+                  checked={selection.allVisibleSelected}
+                  onChange={() =>
+                    setSelectedIds((current) => toggleSelectAllVisible(current, visibleIds))
+                  }
+                  aria-label="Select all products on this page"
+                  className="h-4 w-4 rounded border-zinc-300 text-zinc-900"
+                />
+                <span className="text-xs text-zinc-500">
+                  Select all on this page
+                  {selection.selectedCount > 0
+                    ? ` · ${selection.selectedCount} selected`
+                    : ""}
+                </span>
+              </div>
+            ) : null}
             <ul className="divide-y divide-zinc-100">
               {products.map((product) => {
                 const thumb = adminProductThumbnailUrl(product.image);
@@ -1824,15 +1925,17 @@ export function AdminCatalogProductsPanel() {
 
                 return (
                 <li key={product.id} className="flex flex-wrap items-start gap-3 px-5 py-3">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(product.id)}
-                    onChange={() =>
-                      setSelectedIds((current) => toggleTableSelection(current, product.id))
-                    }
-                    aria-label={`Select product ${product.name}`}
-                    className="mt-5 h-4 w-4 shrink-0 rounded border-zinc-300 text-zinc-900"
-                  />
+                  {catalogView === "active" ? (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(product.id)}
+                      onChange={() =>
+                        setSelectedIds((current) => toggleTableSelection(current, product.id))
+                      }
+                      aria-label={`Select product ${product.name}`}
+                      className="mt-5 h-4 w-4 shrink-0 rounded border-zinc-300 text-zinc-900"
+                    />
+                  ) : null}
                   <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50">
                     {thumb ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -1850,29 +1953,37 @@ export function AdminCatalogProductsPanel() {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-zinc-900">
                       {product.name}
-                      <span
-                        className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
-                          product.status === "active"
-                            ? "bg-emerald-50 text-emerald-700"
-                            : product.status === "archived"
-                              ? "bg-zinc-100 text-zinc-500"
-                              : "bg-amber-50 text-amber-700"
-                        }`}
-                      >
-                        {product.status}
-                      </span>
-                      {channel ? (
-                        <span
-                          className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${channel.className}`}
-                        >
-                          {channel.label}
+                      {catalogView === "active" ? (
+                        <>
+                          <span
+                            className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+                              product.status === "active"
+                                ? "bg-emerald-50 text-emerald-700"
+                                : product.status === "archived"
+                                  ? "bg-zinc-100 text-zinc-500"
+                                  : "bg-amber-50 text-amber-700"
+                            }`}
+                          >
+                            {product.status}
+                          </span>
+                          {channel ? (
+                            <span
+                              className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${channel.className}`}
+                            >
+                              {channel.label}
+                            </span>
+                          ) : null}
+                          {product.isFeatured ? (
+                            <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-700">
+                              Featured
+                            </span>
+                          ) : null}
+                        </>
+                      ) : (
+                        <span className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-zinc-600">
+                          Deleted
                         </span>
-                      ) : null}
-                      {product.isFeatured ? (
-                        <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-700">
-                          Featured
-                        </span>
-                      ) : null}
+                      )}
                     </p>
                     <p className="text-xs text-zinc-500">
                       {product.slug}
@@ -1883,55 +1994,92 @@ export function AdminCatalogProductsPanel() {
                         : ""}
                       {product.storeName ? ` · ${product.storeName}` : ""}
                     </p>
-                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-600">
-                      <span>{formatAdminPriceRange(product.priceRange)}</span>
-                      <span>
-                        {product.variantsCount} variant{product.variantsCount === 1 ? "" : "s"}
-                      </span>
-                      <span>
-                        {formatAdminStockSummary(product.stockSummary, product.variantsCount)}
-                      </span>
-                    </div>
-                    {product.shortDescription ? (
-                      <p className="mt-1 text-xs text-zinc-600">{product.shortDescription}</p>
+                    {catalogView === "deleted" && product.deletedAt ? (
+                      <p className="mt-1 text-xs text-zinc-500">
+                        Deleted {new Date(product.deletedAt).toLocaleString()}
+                      </p>
                     ) : null}
+                    {catalogView === "active" ? (
+                      <>
+                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-600">
+                          <span>{formatAdminPriceRange(product.priceRange)}</span>
+                          <span>
+                            {product.variantsCount} variant
+                            {product.variantsCount === 1 ? "" : "s"}
+                          </span>
+                          <span>
+                            {formatAdminStockSummary(product.stockSummary, product.variantsCount)}
+                          </span>
+                        </div>
+                        {product.shortDescription ? (
+                          <p className="mt-1 text-xs text-zinc-600">{product.shortDescription}</p>
+                        ) : null}
+                      </>
+                    ) : (
+                      <p className="mt-1 text-xs text-zinc-600">
+                        {product.variantsCount} variant{product.variantsCount === 1 ? "" : "s"}
+                      </p>
+                    )}
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-1">
-                    <button
-                      type="button"
-                      className="rounded px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-100"
-                      onClick={() => openEdit(product)}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-100"
-                      onClick={() => openEdit(product, "media")}
-                    >
-                      Media
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-100"
-                      onClick={() => openEdit(product, "specifications")}
-                    >
-                      Specs
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-100"
-                      onClick={() => openEdit(product, "variants")}
-                    >
-                      Variants
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded px-2 py-1 text-[11px] font-medium text-red-600 hover:bg-red-50"
-                      onClick={() => void handleDelete(product)}
-                    >
-                      Delete
-                    </button>
+                    {catalogView === "active" ? (
+                      <>
+                        <button
+                          type="button"
+                          className="rounded px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-100"
+                          onClick={() => openEdit(product)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-100"
+                          onClick={() => openEdit(product, "media")}
+                        >
+                          Media
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-100"
+                          onClick={() => openEdit(product, "specifications")}
+                        >
+                          Specs
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-100"
+                          onClick={() => openEdit(product, "variants")}
+                        >
+                          Variants
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded px-2 py-1 text-[11px] font-medium text-red-600 hover:bg-red-50"
+                          onClick={() => void handleDelete(product)}
+                        >
+                          Delete
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className="rounded px-2 py-1 text-[11px] font-medium text-[#8b6914] hover:bg-[#c9a227]/10"
+                          onClick={() => void handleRestore(product)}
+                        >
+                          Restore
+                        </button>
+                        {canForceDelete ? (
+                          <button
+                            type="button"
+                            className="rounded px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50"
+                            onClick={() => setForceDeleteTarget(product)}
+                          >
+                            Permanently delete
+                          </button>
+                        ) : null}
+                      </>
+                    )}
                   </div>
                 </li>
                 );
@@ -1939,7 +2087,8 @@ export function AdminCatalogProductsPanel() {
             </ul>
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-200 px-4 py-3">
               <p className="text-xs text-zinc-500">
-                Showing page {currentPage} of {lastPage} · {total} products
+                Showing page {currentPage} of {lastPage} · {total}{" "}
+                {catalogView === "deleted" ? "deleted" : ""} products
               </p>
               <div className="flex gap-2">
                 <button
@@ -1963,35 +2112,6 @@ export function AdminCatalogProductsPanel() {
           </>
         )}
       </div>
-
-      {showTrashed ? (
-        <div className="admin-card mt-4 overflow-hidden">
-          <div className="border-b border-zinc-200 px-5 py-3">
-            <h2 className="text-sm font-semibold text-zinc-900">Deleted products</h2>
-          </div>
-          {trashed.length === 0 ? (
-            <div className="px-5 py-8 text-center text-sm text-zinc-500">Trash is empty.</div>
-          ) : (
-            <ul className="divide-y divide-zinc-100">
-              {trashed.map((product) => (
-                <li key={product.id} className="flex items-center gap-3 px-5 py-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-zinc-900">{product.name}</p>
-                    <p className="text-xs text-zinc-500">{product.slug}</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="rounded px-2 py-1 text-[11px] font-medium text-[#8b6914] hover:bg-[#c9a227]/10"
-                    onClick={() => void handleRestore(product)}
-                  >
-                    Restore
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      ) : null}
     </div>
   );
 }

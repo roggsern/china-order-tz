@@ -38,6 +38,9 @@ final class AdminPermissions
 
     public const CATALOG_DELETE = 'catalog.delete';
 
+    /** Permanent (force) delete of soft-deleted catalog products. Super-admin only by default. */
+    public const CATALOG_FORCE_DELETE = 'catalog.force_delete';
+
     // Pricing
     public const PRICING_VIEW = 'pricing.view';
 
@@ -283,6 +286,7 @@ final class AdminPermissions
             self::CATALOG_ARCHIVE,
             self::CATALOG_RESTORE,
             self::CATALOG_DELETE,
+            self::CATALOG_FORCE_DELETE,
             self::PRICING_VIEW,
             self::PRICING_MANAGE,
             self::INVENTORY_VIEW,

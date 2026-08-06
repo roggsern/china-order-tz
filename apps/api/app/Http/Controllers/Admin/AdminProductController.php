@@ -7,6 +7,7 @@ use App\Actions\AdminProducts\DeleteProductAction;
 use App\Actions\AdminProducts\ForceDeleteProductAction;
 use App\Actions\AdminProducts\GetAdminProductsAction;
 use App\Actions\AdminProducts\GetInventoryMovementsAction;
+use App\Actions\AdminProducts\GetProductForceDeleteEligibilityAction;
 use App\Actions\AdminProducts\GetProductImagesAction;
 use App\Actions\AdminProducts\GetTrashedProductsAction;
 use App\Actions\AdminProducts\QuoteProductPriceAction;
@@ -17,6 +18,7 @@ use App\Actions\AdminProducts\UpdateProductAction;
 use App\Actions\AdminProducts\UpdateProductStockAction;
 use App\Actions\AdminProducts\UploadProductImageAction;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\ForceDeleteProductRequest;
 use App\Http\Requests\Admin\QuoteProductPriceRequest;
 use App\Http\Requests\Admin\StoreProductImageRequest;
 use App\Http\Requests\Admin\StoreProductRequest;
@@ -110,19 +112,44 @@ class AdminProductController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Product restored successfully.',
-            'data' => new ProductResource($action->handle($id)),
+            'data' => new ProductResource($action->handle($id, auth('sanctum')->id())),
         ]);
     }
 
-    public function forceDestroy(string $id, ForceDeleteProductAction $action): JsonResponse
-    {
-        $this->authorize(AdminPermissions::CATALOG_DELETE);
-
-        $action->handle($id);
+    public function forceDeleteEligibility(
+        string $id,
+        GetProductForceDeleteEligibilityAction $action,
+    ): JsonResponse {
+        $this->authorize(AdminPermissions::CATALOG_FORCE_DELETE);
 
         return response()->json([
             'success' => true,
-            'message' => 'Product permanently deleted successfully.',
+            'data' => $action->handle($id, auth('sanctum')->id()),
+        ]);
+    }
+
+    public function forceDestroy(
+        string $id,
+        ForceDeleteProductRequest $request,
+        ForceDeleteProductAction $action,
+    ): JsonResponse {
+        $this->authorize(AdminPermissions::CATALOG_FORCE_DELETE);
+
+        $result = $action->handle(
+            $id,
+            $request->validated('confirmation'),
+            auth('sanctum')->id(),
+        );
+
+        $message = 'Product permanently deleted successfully.';
+        if (($result['media_cleanup']['file_errors'] ?? []) !== []) {
+            $message .= ' Some media files could not be removed; operations will follow up.';
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $message,
+            'data' => $result,
         ]);
     }
 

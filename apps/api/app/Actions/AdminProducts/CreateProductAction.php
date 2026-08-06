@@ -48,6 +48,12 @@ class CreateProductAction
 
         return DB::transaction(function () use ($validated) {
             $name = $validated['name'];
+            $preferredSlug = filled($validated['slug'] ?? null)
+                ? $this->preferredSlug((string) $validated['slug'], treatAsSlug: true)
+                : $this->preferredSlug($name);
+
+            $this->assertSlugAvailableAgainstTrash($preferredSlug);
+
             $slug = filled($validated['slug'] ?? null)
                 ? $this->generateUniqueSlug((string) $validated['slug'], treatAsSlug: true)
                 : $this->generateUniqueSlug($name);
@@ -305,6 +311,24 @@ class CreateProductAction
         ];
     }
 
+    private function preferredSlug(string $value, bool $treatAsSlug = false): string
+    {
+        $slug = Str::slug($value);
+
+        return $slug !== '' ? $slug : 'product';
+    }
+
+    private function assertSlugAvailableAgainstTrash(string $slug): void
+    {
+        if (Product::onlyTrashed()->where('slug', $slug)->exists()) {
+            throw ValidationException::withMessages([
+                'slug' => [
+                    'A deleted product already uses this slug. Permanently delete it from Trash or choose a different name/slug.',
+                ],
+            ]);
+        }
+    }
+
     private function generateUniqueSlug(string $value, bool $treatAsSlug = false): string
     {
         $slug = $treatAsSlug ? Str::slug($value) : Str::slug($value);
@@ -312,7 +336,7 @@ class CreateProductAction
         $slug = $original;
         $counter = 1;
 
-        while (Product::where('slug', $slug)->exists()) {
+        while (Product::withTrashed()->where('slug', $slug)->exists()) {
             $slug = $original.'-'.$counter;
             $counter++;
         }

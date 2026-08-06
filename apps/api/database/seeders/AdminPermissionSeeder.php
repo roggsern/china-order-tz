@@ -95,7 +95,10 @@ class AdminPermissionSeeder extends Seeder
      */
     private function rolePermissionMatrix(): array
     {
-        $all = AdminPermissions::all();
+        $all = array_values(array_filter(
+            AdminPermissions::all(),
+            static fn (string $slug): bool => $slug !== AdminPermissions::CATALOG_FORCE_DELETE,
+        ));
 
         $catalog = [
             AdminPermissions::CATALOG_VIEW,

@@ -95,8 +95,12 @@ class UpdateProductAction
             }
 
             if (array_key_exists('slug', $validated) && filled($validated['slug'])) {
+                $preferred = Str::slug((string) $validated['slug']) ?: 'product';
+                $this->assertSlugAvailableAgainstTrash($preferred, $product->id);
                 $productData['slug'] = $this->generateUniqueSlug((string) $validated['slug'], $product->id, treatAsSlug: true);
             } elseif (array_key_exists('name', $validated) && $validated['name'] !== $product->name) {
+                $preferred = Str::slug((string) $validated['name']) ?: 'product';
+                $this->assertSlugAvailableAgainstTrash($preferred, $product->id);
                 $productData['slug'] = $this->generateUniqueSlug($validated['name'], $product->id);
             }
 
@@ -468,6 +472,22 @@ class UpdateProductAction
         return ProductLifecycleStatus::tryFromMixed($lifecycle)?->isPurchasable() ?? false;
     }
 
+    private function assertSlugAvailableAgainstTrash(string $slug, string $ignoreProductId): void
+    {
+        if (
+            Product::onlyTrashed()
+                ->where('slug', $slug)
+                ->where('id', '!=', $ignoreProductId)
+                ->exists()
+        ) {
+            throw ValidationException::withMessages([
+                'slug' => [
+                    'A deleted product already uses this slug. Permanently delete it from Trash or choose a different name/slug.',
+                ],
+            ]);
+        }
+    }
+
     private function generateUniqueSlug(string $value, string $ignoreProductId, bool $treatAsSlug = false): string
     {
         $slug = Str::slug($value);
@@ -476,7 +496,7 @@ class UpdateProductAction
         $counter = 1;
 
         while (
-            Product::query()
+            Product::withTrashed()
                 ->where('slug', $slug)
                 ->where('id', '!=', $ignoreProductId)
                 ->exists()

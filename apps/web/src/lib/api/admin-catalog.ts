@@ -2375,6 +2375,175 @@ export async function restoreAdminCatalogProduct(id: string): Promise<AdminCatal
   return mapAdminApiCatalogProduct(data);
 }
 
+export type ProductForceDeleteEligibility = {
+  canForceDelete: boolean;
+  confirmationPhrase: string;
+  product: {
+    id: string;
+    name: string;
+    slug: string;
+    deletedAt: string | null;
+  };
+  blockingDependencies: Array<{
+    type: string;
+    count: number;
+    message: string;
+  }>;
+  deletableDependencies: {
+    variants: number;
+    variantPrices: number;
+    productMedia: number;
+    productImages: number;
+  };
+};
+
+type ApiForceDeleteEligibility = {
+  can_force_delete?: boolean;
+  confirmation_phrase?: string;
+  product?: {
+    id?: string;
+    name?: string;
+    slug?: string;
+    deleted_at?: string | null;
+  };
+  blocking_dependencies?: Array<{
+    type?: string;
+    count?: number;
+    message?: string;
+  }>;
+  deletable_dependencies?: {
+    variants?: number;
+    variant_prices?: number;
+    product_media?: number;
+    product_images?: number;
+  };
+};
+
+export async function fetchProductForceDeleteEligibility(
+  id: string,
+): Promise<ProductForceDeleteEligibility> {
+  const trimmed = id.trim();
+  if (!trimmed) {
+    throw new AdminCatalogApiError("Product id is required.", 422);
+  }
+
+  const response = await fetch(
+    `/api/admin/products/${encodeURIComponent(trimmed)}/force-delete-eligibility`,
+    {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    },
+  );
+
+  const payload = await parseJsonResponse<{
+    success?: boolean;
+    message?: string;
+    data?: ApiForceDeleteEligibility;
+  }>(response);
+
+  if (!response.ok || payload.success === false || !payload.data) {
+    throw new AdminCatalogApiError(
+      payload.message?.trim() || "Unable to check permanent deletion eligibility.",
+      response.status,
+    );
+  }
+
+  const data = payload.data;
+  return {
+    canForceDelete: data.can_force_delete === true,
+    confirmationPhrase: data.confirmation_phrase?.trim() || "DELETE PRODUCT",
+    product: {
+      id: data.product?.id ?? trimmed,
+      name: data.product?.name ?? "",
+      slug: data.product?.slug ?? "",
+      deletedAt: data.product?.deleted_at ?? null,
+    },
+    blockingDependencies: (data.blocking_dependencies ?? []).map((item) => ({
+      type: item.type ?? "unknown",
+      count: item.count ?? 0,
+      message: item.message ?? "Protected dependency.",
+    })),
+    deletableDependencies: {
+      variants: data.deletable_dependencies?.variants ?? 0,
+      variantPrices: data.deletable_dependencies?.variant_prices ?? 0,
+      productMedia: data.deletable_dependencies?.product_media ?? 0,
+      productImages: data.deletable_dependencies?.product_images ?? 0,
+    },
+  };
+}
+
+export type ForceDeleteProductResult = {
+  productId: string;
+  slug: string;
+  name: string;
+  mediaCleanup: {
+    deletedFiles: number;
+    missingFiles: number;
+    sharedFilesSkipped: number;
+    fileErrors: string[];
+  };
+  message: string;
+};
+
+export async function forceDeleteAdminCatalogProduct(
+  id: string,
+  confirmation: string,
+): Promise<ForceDeleteProductResult> {
+  const trimmed = id.trim();
+  if (!trimmed) {
+    throw new AdminCatalogApiError("Product id is required.", 422);
+  }
+
+  const response = await fetch(`/api/admin/products/${encodeURIComponent(trimmed)}/force`, {
+    method: "DELETE",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ confirmation }),
+  });
+
+  const payload = await parseJsonResponse<{
+    success?: boolean;
+    message?: string;
+    data?: {
+      product_id?: string;
+      slug?: string;
+      name?: string;
+      media_cleanup?: {
+        deleted_files?: number;
+        missing_files?: number;
+        shared_files_skipped?: number;
+        file_errors?: string[];
+      };
+    };
+    errors?: Record<string, string[]>;
+  }>(response);
+
+  if (!response.ok || payload.success === false) {
+    const fieldError = payload.errors
+      ? Object.values(payload.errors).flat()[0]
+      : undefined;
+    throw new AdminCatalogApiError(
+      fieldError || payload.message?.trim() || "Unable to permanently delete product.",
+      response.status,
+    );
+  }
+
+  return {
+    productId: payload.data?.product_id ?? trimmed,
+    slug: payload.data?.slug ?? "",
+    name: payload.data?.name ?? "",
+    mediaCleanup: {
+      deletedFiles: payload.data?.media_cleanup?.deleted_files ?? 0,
+      missingFiles: payload.data?.media_cleanup?.missing_files ?? 0,
+      sharedFilesSkipped: payload.data?.media_cleanup?.shared_files_skipped ?? 0,
+      fileErrors: payload.data?.media_cleanup?.file_errors ?? [],
+    },
+    message: payload.message?.trim() || "Product permanently deleted successfully.",
+  };
+}
+
 export type AdminProductShippingOption = {
   id: string;
   productId: string;

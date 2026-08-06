@@ -7,6 +7,8 @@ use App\Models\ProductImage;
 use App\Models\ProductMedia;
 use App\Models\ProductVariant;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Soft-delete / restore / force-delete cascade for catalog products.
@@ -72,14 +74,21 @@ class ProductDeletionLifecycle
         });
     }
 
-    public function forceDelete(Product $product): void
+    /**
+     * Permanently delete a soft-deleted product and owned runtime rows.
+     * Physical media files are removed only after the DB transaction commits,
+     * and only when the storage object is not still referenced by another product.
+     *
+     * @return array{deleted_files: int, missing_files: int, shared_files_skipped: int, file_errors: list<string>}
+     */
+    public function forceDelete(Product $product): array
     {
+        $mediaPlan = $this->collectExclusiveMediaStoragePaths($product);
+
         DB::transaction(function () use ($product): void {
             /** @var Product $locked */
             $locked = Product::onlyTrashed()->whereKey($product->id)->lockForUpdate()->firstOrFail();
 
-            // Force-delete soft-deleted children first so no dangling rows remain if
-            // DB cascade timing differs; FK cascadeOnDelete also covers hard deletes.
             ProductVariant::withTrashed()
                 ->where('product_id', $locked->id)
                 ->get()
@@ -97,6 +106,12 @@ class ProductDeletionLifecycle
 
             $locked->forceDelete();
         });
+
+        return $this->deleteExclusiveMediaFiles(
+            $mediaPlan['paths'],
+            $product->id,
+            $mediaPlan['shared_skipped'],
+        );
     }
 
     /**
@@ -122,5 +137,126 @@ class ProductDeletionLifecycle
             });
 
         return $count;
+    }
+
+    /**
+     * @return array{paths: list<string>, shared_skipped: int}
+     */
+    private function collectExclusiveMediaStoragePaths(Product $product): array
+    {
+        $urls = ProductMedia::withTrashed()
+            ->where('product_id', $product->id)
+            ->pluck('url')
+            ->filter(fn ($url) => is_string($url) && $url !== '')
+            ->unique()
+            ->values();
+
+        $paths = [];
+        $sharedSkipped = 0;
+
+        foreach ($urls as $url) {
+            $path = $this->storagePathFromPublicUrl((string) $url);
+            if ($path === null) {
+                continue;
+            }
+
+            $stillReferenced = ProductMedia::withTrashed()
+                ->where('url', $url)
+                ->where('product_id', '!=', $product->id)
+                ->exists();
+
+            if ($stillReferenced) {
+                $sharedSkipped++;
+                continue;
+            }
+
+            $paths[] = $path;
+        }
+
+        $legacyPaths = ProductImage::withTrashed()
+            ->where('product_id', $product->id)
+            ->pluck('path')
+            ->filter(fn ($path) => is_string($path) && $path !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        foreach ($legacyPaths as $legacyPath) {
+            $stillReferenced = ProductImage::withTrashed()
+                ->where('path', $legacyPath)
+                ->where('product_id', '!=', $product->id)
+                ->exists();
+
+            if ($stillReferenced) {
+                $sharedSkipped++;
+                continue;
+            }
+
+            $paths[] = $legacyPath;
+        }
+
+        return [
+            'paths' => array_values(array_unique($paths)),
+            'shared_skipped' => $sharedSkipped,
+        ];
+    }
+
+    /**
+     * @param  list<string>  $paths
+     * @return array{deleted_files: int, missing_files: int, shared_files_skipped: int, file_errors: list<string>}
+     */
+    private function deleteExclusiveMediaFiles(array $paths, string $productId, int $sharedSkipped = 0): array
+    {
+        $deleted = 0;
+        $missing = 0;
+        $errors = [];
+
+        foreach ($paths as $path) {
+            try {
+                if (! Storage::disk('public')->exists($path)) {
+                    $missing++;
+                    continue;
+                }
+                Storage::disk('public')->delete($path);
+                $deleted++;
+            } catch (\Throwable $exception) {
+                $errors[] = $path.': '.$exception->getMessage();
+                Log::warning('product_force_delete_media_cleanup_failed', [
+                    'product_id' => $productId,
+                    'path' => $path,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
+
+        return [
+            'deleted_files' => $deleted,
+            'missing_files' => $missing,
+            'shared_files_skipped' => $sharedSkipped,
+            'file_errors' => $errors,
+        ];
+    }
+
+    private function storagePathFromPublicUrl(string $url): ?string
+    {
+        $path = parse_url($url, PHP_URL_PATH);
+        if (! is_string($path) || $path === '') {
+            // Relative path already, e.g. products/uuid.jpg
+            if (str_starts_with($url, 'products/')) {
+                return $url;
+            }
+
+            return null;
+        }
+
+        $needle = '/storage/';
+        $pos = strpos($path, $needle);
+        if ($pos === false) {
+            return null;
+        }
+
+        $relative = ltrim(substr($path, $pos + strlen($needle)), '/');
+
+        return $relative !== '' ? $relative : null;
     }
 }

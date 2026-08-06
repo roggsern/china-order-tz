@@ -32,6 +32,7 @@ final class PermissionRiskClassifier
         AdminPermissions::NOTIFICATIONS_MANAGE,
         AdminPermissions::CONFIGURATION_MANAGE,
         AdminPermissions::CATALOG_DELETE,
+        AdminPermissions::CATALOG_FORCE_DELETE,
         AdminPermissions::WAREHOUSE_JOBS_DELETE,
         AdminPermissions::SUPPLIERS_DELETE,
         AdminPermissions::PROCUREMENT_DELETE,

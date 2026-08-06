@@ -684,6 +684,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin', 'admin.active'])->prefix('adm
     Route::put('/products/{product}', [AdminProductController::class, 'update']);
     Route::delete('/products/{product}', [AdminProductController::class, 'destroy']);
     Route::post('/products/{id}/restore', [AdminProductController::class, 'restore']);
+    Route::get('/products/{id}/force-delete-eligibility', [AdminProductController::class, 'forceDeleteEligibility']);
     Route::delete('/products/{id}/force', [AdminProductController::class, 'forceDestroy']);
     Route::delete('/product-images/{image}', [AdminProductImageController::class, 'destroy']);
     Route::patch('/product-images/{image}/primary', [AdminProductImageController::class, 'setPrimary']);

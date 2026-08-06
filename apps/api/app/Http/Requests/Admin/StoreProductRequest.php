@@ -31,13 +31,29 @@ class StoreProductRequest extends FormRequest
     }
 
     /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'slug.unique' => 'This slug is already used by an active or deleted product. Choose another slug or permanently delete the trashed product first.',
+            'sku.unique' => 'This SKU is already used by another product.',
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function rules(): array
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'slug' => ['nullable', 'string', 'max:255', 'unique:products,slug'],
+            'slug' => [
+                'nullable',
+                'string',
+                'max:255',
+                Rule::unique('products', 'slug'),
+            ],
             'commerce_channel_id' => ['required', 'uuid', 'exists:commerce_channels,id'],
             'store_id' => ['sometimes', 'nullable', 'uuid', 'exists:stores,id'],
             'category_id' => ['required_without:catalog_product_type_id', 'nullable', 'uuid', 'exists:categories,id'],
@@ -45,7 +61,7 @@ class StoreProductRequest extends FormRequest
             'product_condition' => ['sometimes', 'nullable', 'string', Rule::in(ProductCondition::values())],
             'brand_id' => ['nullable', 'uuid', 'exists:brands,id'],
             'supplier_id' => ['nullable', 'uuid', Rule::exists('suppliers', 'id')->where('is_active', true)],
-            'sku' => ['nullable', 'string', 'max:100', 'unique:products,sku'],
+            'sku' => ['nullable', 'string', 'max:100', Rule::unique('products', 'sku')],
             'price' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'pricing_model' => ['sometimes', 'string', Rule::in(array_column(ProductPricingModel::cases(), 'value'))],
             'compare_at_price' => ['nullable', 'numeric', 'min:0'],

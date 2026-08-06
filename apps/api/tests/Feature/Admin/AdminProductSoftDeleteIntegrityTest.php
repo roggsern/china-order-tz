@@ -211,11 +211,13 @@ class AdminProductSoftDeleteIntegrityTest extends TestCase
     {
         Sanctum::actingAs(Admin::factory()->create());
 
-        $product = Product::factory()->tzLocal()->create();
+        $product = Product::factory()->tzLocal()->create(['name' => 'Force Cascade Product']);
         $variant = ProductVariant::factory()->create(['product_id' => $product->id]);
 
         $this->deleteJson("/api/v1/admin/products/{$product->id}")->assertOk();
-        $this->deleteJson("/api/v1/admin/products/{$product->id}/force")->assertOk();
+        $this->deleteJson("/api/v1/admin/products/{$product->id}/force", [
+            'confirmation' => 'DELETE FORCE CASCADE PRODUCT',
+        ])->assertOk();
 
         $this->assertNull(Product::withTrashed()->find($product->id));
         $this->assertNull(ProductVariant::withTrashed()->find($variant->id));
