@@ -106,7 +106,7 @@ export function VariantMediaManager({
       return;
     }
 
-    const { accepted, error: validationError } = validateProductMediaUpload(incoming);
+    const { accepted, error: validationError } = await validateProductMediaUpload(incoming);
     if (validationError) {
       setError(validationError);
     }

@@ -99,7 +99,7 @@ export function VariantAttributeImageApply({
       return;
     }
 
-    const validation = validateProductMediaUpload([file]);
+    const validation = await validateProductMediaUpload([file]);
     if (validation.error || validation.accepted.length === 0) {
       onError(validation.error ?? "Unsupported image file.");
       return;
@@ -194,17 +194,19 @@ export function VariantAttributeImageApply({
             disabled={busy || disabled || !canUpdate}
             onChange={(event) => {
               const incoming = Array.from(event.target.files ?? []);
-              const validation = validateProductMediaUpload(incoming);
-              if (validation.error || validation.accepted.length === 0) {
-                setFile(null);
-                if (validation.error) {
-                  onError(validation.error);
+              void (async () => {
+                const validation = await validateProductMediaUpload(incoming);
+                if (validation.error || validation.accepted.length === 0) {
+                  setFile(null);
+                  if (validation.error) {
+                    onError(validation.error);
+                  }
+                  event.target.value = "";
+                  return;
                 }
+                setFile(validation.accepted[0] ?? null);
                 event.target.value = "";
-                return;
-              }
-              setFile(validation.accepted[0] ?? null);
-              event.target.value = "";
+              })();
             }}
           />
         </div>

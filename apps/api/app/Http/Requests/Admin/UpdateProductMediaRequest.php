@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\Concerns\ValidatesProductVariantMediaBinding;
 use App\Http\Requests\Concerns\AuthorizesAdminPermission;
 use App\Support\Admin\AdminPermissions;
 use App\Support\ProductMedia\ProductMediaUploadContract;
+use App\Support\ProductMedia\ProductMediaUploadDiagnostics;
 use App\Support\Security\SafePublicUrl;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -52,6 +53,12 @@ class UpdateProductMediaRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $this->validateProductVariantMediaBinding($validator);
+
+        $validator->after(function () {
+            if ($this->hasFile('file')) {
+                ProductMediaUploadDiagnostics::logIfEnabled($this->file('file'));
+            }
+        });
     }
 
     protected function prepareForValidation(): void

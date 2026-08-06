@@ -24,6 +24,25 @@ Canonical admin catalog product/variant image upload policy.
 Shared PHP/Laravel constant source: `App\Support\ProductMedia\ProductMediaUploadContract`.  
 Shared frontend helper: `apps/web/src/lib/admin/product-media-upload.ts` (used by product media, variant media, and attribute-option apply).
 
+## Live admin entry points
+
+Shared client helper: `apps/web/src/lib/admin/product-media-upload.ts`
+
+Used by:
+- `ProductMediaManager`
+- `VariantMediaManager`
+- `VariantAttributeImageApply`
+
+Client accepts MIME aliases (`image/png`, `image/x-png`, `image/jpeg`, `image/jpg`, `image/pjpeg`, `image/webp`), allowed extensions, and (for empty/`application/octet-stream`) PNG/JPEG/WebP magic-byte sniffing. Format errors never mention the 10 MB limit.
+
+## Optional diagnostics
+
+```bash
+PRODUCT_MEDIA_UPLOAD_DIAGNOSTICS=true
+```
+
+When enabled, failed/attempted catalog uploads log only: original name, client MIME, sniffed MIME, guessed extension, size, upload error, isValid. Default **false**.
+
 ## Legacy endpoint (not live UI)
 
 `POST /api/v1/admin/products/{id}/images` (`StoreProductImageRequest`) remains at **2 MB**.  

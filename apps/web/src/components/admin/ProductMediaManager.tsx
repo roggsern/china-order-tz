@@ -94,7 +94,7 @@ export function ProductMediaManager({ productId, productName }: ProductMediaMana
   };
 
   const uploadFiles = async (incoming: File[]) => {
-    const { accepted, error: validationError } = validateProductMediaUpload(incoming);
+    const { accepted, error: validationError } = await validateProductMediaUpload(incoming);
     if (validationError) {
       setError(validationError);
     }

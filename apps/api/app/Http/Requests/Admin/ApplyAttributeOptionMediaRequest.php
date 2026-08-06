@@ -5,8 +5,10 @@ namespace App\Http\Requests\Admin;
 use App\Http\Requests\Concerns\AuthorizesAdminPermission;
 use App\Support\Admin\AdminPermissions;
 use App\Support\ProductMedia\ProductMediaUploadContract;
+use App\Support\ProductMedia\ProductMediaUploadDiagnostics;
 use App\Support\Security\SafePublicUrl;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class ApplyAttributeOptionMediaRequest extends FormRequest
 {
@@ -43,5 +45,14 @@ class ApplyAttributeOptionMediaRequest extends FormRequest
     public function messages(): array
     {
         return ProductMediaUploadContract::fileMessages('file');
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function () {
+            if ($this->hasFile('file')) {
+                ProductMediaUploadDiagnostics::logIfEnabled($this->file('file'));
+            }
+        });
     }
 }
