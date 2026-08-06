@@ -45,6 +45,7 @@ export function ProductDetailMobile({
   const [selectedColorSlug, setSelectedColorSlug] = useState<string | null>(null);
   const [configSelection, setConfigSelection] = useState<StorefrontConfigurationSelection>({
     configurationId: null,
+    mediaPreviewConfigurationId: null,
     label: "",
     sku: "",
     inStock: true,
@@ -141,6 +142,7 @@ export function ProductDetailMobile({
           product={product}
           selectedColorSlug={selectedColorSlug}
           configurationId={configSelection.configurationId}
+          mediaPreviewConfigurationId={configSelection.mediaPreviewConfigurationId}
         />
       </div>
 
@@ -163,6 +165,7 @@ export function ProductDetailMobile({
             productSlug={product.slug}
             basePrice={product.price}
             quantity={quantity}
+            variantGalleries={product.variantGalleries}
             onQuantityMaxChange={handleQuantityMaxChange}
             onSelectionChange={handleSelectionChange}
             onQuoteChange={handleQuoteChange}

@@ -15,9 +15,13 @@ import {
   type StorefrontConfigurationExperience,
   type StorefrontPriceQuote,
 } from "@/lib/catalog/storefront-configuration";
+import { resolveMediaPreviewConfigurationId } from "@/lib/catalog/storefront-media-preview";
+import type { ProductImage } from "@/lib/types/catalog";
 
 export type StorefrontConfigurationSelection = {
   configurationId: string | null;
+  /** Gallery-only; never use for SKU / price / stock / cart. */
+  mediaPreviewConfigurationId: string | null;
   label: string;
   sku: string;
   inStock: boolean;
@@ -32,6 +36,8 @@ interface ProductConfigurationPickerProps {
   productSlug: string;
   basePrice: number;
   quantity: number;
+  /** Used to pick a deterministic color/visual media preview without resolving a SKU. */
+  variantGalleries?: Record<string, ProductImage[]> | null;
   onQuantityMaxChange?: (max: number) => void;
   onSelectionChange: (selection: StorefrontConfigurationSelection) => void;
   onQuoteChange: (quote: StorefrontPriceQuote | null) => void;
@@ -81,6 +87,7 @@ export function ProductConfigurationPicker({
   productSlug,
   basePrice: _basePrice,
   quantity,
+  variantGalleries = null,
   onQuantityMaxChange,
   onSelectionChange,
   onQuoteChange,
@@ -214,8 +221,17 @@ export function ProductConfigurationPicker({
       ) ||
       "";
 
+    const mediaPreviewConfigurationId = resolveMediaPreviewConfigurationId({
+      configurations: experience?.configurations ?? [],
+      selections,
+      attributes: configAttributes,
+      variantGalleries,
+      exactConfigurationId: configurationId,
+    });
+
     onSelectionChange({
       configurationId,
+      mediaPreviewConfigurationId,
       label,
       sku: matched?.sku ?? "",
       inStock,
@@ -230,12 +246,15 @@ export function ProductConfigurationPicker({
       onQuantityMaxChange?.(Math.max(1, stock || 1));
     }
   }, [
+    configAttributes,
     experience,
     matched,
     onQuantityMaxChange,
     onSelectionChange,
     selectedAttributes,
     selectedColorSlug,
+    selections,
+    variantGalleries,
   ]);
 
   useEffect(() => {

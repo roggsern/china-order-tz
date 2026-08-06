@@ -18,6 +18,9 @@ export function ProductDetailDesktopExperience({
 }: ProductDetailDesktopExperienceProps) {
   const [selectedColorSlug, setSelectedColorSlug] = useState<string | null>(null);
   const [configurationId, setConfigurationId] = useState<string | null>(null);
+  const [mediaPreviewConfigurationId, setMediaPreviewConfigurationId] = useState<
+    string | null
+  >(null);
   const shippingContext = pickProductShippingContext(product);
 
   const handleSelectedColorChange = useCallback((colorSlug: string | null) => {
@@ -26,6 +29,10 @@ export function ProductDetailDesktopExperience({
 
   const handleConfigurationIdChange = useCallback((nextId: string | null) => {
     setConfigurationId(nextId);
+  }, []);
+
+  const handleMediaPreviewConfigurationIdChange = useCallback((nextId: string | null) => {
+    setMediaPreviewConfigurationId(nextId);
   }, []);
 
   return (
@@ -38,6 +45,7 @@ export function ProductDetailDesktopExperience({
           fallbackGradient={product.gradient}
           selectedColorSlug={selectedColorSlug}
           configurationId={configurationId}
+          mediaPreviewConfigurationId={mediaPreviewConfigurationId}
         />
 
         <ProductTabs
@@ -59,6 +67,7 @@ export function ProductDetailDesktopExperience({
         category={category}
         onSelectedColorChange={handleSelectedColorChange}
         onConfigurationIdChange={handleConfigurationIdChange}
+        onMediaPreviewConfigurationIdChange={handleMediaPreviewConfigurationIdChange}
       />
     </div>
   );

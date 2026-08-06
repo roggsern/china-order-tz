@@ -26,6 +26,9 @@ interface ProductDetailPurchasePanelProps {
   category?: Category;
   onSelectedColorChange?: (colorSlug: string | null) => void;
   onConfigurationIdChange?: (configurationId: string | null) => void;
+  onMediaPreviewConfigurationIdChange?: (
+    mediaPreviewConfigurationId: string | null,
+  ) => void;
 }
 
 export function ProductDetailPurchasePanel({
@@ -33,11 +36,13 @@ export function ProductDetailPurchasePanel({
   category,
   onSelectedColorChange,
   onConfigurationIdChange,
+  onMediaPreviewConfigurationIdChange,
 }: ProductDetailPurchasePanelProps) {
   const [quantity, setQuantity] = useState(1);
   const [quantityMax, setQuantityMax] = useState(Math.min(Math.max(product.stock, 0), 99));
   const [configSelection, setConfigSelection] = useState<StorefrontConfigurationSelection>({
     configurationId: null,
+    mediaPreviewConfigurationId: null,
     label: "",
     sku: "",
     inStock: true,
@@ -53,8 +58,9 @@ export function ProductDetailPurchasePanel({
     (selection: StorefrontConfigurationSelection) => {
       setConfigSelection(selection);
       onConfigurationIdChange?.(selection.configurationId);
+      onMediaPreviewConfigurationIdChange?.(selection.mediaPreviewConfigurationId);
     },
-    [onConfigurationIdChange],
+    [onConfigurationIdChange, onMediaPreviewConfigurationIdChange],
   );
 
   const handleQuoteChange = useCallback((nextQuote: StorefrontPriceQuote | null) => {
@@ -123,6 +129,7 @@ export function ProductDetailPurchasePanel({
           productSlug={product.slug}
           basePrice={product.price}
           quantity={quantity}
+          variantGalleries={product.variantGalleries}
           onQuantityMaxChange={handleQuantityMaxChange}
           onSelectionChange={handleSelectionChange}
           onQuoteChange={handleQuoteChange}

@@ -28,6 +28,8 @@ interface ProductGalleryProps {
   selectedColorSlug?: string | null;
   /** Prefer variant-bound gallery when the customer has matched a configuration. */
   configurationId?: string | null;
+  /** Gallery-only preview from partial Color/visual selection. */
+  mediaPreviewConfigurationId?: string | null;
 }
 
 function renderGallerySlide(
@@ -67,6 +69,7 @@ export function ProductGallery({
   fallbackGradient,
   selectedColorSlug = null,
   configurationId = null,
+  mediaPreviewConfigurationId = null,
 }: ProductGalleryProps) {
   const galleryProduct = legacyImages?.length
     ? {
@@ -76,7 +79,12 @@ export function ProductGallery({
       }
     : product;
 
-  const media = getProductGalleryMedia(galleryProduct, selectedColorSlug, configurationId);
+  const media = getProductGalleryMedia(
+    galleryProduct,
+    selectedColorSlug,
+    configurationId,
+    mediaPreviewConfigurationId,
+  );
   const name = productName ?? product.name;
   const emoji = fallbackEmoji ?? product.emoji;
   const gradient = fallbackGradient ?? product.gradient;
@@ -90,7 +98,7 @@ export function ProductGallery({
 
   useEffect(() => {
     setActiveIndex(0);
-  }, [selectedColorSlug, configurationId, media.length]);
+  }, [selectedColorSlug, configurationId, mediaPreviewConfigurationId, media.length]);
 
   const activeSlide = media[activeIndex] ?? media[0];
   const activeIsImage = activeSlide?.kind === "image";
@@ -184,7 +192,7 @@ export function ProductGallery({
         >
           <AnimatePresence mode="wait">
             <motion.div
-              key={`${configurationId ?? selectedColorSlug ?? "all"}-${activeSlide.key}`}
+              key={`${configurationId ?? mediaPreviewConfigurationId ?? selectedColorSlug ?? "all"}-${activeSlide.key}`}
               initial={reduceMotion ? false : { opacity: 0, scale: 1.02 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={reduceMotion ? undefined : { opacity: 0, scale: 0.985 }}

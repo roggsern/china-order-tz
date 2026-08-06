@@ -62,6 +62,20 @@ describe("storefront variant gallery selection", () => {
     }
   });
 
+  it("uses media preview gallery when commercial configuration is still null", () => {
+    const images = resolveStorefrontGalleryImages(baseProduct, {
+      configurationId: null,
+      mediaPreviewConfigurationId: "variant-black",
+    });
+    assert.equal(images[0]?.url, "/storage/variant-black.jpg");
+
+    const slides = getProductGalleryMedia(baseProduct, null, null, "variant-black");
+    assert.equal(slides[0]?.kind, "image");
+    if (slides[0]?.kind === "image") {
+      assert.equal(slides[0].image.url, "/storage/variant-black.jpg");
+    }
+  });
+
   it("falls back to product gallery when variant has no dedicated media map", () => {
     const images = resolveStorefrontGalleryImages(baseProduct, {
       configurationId: "variant-missing",

@@ -22,6 +22,7 @@ interface ProductGalleryMobileProps {
   >;
   selectedColorSlug?: string | null;
   configurationId?: string | null;
+  mediaPreviewConfigurationId?: string | null;
 }
 
 function renderGallerySlide(
@@ -54,8 +55,14 @@ export function ProductGalleryMobile({
   product,
   selectedColorSlug = null,
   configurationId = null,
+  mediaPreviewConfigurationId = null,
 }: ProductGalleryMobileProps) {
-  const media = getProductGalleryMedia(product, selectedColorSlug, configurationId);
+  const media = getProductGalleryMedia(
+    product,
+    selectedColorSlug,
+    configurationId,
+    mediaPreviewConfigurationId,
+  );
   const reduceMotion = useReducedMotion();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -86,7 +93,7 @@ export function ProductGalleryMobile({
   useEffect(() => {
     setActiveIndex(0);
     scrollRef.current?.scrollTo({ left: 0, behavior: "auto" });
-  }, [selectedColorSlug, configurationId, media.length]);
+  }, [selectedColorSlug, configurationId, mediaPreviewConfigurationId, media.length]);
 
   if (media.length === 0) return null;
 
