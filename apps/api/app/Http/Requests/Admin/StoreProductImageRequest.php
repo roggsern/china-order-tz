@@ -6,6 +6,12 @@ use App\Http\Requests\Concerns\AuthorizesAdminPermission;
 use App\Support\Admin\AdminPermissions;
 use Illuminate\Foundation\Http\FormRequest;
 
+/**
+ * Legacy product image upload (POST /products/{id}/images).
+ *
+ * Not the live catalog product/variant media UI contract (10 MB via product_media).
+ * Kept at 2 MB intentionally — do not raise without migrating callers off this path.
+ */
 class StoreProductImageRequest extends FormRequest
 {
     use AuthorizesAdminPermission;

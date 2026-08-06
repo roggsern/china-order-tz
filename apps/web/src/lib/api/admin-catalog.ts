@@ -1,5 +1,6 @@
 import { enrichApiCategoryFromStatic } from "@/lib/catalog/category-presentation";
 import { legacyNumericIdFromCatalogProductId as apiIdToNumericId } from "@/lib/admin/product-id-map";
+import { resolveProductMediaUploadError } from "@/lib/admin/product-media-upload";
 import type {
   Category,
   Product,
@@ -738,6 +739,22 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
   }
 
   return payload;
+}
+
+async function parseProductMediaUploadJsonResponse<T extends {
+  message?: string;
+  errors?: Record<string, string[]>;
+}>(response: Response): Promise<T> {
+  const raw = await response.text();
+
+  try {
+    return (raw ? JSON.parse(raw) : {}) as T;
+  } catch {
+    throw new AdminCatalogApiError(
+      resolveProductMediaUploadError(response.status, {}, "Unable to upload image."),
+      response.status,
+    );
+  }
 }
 
 async function fetchAllPaginated<T, R>(
@@ -2745,17 +2762,25 @@ export async function uploadAdminProductMediaImage(
     formData.append("product_variant_id", options.productVariantId);
   }
 
-  const response = await fetch(
-    `/api/admin/products/${encodeURIComponent(productId)}/media`,
-    {
-      method: "POST",
-      headers: { Accept: "application/json" },
-      body: formData,
-      cache: "no-store",
-    },
-  );
+  let response: Response;
+  try {
+    response = await fetch(
+      `/api/admin/products/${encodeURIComponent(productId)}/media`,
+      {
+        method: "POST",
+        headers: { Accept: "application/json" },
+        body: formData,
+        cache: "no-store",
+      },
+    );
+  } catch {
+    throw new AdminCatalogApiError(
+      resolveProductMediaUploadError(0, {}, "Unable to upload image."),
+      0,
+    );
+  }
 
-  const payload = await parseJsonResponse<{
+  const payload = await parseProductMediaUploadJsonResponse<{
     success?: boolean;
     message?: string;
     data?: AdminApiProductMedia;
@@ -2763,11 +2788,8 @@ export async function uploadAdminProductMediaImage(
   }>(response);
 
   if (!response.ok || payload.success === false || !payload.data?.id) {
-    const firstError = payload.errors
-      ? Object.values(payload.errors).flat()[0]
-      : undefined;
     throw new AdminCatalogApiError(
-      firstError?.trim() || payload.message?.trim() || "Unable to upload image.",
+      resolveProductMediaUploadError(response.status, payload, "Unable to upload image."),
       response.status,
     );
   }
@@ -2814,17 +2836,25 @@ export async function applyAdminProductMediaToAttributeOption(
   if (options.altText) formData.append("alt_text", options.altText);
   if (options.title) formData.append("title", options.title);
 
-  const response = await fetch(
-    `/api/admin/products/${encodeURIComponent(productId)}/media/apply-to-attribute-option`,
-    {
-      method: "POST",
-      headers: { Accept: "application/json" },
-      body: formData,
-      cache: "no-store",
-    },
-  );
+  let response: Response;
+  try {
+    response = await fetch(
+      `/api/admin/products/${encodeURIComponent(productId)}/media/apply-to-attribute-option`,
+      {
+        method: "POST",
+        headers: { Accept: "application/json" },
+        body: formData,
+        cache: "no-store",
+      },
+    );
+  } catch {
+    throw new AdminCatalogApiError(
+      resolveProductMediaUploadError(0, {}, "Unable to apply image to attribute option."),
+      0,
+    );
+  }
 
-  const payload = await parseJsonResponse<{
+  const payload = await parseProductMediaUploadJsonResponse<{
     success?: boolean;
     message?: string;
     data?: AdminApiAttributeOptionMediaApplyResult;
@@ -2832,13 +2862,12 @@ export async function applyAdminProductMediaToAttributeOption(
   }>(response);
 
   if (!response.ok || payload.success === false || !payload.data) {
-    const firstError = payload.errors
-      ? Object.values(payload.errors).flat()[0]
-      : undefined;
     throw new AdminCatalogApiError(
-      firstError?.trim() ||
-        payload.message?.trim() ||
+      resolveProductMediaUploadError(
+        response.status,
+        payload,
         "Unable to apply image to attribute option.",
+      ),
       response.status,
     );
   }

@@ -19,7 +19,7 @@ import {
 } from "@/lib/admin/product-media-legacy";
 import {
   ADMIN_PRODUCT_MEDIA_ACCEPT,
-  filterAcceptedProductMediaFiles,
+  ADMIN_PRODUCT_MEDIA_UPLOAD_HINT,
   productMediaDropActiveClass,
   validateProductMediaUpload,
 } from "@/lib/admin/product-media-upload";
@@ -115,7 +115,7 @@ export function ProductMediaManager({ productId, productName }: ProductMediaMana
   };
 
   const handleUpload = async (fileList: FileList | null) => {
-    await uploadFiles(filterAcceptedProductMediaFiles(fileList));
+    await uploadFiles(Array.from(fileList ?? []));
   };
 
   const handleAddVideo = async () => {
@@ -192,14 +192,14 @@ export function ProductMediaManager({ productId, productName }: ProductMediaMana
           event.preventDefault();
           setIsDragging(false);
           if (busy) return;
-          void uploadFiles(filterAcceptedProductMediaFiles(event.dataTransfer.files));
+          void uploadFiles(Array.from(event.dataTransfer.files ?? []));
         }}
       >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold text-zinc-900">Upload images</h3>
             <p className="mt-1 text-xs text-zinc-500">
-              Drag and drop images here, or choose files. JPG, PNG, WEBP — max 5MB each.
+              Drag and drop images here, or choose files. {ADMIN_PRODUCT_MEDIA_UPLOAD_HINT}
             </p>
           </div>
           <label className="admin-btn-primary cursor-pointer">

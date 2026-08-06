@@ -4,6 +4,7 @@ namespace App\Http\Requests\Admin;
 
 use App\Http\Requests\Concerns\AuthorizesAdminPermission;
 use App\Support\Admin\AdminPermissions;
+use App\Support\ProductMedia\ProductMediaUploadContract;
 use App\Support\Security\SafePublicUrl;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -23,15 +24,7 @@ class ApplyAttributeOptionMediaRequest extends FormRequest
     {
         return [
             'catalog_attribute_option_id' => ['required', 'uuid', 'exists:catalog_attribute_options,id'],
-            'file' => [
-                'required_without:url',
-                'nullable',
-                'file',
-                'image',
-                'mimes:jpg,jpeg,png,webp',
-                'max:5120',
-                'dimensions:max_width=5000,max_height=5000',
-            ],
+            'file' => ProductMediaUploadContract::imageFileRules('required_without:url', 'nullable'),
             'url' => [
                 'required_without:file',
                 'nullable',
@@ -42,5 +35,13 @@ class ApplyAttributeOptionMediaRequest extends FormRequest
             'alt_text' => ['sometimes', 'nullable', 'string', 'max:255'],
             'title' => ['sometimes', 'nullable', 'string', 'max:255'],
         ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return ProductMediaUploadContract::fileMessages('file');
     }
 }

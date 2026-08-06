@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ADMIN_PRODUCT_MEDIA_ACCEPT,
-  filterAcceptedProductMediaFiles,
   validateProductMediaUpload,
 } from "@/lib/admin/product-media-upload";
 import {
@@ -194,8 +193,18 @@ export function VariantAttributeImageApply({
             className="admin-input mt-1"
             disabled={busy || disabled || !canUpdate}
             onChange={(event) => {
-              const next = filterAcceptedProductMediaFiles(event.target.files)[0] ?? null;
-              setFile(next);
+              const incoming = Array.from(event.target.files ?? []);
+              const validation = validateProductMediaUpload(incoming);
+              if (validation.error || validation.accepted.length === 0) {
+                setFile(null);
+                if (validation.error) {
+                  onError(validation.error);
+                }
+                event.target.value = "";
+                return;
+              }
+              setFile(validation.accepted[0] ?? null);
+              event.target.value = "";
             }}
           />
         </div>

@@ -165,6 +165,17 @@ export async function proxyAdminMultipartRequest(
   try {
     payload = raw ? JSON.parse(raw) : null;
   } catch {
+    if (upstream.status === 413) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Image exceeds the server upload size limit. Use a JPG, PNG, or WebP under 10 MB.",
+        },
+        { status: 413 },
+      );
+    }
+
     return NextResponse.json(
       {
         success: false,
@@ -174,7 +185,7 @@ export async function proxyAdminMultipartRequest(
     );
   }
 
-  return NextResponse.json(payload, { status: upstream.status });
+  return NextResponse.json(payload ?? { success: false }, { status: upstream.status });
 }
 
 export function forwardAllowedSearchParams(

@@ -31,6 +31,9 @@ COPY --from=mysql-client /lib64/ /lib64/
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+# Upload limits shared by development + production (api / queue / scheduler).
+COPY docker/php/uploads.prod.ini $PHP_INI_DIR/conf.d/zz-uploads.ini
+
 WORKDIR /var/www/html
 
 FROM base AS development

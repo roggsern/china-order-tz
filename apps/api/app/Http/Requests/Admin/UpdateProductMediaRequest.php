@@ -6,6 +6,7 @@ use App\Enums\ProductMediaType;
 use App\Http\Requests\Admin\Concerns\ValidatesProductVariantMediaBinding;
 use App\Http\Requests\Concerns\AuthorizesAdminPermission;
 use App\Support\Admin\AdminPermissions;
+use App\Support\ProductMedia\ProductMediaUploadContract;
 use App\Support\Security\SafePublicUrl;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -36,8 +37,16 @@ class UpdateProductMediaRequest extends FormRequest
             'sort_order' => ['sometimes', 'integer', 'min:0', 'max:999999'],
             'is_primary' => ['sometimes', 'boolean'],
             'is_active' => ['sometimes', 'boolean'],
-            'file' => ['sometimes', 'nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120', 'dimensions:max_width=5000,max_height=5000'],
+            'file' => ProductMediaUploadContract::imageFileRules('sometimes', 'nullable'),
         ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return ProductMediaUploadContract::fileMessages('file');
     }
 
     public function withValidator(Validator $validator): void

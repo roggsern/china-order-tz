@@ -6,6 +6,7 @@ use App\Enums\ProductMediaType;
 use App\Http\Requests\Admin\Concerns\ValidatesProductVariantMediaBinding;
 use App\Http\Requests\Concerns\AuthorizesAdminPermission;
 use App\Support\Admin\AdminPermissions;
+use App\Support\ProductMedia\ProductMediaUploadContract;
 use App\Support\Security\SafePublicUrl;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -43,7 +44,7 @@ class StoreProductMediaRequest extends FormRequest
             $rules['url'] = ['required', 'string', 'max:2048', 'url:http,https'];
             $rules['file'] = ['prohibited'];
         } else {
-            $rules['file'] = ['required_without:url', 'nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120', 'dimensions:max_width=5000,max_height=5000'];
+            $rules['file'] = ProductMediaUploadContract::imageFileRules('required_without:url', 'nullable');
             $rules['url'] = [
                 'required_without:file',
                 'nullable',
@@ -54,6 +55,14 @@ class StoreProductMediaRequest extends FormRequest
         }
 
         return $rules;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return ProductMediaUploadContract::fileMessages('file');
     }
 
     public function withValidator(Validator $validator): void

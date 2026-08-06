@@ -289,6 +289,25 @@ class ProductionComposeDefinitionTest extends TestCase
         $this->assertStringContainsString('production_preflight_static', (string) file_get_contents($path));
     }
 
+    public function test_php_image_ships_upload_limits_ini(): void
+    {
+        $iniPath = self::repoRoot().'/docker/php/uploads.prod.ini';
+        $dockerfilePath = self::repoRoot().'/docker/php/Dockerfile';
+        $nginxConf = self::repoRoot().'/docker/nginx/default.conf';
+
+        $this->assertFileExists($iniPath);
+        $ini = (string) file_get_contents($iniPath);
+        $this->assertStringContainsString('upload_max_filesize = 10M', $ini);
+        $this->assertStringContainsString('post_max_size = 12M', $ini);
+        $this->assertStringContainsString('memory_limit = 256M', $ini);
+
+        $dockerfile = (string) file_get_contents($dockerfilePath);
+        $this->assertStringContainsString('docker/php/uploads.prod.ini', $dockerfile);
+        $this->assertStringContainsString('zz-uploads.ini', $dockerfile);
+
+        $this->assertStringContainsString('client_max_body_size 20M', (string) file_get_contents($nginxConf));
+    }
+
     #[DataProvider('requiredProductionServicesProvider')]
     public function test_prod_compose_declares_required_service(string $service): void
     {
