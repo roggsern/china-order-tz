@@ -99,6 +99,7 @@ class PaymentOrchestrator
                 amount: $amount,
                 currency: $currency,
                 provider: $providerKey,
+                paymentTransactionId: $transaction->id,
             ));
 
             $transaction->fill([
@@ -212,6 +213,7 @@ class PaymentOrchestrator
                 amount: $context['amount'],
                 currency: $context['currency'],
                 provider: PaymentProvider::Nmb->value,
+                paymentTransactionId: $context['transaction_id'],
             ));
 
             if (! $result->ok || ! filled($result->providerReference)) {

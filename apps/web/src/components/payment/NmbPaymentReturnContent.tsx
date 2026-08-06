@@ -8,20 +8,21 @@ import {
   PaymentOrchestratorApiError,
   refreshPaymentTransaction,
   resolvePaymentReturnTransaction,
-  type PaymentTransactionPayload,
 } from "@/lib/api/customer-payment-orchestrator";
 import { buildLoginHref } from "@/lib/auth/return-url";
 import {
   clearNmbCheckoutContext,
-  consumeNmbPendingPaymentId,
+  peekNmbPendingPaymentId,
   readNmbCheckoutContext,
 } from "@/lib/nmb/checkout-context";
 import {
+  buildPaymentReturnPath,
   buildSuccessHref,
   getReturnPhaseCopy,
   looksLikeMerchantReference,
   resolveIndicatorGate,
   resolveInitialReturnPhase,
+  resolvePaymentReturnRecovery,
   resolvePhaseAfterRefreshError,
   resolvePhaseAfterTransaction,
   shouldAttemptReturnResolution,
@@ -38,22 +39,27 @@ export function NmbPaymentReturnContent() {
   const reconciliationStartedRef = useRef(false);
   const resolutionStartedRef = useRef(false);
 
-  const resultIndicator = searchParams.get("resultIndicator");
-  const orderId = searchParams.get("orderId") ?? readNmbCheckoutContext()?.orderId ?? null;
-  const localOrderId =
-    searchParams.get("localOrderId") ?? readNmbCheckoutContext()?.localOrderId ?? null;
-  const merchantReferenceParam = searchParams.get("merchantReference");
-  const [resolvedTransactionId, setResolvedTransactionId] = useState<string | null>(() => {
-    return (
-      searchParams.get("paymentTransactionId") ??
-      readNmbCheckoutContext()?.paymentTransactionId ??
-      readNmbCheckoutContext()?.paymentId ??
-      consumeNmbPendingPaymentId() ??
-      null
-    );
-  });
-  const paymentTransactionId = resolvedTransactionId;
-  const successIndicator = readNmbCheckoutContext()?.successIndicator ?? null;
+  const recovery = useMemo(
+    () =>
+      resolvePaymentReturnRecovery({
+        searchParams,
+        context: readNmbCheckoutContext(),
+        pendingPaymentId: peekNmbPendingPaymentId(),
+      }),
+    [searchParams],
+  );
+
+  const resultIndicator = recovery.resultIndicator;
+  const orderId = recovery.orderId;
+  const localOrderId = recovery.localOrderId;
+  const merchantReferenceParam = recovery.merchantReference;
+  const successIndicator = recovery.successIndicator;
+
+  const [resolvedTransactionId, setResolvedTransactionId] = useState<string | null>(
+    () => recovery.paymentTransactionId,
+  );
+  const paymentTransactionId = resolvedTransactionId ?? recovery.paymentTransactionId;
+
   const indicatorGate = useMemo(
     () => resolveIndicatorGate(resultIndicator, successIndicator),
     [resultIndicator, successIndicator],
@@ -75,6 +81,28 @@ export function NmbPaymentReturnContent() {
 
   const [phase, setPhase] = useState<ReturnPhase>(initialReturnPhase);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+
+  const loginReturnHref = useMemo(
+    () =>
+      buildLoginHref(
+        buildPaymentReturnPath({
+          resultIndicator,
+          paymentTransactionId,
+          orderId,
+          localOrderId,
+          merchantReference: merchantReferenceParam,
+          successIndicator,
+        }),
+      ),
+    [
+      localOrderId,
+      merchantReferenceParam,
+      orderId,
+      paymentTransactionId,
+      resultIndicator,
+      successIndicator,
+    ],
+  );
 
   const fallbackHref = useMemo(() => {
     if (orderId) {
@@ -167,6 +195,12 @@ export function NmbPaymentReturnContent() {
         merchantReference: merchantReferenceParam,
       })
     ) {
+      if (resultIndicator && !orderId && !merchantReferenceParam) {
+        setRefreshError(
+          "We could not recover your payment reference after returning from NMB. Please open the order from My Orders and use Pay Now / payment status.",
+        );
+        setPhase("pending");
+      }
       return;
     }
 
@@ -297,9 +331,7 @@ export function NmbPaymentReturnContent() {
           <h1 className="text-xl font-semibold text-zinc-900">{copy.title}</h1>
           <p className="mt-3 text-sm leading-6 text-zinc-600">{copy.body}</p>
           <Link
-            href={buildLoginHref(
-              `/payment/return${searchParams.toString() ? `?${searchParams.toString()}` : ""}`,
-            )}
+            href={loginReturnHref}
             className="mt-6 inline-flex rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white"
           >
             Sign in
@@ -309,6 +341,11 @@ export function NmbPaymentReturnContent() {
         <>
           <h1 className="text-xl font-semibold text-zinc-900">{copy.title}</h1>
           <p className="mt-3 text-sm leading-6 text-zinc-600">{copy.body}</p>
+          {refreshError ? (
+            <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              {refreshError}
+            </p>
+          ) : null}
           <Link
             href={fallbackHref}
             className="mt-6 inline-flex rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white"

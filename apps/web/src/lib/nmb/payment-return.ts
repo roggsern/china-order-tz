@@ -1,4 +1,5 @@
 import type { PaymentTransactionPayload } from "@/lib/api/customer-payment-orchestrator";
+import type { NmbCheckoutContext } from "@/lib/nmb/types";
 
 export type ReturnPhase =
   | "pending"
@@ -9,6 +10,15 @@ export type ReturnPhase =
   | "failed";
 
 export type IndicatorGate = "ready" | "failed" | "missing";
+
+export type PaymentReturnRecovery = {
+  paymentTransactionId: string | null;
+  orderId: string | null;
+  localOrderId: string | null;
+  merchantReference: string | null;
+  successIndicator: string | null;
+  resultIndicator: string | null;
+};
 
 const WAITING_STATUSES = new Set(["pending", "processing"]);
 
@@ -24,6 +34,7 @@ export function resolveIndicatorGate(
     return resultIndicator === successIndicator ? "ready" : "failed";
   }
 
+  // Allow reconcile when successIndicator was lost from storage but MPGS returned a result.
   return "ready";
 }
 
@@ -38,21 +49,113 @@ export function looksLikeOrderUuid(value: string | null | undefined): boolean {
   );
 }
 
+function firstNonEmpty(...values: Array<string | null | undefined>): string | null {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Merge URL query params with durable/session checkout context.
+ * Prefer URL values, then stored context. paymentTransactionId is primary.
+ */
+export function resolvePaymentReturnRecovery(input: {
+  searchParams: URLSearchParams | { get(name: string): string | null };
+  context: NmbCheckoutContext | null | undefined;
+  pendingPaymentId?: string | null;
+}): PaymentReturnRecovery {
+  const sp = input.searchParams;
+  const context = input.context;
+
+  const paymentTransactionId = firstNonEmpty(
+    sp.get("paymentTransactionId"),
+    context?.paymentTransactionId,
+    context?.paymentId,
+    input.pendingPaymentId,
+  );
+
+  const orderId = firstNonEmpty(sp.get("orderId"), context?.orderId);
+  const localOrderId = firstNonEmpty(sp.get("localOrderId"), context?.localOrderId);
+  const merchantReference = firstNonEmpty(
+    sp.get("merchantReference"),
+    context?.merchantReference,
+    looksLikeMerchantReference(orderId) ? orderId : null,
+  );
+  const successIndicator = firstNonEmpty(sp.get("successIndicator"), context?.successIndicator);
+  const resultIndicator = firstNonEmpty(sp.get("resultIndicator"), context?.resultIndicator);
+
+  return {
+    paymentTransactionId,
+    orderId: looksLikeMerchantReference(orderId) ? null : orderId,
+    localOrderId,
+    merchantReference,
+    successIndicator,
+    resultIndicator,
+  };
+}
+
+/** Build /payment/return?... with recovery keys for redirects and post-login returnUrl. */
+export function buildPaymentReturnPath(input: {
+  resultIndicator?: string | null;
+  paymentTransactionId?: string | null;
+  orderId?: string | null;
+  localOrderId?: string | null;
+  merchantReference?: string | null;
+  successIndicator?: string | null;
+}): string {
+  const params = new URLSearchParams();
+
+  const paymentTransactionId = firstNonEmpty(input.paymentTransactionId);
+  const orderId = firstNonEmpty(input.orderId);
+  const localOrderId = firstNonEmpty(input.localOrderId);
+  const merchantReference = firstNonEmpty(input.merchantReference);
+  const successIndicator = firstNonEmpty(input.successIndicator);
+  const resultIndicator = firstNonEmpty(input.resultIndicator);
+
+  if (resultIndicator) {
+    params.set("resultIndicator", resultIndicator);
+  }
+  if (paymentTransactionId) {
+    params.set("paymentTransactionId", paymentTransactionId);
+  }
+  if (orderId) {
+    params.set("orderId", orderId);
+  }
+  if (localOrderId) {
+    params.set("localOrderId", localOrderId);
+  }
+  if (merchantReference) {
+    params.set("merchantReference", merchantReference);
+  }
+  if (successIndicator) {
+    params.set("successIndicator", successIndicator);
+  }
+
+  const query = params.toString();
+  return query ? `/payment/return?${query}` : "/payment/return";
+}
+
 export function shouldAttemptReturnResolution(input: {
   paymentTransactionId: string | null;
   resultIndicator: string | null;
   orderId: string | null;
   merchantReference: string | null;
 }): boolean {
+  // paymentTransactionId is primary — refresh path, no return-context needed.
   if (input.paymentTransactionId) {
     return false;
   }
 
-  if (input.resultIndicator) {
-    return true;
-  }
-
-  return looksLikeMerchantReference(input.orderId) || looksLikeOrderUuid(input.orderId) || Boolean(input.merchantReference);
+  // Backend return-context requires order_id or merchant_reference.
+  return (
+    looksLikeMerchantReference(input.orderId) ||
+    looksLikeOrderUuid(input.orderId) ||
+    Boolean(input.merchantReference)
+  );
 }
 
 export function resolveInitialReturnPhase(input: {

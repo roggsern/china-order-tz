@@ -25,20 +25,23 @@ function fakeTransaction(
   };
 }
 
+function makeMemoryStorage(): Storage {
+  const store = new Map<string, string>();
+  return {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      store.set(key, value);
+    },
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+  } as Storage;
+}
+
 test("applyFreshNmbCheckoutSession replaces stale gateway session context", () => {
   globalThis.window = {
-    sessionStorage: (() => {
-      const store = new Map<string, string>();
-      return {
-        getItem: (key: string) => store.get(key) ?? null,
-        setItem: (key: string, value: string) => {
-          store.set(key, value);
-        },
-        removeItem: (key: string) => {
-          store.delete(key);
-        },
-      };
-    })(),
+    sessionStorage: makeMemoryStorage(),
+    localStorage: makeMemoryStorage(),
   } as Window & typeof globalThis;
 
   saveNmbCheckoutContext({
@@ -57,6 +60,7 @@ test("applyFreshNmbCheckoutSession replaces stale gateway session context", () =
   const context = readNmbCheckoutContext();
   assert.equal(context?.gatewaySessionId, "SESSION-FRESH");
   assert.equal(context?.successIndicator, "indicator-fresh");
+  assert.equal(context?.merchantReference, "COTZ-PAY-1");
   assert.notEqual(context?.gatewaySessionId, "SESSION-STALE");
 
   clearNmbCheckoutContext();
@@ -64,11 +68,8 @@ test("applyFreshNmbCheckoutSession replaces stale gateway session context", () =
 
 test("applyFreshNmbCheckoutSession rejects missing provider_reference", () => {
   globalThis.window = {
-    sessionStorage: {
-      getItem: () => null,
-      setItem: () => undefined,
-      removeItem: () => undefined,
-    },
+    sessionStorage: makeMemoryStorage(),
+    localStorage: makeMemoryStorage(),
   } as Window & typeof globalThis;
 
   assert.throws(

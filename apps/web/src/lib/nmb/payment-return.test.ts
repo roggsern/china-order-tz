@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  buildPaymentReturnPath,
   getReturnPhaseCopy,
   resolveInitialReturnPhase,
+  resolvePaymentReturnRecovery,
   resolvePhaseAfterTransaction,
   resolvePhaseAfterRefreshError,
   shouldAttemptReturnResolution,
+  shouldReconcileReturn,
 } from "./payment-return";
 
 test("resolveInitialReturnPhase uses confirming when resultIndicator exists without transaction id", () => {
@@ -70,7 +73,7 @@ test("refresh errors keep confirming rather than pending", () => {
   assert.equal(resolvePhaseAfterRefreshError("confirming"), "confirming");
 });
 
-test("shouldAttemptReturnResolution when browser lost transaction id but kept resultIndicator", () => {
+test("shouldAttemptReturnResolution requires order or merchant reference when transaction id missing", () => {
   assert.equal(
     shouldAttemptReturnResolution({
       paymentTransactionId: null,
@@ -78,7 +81,89 @@ test("shouldAttemptReturnResolution when browser lost transaction id but kept re
       orderId: null,
       merchantReference: null,
     }),
+    false,
+  );
+
+  assert.equal(
+    shouldAttemptReturnResolution({
+      paymentTransactionId: null,
+      resultIndicator: "abc123",
+      orderId: null,
+      merchantReference: "COTZ-PAY-20260806-000001",
+    }),
     true,
+  );
+});
+
+test("shouldAttemptReturnResolution skips API resolve when paymentTransactionId is present", () => {
+  assert.equal(
+    shouldAttemptReturnResolution({
+      paymentTransactionId: "019fc6eb-fa77-72d3-a023-27afdc3da259",
+      resultIndicator: "abc123",
+      orderId: null,
+      merchantReference: null,
+    }),
+    false,
+  );
+});
+
+test("shouldReconcileReturn prefers paymentTransactionId as primary recovery key", () => {
+  assert.equal(
+    shouldReconcileReturn({
+      indicatorGate: "ready",
+      paymentTransactionId: "019fc6eb-fa77-72d3-a023-27afdc3da259",
+    }),
+    true,
+  );
+});
+
+test("resolvePaymentReturnRecovery recovers transaction from stored context when URL only has resultIndicator", () => {
+  const recovery = resolvePaymentReturnRecovery({
+    searchParams: new URLSearchParams("resultIndicator=ri-1"),
+    context: {
+      paymentId: "txn-1",
+      paymentTransactionId: "txn-1",
+      orderId: "order-1",
+      merchantReference: "COTZ-PAY-20260806-000001",
+      successIndicator: "si-1",
+    },
+  });
+
+  assert.equal(recovery.paymentTransactionId, "txn-1");
+  assert.equal(recovery.orderId, "order-1");
+  assert.equal(recovery.merchantReference, "COTZ-PAY-20260806-000001");
+  assert.equal(recovery.successIndicator, "si-1");
+  assert.equal(recovery.resultIndicator, "ri-1");
+});
+
+test("resolvePaymentReturnRecovery prefers URL paymentTransactionId over storage", () => {
+  const recovery = resolvePaymentReturnRecovery({
+    searchParams: new URLSearchParams(
+      "resultIndicator=ri-1&paymentTransactionId=txn-url&orderId=order-url&merchantReference=COTZ-PAY-20260806-000002",
+    ),
+    context: {
+      paymentId: "txn-stored",
+      paymentTransactionId: "txn-stored",
+      orderId: "order-stored",
+      merchantReference: "COTZ-PAY-20260806-000001",
+    },
+  });
+
+  assert.equal(recovery.paymentTransactionId, "txn-url");
+  assert.equal(recovery.orderId, "order-url");
+  assert.equal(recovery.merchantReference, "COTZ-PAY-20260806-000002");
+});
+
+test("buildPaymentReturnPath always includes recovery keys", () => {
+  assert.equal(
+    buildPaymentReturnPath({
+      resultIndicator: "ri-1",
+      paymentTransactionId: "txn-1",
+      orderId: "order-1",
+      merchantReference: "COTZ-PAY-20260806-000001",
+      successIndicator: "si-1",
+    }),
+    "/payment/return?resultIndicator=ri-1&paymentTransactionId=txn-1&orderId=order-1&merchantReference=COTZ-PAY-20260806-000001&successIndicator=si-1",
   );
 });
 

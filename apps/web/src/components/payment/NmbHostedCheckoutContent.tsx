@@ -19,6 +19,7 @@ import {
   initiateNmbPaymentSession,
   NmbPaymentSessionError,
 } from "@/lib/nmb/payment-session-api";
+import { buildPaymentReturnPath } from "@/lib/nmb/payment-return";
 
 type NmbHostedCheckoutContentProps = {
   paymentId: string;
@@ -34,23 +35,24 @@ export function NmbHostedCheckoutContent({ paymentId }: NmbHostedCheckoutContent
 
   const redirectToReturn = useCallback(
     (resultIndicator?: string) => {
-      const returnUrl = new URL(getNmbReturnUrl());
-
-      if (resultIndicator) {
-        returnUrl.searchParams.set("resultIndicator", resultIndicator);
-      }
-
       const context = readNmbCheckoutContext();
-      if (context?.orderId) {
-        returnUrl.searchParams.set("orderId", context.orderId);
-      }
-      if (context?.localOrderId) {
-        returnUrl.searchParams.set("localOrderId", context.localOrderId);
-      }
+      const path = buildPaymentReturnPath({
+        resultIndicator,
+        paymentTransactionId: context?.paymentTransactionId ?? context?.paymentId ?? paymentId,
+        orderId: context?.orderId,
+        localOrderId: context?.localOrderId,
+        merchantReference: context?.merchantReference,
+        successIndicator: context?.successIndicator,
+      });
 
-      router.replace(`${returnUrl.pathname}${returnUrl.search}`);
+      try {
+        const configured = new URL(getNmbReturnUrl());
+        router.replace(`${path}${configured.hash || ""}`);
+      } catch {
+        router.replace(path);
+      }
     },
-    [router],
+    [paymentId, router],
   );
 
   useEffect(() => {

@@ -23,6 +23,7 @@ export type NmbCheckoutContext = {
   paymentTransactionId?: string | null;
   orderId?: string | null;
   localOrderId?: string | null;
+  merchantReference?: string | null;
   gatewaySessionId?: string | null;
   successIndicator?: string | null;
   sessionVersion?: string | null;

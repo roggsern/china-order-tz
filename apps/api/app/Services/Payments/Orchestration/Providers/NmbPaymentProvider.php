@@ -62,11 +62,22 @@ class NmbPaymentProvider implements PaymentProviderInterface
             );
         }
 
+        $returnUrl = rtrim((string) NmbConfig::get('return_url'), '/');
+        $returnQuery = http_build_query(array_filter([
+            'paymentTransactionId' => $request->paymentTransactionId,
+            'merchantReference' => $request->merchantReference,
+            'orderId' => $request->order->id,
+        ], static fn ($value): bool => filled($value)));
+
+        if ($returnQuery !== '') {
+            $returnUrl .= (str_contains($returnUrl, '?') ? '&' : '?').$returnQuery;
+        }
+
         $payload = [
             'apiOperation' => 'INITIATE_CHECKOUT',
             'interaction' => [
                 'operation' => 'PURCHASE',
-                'returnUrl' => (string) NmbConfig::get('return_url'),
+                'returnUrl' => $returnUrl,
                 'merchant' => [
                     'name' => (string) NmbConfig::get('merchant_name'),
                     'url' => (string) NmbConfig::get('merchant_url'),

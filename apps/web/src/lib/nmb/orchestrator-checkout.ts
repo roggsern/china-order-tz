@@ -29,6 +29,7 @@ export function prepareNmbHostedCheckoutLaunch(
     gatewaySessionId: transaction.provider_reference ?? null,
     successIndicator: transaction.success_indicator ?? null,
     orderId: transaction.order_id,
+    merchantReference: transaction.merchant_reference ?? null,
     localOrderId: extras?.localOrderId ?? null,
   });
   setNmbPendingPaymentId(transaction.id);

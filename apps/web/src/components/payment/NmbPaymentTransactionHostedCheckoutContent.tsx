@@ -21,6 +21,7 @@ import {
   launchMpgsHostedCheckout,
 } from "@/lib/nmb/hosted-checkout";
 import { prepareNmbHostedCheckoutLaunch } from "@/lib/nmb/orchestrator-checkout";
+import { buildPaymentReturnPath } from "@/lib/nmb/payment-return";
 
 type NmbPaymentTransactionHostedCheckoutContentProps = {
   paymentTransactionId: string;
@@ -43,38 +44,41 @@ export function NmbPaymentTransactionHostedCheckoutContent({
 
   const redirectToReturn = useCallback(
     (resultIndicator?: string) => {
-      const returnUrl = new URL(getNmbReturnUrl());
-
-      if (resultIndicator) {
-        returnUrl.searchParams.set("resultIndicator", resultIndicator);
-      }
-
       const context = readNmbCheckoutContext();
-      if (context?.orderId) {
-        returnUrl.searchParams.set("orderId", context.orderId);
-      }
-      if (context?.localOrderId) {
-        returnUrl.searchParams.set("localOrderId", context.localOrderId);
-      }
-      if (context?.paymentTransactionId ?? context?.paymentId) {
-        returnUrl.searchParams.set(
-          "paymentTransactionId",
-          context.paymentTransactionId ?? context.paymentId,
-        );
-      }
+      const paymentTxnId =
+        context?.paymentTransactionId ?? context?.paymentId ?? paymentTransactionId;
 
-      router.replace(`${returnUrl.pathname}${returnUrl.search}`);
+      const path = buildPaymentReturnPath({
+        resultIndicator,
+        paymentTransactionId: paymentTxnId,
+        orderId: context?.orderId,
+        localOrderId: context?.localOrderId,
+        merchantReference: context?.merchantReference,
+        successIndicator: context?.successIndicator ?? successIndicatorProp,
+      });
+
+      // Keep absolute origin from configured return URL when available.
+      try {
+        const configured = new URL(getNmbReturnUrl());
+        router.replace(`${path}${configured.hash || ""}`);
+      } catch {
+        router.replace(path);
+      }
     },
-    [router],
+    [paymentTransactionId, router, successIndicatorProp],
   );
 
   const launchWithSession = useCallback(
     async (sessionId: string, successIndicator: string | null) => {
-      patchNmbCheckoutContext({
+      const existing = readNmbCheckoutContext();
+      saveNmbCheckoutContext({
         paymentId: paymentTransactionId,
         paymentTransactionId,
         gatewaySessionId: sessionId,
         successIndicator,
+        orderId: existing?.orderId ?? null,
+        localOrderId: existing?.localOrderId ?? null,
+        merchantReference: existing?.merchantReference ?? null,
       });
 
       setPhase("redirecting");
@@ -85,6 +89,9 @@ export function NmbPaymentTransactionHostedCheckoutContent({
           onComplete: (resultIndicator) => {
             patchNmbCheckoutContext({
               resultIndicator,
+              paymentTransactionId,
+              paymentId: paymentTransactionId,
+              successIndicator,
             });
             redirectToReturn(resultIndicator);
           },
@@ -143,12 +150,16 @@ export function NmbPaymentTransactionHostedCheckoutContent({
 
         prepareNmbHostedCheckoutLaunch(transaction);
       } else {
+        const existing = readNmbCheckoutContext();
         saveNmbCheckoutContext({
-          ...(readNmbCheckoutContext() ?? {}),
+          ...(existing ?? { paymentId: paymentTransactionId }),
           paymentId: paymentTransactionId,
           paymentTransactionId,
           gatewaySessionId: sessionId,
           successIndicator,
+          orderId: existing?.orderId ?? null,
+          merchantReference: existing?.merchantReference ?? null,
+          localOrderId: existing?.localOrderId ?? null,
         });
       }
 
@@ -248,7 +259,7 @@ export function NmbPaymentTransactionHostedCheckoutContent({
       </h1>
       <p className="mt-3 text-sm leading-6 text-zinc-600">
         {phase === "redirecting"
-          ? "You will be redirected to the NMB hosted payment page shortly."
+          ? "You will be redirected to the NMB Hosted payment page shortly."
           : "We are loading your NMB payment session. Do not close this window."}
       </p>
     </div>

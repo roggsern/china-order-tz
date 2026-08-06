@@ -1,29 +1,17 @@
 import type { NmbCheckoutContext } from "@/lib/nmb/types";
 
-const STORAGE_KEY = "china-order-tz-nmb-checkout";
+const SESSION_STORAGE_KEY = "china-order-tz-nmb-checkout";
+const DURABLE_STORAGE_KEY = "china-order-tz-nmb-checkout-durable";
+const PENDING_PAYMENT_KEY = "china-order-tz-nmb-pending-payment-id";
+const DURABLE_PENDING_PAYMENT_KEY = "china-order-tz-nmb-pending-payment-id-durable";
 
-export function saveNmbCheckoutContext(context: NmbCheckoutContext): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  const existing = readNmbCheckoutContext();
-  window.sessionStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify({
-      ...existing,
-      ...context,
-    }),
-  );
+function canUseStorage(): boolean {
+  return typeof window !== "undefined";
 }
 
-export function readNmbCheckoutContext(): NmbCheckoutContext | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
+function readJson(storage: Storage, key: string): NmbCheckoutContext | null {
   try {
-    const raw = window.sessionStorage.getItem(STORAGE_KEY);
+    const raw = storage.getItem(key);
     if (!raw) {
       return null;
     }
@@ -34,46 +22,112 @@ export function readNmbCheckoutContext(): NmbCheckoutContext | null {
   }
 }
 
-export function patchNmbCheckoutContext(patch: Partial<NmbCheckoutContext>): NmbCheckoutContext | null {
-  const existing = readNmbCheckoutContext();
+function writeJson(storage: Storage, key: string, value: NmbCheckoutContext): void {
+  storage.setItem(key, JSON.stringify(value));
+}
 
-  if (!existing) {
+function mergeContext(
+  existing: NmbCheckoutContext | null,
+  patch: Partial<NmbCheckoutContext> & Pick<NmbCheckoutContext, "paymentId">,
+): NmbCheckoutContext {
+  return {
+    ...existing,
+    ...patch,
+    paymentId: patch.paymentId || existing?.paymentId || "",
+  };
+}
+
+export function saveNmbCheckoutContext(context: NmbCheckoutContext): void {
+  if (!canUseStorage()) {
+    return;
+  }
+
+  const next = mergeContext(readNmbCheckoutContext(), context);
+  writeJson(window.sessionStorage, SESSION_STORAGE_KEY, next);
+  writeJson(window.localStorage, DURABLE_STORAGE_KEY, next);
+
+  const paymentTransactionId = next.paymentTransactionId ?? next.paymentId;
+  if (paymentTransactionId) {
+    setNmbPendingPaymentId(paymentTransactionId);
+  }
+}
+
+export function readNmbCheckoutContext(): NmbCheckoutContext | null {
+  if (!canUseStorage()) {
     return null;
   }
 
-  const next = { ...existing, ...patch };
+  return (
+    readJson(window.sessionStorage, SESSION_STORAGE_KEY) ??
+    readJson(window.localStorage, DURABLE_STORAGE_KEY)
+  );
+}
+
+export function patchNmbCheckoutContext(patch: Partial<NmbCheckoutContext>): NmbCheckoutContext | null {
+  const existing = readNmbCheckoutContext();
+  if (!existing && !patch.paymentId && !patch.paymentTransactionId) {
+    return null;
+  }
+
+  const paymentId =
+    patch.paymentId ??
+    patch.paymentTransactionId ??
+    existing?.paymentId ??
+    existing?.paymentTransactionId;
+
+  if (!paymentId) {
+    return null;
+  }
+
+  const next = mergeContext(existing, { ...patch, paymentId });
   saveNmbCheckoutContext(next);
   return next;
 }
 
 export function clearNmbCheckoutContext(): void {
-  if (typeof window === "undefined") {
+  if (!canUseStorage()) {
     return;
   }
 
-  window.sessionStorage.removeItem(STORAGE_KEY);
+  window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
+  window.localStorage.removeItem(DURABLE_STORAGE_KEY);
+  window.sessionStorage.removeItem(PENDING_PAYMENT_KEY);
+  window.localStorage.removeItem(DURABLE_PENDING_PAYMENT_KEY);
 }
-
-const PENDING_PAYMENT_KEY = "china-order-tz-nmb-pending-payment-id";
 
 export function setNmbPendingPaymentId(paymentId: string): void {
-  if (typeof window === "undefined") {
+  if (!canUseStorage() || !paymentId.trim()) {
     return;
   }
 
-  window.sessionStorage.setItem(PENDING_PAYMENT_KEY, paymentId);
+  const value = paymentId.trim();
+  window.sessionStorage.setItem(PENDING_PAYMENT_KEY, value);
+  window.localStorage.setItem(DURABLE_PENDING_PAYMENT_KEY, value);
 }
 
-export function consumeNmbPendingPaymentId(): string | null {
-  if (typeof window === "undefined") {
+/** Non-destructive read used during return recovery. */
+export function peekNmbPendingPaymentId(): string | null {
+  if (!canUseStorage()) {
     return null;
   }
 
-  const paymentId = window.sessionStorage.getItem(PENDING_PAYMENT_KEY)?.trim() || null;
+  return (
+    window.sessionStorage.getItem(PENDING_PAYMENT_KEY)?.trim() ||
+    window.localStorage.getItem(DURABLE_PENDING_PAYMENT_KEY)?.trim() ||
+    null
+  );
+}
 
-  if (paymentId) {
-    window.sessionStorage.removeItem(PENDING_PAYMENT_KEY);
+/** @deprecated Prefer peekNmbPendingPaymentId + clearNmbCheckoutContext after success. */
+export function consumeNmbPendingPaymentId(): string | null {
+  const paymentId = peekNmbPendingPaymentId();
+
+  if (!canUseStorage() || !paymentId) {
+    return paymentId;
   }
+
+  window.sessionStorage.removeItem(PENDING_PAYMENT_KEY);
+  window.localStorage.removeItem(DURABLE_PENDING_PAYMENT_KEY);
 
   return paymentId;
 }

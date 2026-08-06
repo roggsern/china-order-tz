@@ -36,6 +36,7 @@ export function applyFreshNmbCheckoutSession(
     gatewaySessionId: sessionId,
     successIndicator,
     orderId: transaction.order_id,
+    merchantReference: transaction.merchant_reference ?? null,
   });
   patchNmbCheckoutContext({
     paymentId: paymentTransactionId,
@@ -43,6 +44,7 @@ export function applyFreshNmbCheckoutSession(
     gatewaySessionId: sessionId,
     successIndicator,
     orderId: transaction.order_id,
+    merchantReference: transaction.merchant_reference ?? null,
   });
 
   return {
