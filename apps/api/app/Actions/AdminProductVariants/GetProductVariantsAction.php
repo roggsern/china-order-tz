@@ -21,7 +21,8 @@ class GetProductVariantsAction
                 'catalogAttributeValues.option',
                 'attributeValues.attribute',
             ])
-            ->withCount(['prices', 'inventories'])
+            ->withCount(['prices', 'inventories', 'chinaCommercialStock as commercial_stocks_count'])
+            ->withExists(['chinaCommercialStock as has_active_commercial_stock'])
             ->orderByDesc('is_default')
             ->orderBy('sort_order')
             ->orderBy('name')

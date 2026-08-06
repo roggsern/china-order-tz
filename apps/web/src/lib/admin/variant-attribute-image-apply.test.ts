@@ -39,6 +39,8 @@ const variant = (
   stock: null,
   pricesCount: 0,
   inventoriesCount: 0,
+  commercialStocksCount: 0,
+  hasActiveCommercialStock: false,
   displayAttributes: [],
   attributeValues: optionIds.map((optionId, index) => ({
     id: `${id}-av-${index}`,

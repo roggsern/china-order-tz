@@ -38,6 +38,11 @@ import { formatVariantDisplayLabel } from "@/lib/catalog/variant-display-attribu
 type ProductVariantsManagerProps = {
   productId: string;
   commerceChannelCode?: string | null;
+  /**
+   * Invoked after successful mutations that can change publish readiness.
+   * Parent should reload the canonical publishVariants / publish context.
+   */
+  onVariantsChanged?: () => void | Promise<void>;
 };
 
 type ManualForm = {
@@ -61,6 +66,7 @@ const emptyForm = (): ManualForm => ({
 export function ProductVariantsManager({
   productId,
   commerceChannelCode,
+  onVariantsChanged,
 }: ProductVariantsManagerProps) {
   const isChinaImport = commerceChannelCode === "CHINA_IMPORT";
   const { permissions } = useAdminPermissions();
@@ -82,6 +88,18 @@ export function ProductVariantsManager({
   const [mediaVariantId, setMediaVariantId] = useState<string | null>(null);
   const [selectedVariantIds, setSelectedVariantIds] = useState<string[]>([]);
   const [addOptionAttributeId, setAddOptionAttributeId] = useState<string | null>(null);
+
+  const notifyVariantsChanged = useCallback(async () => {
+    try {
+      await onVariantsChanged?.();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? `Pricing/stock saved, but publish readiness could not refresh: ${err.message}`
+          : "Pricing/stock saved, but publish readiness could not refresh. Reopen Edit to refresh.",
+      );
+    }
+  }, [onVariantsChanged]);
 
   const addOptionAttribute = useMemo(
     () => attributes.find((attr) => attr.catalogAttributeId === addOptionAttributeId) ?? null,
@@ -242,6 +260,7 @@ export function ProductVariantsManager({
       setEditingId(null);
       setForm(emptyForm());
       await reload();
+      await notifyVariantsChanged();
     } catch (err) {
       setError(
         err instanceof AdminCatalogApiError
@@ -276,6 +295,7 @@ export function ProductVariantsManager({
         setInventoryVariantId(null);
       }
       await reload();
+      await notifyVariantsChanged();
     } catch (err) {
       setError(
         err instanceof AdminCatalogApiError
@@ -294,6 +314,7 @@ export function ProductVariantsManager({
       await updateAdminProductVariant(productId, variant.id, { is_default: true });
       setSuccess("Default variant updated.");
       await reload();
+      await notifyVariantsChanged();
     } catch (err) {
       setError(
         err instanceof AdminCatalogApiError
@@ -346,6 +367,7 @@ export function ProductVariantsManager({
           ? "No new variants generated (combinations already exist)."
           : `Generated ${generated} new variant${generated === 1 ? "" : "s"}. ${needsPricing} need pricing, ${needsInventory} need inventory stock.`,
       );
+      await notifyVariantsChanged();
     } catch (err) {
       setError(
         err instanceof AdminCatalogApiError
@@ -382,7 +404,10 @@ export function ProductVariantsManager({
         onClearSelection={() => setSelectedVariantIds([])}
         onCompleted={() => {
           setSuccess("Bulk variant update completed.");
-          void reload();
+          void (async () => {
+            await reload();
+            await notifyVariantsChanged();
+          })();
         }}
       />
 
@@ -608,6 +633,10 @@ export function ProductVariantsManager({
             "Variant"
           }
           onClose={() => setPricingVariantId(null)}
+          onPricesChanged={async () => {
+            await reload();
+            await notifyVariantsChanged();
+          }}
         />
       ) : null}
 
@@ -620,6 +649,10 @@ export function ProductVariantsManager({
             "Variant"
           }
           onClose={() => setInventoryVariantId(null)}
+          onInventoriesChanged={async () => {
+            await reload();
+            await notifyVariantsChanged();
+          }}
         />
       ) : null}
 

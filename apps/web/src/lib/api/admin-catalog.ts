@@ -3067,6 +3067,10 @@ export type AdminProductVariant = {
   stock: number | null;
   pricesCount: number;
   inventoriesCount: number;
+  /** CHINA_IMPORT: commercial stock rows (0/1). Not warehouse inventories. */
+  commercialStocksCount: number;
+  /** CHINA_IMPORT: true when a china_commercial_stocks row exists for the variant. */
+  hasActiveCommercialStock: boolean;
   displayAttributes: Array<{ attribute: string; value: string }>;
   attributeValues: AdminProductVariantAttributeValue[];
 };
@@ -3122,6 +3126,8 @@ type AdminApiProductVariant = {
   stock?: number | null;
   prices_count?: number;
   inventories_count?: number;
+  commercial_stocks_count?: number;
+  has_active_commercial_stock?: boolean;
   display_attributes?: Array<{ attribute?: string | null; value?: string | null }>;
   attribute_values?: AdminApiVariantAttributeValue[];
 };
@@ -3158,6 +3164,8 @@ export function mapAdminApiProductVariant(item: AdminApiProductVariant): AdminPr
     stock: item.stock === null || item.stock === undefined ? null : Number(item.stock),
     pricesCount: Number(item.prices_count ?? 0),
     inventoriesCount: Number(item.inventories_count ?? 0),
+    commercialStocksCount: Number(item.commercial_stocks_count ?? 0),
+    hasActiveCommercialStock: item.has_active_commercial_stock === true,
     displayAttributes: (item.display_attributes ?? [])
       .map((row) => ({
         attribute: row.attribute?.trim() ?? "",

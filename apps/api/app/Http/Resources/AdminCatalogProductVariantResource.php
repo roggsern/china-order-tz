@@ -38,6 +38,9 @@ class AdminCatalogProductVariantResource extends JsonResource
             'stock' => null,
             'prices_count' => $this->whenCounted('prices'),
             'inventories_count' => $this->whenCounted('inventories'),
+            // CHINA_IMPORT sellability uses commercial stock — not warehouse inventories_count.
+            'commercial_stocks_count' => (int) ($this->commercial_stocks_count ?? 0),
+            'has_active_commercial_stock' => (bool) ($this->has_active_commercial_stock ?? false),
             'display_attributes' => $displayAttributes,
             'attribute_values' => $values->map(function (ProductVariantAttributeValue $row) {
                 $type = $row->attribute?->type instanceof CatalogAttributeType

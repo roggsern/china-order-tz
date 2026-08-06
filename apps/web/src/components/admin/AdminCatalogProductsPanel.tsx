@@ -173,6 +173,8 @@ export function AdminCatalogProductsPanel() {
   const [formTab, setFormTab] = useState<CatalogProductEditTab>("details");
   const [saving, setSaving] = useState(false);
   const [publishVariants, setPublishVariants] = useState<AdminProductVariant[]>([]);
+  const [publishContextRefreshing, setPublishContextRefreshing] = useState(false);
+  const [publishRefreshError, setPublishRefreshError] = useState<string | null>(null);
   const [publishContext, setPublishContext] = useState<AdminCatalogProduct | null>(null);
   const [publishShippingOptions, setPublishShippingOptions] = useState<
     AdminProductShippingOption[] | null
@@ -601,6 +603,7 @@ export function AdminCatalogProductsPanel() {
       catalogProductTypeIsActive: selectedType?.isActive ?? true,
       isLeafCategory: isLeafCategoryId(subcategoryId, categories),
       price: form.price,
+      pricingModel: form.pricingModel === "variants" ? "variants" : "simple",
       commerceChannelCode,
       commerceChannelId: publishContext?.commerceChannelId ?? null,
       storeId: resolveProductStoreIdForReadiness({
@@ -670,6 +673,9 @@ export function AdminCatalogProductsPanel() {
       return;
     }
 
+    setPublishContextRefreshing(true);
+    setPublishRefreshError(null);
+
     try {
       const [product, variantsPayload] = await Promise.all([
         fetchAdminCatalogProduct(form.id),
@@ -687,8 +693,15 @@ export function AdminCatalogProductsPanel() {
       } else {
         setPublishShippingOptions(null);
       }
-    } catch {
-      // Keep existing publish context if refresh fails.
+    } catch (err) {
+      setPublishRefreshError(
+        err instanceof Error
+          ? err.message
+          : "Unable to refresh publish readiness. Saved pricing is kept — reopen Edit to retry.",
+      );
+      throw err instanceof Error ? err : new Error("Unable to refresh publish readiness.");
+    } finally {
+      setPublishContextRefreshing(false);
     }
   }, [form?.id]);
 
@@ -1123,14 +1136,16 @@ export function AdminCatalogProductsPanel() {
                 actionError={actionError}
                 publishReadiness={publishReadiness}
                 publishVariantCount={publishVariants.length}
-                publishSellableVariantCount={publishVariants.filter(isSellableVariant).length}
+                publishSellableVariantCount={publishVariants.filter((variant) =>
+                  isSellableVariant(variant, publishContext?.commerceChannelCode),
+                ).length}
                 hasPublishableShipping={hasPublishableShippingOption(publishShippingOptions ?? [])}
                 onSaveDraft={saveProductDraft}
                 onPublish={handleWizardPublish}
                 onCancel={() => setForm(null)}
-                onRefreshPublishContext={() => {
-                  void refreshPublishContext();
-                }}
+                onRefreshPublishContext={refreshPublishContext}
+                publishContextRefreshing={publishContextRefreshing}
+                publishRefreshError={publishRefreshError}
                 onRefreshShipping={() => {
                   void refreshPublishShippingOptions();
                 }}
@@ -1167,6 +1182,7 @@ export function AdminCatalogProductsPanel() {
               <ProductVariantsManager
                 productId={form.id}
                 commerceChannelCode={publishContext?.commerceChannelCode ?? null}
+                onVariantsChanged={refreshPublishContext}
               />
               <div className="mt-4">
                 <button
@@ -1614,6 +1630,8 @@ export function AdminCatalogProductsPanel() {
               <PublishReadinessChecklist
                 readiness={publishReadiness}
                 showWarning={form.status === "active" && !publishReadiness.ready}
+                refreshing={publishContextRefreshing}
+                refreshError={publishRefreshError}
               />
             </div>
           ) : null}

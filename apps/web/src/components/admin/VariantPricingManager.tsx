@@ -15,6 +15,8 @@ type VariantPricingManagerProps = {
   variantId: string;
   variantLabel: string;
   onClose?: () => void;
+  /** Called after a successful price mutation so parent publish readiness can refresh. */
+  onPricesChanged?: () => void | Promise<void>;
 };
 
 type PriceForm = {
@@ -60,6 +62,7 @@ export function VariantPricingManager({
   variantId,
   variantLabel,
   onClose,
+  onPricesChanged,
 }: VariantPricingManagerProps) {
   const [prices, setPrices] = useState<AdminVariantPrice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -150,6 +153,7 @@ export function VariantPricingManager({
       setEditingId(null);
       setForm(emptyForm());
       await reload();
+      await onPricesChanged?.();
     } catch (err) {
       setError(
         err instanceof AdminCatalogApiError
@@ -168,6 +172,7 @@ export function VariantPricingManager({
       await updateAdminVariantPrice(price.id, { is_active: !price.isActive });
       setSuccess(price.isActive ? "Price deactivated." : "Price activated.");
       await reload();
+      await onPricesChanged?.();
     } catch (err) {
       setError(
         err instanceof AdminCatalogApiError
@@ -196,6 +201,7 @@ export function VariantPricingManager({
         startCreate();
       }
       await reload();
+      await onPricesChanged?.();
     } catch (err) {
       setError(
         err instanceof AdminCatalogApiError

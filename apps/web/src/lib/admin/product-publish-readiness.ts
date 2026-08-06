@@ -14,6 +14,16 @@ export type ProductPublishReadinessResult = {
   path: "simple" | "variant";
 };
 
+export type PublishReadinessVariant = Pick<
+  AdminProductVariant,
+  | "isActive"
+  | "price"
+  | "pricesCount"
+  | "inventoriesCount"
+  | "hasActiveCommercialStock"
+  | "commercialStocksCount"
+>;
+
 export type ProductPublishReadinessInput = {
   catalogProductTypeId: string;
   subcategoryId: string;
@@ -21,14 +31,13 @@ export type ProductPublishReadinessInput = {
   catalogProductTypeIsActive?: boolean;
   isLeafCategory: boolean;
   price: number;
+  /** When "variants", never fall through to the simple base-price blocker. */
+  pricingModel?: "simple" | "variants" | null;
   commerceChannelCode?: string | null;
   commerceChannelId?: string | null;
   storeId?: string | null;
   hasSimpleInventoryPolicy: boolean;
-  variants: Pick<
-    AdminProductVariant,
-    "isActive" | "price" | "pricesCount" | "inventoriesCount"
-  >[];
+  variants: PublishReadinessVariant[];
   isDemo?: boolean;
   /** Required when commerce channel is CHINA_IMPORT. */
   hasPublishableShippingOption?: boolean;
@@ -47,22 +56,7 @@ export function isLeafCategoryId(
   return !categories.some((category) => category.parentId === categoryId);
 }
 
-export function isSellableVariant(
-  variant: Pick<AdminProductVariant, "isActive" | "price" | "pricesCount" | "inventoriesCount">,
-): boolean {
-  if (!variant.isActive) {
-    return false;
-  }
-
-  const hasPrice = (variant.price ?? 0) > 0 || variant.pricesCount > 0;
-  if (!hasPrice) {
-    return false;
-  }
-
-  return variant.inventoriesCount > 0;
-}
-
-function normalizeCommerceChannelCode(code: string | null | undefined): string | null {
+export function normalizeCommerceChannelCode(code: string | null | undefined): string | null {
   if (!code) {
     return null;
   }
@@ -70,12 +64,57 @@ function normalizeCommerceChannelCode(code: string | null | undefined): string |
   return code.trim().toUpperCase().replace(/-/g, "_");
 }
 
+export function variantHasRetailPrice(variant: PublishReadinessVariant): boolean {
+  return (variant.price ?? 0) > 0 || variant.pricesCount > 0;
+}
+
+/** Stock policy aligned with backend StockResolver (warehouse vs commercial). */
+export function variantHasStockPolicy(
+  variant: PublishReadinessVariant,
+  commerceChannelCode?: string | null,
+): boolean {
+  const channelCode = normalizeCommerceChannelCode(commerceChannelCode);
+
+  if (channelCode === "CHINA_IMPORT") {
+    return (
+      variant.hasActiveCommercialStock === true || (variant.commercialStocksCount ?? 0) > 0
+    );
+  }
+
+  return variant.inventoriesCount > 0;
+}
+
+export function isSellableVariant(
+  variant: PublishReadinessVariant,
+  commerceChannelCode?: string | null,
+): boolean {
+  if (!variant.isActive) {
+    return false;
+  }
+
+  if (!variantHasRetailPrice(variant)) {
+    return false;
+  }
+
+  return variantHasStockPolicy(variant, commerceChannelCode);
+}
+
+function usesVariantPublishPath(input: ProductPublishReadinessInput): boolean {
+  if (input.pricingModel === "variants") {
+    return true;
+  }
+
+  return input.variants.length > 0;
+}
+
 export function calculateProductPublishReadiness(
   input: ProductPublishReadinessInput,
 ): ProductPublishReadinessResult {
-  const sellableVariants = input.variants.filter(isSellableVariant);
-  const variantPath = sellableVariants.length > 0;
   const channelCode = normalizeCommerceChannelCode(input.commerceChannelCode);
+  const variantPath = usesVariantPublishPath(input);
+  const sellableVariants = input.variants.filter((variant) =>
+    isSellableVariant(variant, channelCode),
+  );
 
   const items: PublishReadinessItem[] = [
     {
@@ -137,9 +176,36 @@ export function calculateProductPublishReadiness(
   }
 
   if (variantPath) {
+    const activeVariants = input.variants.filter((variant) => variant.isActive);
+    const hasRetailPricing = activeVariants.some((variant) => variantHasRetailPrice(variant));
+    const hasStockPolicy = activeVariants.some((variant) =>
+      variantHasStockPolicy(variant, channelCode),
+    );
+
+    items.push({
+      id: "variant-retail-pricing",
+      label: "Variant retail pricing complete",
+      met: hasRetailPricing,
+    });
+
+    items.push({
+      id:
+        channelCode === "CHINA_IMPORT"
+          ? "variant-commercial-stock"
+          : "variant-warehouse-inventory",
+      label:
+        channelCode === "CHINA_IMPORT"
+          ? "Variant commercial stock configured"
+          : "Variant warehouse inventory configured",
+      met: hasStockPolicy,
+    });
+
     items.push({
       id: "sellable-variant",
-      label: "At least one sellable variant with pricing and inventory",
+      label:
+        channelCode === "CHINA_IMPORT"
+          ? "At least one sellable variant with retail pricing and commercial stock"
+          : "At least one sellable variant with pricing and inventory",
       met: sellableVariants.length > 0,
     });
   } else {

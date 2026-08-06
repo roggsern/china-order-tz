@@ -104,6 +104,37 @@ class AdminVariantBulkActionTest extends TestCase
         $this->assertSame(3, ChinaCommercialStock::query()->where('product_id', $product->id)->count());
     }
 
+    public function test_variant_list_exposes_commercial_stock_flags_for_china_readiness(): void
+    {
+        [$product, $variants] = $this->chinaVariantProduct(1);
+        $variant = $variants->first();
+
+        ChinaCommercialStock::query()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'available_quantity' => 12,
+            'reserved_quantity' => 0,
+            'ordered_quantity' => 0,
+        ]);
+
+        VariantPrice::query()->create([
+            'product_variant_id' => $variant->id,
+            'price_type' => VariantPriceType::Retail,
+            'currency' => 'TZS',
+            'amount' => 2500000,
+            'minimum_quantity' => 1,
+            'is_active' => true,
+        ]);
+
+        $this->getJson('/api/v1/admin/products/'.$product->id.'/variants')
+            ->assertOk()
+            ->assertJsonPath('data.variants.0.id', $variant->id)
+            ->assertJsonPath('data.variants.0.prices_count', 1)
+            ->assertJsonPath('data.variants.0.inventories_count', 0)
+            ->assertJsonPath('data.variants.0.commercial_stocks_count', 1)
+            ->assertJsonPath('data.variants.0.has_active_commercial_stock', true);
+    }
+
     public function test_bulk_activate_and_deactivate_variants(): void
     {
         [$product, $variants] = $this->chinaVariantProduct(2);

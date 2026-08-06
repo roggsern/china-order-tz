@@ -15,6 +15,8 @@ type VariantInventoryManagerProps = {
   variantLabel: string;
   defaultWarehouseCode?: string;
   onClose?: () => void;
+  /** Called after a successful inventory mutation so parent publish readiness can refresh. */
+  onInventoriesChanged?: () => void | Promise<void>;
 };
 
 type InventoryForm = {
@@ -40,6 +42,7 @@ export function VariantInventoryManager({
   variantLabel,
   defaultWarehouseCode = "MAIN",
   onClose,
+  onInventoriesChanged,
 }: VariantInventoryManagerProps) {
   const [rows, setRows] = useState<AdminVariantInventory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -128,6 +131,7 @@ export function VariantInventoryManager({
       setEditingId(null);
       setForm(emptyForm(defaultWarehouseCode));
       await reload();
+      await onInventoriesChanged?.();
     } catch (err) {
       setError(
         err instanceof AdminCatalogApiError
@@ -151,6 +155,7 @@ export function VariantInventoryManager({
       await updateAdminVariantInventory(row.id, { reserve: qty });
       setSuccess(`Reserved ${qty} unit(s).`);
       await reload();
+      await onInventoriesChanged?.();
     } catch (err) {
       setError(
         err instanceof AdminCatalogApiError ? err.message : "Unable to reserve stock.",
@@ -172,6 +177,7 @@ export function VariantInventoryManager({
       await updateAdminVariantInventory(row.id, { release: qty });
       setSuccess(`Released ${qty} unit(s).`);
       await reload();
+      await onInventoriesChanged?.();
     } catch (err) {
       setError(
         err instanceof AdminCatalogApiError ? err.message : "Unable to release stock.",
@@ -188,6 +194,7 @@ export function VariantInventoryManager({
       await updateAdminVariantInventory(row.id, { is_active: !row.isActive });
       setSuccess(row.isActive ? "Inventory deactivated." : "Inventory activated.");
       await reload();
+      await onInventoriesChanged?.();
     } catch (err) {
       setError(
         err instanceof AdminCatalogApiError
@@ -212,6 +219,7 @@ export function VariantInventoryManager({
         startCreate();
       }
       await reload();
+      await onInventoriesChanged?.();
     } catch (err) {
       setError(
         err instanceof AdminCatalogApiError

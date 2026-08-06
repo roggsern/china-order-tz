@@ -89,8 +89,10 @@ type AdminProductCreationWizardProps = {
   onSaveDraft: (options?: { strictStepValidation?: boolean }) => Promise<boolean>;
   onPublish: () => Promise<void>;
   onCancel: () => void;
-  onRefreshPublishContext: () => void;
+  onRefreshPublishContext: () => void | Promise<void>;
   onRefreshShipping: () => void;
+  publishContextRefreshing?: boolean;
+  publishRefreshError?: string | null;
 };
 
 export function AdminProductCreationWizard({
@@ -117,6 +119,8 @@ export function AdminProductCreationWizard({
   onCancel,
   onRefreshPublishContext,
   onRefreshShipping,
+  publishContextRefreshing = false,
+  publishRefreshError = null,
 }: AdminProductCreationWizardProps) {
   const steps = useMemo(
     () => resolveProductCreationWizardSteps(form.commerceJourney, form.pricingModel),
@@ -732,6 +736,7 @@ export function AdminProductCreationWizard({
           <ProductVariantsManager
             productId={form.id}
             commerceChannelCode={form.commerceJourney === "china" ? "CHINA_IMPORT" : "TZ_LOCAL"}
+            onVariantsChanged={onRefreshPublishContext}
           />
           {form.commerceJourney === "china" ? (
             <ProductCommercialAvailabilityManager
@@ -773,7 +778,12 @@ export function AdminProductCreationWizard({
       {currentStepId === "review" ? (
         <div className="space-y-4">
           {publishReadiness ? (
-            <PublishReadinessChecklist readiness={publishReadiness} showWarning={!publishReadiness.ready} />
+            <PublishReadinessChecklist
+              readiness={publishReadiness}
+              showWarning={!publishReadiness.ready}
+              refreshing={publishContextRefreshing}
+              refreshError={publishRefreshError}
+            />
           ) : null}
           {progress.readyForReview && !progress.readyToPublish ? (
             <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
