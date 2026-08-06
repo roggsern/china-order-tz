@@ -9,6 +9,7 @@ use App\Payments\Gateways\Nmb\NmbApiClient;
 use App\Payments\Gateways\Nmb\NmbApiException;
 use App\Payments\Gateways\Nmb\NmbCheckoutSessionMapper;
 use App\Payments\Gateways\Nmb\NmbConfig;
+use App\Payments\Gateways\Nmb\NmbMpgsResponseNormalizer;
 use App\Payments\Gateways\Nmb\NmbPaymentOutcomeEvaluator;
 use App\Services\Payments\Orchestration\Contracts\PaymentProviderInterface;
 use App\Services\Payments\Orchestration\DTOs\PaymentInitiationRequest;
@@ -263,19 +264,20 @@ class NmbPaymentProvider implements PaymentProviderInterface
         array $response,
         array $requestPayload,
     ): PaymentProviderResult {
-        $order = is_array($response['order'] ?? null) ? $response['order'] : [];
-        $txn = is_array($response['transaction'] ?? null) ? $response['transaction'] : [];
+        $normalized = app(NmbMpgsResponseNormalizer::class)->normalize($response);
+        $order = is_array($normalized['order'] ?? null) ? $normalized['order'] : [];
+        $txn = is_array($normalized['transaction'] ?? null) ? $normalized['transaction'] : [];
         $transactionId = isset($txn['id']) ? (string) $txn['id'] : null;
 
         $evaluated = $this->outcomeEvaluator->evaluate(
-            $response,
+            $normalized,
             expectedOrderId: (string) $transaction->merchant_reference,
             expectedAmount: number_format((float) $transaction->amount, 2, '.', ''),
             expectedCurrency: (string) $transaction->currency,
         );
 
         $verificationPayload = [
-            'result' => $response['result'] ?? null,
+            'result' => $normalized['result'] ?? null,
             'order_id' => $order['id'] ?? null,
             'transaction_id' => $transactionId,
             'amount' => $order['amount'] ?? null,

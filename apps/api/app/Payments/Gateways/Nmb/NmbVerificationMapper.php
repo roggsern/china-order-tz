@@ -8,6 +8,7 @@ class NmbVerificationMapper
 {
     public function __construct(
         private readonly NmbPaymentOutcomeEvaluator $outcomeEvaluator,
+        private readonly NmbMpgsResponseNormalizer $responseNormalizer,
     ) {}
 
     /**
@@ -15,21 +16,23 @@ class NmbVerificationMapper
      */
     public function fromResponse(array $response, Payment $payment): NmbVerificationResult
     {
+        $normalized = $this->responseNormalizer->normalize($response);
+
         $evaluated = $this->outcomeEvaluator->evaluate(
-            $response,
+            $normalized,
             expectedOrderId: (string) $payment->reference,
             expectedAmount: number_format((float) $payment->amount, 2, '.', ''),
             expectedCurrency: (string) $payment->currency,
         );
 
-        $order = is_array($response['order'] ?? null) ? $response['order'] : [];
-        $transaction = is_array($response['transaction'] ?? null) ? $response['transaction'] : [];
+        $order = is_array($normalized['order'] ?? null) ? $normalized['order'] : [];
+        $transaction = is_array($normalized['transaction'] ?? null) ? $normalized['transaction'] : [];
 
         $orderId = isset($order['id']) ? (string) $order['id'] : null;
         $amount = isset($order['amount']) ? (string) $order['amount'] : null;
         $currency = isset($order['currency']) ? (string) $order['currency'] : null;
         $transactionId = isset($transaction['id']) ? (string) $transaction['id'] : null;
-        $topLevelResult = isset($response['result']) ? (string) $response['result'] : null;
+        $topLevelResult = isset($normalized['result']) ? (string) $normalized['result'] : null;
 
         $pending = $evaluated->outcome === NmbPaymentOutcome::Processing;
         $verified = $evaluated->outcome->isVerifiedPaid();
@@ -43,6 +46,7 @@ class NmbVerificationMapper
             amount: $amount,
             currency: $currency,
             rawResponse: array_merge($response, [
+                'nmb_normalized' => $normalized,
                 'nmb_outcome' => $evaluated->outcome->value,
                 'nmb_outcome_context' => $evaluated->context,
             ]),

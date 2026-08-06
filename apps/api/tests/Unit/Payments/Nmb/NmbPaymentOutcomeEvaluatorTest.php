@@ -151,6 +151,47 @@ class NmbPaymentOutcomeEvaluatorTest extends TestCase
         $this->assertSame('SUCCESS', $result->context['transaction_result'] ?? null);
     }
 
+    public function test_flat_retrieve_order_payload_with_payment_list_is_successful(): void
+    {
+        $result = $this->evaluator->evaluate(
+            [
+                'result' => 'SUCCESS',
+                'response' => ['gatewayCode' => 'APPROVED'],
+                'id' => 'COTZ-PAY-20260806-000060',
+                'amount' => '3000.00',
+                'currency' => 'TZS',
+                'status' => 'CAPTURED',
+                'authenticationStatus' => 'AUTHENTICATION_SUCCESSFUL',
+                'totalAuthorizedAmount' => '3000.00',
+                'totalCapturedAmount' => '3000.00',
+                'transaction' => [
+                    [
+                        'transaction' => [
+                            'type' => 'AUTHENTICATION',
+                            'result' => 'SUCCESS',
+                        ],
+                    ],
+                    [
+                        'transaction' => [
+                            'id' => 'TXN-PAY-FLAT-1',
+                            'type' => 'PAYMENT',
+                            'result' => 'SUCCESS',
+                        ],
+                    ],
+                ],
+            ],
+            expectedOrderId: 'COTZ-PAY-20260806-000060',
+            expectedAmount: '3000.00',
+            expectedCurrency: 'TZS',
+        );
+
+        $this->assertSame(NmbPaymentOutcome::Successful, $result->outcome);
+        $this->assertTrue($result->outcome->isVerifiedPaid());
+        $this->assertSame('COTZ-PAY-20260806-000060', $result->context['order_id'] ?? null);
+        $this->assertSame('3000.00', $result->context['total_captured_amount'] ?? null);
+        $this->assertSame('PAYMENT', $result->context['transaction_type'] ?? null);
+    }
+
     public function test_declined_response_is_failed(): void
     {
         $result = $this->evaluator->evaluate(

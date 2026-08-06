@@ -103,6 +103,98 @@ class NmbVerificationMapperTest extends TestCase
         $this->assertTrue($result->pending);
     }
 
+    public function test_mpgs_transaction_list_selects_payment_and_verifies_capture(): void
+    {
+        $payment = Payment::factory()->nmb()->create([
+            'reference' => 'COTZ-PAY-20260806-000050',
+            'amount' => 3000,
+            'currency' => 'TZS',
+        ]);
+
+        $result = $this->mapper->fromResponse([
+            'result' => 'SUCCESS',
+            'response' => ['gatewayCode' => 'APPROVED'],
+            'id' => 'COTZ-PAY-20260806-000050',
+            'amount' => '3000.00',
+            'currency' => 'TZS',
+            'status' => 'CAPTURED',
+            'authenticationStatus' => 'AUTHENTICATION_SUCCESSFUL',
+            'totalAuthorizedAmount' => '3000.00',
+            'totalCapturedAmount' => '3000.00',
+            'transaction' => [
+                [
+                    'transaction' => [
+                        'id' => 'TXN-AUTHN-1',
+                        'type' => 'AUTHENTICATION',
+                        'result' => 'SUCCESS',
+                    ],
+                ],
+                [
+                    'transaction' => [
+                        'id' => 'TXN-PAY-1',
+                        'type' => 'PAYMENT',
+                        'result' => 'SUCCESS',
+                        'totalAuthorizedAmount' => '3000.00',
+                        'totalCapturedAmount' => '3000.00',
+                        'response' => [
+                            'gatewayCode' => 'APPROVED',
+                        ],
+                    ],
+                ],
+            ],
+        ], $payment);
+
+        $this->assertTrue($result->verified);
+        $this->assertFalse($result->pending);
+        $this->assertSame('COTZ-PAY-20260806-000050', $result->orderId);
+        $this->assertSame('TXN-PAY-1', $result->transactionId);
+        $this->assertSame('successful', $result->rawResponse['nmb_outcome'] ?? null);
+        $this->assertSame('PAYMENT', $result->rawResponse['nmb_outcome_context']['transaction_type'] ?? null);
+        $this->assertSame('3000.00', $result->rawResponse['nmb_outcome_context']['total_captured_amount'] ?? null);
+    }
+
+    public function test_mpgs_payment_amounts_on_transaction_are_used_when_order_amounts_missing(): void
+    {
+        $payment = Payment::factory()->nmb()->create([
+            'reference' => 'COTZ-PAY-20260806-000051',
+            'amount' => 3000,
+            'currency' => 'TZS',
+        ]);
+
+        $result = $this->mapper->fromResponse([
+            'result' => 'SUCCESS',
+            'response' => ['gatewayCode' => 'APPROVED'],
+            'order' => [
+                'id' => 'COTZ-PAY-20260806-000051',
+                'currency' => 'TZS',
+                'status' => 'CAPTURED',
+                'authenticationStatus' => 'AUTHENTICATION_SUCCESSFUL',
+            ],
+            'transaction' => [
+                [
+                    'transaction' => [
+                        'type' => 'AUTHENTICATION',
+                        'result' => 'SUCCESS',
+                    ],
+                ],
+                [
+                    'transaction' => [
+                        'id' => 'TXN-PAY-2',
+                        'type' => 'PAYMENT',
+                        'result' => 'SUCCESS',
+                        'amount' => '3000.00',
+                        'totalAuthorizedAmount' => '3000.00',
+                        'totalCapturedAmount' => '3000.00',
+                    ],
+                ],
+            ],
+        ], $payment);
+
+        $this->assertTrue($result->verified);
+        $this->assertSame('TXN-PAY-2', $result->transactionId);
+        $this->assertSame('3000.00', $result->rawResponse['nmb_outcome_context']['total_captured_amount'] ?? null);
+    }
+
     public function test_rejects_gateway_failure(): void
     {
         $payment = Payment::factory()->nmb()->create([
