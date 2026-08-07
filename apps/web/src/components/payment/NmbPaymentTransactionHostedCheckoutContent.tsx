@@ -178,6 +178,14 @@ export function NmbPaymentTransactionHostedCheckoutContent({
       return;
     }
 
+    // Mastercard Hosted Checkout cancel returns to this page with #__hc-action-cancel.
+    // Do not auto-relaunch the gateway on remount.
+    if (typeof window !== "undefined" && window.location.hash === "#__hc-action-cancel") {
+      setPhase("error");
+      setErrorMessage("Payment was cancelled. You can try again when ready.");
+      return;
+    }
+
     launchedRef.current = true;
 
     void (async () => {
