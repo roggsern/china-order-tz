@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import {
   AdminCrmApiError,
   fetchAdminCustomerSummary,
@@ -18,11 +20,18 @@ function money(value?: string | number | null, currency = "TZS"): string {
 
 function Card({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">{label}</p>
-      <p className="mt-1.5 text-lg font-semibold text-zinc-100">{value}</p>
+    <div className="admin-stat-card px-4 py-4 sm:px-5">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-600">{label}</p>
+      <p className="mt-2 text-xl font-bold text-zinc-900">{value}</p>
     </div>
   );
+}
+
+function statusBadgeClass(status: string): string {
+  if (status === "active") return "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200";
+  if (status === "dormant") return "bg-amber-50 text-amber-800 ring-1 ring-amber-200";
+  if (status === "blocked") return "bg-red-50 text-red-800 ring-1 ring-red-200";
+  return "bg-zinc-100 text-zinc-700 ring-1 ring-zinc-200";
 }
 
 export function AdminCustomersPanel() {
@@ -66,16 +75,14 @@ export function AdminCustomersPanel() {
   }, [reload]);
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      <div>
-        <h1 className="text-xl font-semibold text-zinc-50">Customers</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          CRM directory of registered customer accounts. Guest carts are not listed.
-        </p>
-      </div>
+    <div className="min-w-0 space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <AdminPageHeader
+        title="Customers"
+        description="CRM directory of registered customer accounts. Guest carts are not listed."
+      />
 
       {error ? (
-        <div className="rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2 text-sm text-red-200">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {error}
         </div>
       ) : null}
@@ -95,7 +102,7 @@ export function AdminCustomersPanel() {
       </div>
 
       <div className="flex flex-wrap items-end gap-2">
-        <label className="text-xs text-zinc-500">
+        <label className="admin-label">
           Search
           <input
             value={search}
@@ -104,10 +111,10 @@ export function AdminCustomersPanel() {
               setSearch(e.target.value);
             }}
             placeholder="Code, name, email, phone, order #"
-            className="mt-1 block w-64 rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
+            className="admin-input mt-1 w-64"
           />
         </label>
-        <label className="text-xs text-zinc-500">
+        <label className="admin-label">
           Status
           <select
             value={status}
@@ -115,7 +122,7 @@ export function AdminCustomersPanel() {
               setPage(1);
               setStatus(e.target.value);
             }}
-            className="mt-1 block rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
+            className="admin-input mt-1"
           >
             <option value="">All</option>
             <option value="active">Active</option>
@@ -123,12 +130,12 @@ export function AdminCustomersPanel() {
             <option value="blocked">Blocked</option>
           </select>
         </label>
-        <label className="text-xs text-zinc-500">
+        <label className="admin-label">
           Sort
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value)}
-            className="mt-1 block rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
+            className="admin-input mt-1"
           >
             <option value="registered">Registered date</option>
             <option value="spend">Lifetime spend</option>
@@ -136,89 +143,94 @@ export function AdminCustomersPanel() {
             <option value="last_order">Last order</option>
           </select>
         </label>
-        <button
-          type="button"
-          onClick={() => void reload()}
-          className="rounded-md bg-[#c9a227] px-3 py-2 text-sm font-semibold text-zinc-950"
-        >
+        <button type="button" onClick={() => void reload()} className="admin-btn-primary">
           Refresh
         </button>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-zinc-800">
-        <table className="min-w-full text-left text-sm">
-          <thead className="bg-zinc-900 text-[11px] uppercase tracking-wider text-zinc-500">
-            <tr>
-              <th className="px-3 py-2.5">Code</th>
-              <th className="px-3 py-2.5">Name</th>
-              <th className="px-3 py-2.5">Contact</th>
-              <th className="px-3 py-2.5">Source</th>
-              <th className="px-3 py-2.5">Orders</th>
-              <th className="px-3 py-2.5">Spend</th>
-              <th className="px-3 py-2.5">Last order</th>
-              <th className="px-3 py-2.5">Status</th>
-              <th className="px-3 py-2.5">Tags</th>
-              <th className="px-3 py-2.5">Registered</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && rows.length === 0 ? (
+      <div className="admin-card overflow-hidden">
+        <div className="admin-table-scroll">
+          <table className="admin-table min-w-full">
+            <thead>
               <tr>
-                <td colSpan={10} className="px-3 py-6 text-zinc-500">
-                  Loading…
-                </td>
+                <th>Code</th>
+                <th>Name</th>
+                <th>Contact</th>
+                <th>Source</th>
+                <th>Orders</th>
+                <th>Spend</th>
+                <th>Last order</th>
+                <th>Status</th>
+                <th>Tags</th>
+                <th>Registered</th>
               </tr>
-            ) : rows.length === 0 ? (
-              <tr>
-                <td colSpan={10} className="px-3 py-6 text-zinc-500">
-                  No customers match these filters.
-                </td>
-              </tr>
-            ) : (
-              rows.map((row) => (
-                <tr key={row.id} className="border-t border-zinc-800/80 hover:bg-zinc-900/40">
-                  <td className="px-3 py-2.5">
-                    <Link href={`/admin/customers/${row.id}`} className="font-medium text-[#e8c547] hover:underline">
-                      {row.customer_code}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-2.5 text-zinc-200">{row.name ?? "—"}</td>
-                  <td className="px-3 py-2.5 text-zinc-400">
-                    <div>{row.phone || "—"}</div>
-                    <div className="text-xs">{row.email || "—"}</div>
-                  </td>
-                  <td className="px-3 py-2.5 text-zinc-400">{row.registration_source}</td>
-                  <td className="px-3 py-2.5 text-zinc-300">{row.metrics?.total_orders ?? 0}</td>
-                  <td className="px-3 py-2.5 text-zinc-300">
-                    {money(row.metrics?.total_spend, row.metrics?.currency)}
-                  </td>
-                  <td className="px-3 py-2.5 text-zinc-400">
-                    {row.metrics?.last_order_at
-                      ? new Date(row.metrics.last_order_at).toLocaleDateString()
-                      : "—"}
-                  </td>
-                  <td className="px-3 py-2.5 capitalize text-zinc-300">{row.lifecycle_status}</td>
-                  <td className="px-3 py-2.5 text-zinc-400">
-                    {(row.tags ?? []).map((t) => t.name).join(", ") || "—"}
-                  </td>
-                  <td className="px-3 py-2.5 text-zinc-400">
-                    {row.registered_at || row.created_at
-                      ? new Date(row.registered_at || row.created_at || "").toLocaleDateString()
-                      : "—"}
+            </thead>
+            <tbody>
+              {loading && rows.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="text-zinc-600">
+                    Loading…
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : rows.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="!p-0">
+                    <AdminEmptyState title="No customers match these filters" />
+                  </td>
+                </tr>
+              ) : (
+                rows.map((row) => (
+                  <tr key={row.id}>
+                    <td className="admin-table-primary">
+                      <Link
+                        href={`/admin/customers/${row.id}`}
+                        className="font-medium text-[#8b6914] hover:underline"
+                      >
+                        {row.customer_code}
+                      </Link>
+                    </td>
+                    <td className="text-zinc-900">{row.name ?? "—"}</td>
+                    <td className="text-zinc-600">
+                      <div>{row.phone || "—"}</div>
+                      <div className="text-xs">{row.email || "—"}</div>
+                    </td>
+                    <td className="text-zinc-600">{row.registration_source}</td>
+                    <td>{row.metrics?.total_orders ?? 0}</td>
+                    <td>{money(row.metrics?.total_spend, row.metrics?.currency)}</td>
+                    <td className="text-zinc-600">
+                      {row.metrics?.last_order_at
+                        ? new Date(row.metrics.last_order_at).toLocaleDateString()
+                        : "—"}
+                    </td>
+                    <td>
+                      <span
+                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize ${statusBadgeClass(row.lifecycle_status)}`}
+                      >
+                        {row.lifecycle_status}
+                      </span>
+                    </td>
+                    <td className="text-zinc-600">
+                      {(row.tags ?? []).map((t) => t.name).join(", ") || "—"}
+                    </td>
+                    <td className="text-zinc-600">
+                      {row.registered_at || row.created_at
+                        ? new Date(row.registered_at || row.created_at || "").toLocaleDateString()
+                        : "—"}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      <div className="flex items-center gap-3 text-sm text-zinc-400">
+      <div className="flex items-center gap-3 text-sm text-zinc-600">
         <button
           type="button"
           disabled={(meta.current_page ?? 1) <= 1}
           onClick={() => setPage((p) => Math.max(1, p - 1))}
-          className="rounded border border-zinc-700 px-2 py-1 disabled:opacity-40"
+          className="admin-btn-secondary disabled:opacity-40"
         >
           Prev
         </button>
@@ -229,7 +241,7 @@ export function AdminCustomersPanel() {
           type="button"
           disabled={(meta.current_page ?? 1) >= (meta.last_page ?? 1)}
           onClick={() => setPage((p) => p + 1)}
-          className="rounded border border-zinc-700 px-2 py-1 disabled:opacity-40"
+          className="admin-btn-secondary disabled:opacity-40"
         >
           Next
         </button>

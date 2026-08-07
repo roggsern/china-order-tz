@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { useAdminPermissions } from "@/hooks/use-admin-permissions";
 import {
   AdminShippingRatesApiError,
@@ -154,48 +156,47 @@ export function AdminShippingSettingsPanel() {
 
   if (permissionsLoading) {
     return (
-      <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6 text-sm text-zinc-400">
-        Checking permissions…
+      <div className="min-w-0 space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+        <div className="admin-card p-6 text-sm text-zinc-600">Checking permissions…</div>
       </div>
     );
   }
 
   if (!canView) {
     return (
-      <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6">
-        <h1 className="text-xl font-semibold text-zinc-100">Shipping configuration</h1>
-        <p className="mt-2 text-sm text-zinc-400">
-          You need <code className="text-zinc-300">shipping.view</code> to open this page.
-        </p>
+      <div className="min-w-0 space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+        <AdminPageHeader title="Shipping configuration" />
+        <div className="admin-card p-6">
+          <p className="text-sm text-zinc-600">
+            You need <code className="text-zinc-900">shipping.view</code> to open this page.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-zinc-100">Shipping configuration</h1>
-        <p className="mt-1 text-sm text-zinc-400">
-          Manage air freight, sea freight, and local delivery prices and duration windows.
-          Rates are stored in <code className="text-zinc-300">shipping_rates</code>.
-        </p>
-      </div>
+    <div className="min-w-0 space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <AdminPageHeader
+        title="Shipping configuration"
+        description="Manage air freight, sea freight, and local delivery prices and duration windows. Rates are stored in shipping_rates."
+      />
 
       {error ? (
-        <div className="rounded-lg border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {error}
         </div>
       ) : null}
       {success ? (
-        <div className="rounded-lg border border-emerald-900/60 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-200">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           {success}
         </div>
       ) : null}
 
       {loading ? (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6 text-sm text-zinc-400">
-          Loading shipping rates…
-        </div>
+        <div className="admin-card p-6 text-sm text-zinc-600">Loading shipping rates…</div>
+      ) : orderedRates.length === 0 ? (
+        <AdminEmptyState title="No shipping rates configured" />
       ) : (
         <div className="grid gap-4 lg:grid-cols-3">
           {orderedRates.map((rate) => {
@@ -203,16 +204,13 @@ export function AdminShippingSettingsPanel() {
             const busy = savingMethod === rate.method;
 
             return (
-              <section
-                key={rate.method}
-                className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-5"
-              >
+              <section key={rate.method} className="admin-card p-5">
                 <div className="mb-4 flex items-start justify-between gap-3">
                   <div>
-                    <h2 className="text-lg font-medium text-zinc-100">{methodLabel(rate)}</h2>
-                    <p className="text-xs text-zinc-500">{rate.method}</p>
+                    <h2 className="text-lg font-semibold text-zinc-900">{methodLabel(rate)}</h2>
+                    <p className="text-xs text-zinc-600">{rate.method}</p>
                   </div>
-                  <label className="flex items-center gap-2 text-sm text-zinc-300">
+                  <label className="flex items-center gap-2 text-sm text-zinc-600">
                     <input
                       type="checkbox"
                       checked={form.active}
@@ -220,14 +218,14 @@ export function AdminShippingSettingsPanel() {
                       onChange={(event) =>
                         updateField(rate.method, "active", event.target.checked)
                       }
-                      className="h-4 w-4 rounded border-zinc-600 bg-zinc-900"
+                      className="h-4 w-4 rounded border-zinc-300"
                     />
                     Active
                   </label>
                 </div>
 
                 <div className="space-y-3">
-                  <label className="block text-sm text-zinc-300">
+                  <label className="admin-label">
                     Price ({rate.currency || "TZS"})
                     <input
                       type="number"
@@ -238,12 +236,12 @@ export function AdminShippingSettingsPanel() {
                       onChange={(event) =>
                         updateField(rate.method, "price", event.target.value)
                       }
-                      className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100 disabled:opacity-60"
+                      className="admin-input mt-1 disabled:opacity-60"
                     />
                   </label>
 
                   <div className="grid grid-cols-3 gap-2">
-                    <label className="block text-sm text-zinc-300">
+                    <label className="admin-label">
                       Min days
                       <input
                         type="number"
@@ -253,10 +251,10 @@ export function AdminShippingSettingsPanel() {
                         onChange={(event) =>
                           updateField(rate.method, "estimated_min_days", event.target.value)
                         }
-                        className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100 disabled:opacity-60"
+                        className="admin-input mt-1 disabled:opacity-60"
                       />
                     </label>
-                    <label className="block text-sm text-zinc-300">
+                    <label className="admin-label">
                       Typical
                       <input
                         type="number"
@@ -270,10 +268,10 @@ export function AdminShippingSettingsPanel() {
                             event.target.value,
                           )
                         }
-                        className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100 disabled:opacity-60"
+                        className="admin-input mt-1 disabled:opacity-60"
                       />
                     </label>
-                    <label className="block text-sm text-zinc-300">
+                    <label className="admin-label">
                       Max days
                       <input
                         type="number"
@@ -283,7 +281,7 @@ export function AdminShippingSettingsPanel() {
                         onChange={(event) =>
                           updateField(rate.method, "estimated_max_days", event.target.value)
                         }
-                        className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100 disabled:opacity-60"
+                        className="admin-input mt-1 disabled:opacity-60"
                       />
                     </label>
                   </div>
@@ -294,7 +292,7 @@ export function AdminShippingSettingsPanel() {
                     type="button"
                     disabled={!canManage || busy}
                     onClick={() => void save(rate.method)}
-                    className="w-full rounded-lg bg-[#e8c547] px-3 py-2 text-sm font-medium text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="admin-btn-primary w-full disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {busy ? "Saving…" : canManage ? "Save changes" : "View only"}
                   </button>

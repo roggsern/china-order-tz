@@ -26,6 +26,7 @@ import { fetchAdminSuppliers, type AdminSupplier } from "@/lib/api/admin-procure
 import { PublishReadinessChecklist } from "@/components/admin/PublishReadinessChecklist";
 import { AdminProductBulkActionBar } from "@/components/admin/AdminProductBulkActionBar";
 import { AdminProductCreationWizard } from "@/components/admin/AdminProductCreationWizard";
+import { AdminProductSectionTabs } from "@/components/admin/AdminProductSectionTabs";
 import { AdminBrandAsyncSelect } from "@/components/admin/AdminBrandAsyncSelect";
 import { AdminCategoryTreeSelect } from "@/components/admin/AdminCategoryTreeSelect";
 import { AdminSupplierAsyncSelect } from "@/components/admin/AdminSupplierAsyncSelect";
@@ -1103,99 +1104,51 @@ export function AdminCatalogProductsPanel() {
       ) : null}
 
       {form ? (
-        <div className="admin-card mb-4 p-5">
+        <div className="admin-card mb-4 overflow-x-hidden p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-zinc-900">
-              {useWizardFlow ? "Create product (draft wizard)" : form.id ? "Edit product" : "New product"}
+              {useWizardFlow
+                ? "Create product"
+                : form.id
+                  ? "Edit product"
+                  : "New product"}
             </h2>
-            {form.id && !useWizardFlow ? (
-              <div className="flex gap-1 rounded-lg border border-zinc-200 p-0.5">
-                <button
-                  type="button"
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium ${
-                    formTab === "details"
-                      ? "bg-zinc-900 text-white"
-                      : "text-zinc-600 hover:bg-zinc-50"
-                  }`}
-                  onClick={() => setFormTab("details")}
-                >
-                  Details
-                </button>
-                <button
-                  type="button"
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium ${
-                    formTab === "media"
-                      ? "bg-zinc-900 text-white"
-                      : "text-zinc-600 hover:bg-zinc-50"
-                  }`}
-                  onClick={() => setFormTab("media")}
-                >
-                  Media
-                </button>
-                <button
-                  type="button"
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium ${
-                    formTab === "specifications"
-                      ? "bg-zinc-900 text-white"
-                      : "text-zinc-600 hover:bg-zinc-50"
-                  }`}
-                  onClick={() => setFormTab("specifications")}
-                >
-                  Specifications
-                </button>
-                <button
-                  type="button"
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium ${
-                    formTab === "variants"
-                      ? "bg-zinc-900 text-white"
-                      : "text-zinc-600 hover:bg-zinc-50"
-                  }`}
-                  onClick={() => setFormTab("variants")}
-                >
-                  Variants
-                </button>
-                {showStockTab ? (
-                  <button
-                    type="button"
-                    className={`rounded-md px-3 py-1.5 text-xs font-medium ${
-                      formTab === "stock"
-                        ? "bg-zinc-900 text-white"
-                        : "text-zinc-600 hover:bg-zinc-50"
-                    }`}
-                    onClick={() => setFormTab("stock")}
-                  >
-                    Stock
-                  </button>
-                ) : null}
-                {showCommercialAvailabilityTab ? (
-                  <button
-                    type="button"
-                    className={`rounded-md px-3 py-1.5 text-xs font-medium ${
-                      formTab === "commercial-availability"
-                        ? "bg-zinc-900 text-white"
-                        : "text-zinc-600 hover:bg-zinc-50"
-                    }`}
-                    onClick={() => setFormTab("commercial-availability")}
-                  >
-                    Commercial Availability
-                  </button>
-                ) : null}
-                {showShippingTab ? (
-                  <button
-                    type="button"
-                    className={`rounded-md px-3 py-1.5 text-xs font-medium ${
-                      formTab === "shipping"
-                        ? "bg-zinc-900 text-white"
-                        : "text-zinc-600 hover:bg-zinc-50"
-                    }`}
-                    onClick={() => setFormTab("shipping")}
-                  >
-                    Shipping
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
+            <button
+              type="button"
+              className="admin-btn-secondary shrink-0"
+              onClick={() => setForm(null)}
+            >
+              Close
+            </button>
           </div>
+
+          {form.id && !useWizardFlow ? (
+            <div className="mt-4">
+              <AdminProductSectionTabs
+                eyebrow="Product workspace"
+                title={form.name.trim() || "Untitled product"}
+                activeTabId={formTab}
+                onSelectTab={(tabId) => setFormTab(tabId as CatalogProductEditTab)}
+                tabs={[
+                  { id: "details", label: "Details" },
+                  { id: "media", label: "Media" },
+                  { id: "specifications", label: "Specifications", shortLabel: "Specs" },
+                  { id: "variants", label: "Variants" },
+                  ...(showStockTab ? [{ id: "stock", label: "Stock" }] : []),
+                  ...(showCommercialAvailabilityTab
+                    ? [
+                        {
+                          id: "commercial-availability",
+                          label: "Commercial Availability",
+                          shortLabel: "Commercial",
+                        },
+                      ]
+                    : []),
+                  ...(showShippingTab ? [{ id: "shipping", label: "Shipping" }] : []),
+                ]}
+              />
+            </div>
+          ) : null}
 
           {form.id && publishContext?.legacyConfigurationProduct ? (
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -1243,105 +1196,51 @@ export function AdminCatalogProductsPanel() {
               />
             </div>
           ) : form.id && formTab === "media" ? (
-            <div className="mt-4">
+            <div className="mt-4 min-w-0">
               <ProductMediaManager productId={form.id} productName={form.name || "Product"} />
-              <div className="mt-4">
-                <button
-                  type="button"
-                  className="admin-btn-secondary"
-                  onClick={() => setForm(null)}
-                >
-                  Close
-                </button>
-              </div>
             </div>
           ) : form.id && formTab === "specifications" ? (
-            <div className="mt-4">
+            <div className="mt-4 min-w-0">
               <ProductSpecificationsManager productId={form.id} />
-              <div className="mt-4">
-                <button
-                  type="button"
-                  className="admin-btn-secondary"
-                  onClick={() => setForm(null)}
-                >
-                  Close
-                </button>
-              </div>
             </div>
           ) : form.id && formTab === "variants" ? (
-            <div className="mt-4">
+            <div className="mt-4 min-w-0">
               <ProductVariantsManager
                 productId={form.id}
                 commerceChannelCode={publishContext?.commerceChannelCode ?? null}
                 onVariantsChanged={refreshPublishContext}
               />
-              <div className="mt-4">
-                <button
-                  type="button"
-                  className="admin-btn-secondary"
-                  onClick={() => setForm(null)}
-                >
-                  Close
-                </button>
-              </div>
             </div>
           ) : form.id && formTab === "commercial-availability" && showCommercialAvailabilityTab ? (
-            <div className="mt-4">
+            <div className="mt-4 min-w-0">
               <ProductCommercialAvailabilityManager
                 productId={form.id}
                 onSaved={() => {
                   void refreshPublishContext();
                 }}
               />
-              <div className="mt-4">
-                <button
-                  type="button"
-                  className="admin-btn-secondary"
-                  onClick={() => setForm(null)}
-                >
-                  Close
-                </button>
-              </div>
             </div>
           ) : form.id && formTab === "stock" && showStockTab ? (
-            <div className="mt-4">
+            <div className="mt-4 min-w-0">
               <ProductStockManager
                 productId={form.id}
                 onStockSaved={() => {
                   void refreshPublishContext();
                 }}
               />
-              <div className="mt-4">
-                <button
-                  type="button"
-                  className="admin-btn-secondary"
-                  onClick={() => setForm(null)}
-                >
-                  Close
-                </button>
-              </div>
             </div>
           ) : form.id && formTab === "shipping" && showShippingTab ? (
-            <div className="mt-4">
+            <div className="mt-4 min-w-0">
               <ProductShippingManager
                 productId={form.id}
                 onSaved={() => {
                   void refreshPublishShippingOptions();
                 }}
               />
-              <div className="mt-4">
-                <button
-                  type="button"
-                  className="admin-btn-secondary"
-                  onClick={() => setForm(null)}
-                >
-                  Close
-                </button>
-              </div>
             </div>
           ) : (
           <>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div className="mt-4 grid min-w-0 gap-4 sm:grid-cols-2">
             {!form.id ? (
               <>
                 <div className="sm:col-span-2">

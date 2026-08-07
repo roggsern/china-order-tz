@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import {
   AdminGrowthApiError,
   createGrowthCampaign,
@@ -188,17 +190,14 @@ export function AdminGrowthPanel() {
   ];
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      <div>
-        <h1 className="text-xl font-semibold text-zinc-50">Growth Platform</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Segments, campaigns, and journeys orchestrate CRM, Loyalty, Promotions, and Notifications —
-          without duplicating those engines.
-        </p>
-      </div>
+    <div className="min-w-0 space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <AdminPageHeader
+        title="Growth Platform"
+        description="Segments, campaigns, and journeys orchestrate CRM, Loyalty, Promotions, and Notifications — without duplicating those engines."
+      />
 
       {error ? (
-        <div className="rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2 text-sm text-red-200">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {error}
         </div>
       ) : null}
@@ -211,37 +210,41 @@ export function AdminGrowthPanel() {
             ["Campaign revenue", dashboard.campaign_revenue],
             ["Conversion %", dashboard.campaign_conversion_rate],
           ].map(([label, value]) => (
-            <div key={String(label)} className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">{label}</p>
-              <p className="mt-1 text-2xl font-semibold text-zinc-50">{value}</p>
+            <div key={String(label)} className="admin-stat-card px-4 py-4 sm:px-5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-600">
+                {label}
+              </p>
+              <p className="mt-2 text-xl font-bold text-zinc-900">{value}</p>
             </div>
           ))}
         </div>
       ) : null}
 
       {dashboard ? (
-        <div className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-4 text-sm text-zinc-300">
-          <p className="mb-2 text-xs uppercase tracking-wide text-zinc-500">Lifecycle</p>
+        <div className="admin-card p-4 text-sm text-zinc-700">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-600">
+            Lifecycle
+          </p>
           <div className="flex flex-wrap gap-4">
             {Object.entries(dashboard.lifecycle_distribution).map(([key, value]) => (
               <span key={key}>
-                {key}: <span className="text-zinc-100">{value}</span>
+                {key}: <span className="font-semibold text-zinc-900">{value}</span>
               </span>
             ))}
           </div>
         </div>
       ) : null}
 
-      <div className="flex flex-wrap gap-2 border-b border-zinc-800 pb-2">
+      <div className="flex flex-wrap gap-2 border-b border-zinc-200 pb-2">
         {tabs.map((item) => (
           <button
             key={item.id}
             type="button"
             onClick={() => setTab(item.id)}
-            className={`rounded-md px-3 py-1.5 text-sm ${
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
               tab === item.id
-                ? "bg-zinc-100 text-zinc-900"
-                : "border border-zinc-700 text-zinc-300 hover:bg-zinc-900"
+                ? "bg-[#c9a227]/15 text-[#8b6914] ring-1 ring-[#c9a227]/40"
+                : "border border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900"
             }`}
           >
             {item.label}
@@ -251,17 +254,17 @@ export function AdminGrowthPanel() {
 
       {tab === "segments" ? (
         <section className="space-y-4">
-          <form onSubmit={onCreateSegment} className="grid gap-2 rounded-lg border border-zinc-800 p-4 md:grid-cols-5">
+          <form onSubmit={onCreateSegment} className="admin-card grid gap-2 p-4 md:grid-cols-5">
             <input
               value={segmentForm.name}
               onChange={(e) => setSegmentForm((p) => ({ ...p, name: e.target.value }))}
               placeholder="Segment name"
-              className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 md:col-span-2"
+              className="admin-input md:col-span-2"
             />
             <select
               value={segmentForm.field}
               onChange={(e) => setSegmentForm((p) => ({ ...p, field: e.target.value }))}
-              className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+              className="admin-input"
             >
               <option value="total_spend">total_spend</option>
               <option value="total_orders">total_orders</option>
@@ -273,7 +276,7 @@ export function AdminGrowthPanel() {
             <select
               value={segmentForm.op}
               onChange={(e) => setSegmentForm((p) => ({ ...p, op: e.target.value }))}
-              className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+              className="admin-input"
             >
               <option value="gte">gte</option>
               <option value="lte">lte</option>
@@ -285,74 +288,86 @@ export function AdminGrowthPanel() {
               value={segmentForm.value}
               onChange={(e) => setSegmentForm((p) => ({ ...p, value: e.target.value }))}
               placeholder="Value"
-              className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+              className="admin-input"
             />
             <button
               type="submit"
               disabled={busy}
-              className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-900 md:col-span-5 md:w-fit"
+              className="admin-btn-primary md:col-span-5 md:w-fit disabled:opacity-50"
             >
               Create segment
             </button>
           </form>
 
-          <div className="overflow-x-auto rounded-lg border border-zinc-800">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-zinc-900/60 text-zinc-400">
-                <tr>
-                  <th className="px-3 py-2">Code</th>
-                  <th className="px-3 py-2">Name</th>
-                  <th className="px-3 py-2">Members</th>
-                  <th className="px-3 py-2">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {segments.map((segment) => (
-                  <tr key={segment.id} className="border-t border-zinc-800 text-zinc-200">
-                    <td className="px-3 py-2 font-mono text-xs">{segment.code}</td>
-                    <td className="px-3 py-2">{segment.name}</td>
-                    <td className="px-3 py-2">{segment.member_count}</td>
-                    <td className="px-3 py-2">
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => {
-                          setBusy(true);
-                          void refreshGrowthSegment(segment.id)
-                            .then(() => reload())
-                            .catch((err) =>
-                              setError(
-                                err instanceof AdminGrowthApiError ? err.message : "Refresh failed.",
-                              ),
-                            )
-                            .finally(() => setBusy(false));
-                        }}
-                        className="rounded border border-zinc-700 px-2 py-1 text-xs"
-                      >
-                        Refresh
-                      </button>
-                    </td>
+          <div className="admin-card overflow-hidden">
+            <div className="admin-table-scroll">
+              <table className="admin-table min-w-full">
+                <thead>
+                  <tr>
+                    <th>Code</th>
+                    <th>Name</th>
+                    <th>Members</th>
+                    <th>Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {segments.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="!p-0">
+                        <AdminEmptyState title="No segments yet" />
+                      </td>
+                    </tr>
+                  ) : (
+                    segments.map((segment) => (
+                      <tr key={segment.id}>
+                        <td className="font-mono text-xs">{segment.code}</td>
+                        <td className="admin-table-primary">{segment.name}</td>
+                        <td>{segment.member_count}</td>
+                        <td>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                              setBusy(true);
+                              void refreshGrowthSegment(segment.id)
+                                .then(() => reload())
+                                .catch((err) =>
+                                  setError(
+                                    err instanceof AdminGrowthApiError
+                                      ? err.message
+                                      : "Refresh failed.",
+                                  ),
+                                )
+                                .finally(() => setBusy(false));
+                            }}
+                            className="admin-btn-secondary !px-2 !py-1 text-xs"
+                          >
+                            Refresh
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </section>
       ) : null}
 
       {tab === "campaigns" ? (
         <section className="space-y-4">
-          <form onSubmit={onCreateCampaign} className="grid gap-2 rounded-lg border border-zinc-800 p-4 md:grid-cols-2">
+          <form onSubmit={onCreateCampaign} className="admin-card grid gap-2 p-4 md:grid-cols-2">
             <input
               value={campaignForm.name}
               onChange={(e) => setCampaignForm((p) => ({ ...p, name: e.target.value }))}
               placeholder="Campaign name"
-              className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+              className="admin-input"
             />
             <select
               value={campaignForm.campaign_type}
               onChange={(e) => setCampaignForm((p) => ({ ...p, campaign_type: e.target.value }))}
-              className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+              className="admin-input"
             >
               <option value="promotion">Promotion</option>
               <option value="announcement">Announcement</option>
@@ -365,7 +380,7 @@ export function AdminGrowthPanel() {
             <select
               value={campaignForm.growth_segment_id}
               onChange={(e) => setCampaignForm((p) => ({ ...p, growth_segment_id: e.target.value }))}
-              className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+              className="admin-input"
             >
               <option value="">Target segment</option>
               {segments.map((s) => (
@@ -377,7 +392,7 @@ export function AdminGrowthPanel() {
             <select
               value={campaignForm.channel}
               onChange={(e) => setCampaignForm((p) => ({ ...p, channel: e.target.value }))}
-              className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+              className="admin-input"
             >
               <option value="whatsapp">WhatsApp</option>
               <option value="email">Email</option>
@@ -390,15 +405,15 @@ export function AdminGrowthPanel() {
               onChange={(e) => setCampaignForm((p) => ({ ...p, message_body: e.target.value }))}
               placeholder="Message body"
               rows={3}
-              className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 md:col-span-2"
+              className="admin-input md:col-span-2"
             />
             <input
               value={campaignForm.bonus_points}
               onChange={(e) => setCampaignForm((p) => ({ ...p, bonus_points: e.target.value }))}
               placeholder="Bonus loyalty points (optional)"
-              className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+              className="admin-input"
             />
-            <label className="flex items-center gap-2 text-sm text-zinc-300">
+            <label className="flex items-center gap-2 text-sm text-zinc-700">
               <input
                 type="checkbox"
                 checked={campaignForm.create_promotion}
@@ -411,54 +426,66 @@ export function AdminGrowthPanel() {
             <button
               type="submit"
               disabled={busy}
-              className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-900 md:col-span-2 md:w-fit"
+              className="admin-btn-primary md:col-span-2 md:w-fit disabled:opacity-50"
             >
               Create campaign
             </button>
           </form>
 
-          <div className="overflow-x-auto rounded-lg border border-zinc-800">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-zinc-900/60 text-zinc-400">
-                <tr>
-                  <th className="px-3 py-2">Name</th>
-                  <th className="px-3 py-2">Type</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">Sent</th>
-                  <th className="px-3 py-2">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {campaigns.map((campaign) => (
-                  <tr key={campaign.id} className="border-t border-zinc-800 text-zinc-200">
-                    <td className="px-3 py-2">{campaign.name}</td>
-                    <td className="px-3 py-2">{campaign.campaign_type}</td>
-                    <td className="px-3 py-2">{campaign.status}</td>
-                    <td className="px-3 py-2">{campaign.sent_count}</td>
-                    <td className="px-3 py-2">
-                      <button
-                        type="button"
-                        disabled={busy || campaign.status === "completed"}
-                        onClick={() => {
-                          setBusy(true);
-                          void sendGrowthCampaign(campaign.id)
-                            .then(() => reload())
-                            .catch((err) =>
-                              setError(
-                                err instanceof AdminGrowthApiError ? err.message : "Send failed.",
-                              ),
-                            )
-                            .finally(() => setBusy(false));
-                        }}
-                        className="rounded border border-zinc-700 px-2 py-1 text-xs disabled:opacity-40"
-                      >
-                        Send
-                      </button>
-                    </td>
+          <div className="admin-card overflow-hidden">
+            <div className="admin-table-scroll">
+              <table className="admin-table min-w-full">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Sent</th>
+                    <th>Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {campaigns.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="!p-0">
+                        <AdminEmptyState title="No campaigns yet" />
+                      </td>
+                    </tr>
+                  ) : (
+                    campaigns.map((campaign) => (
+                      <tr key={campaign.id}>
+                        <td className="admin-table-primary">{campaign.name}</td>
+                        <td>{campaign.campaign_type}</td>
+                        <td className="capitalize">{campaign.status}</td>
+                        <td>{campaign.sent_count}</td>
+                        <td>
+                          <button
+                            type="button"
+                            disabled={busy || campaign.status === "completed"}
+                            onClick={() => {
+                              setBusy(true);
+                              void sendGrowthCampaign(campaign.id)
+                                .then(() => reload())
+                                .catch((err) =>
+                                  setError(
+                                    err instanceof AdminGrowthApiError
+                                      ? err.message
+                                      : "Send failed.",
+                                  ),
+                                )
+                                .finally(() => setBusy(false));
+                            }}
+                            className="admin-btn-secondary !px-2 !py-1 text-xs disabled:opacity-40"
+                          >
+                            Send
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </section>
       ) : null}
@@ -478,22 +505,22 @@ export function AdminGrowthPanel() {
                   )
                   .finally(() => setBusy(false));
               }}
-              className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200"
+              className="admin-btn-secondary disabled:opacity-50"
             >
               Run journey triggers
             </button>
           </div>
-          <form onSubmit={onCreateJourney} className="grid gap-2 rounded-lg border border-zinc-800 p-4 md:grid-cols-2">
+          <form onSubmit={onCreateJourney} className="admin-card grid gap-2 p-4 md:grid-cols-2">
             <input
               value={journeyForm.name}
               onChange={(e) => setJourneyForm((p) => ({ ...p, name: e.target.value }))}
               placeholder="Journey name"
-              className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+              className="admin-input"
             />
             <select
               value={journeyForm.trigger_type}
               onChange={(e) => setJourneyForm((p) => ({ ...p, trigger_type: e.target.value }))}
-              className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+              className="admin-input"
             >
               <option value="registration">Registration</option>
               <option value="inactive_days">Inactive days</option>
@@ -504,7 +531,7 @@ export function AdminGrowthPanel() {
             <select
               value={journeyForm.growth_segment_id}
               onChange={(e) => setJourneyForm((p) => ({ ...p, growth_segment_id: e.target.value }))}
-              className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+              className="admin-input"
             >
               <option value="">Optional segment</option>
               {segments.map((s) => (
@@ -516,7 +543,7 @@ export function AdminGrowthPanel() {
             <select
               value={journeyForm.growth_campaign_id}
               onChange={(e) => setJourneyForm((p) => ({ ...p, growth_campaign_id: e.target.value }))}
-              className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+              className="admin-input"
             >
               <option value="">Optional campaign</option>
               {campaigns.map((c) => (
@@ -528,25 +555,26 @@ export function AdminGrowthPanel() {
             <button
               type="submit"
               disabled={busy}
-              className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-900 md:col-span-2 md:w-fit"
+              className="admin-btn-primary md:col-span-2 md:w-fit disabled:opacity-50"
             >
               Create journey
             </button>
           </form>
-          <ul className="space-y-2">
-            {journeys.map((journey) => (
-              <li
-                key={journey.id}
-                className="rounded-lg border border-zinc-800 px-3 py-2 text-sm text-zinc-200"
-              >
-                <span className="font-medium text-zinc-50">{journey.name}</span>
-                <span className="ml-2 text-zinc-500">{journey.trigger_type}</span>
-                {journey.segment ? (
-                  <span className="ml-2 text-zinc-500">→ {journey.segment.name}</span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
+          {journeys.length === 0 ? (
+            <AdminEmptyState title="No journeys yet" />
+          ) : (
+            <ul className="space-y-2">
+              {journeys.map((journey) => (
+                <li key={journey.id} className="admin-card px-3 py-2 text-sm text-zinc-700">
+                  <span className="font-medium text-zinc-900">{journey.name}</span>
+                  <span className="ml-2 text-zinc-600">{journey.trigger_type}</span>
+                  {journey.segment ? (
+                    <span className="ml-2 text-zinc-600">→ {journey.segment.name}</span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       ) : null}
 
@@ -556,7 +584,7 @@ export function AdminGrowthPanel() {
             <select
               value={analyticsCampaignId}
               onChange={(e) => setAnalyticsCampaignId(e.target.value)}
-              className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+              className="admin-input max-w-xs"
             >
               <option value="">Select campaign</option>
               {campaigns.map((c) => (
@@ -577,7 +605,7 @@ export function AdminGrowthPanel() {
                   )
                   .finally(() => setBusy(false));
               }}
-              className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200"
+              className="admin-btn-secondary disabled:opacity-50"
             >
               Load analytics
             </button>
@@ -594,47 +622,56 @@ export function AdminGrowthPanel() {
                   ["Revenue", analytics.revenue_generated],
                 ] as const
               ).map(([label, value]) => (
-                <div key={label} className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
-                  <p className="text-xs uppercase tracking-wide text-zinc-500">{label}</p>
-                  <p className="mt-1 text-xl font-semibold text-zinc-50">{value}</p>
+                <div key={label} className="admin-stat-card px-4 py-4 sm:px-5">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-600">
+                    {label}
+                  </p>
+                  <p className="mt-2 text-xl font-bold text-zinc-900">{value}</p>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-zinc-500">
-              Select a campaign to view engagement. Platform KPIs also appear under Analytics → Growth.
+            <p className="text-sm text-zinc-600">
+              Select a campaign to view engagement. Platform KPIs also appear under Analytics →
+              Growth.
             </p>
           )}
         </section>
       ) : null}
 
       {tab === "templates" ? (
-        <section className="rounded-lg border border-zinc-800 p-4 text-sm text-zinc-300">
-          <p className="font-medium text-zinc-100">Message templates</p>
-          <p className="mt-2 text-zinc-500">
+        <section className="admin-card p-4 text-sm text-zinc-700">
+          <p className="font-semibold text-zinc-900">Message templates</p>
+          <p className="mt-2 text-zinc-600">
             Growth campaigns reuse the Notification Platform templates keyed by{" "}
-            <code className="text-zinc-300">growth_campaign.&#123;channel&#125;</code>. Manage copy in
-            Notification Templates — this platform does not store a parallel template system.
+            <code className="text-zinc-800">growth_campaign.&#123;channel&#125;</code>. Manage copy
+            in Notification Templates — this platform does not store a parallel template system.
           </p>
-          <a href="/admin/notification-templates" className="mt-3 inline-block text-zinc-100 underline">
+          <a
+            href="/admin/notification-templates"
+            className="mt-3 inline-block font-medium text-[#8b6914] underline"
+          >
             Open notification templates
           </a>
         </section>
       ) : null}
 
       {tab === "settings" ? (
-        <section className="rounded-lg border border-zinc-800 p-4 text-sm text-zinc-300">
-          <p className="font-medium text-zinc-100">Channel priority</p>
-          <ol className="mt-3 list-decimal space-y-1 pl-5 text-zinc-400">
+        <section className="admin-card p-4 text-sm text-zinc-700">
+          <p className="font-semibold text-zinc-900">Channel priority</p>
+          <ol className="mt-3 list-decimal space-y-1 pl-5 text-zinc-600">
             {CHANNEL_PRIORITY.map((channel) => (
               <li key={channel}>{channel}</li>
             ))}
           </ol>
-          <p className="mt-4 text-zinc-500">
+          <p className="mt-4 text-zinc-600">
             Delivery credentials and providers live in Notification Settings. Growth only selects
-            channels and event type <code className="text-zinc-300">growth_campaign</code>.
+            channels and event type <code className="text-zinc-800">growth_campaign</code>.
           </p>
-          <a href="/admin/notifications" className="mt-3 inline-block text-zinc-100 underline">
+          <a
+            href="/admin/notifications"
+            className="mt-3 inline-block font-medium text-[#8b6914] underline"
+          >
             Open notification settings
           </a>
         </section>

@@ -62,15 +62,25 @@ export function AdminStatCard({
   const content = (
     <div className={`${variantClasses[variant]} p-4 transition hover:shadow-md sm:p-5`}>
       <div className="flex items-start justify-between gap-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">{label}</p>
+        <p
+          className={`text-xs font-semibold uppercase tracking-[0.14em] ${
+            variant === "dark" ? "text-zinc-300" : "text-zinc-600"
+          }`}
+        >
+          {label}
+        </p>
         {icon}
       </div>
       <AnimatedStatValue
         value={value}
         livePulse={livePulse}
-        className={`mt-2 block font-bold ${accent ?? "text-zinc-900"} ${isText ? "text-lg sm:text-xl" : "text-2xl sm:text-3xl"}`}
+        className={`mt-2 block font-bold ${accent ?? (variant === "dark" ? "text-white" : "text-zinc-900")} ${isText ? "text-lg sm:text-xl" : "text-2xl sm:text-3xl"}`}
       />
-      {sub ? <p className="mt-1.5 text-xs text-zinc-500">{sub}</p> : null}
+      {sub ? (
+        <p className={`mt-1.5 text-xs ${variant === "dark" ? "text-zinc-400" : "text-zinc-600"}`}>
+          {sub}
+        </p>
+      ) : null}
     </div>
   );
 

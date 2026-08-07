@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminRefreshStatusBar } from "@/components/admin/AdminRefreshStatusBar";
 import { CatalogHealthIssueCards } from "@/components/admin/CatalogHealthIssueCards";
 import { CatalogHealthOverview } from "@/components/admin/CatalogHealthOverview";
@@ -84,45 +85,48 @@ export function AdminCatalogHealthPanel() {
 
   if (permissionsLoading) {
     return (
-      <div className="rounded-xl border border-zinc-200 bg-white px-4 py-8 text-sm text-zinc-500 shadow-sm">
-        Checking permissions…
+      <div className="min-w-0 space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+        <div className="admin-card px-4 py-8 text-sm text-zinc-600">Checking permissions…</div>
       </div>
     );
   }
 
   if (!canView) {
     return (
-      <div className="rounded-xl border border-zinc-200 bg-white px-4 py-8 text-sm text-zinc-600 shadow-sm">
-        You need <span className="font-mono text-xs">catalog.view</span> to open Catalog Health.
+      <div className="min-w-0 space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+        <AdminPageHeader title="Catalog Health" eyebrow="Catalog" />
+        <div className="admin-card px-4 py-8 text-sm text-zinc-600">
+          You need <span className="font-mono text-xs text-zinc-900">catalog.view</span> to open
+          Catalog Health.
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-zinc-900">Catalog Health</h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            Read-only quality signals for commerce readiness, media, inventory, and catalog data.
-          </p>
-        </div>
-        <AdminRefreshStatusBar
-          lastUpdatedAt={autoRefresh.lastUpdatedAt}
-          isRefreshing={autoRefresh.isRefreshing || loading}
-          onRefresh={() => void autoRefresh.refreshNow()}
-          policyLabel={autoRefresh.policyLabel}
-        />
-      </div>
+    <div className="min-w-0 space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <AdminPageHeader
+        eyebrow="Catalog"
+        title="Catalog Health"
+        description="Read-only quality signals for commerce readiness, media, inventory, and catalog data."
+        actions={
+          <AdminRefreshStatusBar
+            lastUpdatedAt={autoRefresh.lastUpdatedAt}
+            isRefreshing={autoRefresh.isRefreshing || loading}
+            onRefresh={() => void autoRefresh.refreshNow()}
+            policyLabel={autoRefresh.policyLabel}
+          />
+        }
+      />
 
       {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {error}
         </div>
       ) : null}
 
       {loading && !report ? (
-        <div className="rounded-xl border border-zinc-200 bg-white px-4 py-10 text-center text-sm text-zinc-500 shadow-sm">
+        <div className="admin-card px-4 py-10 text-center text-sm text-zinc-600">
           Loading catalog health…
         </div>
       ) : null}

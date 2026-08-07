@@ -43,7 +43,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-[#f4f4f5] lg:flex-row">
+    <div className="flex min-h-screen bg-[var(--admin-bg,#f3f4f6)] lg:flex-row">
       <AdminSidebar
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed((current) => !current)}

@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { useAdminPermissions } from "@/hooks/use-admin-permissions";
 import {
   AdminCatalogApiError,
@@ -127,46 +129,45 @@ export function AdminStoreSettingsPanel() {
 
   if (permissionsLoading) {
     return (
-      <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6 text-sm text-zinc-400">
-        Checking permissions…
+      <div className="min-w-0 space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+        <div className="admin-card p-6 text-sm text-zinc-600">Checking permissions…</div>
       </div>
     );
   }
 
   if (!canView) {
     return (
-      <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6">
-        <h1 className="text-xl font-semibold text-zinc-100">Store settings</h1>
-        <p className="mt-2 text-sm text-zinc-400">
-          You need <code className="text-zinc-300">stores.view</code> to open this page.
-        </p>
+      <div className="min-w-0 space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+        <AdminPageHeader title="Store settings" />
+        <div className="admin-card p-6">
+          <p className="text-sm text-zinc-600">
+            You need <code className="text-zinc-900">stores.view</code> to open this page.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-zinc-100">Store settings</h1>
-        <p className="mt-1 text-sm text-zinc-400">
-          Manage business information, customer contact, receipt content, and social links. Stored in
-          each store&apos;s settings JSON — secrets stay out of the database.
-        </p>
-      </div>
+    <div className="min-w-0 space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <AdminPageHeader
+        title="Store settings"
+        description="Manage business information, customer contact, receipt content, and social links. Stored in each store&apos;s settings JSON — secrets stay out of the database."
+      />
 
       {error ? (
-        <div className="rounded-lg border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {error}
         </div>
       ) : null}
       {success ? (
-        <div className="rounded-lg border border-emerald-900/60 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-200">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           {success}
         </div>
       ) : null}
 
-      <section className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-5">
-        <label className="block text-sm text-zinc-300">
+      <section className="admin-card p-5">
+        <label className="admin-label">
           Store
           <select
             value={storeId}
@@ -175,7 +176,7 @@ export function AdminStoreSettingsPanel() {
               setStoreId(event.target.value);
               setSuccess(null);
             }}
-            className="mt-1 w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100 disabled:opacity-60"
+            className="admin-input mt-1 max-w-md disabled:opacity-60"
           >
             {stores.length === 0 ? <option value="">No stores available</option> : null}
             {stores.map((store) => (
@@ -188,17 +189,16 @@ export function AdminStoreSettingsPanel() {
       </section>
 
       {loadingStores || loadingSettings ? (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6 text-sm text-zinc-400">
-          Loading store settings…
-        </div>
+        <div className="admin-card p-6 text-sm text-zinc-600">Loading store settings…</div>
       ) : !storeId ? (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6 text-sm text-zinc-400">
-          Select a store to edit settings.
-        </div>
+        <AdminEmptyState
+          title="Select a store to edit settings"
+          description="Choose a store above to load business, contact, receipt, and social settings."
+        />
       ) : (
         <>
-          <section className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-5">
-            <h2 className="text-lg font-medium text-zinc-100">Business information</h2>
+          <section className="admin-card p-5">
+            <h2 className="text-lg font-semibold text-zinc-900">Business information</h2>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {(
                 [
@@ -208,7 +208,7 @@ export function AdminStoreSettingsPanel() {
                   ["address", "Address"],
                 ] as const
               ).map(([key, label]) => (
-                <label key={key} className="block text-sm text-zinc-300 md:col-span-1">
+                <label key={key} className="admin-label md:col-span-1">
                   {label}
                   <input
                     type={key === "email" ? "email" : "text"}
@@ -225,17 +225,17 @@ export function AdminStoreSettingsPanel() {
                       );
                       setSuccess(null);
                     }}
-                    className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100 disabled:opacity-60"
+                    className="admin-input mt-1 disabled:opacity-60"
                   />
                 </label>
               ))}
             </div>
           </section>
 
-          <section className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-5">
-            <h2 className="text-lg font-medium text-zinc-100">Customer contact</h2>
+          <section className="admin-card p-5">
+            <h2 className="text-lg font-semibold text-zinc-900">Customer contact</h2>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <label className="block text-sm text-zinc-300">
+              <label className="admin-label">
                 Support phone
                 <input
                   type="text"
@@ -252,10 +252,10 @@ export function AdminStoreSettingsPanel() {
                     );
                     setSuccess(null);
                   }}
-                  className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100 disabled:opacity-60"
+                  className="admin-input mt-1 disabled:opacity-60"
                 />
               </label>
-              <label className="block text-sm text-zinc-300">
+              <label className="admin-label">
                 Support email
                 <input
                   type="email"
@@ -272,19 +272,19 @@ export function AdminStoreSettingsPanel() {
                     );
                     setSuccess(null);
                   }}
-                  className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100 disabled:opacity-60"
+                  className="admin-input mt-1 disabled:opacity-60"
                 />
               </label>
             </div>
           </section>
 
-          <section className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-5">
-            <h2 className="text-lg font-medium text-zinc-100">Receipt settings</h2>
-            <p className="mt-1 text-sm text-zinc-500">
+          <section className="admin-card p-5">
+            <h2 className="text-lg font-semibold text-zinc-900">Receipt settings</h2>
+            <p className="mt-1 text-sm text-zinc-600">
               Updates merge into existing receipt JSON used by POS — other receipt keys are preserved.
             </p>
             <div className="mt-4 space-y-3">
-              <label className="block text-sm text-zinc-300">
+              <label className="admin-label">
                 Footer message
                 <textarea
                   value={sections.receipt.footer_message}
@@ -301,10 +301,10 @@ export function AdminStoreSettingsPanel() {
                     );
                     setSuccess(null);
                   }}
-                  className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100 disabled:opacity-60"
+                  className="admin-input mt-1 disabled:opacity-60"
                 />
               </label>
-              <label className="flex items-center gap-3 text-sm text-zinc-300">
+              <label className="flex items-center gap-3 text-sm text-zinc-600">
                 <input
                   type="checkbox"
                   checked={Boolean(sections.receipt.show_logo)}
@@ -320,15 +320,15 @@ export function AdminStoreSettingsPanel() {
                     );
                     setSuccess(null);
                   }}
-                  className="h-4 w-4 rounded border-zinc-600 bg-zinc-900"
+                  className="h-4 w-4 rounded border-zinc-300"
                 />
                 Show logo on receipt
               </label>
             </div>
           </section>
 
-          <section className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-5">
-            <h2 className="text-lg font-medium text-zinc-100">Social links</h2>
+          <section className="admin-card p-5">
+            <h2 className="text-lg font-semibold text-zinc-900">Social links</h2>
             <div className="mt-4 grid gap-3 md:grid-cols-3">
               {(
                 [
@@ -337,7 +337,7 @@ export function AdminStoreSettingsPanel() {
                   ["tiktok", "TikTok"],
                 ] as const
               ).map(([key, label]) => (
-                <label key={key} className="block text-sm text-zinc-300">
+                <label key={key} className="admin-label">
                   {label}
                   <input
                     type="text"
@@ -354,7 +354,7 @@ export function AdminStoreSettingsPanel() {
                       );
                       setSuccess(null);
                     }}
-                    className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100 disabled:opacity-60"
+                    className="admin-input mt-1 disabled:opacity-60"
                   />
                 </label>
               ))}
@@ -366,7 +366,7 @@ export function AdminStoreSettingsPanel() {
               type="button"
               disabled={!canManage || saving || !storeId}
               onClick={() => void save()}
-              className="rounded-lg bg-[#e8c547] px-4 py-2 text-sm font-medium text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50"
+              className="admin-btn-primary disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving ? "Saving…" : canManage ? "Save settings" : "View only"}
             </button>

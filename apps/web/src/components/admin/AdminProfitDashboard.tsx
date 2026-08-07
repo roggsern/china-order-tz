@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import {
   AdminProfitsApiError,
   fetchAdminProfitDashboard,
@@ -29,9 +31,9 @@ function MetricCard({
   value: string;
 }) {
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-4 py-4">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">{label}</p>
-      <p className="mt-2 text-xl font-semibold text-zinc-100">{value}</p>
+    <div className="admin-stat-card px-4 py-4 sm:px-5">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-600">{label}</p>
+      <p className="mt-2 text-xl font-bold text-zinc-900">{value}</p>
     </div>
   );
 }
@@ -46,41 +48,41 @@ function ProductTable({
   empty: string;
 }) {
   return (
-    <section className="rounded-lg border border-zinc-800 bg-zinc-950/40">
-      <header className="border-b border-zinc-800 px-4 py-3">
-        <h2 className="text-sm font-semibold text-zinc-100">{title}</h2>
+    <section className="admin-card overflow-hidden">
+      <header className="border-b border-zinc-200 px-4 py-3">
+        <h2 className="text-sm font-semibold text-zinc-900">{title}</h2>
       </header>
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-left text-sm">
-          <thead className="bg-zinc-900/80 text-[11px] uppercase tracking-wider text-zinc-500">
+      <div className="admin-table-scroll">
+        <table className="admin-table min-w-full">
+          <thead>
             <tr>
-              <th className="px-4 py-2.5 font-medium">Product</th>
-              <th className="px-4 py-2.5 font-medium">Revenue</th>
-              <th className="px-4 py-2.5 font-medium">Cost</th>
-              <th className="px-4 py-2.5 font-medium">Profit</th>
-              <th className="px-4 py-2.5 font-medium">Margin</th>
+              <th>Product</th>
+              <th>Revenue</th>
+              <th>Cost</th>
+              <th>Profit</th>
+              <th>Margin</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-zinc-500">
-                  {empty}
+                <td colSpan={5} className="!p-0">
+                  <AdminEmptyState title={empty} description="Adjust the date range or wait for paid orders with profit snapshots." />
                 </td>
               </tr>
             ) : (
               rows.map((row) => (
-                <tr key={`${row.product_id}-${row.product_variant_id ?? "x"}`} className="border-t border-zinc-800/80">
-                  <td className="px-4 py-3 text-zinc-200">
-                    <div className="font-medium">{row.product_name ?? "—"}</div>
-                    <div className="text-xs text-zinc-500">
+                <tr key={`${row.product_id}-${row.product_variant_id ?? "x"}`}>
+                  <td className="admin-table-primary">
+                    <div>{row.product_name ?? "—"}</div>
+                    <div className="mt-0.5 text-xs font-normal text-zinc-600">
                       {[row.variant_name, row.sku].filter(Boolean).join(" · ") || "—"}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-zinc-300">{formatMoney(row.revenue)}</td>
-                  <td className="px-4 py-3 text-zinc-300">{formatMoney(row.total_cost)}</td>
-                  <td className="px-4 py-3 text-zinc-300">{formatMoney(row.gross_profit)}</td>
-                  <td className="px-4 py-3 text-zinc-300">{formatMargin(row.margin_percentage)}</td>
+                  <td>{formatMoney(row.revenue)}</td>
+                  <td>{formatMoney(row.total_cost)}</td>
+                  <td>{formatMoney(row.gross_profit)}</td>
+                  <td>{formatMargin(row.margin_percentage)}</td>
                 </tr>
               ))
             )}
@@ -93,39 +95,42 @@ function ProductTable({
 
 function SupplierTable({ rows }: { rows: AdminProfitSupplierRow[] }) {
   return (
-    <section className="rounded-lg border border-zinc-800 bg-zinc-950/40">
-      <header className="border-b border-zinc-800 px-4 py-3">
-        <h2 className="text-sm font-semibold text-zinc-100">Supplier profitability</h2>
+    <section className="admin-card overflow-hidden">
+      <header className="border-b border-zinc-200 px-4 py-3">
+        <h2 className="text-sm font-semibold text-zinc-900">Supplier profitability</h2>
       </header>
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-left text-sm">
-          <thead className="bg-zinc-900/80 text-[11px] uppercase tracking-wider text-zinc-500">
+      <div className="admin-table-scroll">
+        <table className="admin-table min-w-full">
+          <thead>
             <tr>
-              <th className="px-4 py-2.5 font-medium">Supplier</th>
-              <th className="px-4 py-2.5 font-medium">Revenue</th>
-              <th className="px-4 py-2.5 font-medium">Cost</th>
-              <th className="px-4 py-2.5 font-medium">Profit</th>
-              <th className="px-4 py-2.5 font-medium">Margin</th>
+              <th>Supplier</th>
+              <th>Revenue</th>
+              <th>Cost</th>
+              <th>Profit</th>
+              <th>Margin</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-zinc-500">
-                  No supplier profit data yet.
+                <td colSpan={5} className="!p-0">
+                  <AdminEmptyState
+                    title="No supplier profit data yet"
+                    description="Supplier margins appear after China import orders are paid and costed."
+                  />
                 </td>
               </tr>
             ) : (
               rows.map((row) => (
-                <tr key={row.supplier_id} className="border-t border-zinc-800/80">
-                  <td className="px-4 py-3 text-zinc-200">
-                    <div className="font-medium">{row.supplier_name ?? "—"}</div>
-                    <div className="text-xs text-zinc-500">{row.supplier_code ?? "—"}</div>
+                <tr key={row.supplier_id}>
+                  <td className="admin-table-primary">
+                    <div>{row.supplier_name ?? "—"}</div>
+                    <div className="mt-0.5 text-xs font-normal text-zinc-600">{row.supplier_code ?? "—"}</div>
                   </td>
-                  <td className="px-4 py-3 text-zinc-300">{formatMoney(row.revenue)}</td>
-                  <td className="px-4 py-3 text-zinc-300">{formatMoney(row.total_cost)}</td>
-                  <td className="px-4 py-3 text-zinc-300">{formatMoney(row.gross_profit)}</td>
-                  <td className="px-4 py-3 text-zinc-300">{formatMargin(row.margin_percentage)}</td>
+                  <td>{formatMoney(row.revenue)}</td>
+                  <td>{formatMoney(row.total_cost)}</td>
+                  <td>{formatMoney(row.gross_profit)}</td>
+                  <td>{formatMargin(row.margin_percentage)}</td>
                 </tr>
               ))
             )}
@@ -168,54 +173,49 @@ export function AdminProfitDashboard() {
   const summary = data?.summary;
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-zinc-50">Profit Dashboard</h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            Snapshot-based revenue, cost, and margin. Historical orders never recalculate from live prices.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-end gap-2">
-          <label className="text-xs text-zinc-500">
-            From
-            <input
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="mt-1 block rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
-            />
-          </label>
-          <label className="text-xs text-zinc-500">
-            To
-            <input
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="mt-1 block rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => void reload()}
-            className="rounded-md bg-[#c9a227] px-3 py-2 text-sm font-semibold text-zinc-950 hover:bg-[#e8c547]"
-          >
-            Refresh
-          </button>
-        </div>
-      </div>
+    <div className="min-w-0 space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <AdminPageHeader
+        eyebrow="Finance"
+        title="Profit Dashboard"
+        description="Snapshot-based revenue, cost, and margin. Historical orders never recalculate from live prices."
+        actions={
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="admin-label">
+              From
+              <input
+                type="date"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                className="admin-input mt-1"
+              />
+            </label>
+            <label className="admin-label">
+              To
+              <input
+                type="date"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                className="admin-input mt-1"
+              />
+            </label>
+            <button type="button" onClick={() => void reload()} className="admin-btn-primary">
+              Refresh
+            </button>
+          </div>
+        }
+      />
 
       {error ? (
-        <div className="rounded-md border border-red-900/60 bg-red-950/40 px-3 py-2 text-sm text-red-200">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {error}
         </div>
       ) : null}
 
       {loading && !data ? (
-        <p className="text-sm text-zinc-500">Loading profit metrics…</p>
+        <p className="text-sm text-zinc-600">Loading profit metrics…</p>
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="admin-dashboard-grid-4">
             <MetricCard
               label="Revenue"
               value={summary ? formatMoney(summary.revenue, summary.currency) : "—"}
@@ -234,16 +234,16 @@ export function AdminProfitDashboard() {
             />
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid min-w-0 gap-4 xl:grid-cols-2">
             <ProductTable
               title="Top profitable products"
               rows={data?.top_products ?? []}
-              empty="No profitable product rows yet."
+              empty="No profitable product rows yet"
             />
             <ProductTable
               title="Low margin products"
               rows={data?.low_margin_products ?? []}
-              empty="No low-margin products in range."
+              empty="No low-margin products in range"
             />
           </div>
 

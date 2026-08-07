@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { useAdminPermissions } from "@/hooks/use-admin-permissions";
 import {
   brandingUploadReady,
@@ -214,175 +216,174 @@ export function AdminStoresPanel({ initialStoreId }: { initialStoreId?: string }
 
   if (permissionsLoading) {
     return (
-      <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6 text-sm text-zinc-400">
-        Checking permissions…
+      <div className="min-w-0 space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+        <div className="admin-card p-6 text-sm text-zinc-600">Checking permissions…</div>
       </div>
     );
   }
 
   if (!canView) {
     return (
-      <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6">
-        <h1 className="text-xl font-semibold text-zinc-100">Stores</h1>
-        <p className="mt-2 text-sm text-zinc-400">
-          You need <code className="text-zinc-300">stores.view</code> to open Store Manager.
-        </p>
+      <div className="min-w-0 space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+        <AdminPageHeader title="Stores" />
+        <div className="admin-card p-6">
+          <p className="text-sm text-zinc-600">
+            You need <code className="text-zinc-900">stores.view</code> to open Store Manager.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-zinc-100">{title}</h1>
-          <p className="mt-1 text-sm text-zinc-400">
-            Manage TZ_LOCAL store identity, status, and branding. Settings stay on the settings page.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {mode !== "list" ? (
-            <button
-              type="button"
-              onClick={() => {
-                setMode("list");
-                setSelected(null);
-                void reloadList();
-              }}
-              className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900"
-            >
-              Back to list
-            </button>
-          ) : null}
-          {mode === "list" && canCreate ? (
-            <button
-              type="button"
-              onClick={() => {
-                setMode("create");
-                setForm(emptyForm());
-                setLogoFile(null);
-                setBannerFile(null);
-                setSelected(null);
-              }}
-              className="rounded-lg border border-[#c9a227]/50 bg-[#c9a227]/10 px-3 py-1.5 text-sm text-[#c9a227]"
-            >
-              Create store
-            </button>
-          ) : null}
-        </div>
-      </div>
+    <div className="min-w-0 space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <AdminPageHeader
+        title={title}
+        description="Manage TZ_LOCAL store identity, status, and branding. Settings stay on the settings page."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            {mode !== "list" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("list");
+                  setSelected(null);
+                  void reloadList();
+                }}
+                className="admin-btn-secondary"
+              >
+                Back to list
+              </button>
+            ) : null}
+            {mode === "list" && canCreate ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("create");
+                  setForm(emptyForm());
+                  setLogoFile(null);
+                  setBannerFile(null);
+                  setSelected(null);
+                }}
+                className="admin-btn-primary"
+              >
+                Create store
+              </button>
+            ) : null}
+          </div>
+        }
+      />
 
       {error ? (
-        <div className="rounded-lg border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {error}
         </div>
       ) : null}
 
       {mode === "list" ? (
         loading ? (
-          <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6 text-sm text-zinc-400">
-            Loading stores…
-          </div>
+          <div className="admin-card p-6 text-sm text-zinc-600">Loading stores…</div>
+        ) : rows.length === 0 ? (
+          <AdminEmptyState title="No stores yet" />
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-zinc-800">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-zinc-950/80 text-xs uppercase tracking-wide text-zinc-500">
-                <tr>
-                  <th className="px-4 py-3">Store</th>
-                  <th className="px-4 py-3">Slug</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Created</th>
-                  <th className="px-4 py-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-800">
-                {rows.map((row) => (
-                  <tr key={row.id} className="bg-zinc-950/30">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        {row.logoUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={row.logoUrl}
-                            alt=""
-                            className="h-10 w-10 rounded-lg object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-800 text-xs text-zinc-300">
-                            {row.name.slice(0, 1)}
+          <div className="admin-card overflow-hidden">
+            <div className="admin-table-scroll">
+              <table className="admin-table min-w-full">
+                <thead>
+                  <tr>
+                    <th>Store</th>
+                    <th>Slug</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr key={row.id}>
+                      <td>
+                        <div className="flex items-center gap-3">
+                          {row.logoUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={row.logoUrl}
+                              alt=""
+                              className="h-10 w-10 rounded-lg object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-100 text-xs font-semibold text-zinc-700">
+                              {row.name.slice(0, 1)}
+                            </div>
+                          )}
+                          <div>
+                            <p className="font-semibold text-zinc-900">{row.name}</p>
+                            <p className="text-xs text-zinc-600">{row.code}</p>
                           </div>
-                        )}
-                        <div>
-                          <p className="font-medium text-zinc-100">{row.name}</p>
-                          <p className="text-xs text-zinc-500">{row.code}</p>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-zinc-300">{row.slug}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={
-                          row.isActive ? "text-emerald-300" : "text-amber-300"
-                        }
-                      >
-                        {row.statusLabel}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-zinc-400">
-                      {row.createdAt ? new Date(row.createdAt).toLocaleDateString() : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => void openEdit(row.id)}
-                          className="text-[#c9a227] hover:underline"
+                      </td>
+                      <td>{row.slug}</td>
+                      <td>
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                            row.isActive
+                              ? "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200"
+                              : "bg-amber-50 text-amber-800 ring-1 ring-amber-200"
+                          }`}
                         >
-                          View
-                        </button>
-                        {canUpdate ? (
+                          {row.statusLabel}
+                        </span>
+                      </td>
+                      <td className="text-zinc-600">
+                        {row.createdAt ? new Date(row.createdAt).toLocaleDateString() : "—"}
+                      </td>
+                      <td>
+                        <div className="flex gap-2">
                           <button
                             type="button"
                             onClick={() => void openEdit(row.id)}
-                            className="text-zinc-300 hover:underline"
+                            className="font-medium text-[#8b6914] hover:underline"
                           >
-                            Edit
+                            View
                           </button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                          {canUpdate ? (
+                            <button
+                              type="button"
+                              onClick={() => void openEdit(row.id)}
+                              className="font-medium text-zinc-700 hover:underline"
+                            >
+                              Edit
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )
       ) : null}
 
       {mode === "create" ? (
-        <form onSubmit={(e) => void handleCreateSubmit(e)} className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-950/40 p-5">
-          <StoreIdentityFields
-            form={form}
-            setForm={setForm}
-            includeCode
-            disabled={saving}
-          />
+        <form onSubmit={(e) => void handleCreateSubmit(e)} className="admin-card space-y-4 p-5">
+          <StoreIdentityFields form={form} setForm={setForm} includeCode disabled={saving} />
           <div className="grid gap-4 md:grid-cols-2">
-            <label className="block text-sm text-zinc-300">
+            <label className="admin-label">
               Logo
               <input
                 type="file"
                 accept="image/*"
-                className="mt-1 block w-full text-sm"
+                className="mt-1 block w-full text-sm text-zinc-700"
                 onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
               />
             </label>
-            <label className="block text-sm text-zinc-300">
+            <label className="admin-label">
               Banner
               <input
                 type="file"
                 accept="image/*"
-                className="mt-1 block w-full text-sm"
+                className="mt-1 block w-full text-sm text-zinc-700"
                 onChange={(e) => setBannerFile(e.target.files?.[0] ?? null)}
               />
             </label>
@@ -390,7 +391,7 @@ export function AdminStoresPanel({ initialStoreId }: { initialStoreId?: string }
           <button
             type="submit"
             disabled={saving || !canCreate}
-            className="rounded-lg border border-[#c9a227]/50 bg-[#c9a227]/10 px-4 py-2 text-sm text-[#c9a227] disabled:opacity-40"
+            className="admin-btn-primary disabled:opacity-40"
           >
             {saving ? "Creating…" : "Create store"}
           </button>
@@ -399,16 +400,16 @@ export function AdminStoresPanel({ initialStoreId }: { initialStoreId?: string }
 
       {mode === "edit" && selected ? (
         <div className="space-y-4">
-          <div className="flex flex-wrap gap-2 border-b border-zinc-800 pb-3">
+          <div className="flex flex-wrap gap-2 border-b border-zinc-200 pb-3">
             {(["overview", "branding", "settings", "team", "activity"] as EditTab[]).map((key) => (
               <button
                 key={key}
                 type="button"
                 onClick={() => setTab(key)}
-                className={`rounded-lg px-3 py-1.5 text-sm capitalize ${
+                className={`rounded-lg px-3 py-1.5 text-sm capitalize font-medium ${
                   tab === key
-                    ? "bg-zinc-800 text-zinc-100"
-                    : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
+                    ? "bg-[#c9a227]/15 text-[#8b6914] ring-1 ring-[#c9a227]/40"
+                    : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900"
                 }`}
               >
                 {key}
@@ -417,12 +418,17 @@ export function AdminStoresPanel({ initialStoreId }: { initialStoreId?: string }
           </div>
 
           {tab === "overview" ? (
-            <form onSubmit={(e) => void handleUpdateSubmit(e)} className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-950/40 p-5">
+            <form
+              onSubmit={(e) => void handleUpdateSubmit(e)}
+              className="admin-card space-y-4 p-5"
+            >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs uppercase tracking-wide text-zinc-500">Store identity</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">
+                  Store identity
+                </p>
                 <Link
                   href={`/admin/stores/${selected.id}/dashboard`}
-                  className="rounded-lg border border-[#c9a227]/40 px-3 py-1 text-xs font-medium text-[#c9a227] hover:bg-[#c9a227]/10"
+                  className="rounded-lg border border-[#c9a227]/40 px-3 py-1 text-xs font-medium text-[#8b6914] hover:bg-[#c9a227]/10"
                 >
                   Open dashboard →
                 </Link>
@@ -439,7 +445,7 @@ export function AdminStoresPanel({ initialStoreId }: { initialStoreId?: string }
                     <button
                       type="submit"
                       disabled={saving}
-                      className="rounded-lg border border-[#c9a227]/50 bg-[#c9a227]/10 px-4 py-2 text-sm text-[#c9a227] disabled:opacity-40"
+                      className="admin-btn-primary disabled:opacity-40"
                     >
                       {saving ? "Saving…" : "Save changes"}
                     </button>
@@ -447,14 +453,14 @@ export function AdminStoresPanel({ initialStoreId }: { initialStoreId?: string }
                       type="button"
                       disabled={saving}
                       onClick={() => void handleStatusToggle()}
-                      className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
+                      className="admin-btn-secondary disabled:opacity-40"
                     >
                       {selected.is_active ? "Deactivate" : "Activate"}
                     </button>
                   </>
                 ) : (
-                  <p className="text-sm text-zinc-500">
-                    You need <code className="text-zinc-300">stores.update</code> to edit this store.
+                  <p className="text-sm text-zinc-600">
+                    You need <code className="text-zinc-900">stores.update</code> to edit this store.
                   </p>
                 )}
               </div>
@@ -462,10 +468,10 @@ export function AdminStoresPanel({ initialStoreId }: { initialStoreId?: string }
           ) : null}
 
           {tab === "branding" ? (
-            <div className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-950/40 p-5">
+            <div className="admin-card space-y-4 p-5">
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-zinc-500">Logo</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">Logo</p>
                   {selected.logo_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -474,18 +480,20 @@ export function AdminStoresPanel({ initialStoreId }: { initialStoreId?: string }
                       className="mt-2 h-24 w-24 rounded-lg object-cover"
                     />
                   ) : (
-                    <p className="mt-2 text-sm text-zinc-500">No logo uploaded.</p>
+                    <p className="mt-2 text-sm text-zinc-600">No logo uploaded.</p>
                   )}
                   <input
                     type="file"
                     accept="image/*"
                     disabled={!canUpdate || saving}
-                    className="mt-3 block w-full text-sm"
+                    className="mt-3 block w-full text-sm text-zinc-700"
                     onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
                   />
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-zinc-500">Banner</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">
+                    Banner
+                  </p>
                   {selected.banner_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -494,13 +502,13 @@ export function AdminStoresPanel({ initialStoreId }: { initialStoreId?: string }
                       className="mt-2 h-24 w-full max-w-md rounded-lg object-cover"
                     />
                   ) : (
-                    <p className="mt-2 text-sm text-zinc-500">No banner uploaded.</p>
+                    <p className="mt-2 text-sm text-zinc-600">No banner uploaded.</p>
                   )}
                   <input
                     type="file"
                     accept="image/*"
                     disabled={!canUpdate || saving}
-                    className="mt-3 block w-full text-sm"
+                    className="mt-3 block w-full text-sm text-zinc-700"
                     onChange={(e) => setBannerFile(e.target.files?.[0] ?? null)}
                   />
                 </div>
@@ -510,7 +518,7 @@ export function AdminStoresPanel({ initialStoreId }: { initialStoreId?: string }
                   type="button"
                   disabled={saving || !brandingUploadReady({ logo: logoFile, banner: bannerFile })}
                   onClick={() => void handleBrandingUpload()}
-                  className="rounded-lg border border-[#c9a227]/50 bg-[#c9a227]/10 px-4 py-2 text-sm text-[#c9a227] disabled:opacity-40"
+                  className="admin-btn-primary disabled:opacity-40"
                 >
                   {saving ? "Uploading…" : "Upload branding"}
                 </button>
@@ -519,15 +527,12 @@ export function AdminStoresPanel({ initialStoreId }: { initialStoreId?: string }
           ) : null}
 
           {tab === "settings" ? (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-5">
-              <p className="text-sm text-zinc-300">
+            <div className="admin-card p-5">
+              <p className="text-sm text-zinc-700">
                 Business, receipt, customer, and social settings are managed in Store Settings — not
                 duplicated here.
               </p>
-              <Link
-                href="/admin/settings/store"
-                className="mt-3 inline-flex rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-[#c9a227] hover:bg-zinc-900"
-              >
+              <Link href="/admin/settings/store" className="admin-btn-secondary mt-3 inline-flex">
                 Open store settings
               </Link>
             </div>
@@ -536,17 +541,17 @@ export function AdminStoresPanel({ initialStoreId }: { initialStoreId?: string }
           {tab === "team" ? <AdminStoreTeamPanel storeId={selected.id} /> : null}
 
           {tab === "activity" ? (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-5">
+            <div className="admin-card p-5">
               {activity.length === 0 ? (
-                <p className="text-sm text-zinc-400">No recent activity for this store.</p>
+                <AdminEmptyState title="No recent activity for this store" />
               ) : (
-                <ul className="divide-y divide-zinc-800">
+                <ul className="divide-y divide-zinc-200">
                   {activity.map((row) => (
                     <li key={row.id} className="py-3">
-                      <p className="text-sm text-zinc-100">
+                      <p className="text-sm text-zinc-900">
                         {row.description || row.event_type || "Event"}
                       </p>
-                      <p className="mt-1 text-xs text-zinc-500">
+                      <p className="mt-1 text-xs text-zinc-600">
                         {row.created_at ? new Date(row.created_at).toLocaleString() : "—"}
                         {row.actor?.name ? ` · ${row.actor.name}` : ""}
                       </p>
@@ -575,72 +580,72 @@ function StoreIdentityFields({
 }) {
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      <label className="block text-sm text-zinc-300 md:col-span-2">
+      <label className="admin-label md:col-span-2">
         Name
         <input
           value={form.name}
           disabled={disabled}
           onChange={(e) => setForm((current) => ({ ...current, name: e.target.value }))}
-          className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+          className="admin-input mt-1"
           required
         />
       </label>
-      <label className="block text-sm text-zinc-300">
+      <label className="admin-label">
         Slug
         <input
           value={form.slug}
           disabled={disabled}
           onChange={(e) => setForm((current) => ({ ...current, slug: e.target.value }))}
-          className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+          className="admin-input mt-1"
           placeholder="auto from name"
         />
       </label>
       {includeCode ? (
-        <label className="block text-sm text-zinc-300">
+        <label className="admin-label">
           Code
           <input
             value={form.code}
             disabled={disabled}
             onChange={(e) => setForm((current) => ({ ...current, code: e.target.value }))}
-            className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 uppercase"
+            className="admin-input mt-1 uppercase"
             required
           />
         </label>
       ) : (
-        <label className="block text-sm text-zinc-300">
+        <label className="admin-label">
           Theme color
           <input
             type="color"
             value={form.themeColor || "#1F4B3A"}
             disabled={disabled}
             onChange={(e) => setForm((current) => ({ ...current, themeColor: e.target.value }))}
-            className="mt-1 h-10 w-full rounded-lg border border-zinc-700 bg-zinc-950"
+            className="admin-input mt-1 h-10"
           />
         </label>
       )}
       {includeCode ? (
-        <label className="block text-sm text-zinc-300">
+        <label className="admin-label">
           Theme color
           <input
             type="color"
             value={form.themeColor || "#1F4B3A"}
             disabled={disabled}
             onChange={(e) => setForm((current) => ({ ...current, themeColor: e.target.value }))}
-            className="mt-1 h-10 w-full rounded-lg border border-zinc-700 bg-zinc-950"
+            className="admin-input mt-1 h-10"
           />
         </label>
       ) : null}
-      <label className="block text-sm text-zinc-300 md:col-span-2">
+      <label className="admin-label md:col-span-2">
         Description
         <textarea
           value={form.description}
           disabled={disabled}
           onChange={(e) => setForm((current) => ({ ...current, description: e.target.value }))}
-          className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+          className="admin-input mt-1"
           rows={3}
         />
       </label>
-      <label className="flex items-center gap-2 text-sm text-zinc-300">
+      <label className="flex items-center gap-2 text-sm text-zinc-700">
         <input
           type="checkbox"
           checked={form.isActive}
@@ -649,7 +654,7 @@ function StoreIdentityFields({
         />
         Active
       </label>
-      <label className="flex items-center gap-2 text-sm text-zinc-300">
+      <label className="flex items-center gap-2 text-sm text-zinc-700">
         <input
           type="checkbox"
           checked={form.storefrontVisible}

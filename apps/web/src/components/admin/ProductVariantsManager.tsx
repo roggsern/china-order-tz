@@ -85,6 +85,7 @@ export function ProductVariantsManager({
   const [replaceExisting, setReplaceExisting] = useState(false);
   const [pricingVariantId, setPricingVariantId] = useState<string | null>(null);
   const [inventoryVariantId, setInventoryVariantId] = useState<string | null>(null);
+  const [manualFormOpen, setManualFormOpen] = useState(false);
   const [mediaVariantId, setMediaVariantId] = useState<string | null>(null);
   const [selectedVariantIds, setSelectedVariantIds] = useState<string[]>([]);
   const [addOptionAttributeId, setAddOptionAttributeId] = useState<string | null>(null);
@@ -202,6 +203,15 @@ export function ProductVariantsManager({
     setForm(emptyForm());
     setSuccess(null);
     setError(null);
+    setManualFormOpen(false);
+  };
+
+  const openManualCreate = () => {
+    setEditingId(null);
+    setForm(emptyForm());
+    setSuccess(null);
+    setError(null);
+    setManualFormOpen(true);
   };
 
   const startEdit = (variant: AdminProductVariant) => {
@@ -212,6 +222,7 @@ export function ProductVariantsManager({
       }
     }
     setEditingId(variant.id);
+    setManualFormOpen(true);
     setForm({
       name: variant.name ?? "",
       sku: variant.sku,
@@ -258,6 +269,7 @@ export function ProductVariantsManager({
         setSuccess("Variant created.");
       }
       setEditingId(null);
+      setManualFormOpen(false);
       setForm(emptyForm());
       await reload();
       await notifyVariantsChanged();
@@ -283,6 +295,7 @@ export function ProductVariantsManager({
       setSuccess("Variant deleted.");
       if (editingId === variant.id) {
         setEditingId(null);
+        setManualFormOpen(false);
         setForm(emptyForm());
       }
       if (mediaVariantId === variant.id) {
@@ -657,19 +670,19 @@ export function ProductVariantsManager({
       ) : null}
 
       <div className="rounded-lg border border-zinc-200 p-4">
-        <div className="flex items-center justify-between gap-3">
+        {editingId || manualFormOpen ? (
+          <>
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="text-sm font-semibold text-zinc-900">
             {editingId ? "Edit variant" : "Create variant"}
           </h3>
-          {editingId ? (
-            <button
-              type="button"
-              className="text-xs text-zinc-500 hover:text-zinc-800"
-              onClick={startCreate}
-            >
-              Cancel edit
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className="text-xs text-zinc-500 hover:text-zinc-800"
+            onClick={startCreate}
+          >
+            {editingId ? "Cancel edit" : "Hide form"}
+          </button>
         </div>
 
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -788,7 +801,7 @@ export function ProductVariantsManager({
           Default variant
         </label>
 
-        <div className="mt-4 flex gap-2">
+        <div className="mt-4 flex flex-wrap gap-2">
           <button
             type="button"
             className="admin-btn-primary"
@@ -798,6 +811,24 @@ export function ProductVariantsManager({
             {busy ? "Saving…" : editingId ? "Update variant" : "Create variant"}
           </button>
         </div>
+          </>
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-zinc-900">Manual variant</h3>
+              <p className="mt-1 text-xs text-zinc-500">
+                Prefer Generate combinations when possible. Use this for a single custom variant.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="admin-btn-secondary shrink-0"
+              onClick={openManualCreate}
+            >
+              + Add single variant manually
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="rounded-lg border border-zinc-200 p-4">

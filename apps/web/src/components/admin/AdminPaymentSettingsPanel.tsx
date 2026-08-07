@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { useAdminPermissions } from "@/hooks/use-admin-permissions";
 import {
   AdminPaymentConfigApiError,
@@ -125,75 +126,75 @@ export function AdminPaymentSettingsPanel() {
 
   if (permissionsLoading) {
     return (
-      <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6 text-sm text-zinc-400">
-        Checking permissions…
+      <div className="min-w-0 space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+        <div className="admin-card p-6 text-sm text-zinc-600">Checking permissions…</div>
       </div>
     );
   }
 
   if (!canView) {
     return (
-      <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6">
-        <h1 className="text-xl font-semibold text-zinc-100">Payment configuration</h1>
-        <p className="mt-2 text-sm text-zinc-400">
-          You need <code className="text-zinc-300">payments.config.view</code> to open this page.
-        </p>
+      <div className="min-w-0 space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+        <AdminPageHeader title="Payment configuration" />
+        <div className="admin-card p-6">
+          <p className="text-sm text-zinc-600">
+            You need <code className="text-zinc-900">payments.config.view</code> to open this page.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-zinc-100">Payment configuration</h1>
-        <p className="mt-1 text-sm text-zinc-400">
-          Control which payment methods are available and the default provider. API keys and merchant
-          secrets stay in environment variables.
-        </p>
-      </div>
+    <div className="min-w-0 space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <AdminPageHeader
+        title="Payment configuration"
+        description="Control which payment methods are available and the default provider. API keys and merchant secrets stay in environment variables."
+      />
 
       {error ? (
-        <div className="rounded-lg border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {error}
         </div>
       ) : null}
       {success ? (
-        <div className="rounded-lg border border-emerald-900/60 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-200">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           {success}
         </div>
       ) : null}
 
       {loading ? (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6 text-sm text-zinc-400">
-          Loading payment configuration…
-        </div>
+        <div className="admin-card p-6 text-sm text-zinc-600">Loading payment configuration…</div>
       ) : (
         <>
-          <section className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-5">
-            <h2 className="text-lg font-medium text-zinc-100">Default provider</h2>
-            <p className="mt-1 text-sm text-zinc-500">
+          <section className="admin-card p-5">
+            <h2 className="text-lg font-semibold text-zinc-900">Default provider</h2>
+            <p className="mt-1 text-sm text-zinc-600">
               Must be one of the enabled payment methods.
             </p>
-            <select
-              value={defaultProvider}
-              disabled={!canManage || saving || enabledChoices.length === 0}
-              onChange={(event) => {
-                setDefaultProvider(event.target.value);
-                setSuccess(null);
-              }}
-              className="mt-4 w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100 disabled:opacity-60"
-            >
-              {enabledChoices.map((method) => (
-                <option key={method} value={method}>
-                  {PAYMENT_METHOD_LABELS[method]}
-                </option>
-              ))}
-            </select>
+            <label className="admin-label mt-4">
+              Provider
+              <select
+                value={defaultProvider}
+                disabled={!canManage || saving || enabledChoices.length === 0}
+                onChange={(event) => {
+                  setDefaultProvider(event.target.value);
+                  setSuccess(null);
+                }}
+                className="admin-input mt-1 max-w-md disabled:opacity-60"
+              >
+                {enabledChoices.map((method) => (
+                  <option key={method} value={method}>
+                    {PAYMENT_METHOD_LABELS[method]}
+                  </option>
+                ))}
+              </select>
+            </label>
           </section>
 
-          <section className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-5">
-            <h2 className="text-lg font-medium text-zinc-100">Enabled methods</h2>
-            <p className="mt-1 text-sm text-zinc-500">
+          <section className="admin-card p-5">
+            <h2 className="text-lg font-semibold text-zinc-900">Enabled methods</h2>
+            <p className="mt-1 text-sm text-zinc-600">
               Disabled methods cannot be selected as the default provider.
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -202,20 +203,20 @@ export function AdminPaymentSettingsPanel() {
                 return (
                   <label
                     key={method}
-                    className="flex items-start gap-3 rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-3"
+                    className="flex items-start gap-3 rounded-xl border border-zinc-200 bg-zinc-50/80 px-3 py-3"
                   >
                     <input
                       type="checkbox"
                       checked={Boolean(methods[method])}
                       disabled={!canManage || saving}
                       onChange={(event) => toggleMethod(method, event.target.checked)}
-                      className="mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-900"
+                      className="mt-1 h-4 w-4 rounded border-zinc-300"
                     />
                     <span>
-                      <span className="block text-sm font-medium text-zinc-100">
+                      <span className="block text-sm font-medium text-zinc-900">
                         {PAYMENT_METHOD_LABELS[method]}
                       </span>
-                      <span className="mt-0.5 block text-xs text-zinc-500">
+                      <span className="mt-0.5 block text-xs text-zinc-600">
                         {status?.available
                           ? "Provider available"
                           : method === "nmb"
@@ -236,7 +237,7 @@ export function AdminPaymentSettingsPanel() {
               type="button"
               disabled={!canManage || saving}
               onClick={() => void save()}
-              className="rounded-lg bg-[#e8c547] px-4 py-2 text-sm font-medium text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50"
+              className="admin-btn-primary disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving ? "Saving…" : canManage ? "Save configuration" : "View only"}
             </button>

@@ -14,6 +14,8 @@ import {
   type ChartPayload,
 } from "@/lib/api/admin-analytics";
 import { fetchPosStores, type PosStore } from "@/lib/api/admin-pos";
+import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { formatPrice } from "@/lib/catalog/utils";
 
@@ -34,7 +36,7 @@ function formatMoney(n: number | undefined): string {
 function ModularChart({ chart }: { chart: ChartPayload }) {
   const points = chart.series[0]?.points ?? [];
   if (points.length === 0) {
-    return <p className="mt-6 text-center text-sm text-zinc-500">No chart data.</p>;
+    return <p className="mt-6 text-center text-sm text-zinc-600">No chart data.</p>;
   }
 
   if (chart.type === "pie") {
@@ -45,14 +47,14 @@ function ModularChart({ chart }: { chart: ChartPayload }) {
           const pct = Math.round((Number(p.y) / total) * 100);
           return (
             <li key={String(p.x)} className="flex items-center gap-3 text-sm">
-              <span className="w-28 truncate text-zinc-400">{p.label ?? p.x}</span>
-              <div className="h-2 flex-1 overflow-hidden rounded bg-zinc-800">
+              <span className="w-28 truncate text-zinc-600">{p.label ?? p.x}</span>
+              <div className="h-2 flex-1 overflow-hidden rounded bg-zinc-100">
                 <div
                   className="h-full rounded bg-gradient-to-r from-[#8b6914] to-[#e8c547]"
                   style={{ width: `${Math.max(4, pct)}%` }}
                 />
               </div>
-              <span className="w-24 text-right tabular-nums text-zinc-200">
+              <span className="w-24 text-right tabular-nums text-zinc-900">
                 {typeof p.y === "number" && p.y > 1000 ? formatMoney(p.y) : `${p.y} (${pct}%)`}
               </span>
             </li>
@@ -72,7 +74,7 @@ function ModularChart({ chart }: { chart: ChartPayload }) {
             className="w-full max-w-8 rounded-t bg-gradient-to-t from-[#8b6914] to-[#e8c547]"
             style={{ height: `${Math.max(6, (Number(p.y) / peak) * 100)}%` }}
           />
-          <span className="truncate text-[9px] text-zinc-500">{String(p.x).slice(-5)}</span>
+          <span className="truncate text-[9px] text-zinc-600">{String(p.x).slice(-5)}</span>
         </div>
       ))}
     </div>
@@ -186,45 +188,37 @@ export function RetailIntelligenceDashboard() {
   const tableRows = data ? rowsFromSection(section, data) : [];
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#c9a227]">
-            Retail intelligence
-          </p>
-          <h1 className="mt-1 text-2xl font-semibold text-white">Analytics Platform</h1>
-          <p className="mt-1 max-w-2xl text-sm text-zinc-400">
-            Live KPIs from Orders, Payments, Profit, Inventory, Returns, Sessions, and CRM — no
-            duplicate business logic.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href="/admin/analytics/china"
-            className="rounded-md border border-[#8b6914]/40 px-3 py-1.5 text-xs font-medium text-[#e8c547] hover:border-[#c9a227]/70"
-          >
-            China commercial →
-          </Link>
-          <button
-            type="button"
-            disabled={exporting}
-            onClick={() => void onExport("csv")}
-            className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:border-[#c9a227]/50"
-          >
-            Export CSV
-          </button>
-          <button
-            type="button"
-            disabled={exporting}
-            onClick={() => void onExport("xlsx")}
-            className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:border-[#c9a227]/50"
-          >
-            Export Excel
-          </button>
-        </div>
-      </header>
+    <div className="min-w-0 space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <AdminPageHeader
+        eyebrow="Retail intelligence"
+        title="Analytics Platform"
+        description="Live KPIs from Orders, Payments, Profit, Inventory, Returns, Sessions, and CRM — no duplicate business logic."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Link href="/admin/analytics/china" className="admin-btn-secondary text-xs">
+              China commercial →
+            </Link>
+            <button
+              type="button"
+              disabled={exporting}
+              onClick={() => void onExport("csv")}
+              className="admin-btn-secondary text-xs disabled:opacity-50"
+            >
+              Export CSV
+            </button>
+            <button
+              type="button"
+              disabled={exporting}
+              onClick={() => void onExport("xlsx")}
+              className="admin-btn-secondary text-xs disabled:opacity-50"
+            >
+              Export Excel
+            </button>
+          </div>
+        }
+      />
 
-      <div className="flex flex-wrap gap-2 rounded-xl border border-zinc-800 bg-zinc-950/60 p-2">
+      <div className="admin-card flex flex-wrap gap-2 p-2">
         {ANALYTICS_SECTIONS.map((key) => (
           <button
             key={key}
@@ -232,8 +226,8 @@ export function RetailIntelligenceDashboard() {
             onClick={() => setSection(key)}
             className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
               section === key
-                ? "bg-[#c9a227]/20 text-[#e8c547] ring-1 ring-[#c9a227]/40"
-                : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+                ? "bg-[#c9a227]/15 text-[#8b6914] ring-1 ring-[#c9a227]/40"
+                : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900"
             }`}
           >
             {SECTION_LABELS[key]}
@@ -241,31 +235,31 @@ export function RetailIntelligenceDashboard() {
         ))}
       </div>
 
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
-        <label className="text-xs text-zinc-400">
+      <div className="admin-card flex flex-wrap items-end gap-3 p-4">
+        <label className="admin-label">
           From
           <input
             type="date"
             value={from}
             onChange={(e) => setFrom(e.target.value)}
-            className="mt-1 block rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-white"
+            className="admin-input mt-1"
           />
         </label>
-        <label className="text-xs text-zinc-400">
+        <label className="admin-label">
           To
           <input
             type="date"
             value={to}
             onChange={(e) => setTo(e.target.value)}
-            className="mt-1 block rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-white"
+            className="admin-input mt-1"
           />
         </label>
-        <label className="text-xs text-zinc-400">
+        <label className="admin-label">
           Store
           <select
             value={storeId}
             onChange={(e) => setStoreId(e.target.value)}
-            className="mt-1 block min-w-[160px] rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-white"
+            className="admin-input mt-1 min-w-[160px]"
           >
             <option value="">All assigned</option>
             {stores.map((s) => (
@@ -275,25 +269,21 @@ export function RetailIntelligenceDashboard() {
             ))}
           </select>
         </label>
-        <button
-          type="button"
-          onClick={() => void load()}
-          className="rounded-md bg-[#c9a227] px-3 py-1.5 text-xs font-semibold text-zinc-950"
-        >
+        <button type="button" onClick={() => void load()} className="admin-btn-primary">
           Apply
         </button>
-        <Link href="/admin/pos" className="ml-auto text-xs text-[#c9a227] hover:underline">
+        <Link href="/admin/pos" className="ml-auto text-xs font-medium text-[#8b6914] hover:underline">
           Open POS →
         </Link>
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-900/50 bg-red-950/40 px-3 py-2 text-sm text-red-200">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {error}
         </div>
       )}
 
-      {loading && <p className="text-sm text-zinc-500">Loading analytics…</p>}
+      {loading && <p className="text-sm text-zinc-600">Loading analytics…</p>}
 
       {!loading && dashboard && (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -319,7 +309,13 @@ export function RetailIntelligenceDashboard() {
                 key={key}
                 label={key.replace(/_/g, " ")}
                 value={
-                  typeof value === "number" && (key.includes("amount") || key.includes("revenue") || key.includes("profit") || key.includes("sales") || key.includes("value") || key.includes("cost"))
+                  typeof value === "number" &&
+                  (key.includes("amount") ||
+                    key.includes("revenue") ||
+                    key.includes("profit") ||
+                    key.includes("sales") ||
+                    key.includes("value") ||
+                    key.includes("cost"))
                     ? formatMoney(value)
                     : String(value ?? "—")
                 }
@@ -331,12 +327,9 @@ export function RetailIntelligenceDashboard() {
       {!loading && charts.length > 0 && (
         <div className="grid gap-4 lg:grid-cols-2">
           {charts.map((chart) => (
-            <section
-              key={chart.key}
-              className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4"
-            >
-              <h2 className="text-sm font-semibold text-zinc-200">{chart.label}</h2>
-              <p className="text-[10px] uppercase tracking-wider text-zinc-500">{chart.type} chart</p>
+            <section key={chart.key} className="admin-card p-4">
+              <h2 className="text-sm font-semibold text-zinc-900">{chart.label}</h2>
+              <p className="text-[10px] uppercase tracking-wider text-zinc-600">{chart.type} chart</p>
               <ModularChart chart={chart} />
             </section>
           ))}
@@ -344,48 +337,60 @@ export function RetailIntelligenceDashboard() {
       )}
 
       {!loading && tableRows.length > 0 && (
-        <section className="overflow-x-auto rounded-xl border border-zinc-800">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-zinc-900 text-[11px] uppercase tracking-wide text-zinc-500">
-              <tr>
-                {Object.keys(tableRows[0]).map((col) => (
-                  <th key={col} className="px-3 py-2 font-medium">
-                    {col.replace(/_/g, " ")}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {tableRows.map((row, idx) => (
-                <tr key={idx} className="border-t border-zinc-800 text-zinc-300">
-                  {Object.values(row).map((cell, cidx) => (
-                    <td key={cidx} className="px-3 py-2 tabular-nums">
-                      {cell === null || cell === undefined
-                        ? "—"
-                        : typeof cell === "number" && cell > 100
-                          ? formatMoney(cell)
-                          : String(cell)}
-                    </td>
+        <section className="admin-card overflow-hidden">
+          <div className="admin-table-scroll">
+            <table className="admin-table min-w-full">
+              <thead>
+                <tr>
+                  {Object.keys(tableRows[0]).map((col) => (
+                    <th key={col}>{col.replace(/_/g, " ")}</th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {tableRows.map((row, idx) => (
+                  <tr key={idx}>
+                    {Object.values(row).map((cell, cidx) => (
+                      <td key={cidx} className="tabular-nums">
+                        {cell === null || cell === undefined
+                          ? "—"
+                          : typeof cell === "number" && cell > 100
+                            ? formatMoney(cell)
+                            : String(cell)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
 
+      {!loading && !dashboard && tableRows.length === 0 && charts.length === 0 && !error ? (
+        <AdminEmptyState title="No analytics data for this range" />
+      ) : null}
+
       {section === "dashboard" && (
         <div className="flex flex-wrap gap-3 text-sm">
-          <button type="button" onClick={() => setSection("stores")} className="text-[#c9a227] hover:underline">
+          <button
+            type="button"
+            onClick={() => setSection("stores")}
+            className="font-medium text-[#8b6914] hover:underline"
+          >
             Drill into stores
           </button>
-          <button type="button" onClick={() => setSection("sessions")} className="text-[#c9a227] hover:underline">
+          <button
+            type="button"
+            onClick={() => setSection("sessions")}
+            className="font-medium text-[#8b6914] hover:underline"
+          >
             Drill into sessions
           </button>
-          <Link href="/admin/pos/returns" className="text-[#c9a227] hover:underline">
+          <Link href="/admin/pos/returns" className="font-medium text-[#8b6914] hover:underline">
             Open returns
           </Link>
-          <Link href="/admin/reports" className="text-zinc-400 hover:underline">
+          <Link href="/admin/reports" className="text-zinc-600 hover:underline">
             Tabular reports
           </Link>
         </div>

@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import {
   AdminInventoryApiError,
   createInventoryAdjustment,
@@ -117,44 +119,44 @@ export function AdminInventoryPanel() {
   ];
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-zinc-50">Inventory Control</h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            Store-scoped stock operations over VariantInventory — receiving, counts, adjustments, ledger.
-          </p>
-        </div>
-        <label className="text-sm text-zinc-400">
-          Store
-          <select
-            value={storeId}
-            onChange={(e) => setStoreId(e.target.value)}
-            className="ml-2 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
-          >
-            {stores.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+    <div className="min-w-0 space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <AdminPageHeader
+        title="Inventory Control"
+        description="Store-scoped stock operations over VariantInventory — receiving, counts, adjustments, ledger."
+        actions={
+          <label className="admin-label">
+            Store
+            <select
+              value={storeId}
+              onChange={(e) => setStoreId(e.target.value)}
+              className="admin-input mt-1 min-w-[160px]"
+            >
+              {stores.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        }
+      />
 
       {error ? (
-        <div className="rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2 text-sm text-red-200">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {error}
         </div>
       ) : null}
 
-      <div className="flex flex-wrap gap-1 border-b border-zinc-800 pb-2">
+      <div className="flex flex-wrap gap-1 border-b border-zinc-200 pb-2">
         {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
-            className={`rounded-md px-3 py-1.5 text-sm ${
-              tab === t.id ? "bg-[#c9a227]/20 text-[#e8c547]" : "text-zinc-400 hover:text-zinc-200"
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
+              tab === t.id
+                ? "bg-[#c9a227]/15 text-[#8b6914] ring-1 ring-[#c9a227]/40"
+                : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900"
             }`}
           >
             {t.label}
@@ -172,66 +174,85 @@ export function AdminInventoryPanel() {
             ["Inventory value", `${dashboard.inventory_value.toLocaleString()} TZS`],
             ["Open counts", dashboard.open_counts],
           ].map(([label, value]) => (
-            <div key={String(label)} className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">{label}</p>
-              <p className="mt-1 text-2xl font-semibold text-zinc-50">{value}</p>
+            <div key={String(label)} className="admin-stat-card px-4 py-4 sm:px-5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-600">
+                {label}
+              </p>
+              <p className="mt-2 text-xl font-bold text-zinc-900">{value}</p>
             </div>
           ))}
         </div>
       ) : null}
 
       {tab === "stock" ? (
-        <div className="overflow-x-auto rounded-lg border border-zinc-800">
-          <table className="min-w-full text-left text-sm text-zinc-300">
-            <thead className="bg-zinc-900/80 text-xs uppercase text-zinc-500">
-              <tr>
-                <th className="px-3 py-2">SKU</th>
-                <th className="px-3 py-2">Product</th>
-                <th className="px-3 py-2">Available</th>
-                <th className="px-3 py-2">Damaged</th>
-                <th className="px-3 py-2">Reorder</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stock.map((row) => (
-                <tr key={row.id} className="border-t border-zinc-800">
-                  <td className="px-3 py-2 font-mono text-xs">{row.sku}</td>
-                  <td className="px-3 py-2">{row.product_name}</td>
-                  <td className="px-3 py-2">{row.available}</td>
-                  <td className="px-3 py-2">{row.damaged}</td>
-                  <td className="px-3 py-2">{row.needs_reorder ? "Low" : "OK"}</td>
+        <div className="admin-card overflow-hidden">
+          <div className="admin-table-scroll">
+            <table className="admin-table min-w-full">
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Product</th>
+                  <th>Available</th>
+                  <th>Damaged</th>
+                  <th>Reorder</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {stock.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="!p-0">
+                      <AdminEmptyState title="No stock rows yet" />
+                    </td>
+                  </tr>
+                ) : (
+                  stock.map((row) => (
+                    <tr key={row.id}>
+                      <td className="font-mono text-xs">{row.sku}</td>
+                      <td className="admin-table-primary">{row.product_name}</td>
+                      <td>{row.available}</td>
+                      <td>{row.damaged}</td>
+                      <td>
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                            row.needs_reorder
+                              ? "bg-amber-50 text-amber-800 ring-1 ring-amber-200"
+                              : "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200"
+                          }`}
+                        >
+                          {row.needs_reorder ? "Low" : "OK"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : null}
 
       {tab === "movements" ? (
         <div className="space-y-4">
-          <form
-            onSubmit={onAdjust}
-            className="grid gap-2 rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 md:grid-cols-5"
-          >
-            <h2 className="md:col-span-5 text-sm font-medium text-zinc-200">Stock adjustment</h2>
+          <form onSubmit={onAdjust} className="admin-card grid gap-2 p-4 md:grid-cols-5">
+            <h2 className="md:col-span-5 text-sm font-semibold text-zinc-900">Stock adjustment</h2>
             <input
               required
               value={adjust.product_variant_id}
               onChange={(e) => setAdjust((a) => ({ ...a, product_variant_id: e.target.value }))}
               placeholder="Variant UUID"
-              className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+              className="admin-input"
             />
             <input
               required
               type="number"
               value={adjust.quantity_change}
               onChange={(e) => setAdjust((a) => ({ ...a, quantity_change: e.target.value }))}
-              className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+              className="admin-input"
             />
             <select
               value={adjust.kind}
               onChange={(e) => setAdjust((a) => ({ ...a, kind: e.target.value }))}
-              className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+              className="admin-input"
             >
               <option value="adjustment">Adjustment</option>
               <option value="correction">Correction</option>
@@ -243,39 +264,45 @@ export function AdminInventoryPanel() {
               value={adjust.reason}
               onChange={(e) => setAdjust((a) => ({ ...a, reason: e.target.value }))}
               placeholder="Reason (required)"
-              className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+              className="admin-input"
             />
-            <button
-              type="submit"
-              disabled={busy}
-              className="rounded-md bg-[#c9a227] px-3 py-1.5 text-sm font-medium text-zinc-950 disabled:opacity-50"
-            >
+            <button type="submit" disabled={busy} className="admin-btn-primary disabled:opacity-50">
               Apply
             </button>
           </form>
-          <div className="overflow-x-auto rounded-lg border border-zinc-800">
-            <table className="min-w-full text-left text-sm text-zinc-300">
-              <thead className="bg-zinc-900/80 text-xs uppercase text-zinc-500">
-                <tr>
-                  <th className="px-3 py-2">Type</th>
-                  <th className="px-3 py-2">SKU</th>
-                  <th className="px-3 py-2">Change</th>
-                  <th className="px-3 py-2">After</th>
-                  <th className="px-3 py-2">Reason</th>
-                </tr>
-              </thead>
-              <tbody>
-                {movements.map((m) => (
-                  <tr key={m.id} className="border-t border-zinc-800">
-                    <td className="px-3 py-2 capitalize">{m.movement_type}</td>
-                    <td className="px-3 py-2 font-mono text-xs">{m.sku}</td>
-                    <td className="px-3 py-2">{m.quantity_change}</td>
-                    <td className="px-3 py-2">{m.quantity_after}</td>
-                    <td className="px-3 py-2 text-zinc-500">{m.reason}</td>
+          <div className="admin-card overflow-hidden">
+            <div className="admin-table-scroll">
+              <table className="admin-table min-w-full">
+                <thead>
+                  <tr>
+                    <th>Type</th>
+                    <th>SKU</th>
+                    <th>Change</th>
+                    <th>After</th>
+                    <th>Reason</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {movements.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="!p-0">
+                        <AdminEmptyState title="No movements yet" />
+                      </td>
+                    </tr>
+                  ) : (
+                    movements.map((m) => (
+                      <tr key={m.id}>
+                        <td className="capitalize">{m.movement_type}</td>
+                        <td className="font-mono text-xs">{m.sku}</td>
+                        <td>{m.quantity_change}</td>
+                        <td>{m.quantity_after}</td>
+                        <td className="text-zinc-600">{m.reason}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       ) : null}
@@ -286,68 +313,84 @@ export function AdminInventoryPanel() {
             type="button"
             disabled={busy || !storeId}
             onClick={() => void onStartCount()}
-            className="rounded-md bg-[#c9a227] px-3 py-1.5 text-sm font-medium text-zinc-950 disabled:opacity-50"
+            className="admin-btn-primary disabled:opacity-50"
           >
             Start full store count
           </button>
-          <ul className="space-y-2">
-            {counts.map((c) => (
-              <li key={c.id} className="rounded-md border border-zinc-800 px-3 py-2 text-sm text-zinc-300">
-                <span className="font-mono text-xs text-[#e8c547]">{c.count_number}</span> · {c.status} ·{" "}
-                {c.scope}
-              </li>
-            ))}
-          </ul>
+          {counts.length === 0 ? (
+            <AdminEmptyState title="No stock counts yet" />
+          ) : (
+            <ul className="space-y-2">
+              {counts.map((c) => (
+                <li
+                  key={c.id}
+                  className="admin-card px-3 py-2 text-sm text-zinc-700"
+                >
+                  <span className="font-mono text-xs font-medium text-[#8b6914]">
+                    {c.count_number}
+                  </span>{" "}
+                  · {c.status} · {c.scope}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       ) : null}
 
       {tab === "valuation" && valuation ? (
         <div className="space-y-3">
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-zinc-600">
             Total cost value:{" "}
-            <span className="text-zinc-100">
+            <span className="font-semibold text-zinc-900">
               {Number(valuation.summary.total_cost_value ?? 0).toLocaleString()} TZS
             </span>{" "}
             · {valuation.summary.sku_count} SKUs
           </p>
-          <div className="overflow-x-auto rounded-lg border border-zinc-800">
-            <table className="min-w-full text-left text-sm text-zinc-300">
-              <thead className="bg-zinc-900/80 text-xs uppercase text-zinc-500">
-                <tr>
-                  <th className="px-3 py-2">Product</th>
-                  <th className="px-3 py-2">Qty</th>
-                  <th className="px-3 py-2">Unit cost</th>
-                  <th className="px-3 py-2">Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                {valuation.rows.slice(0, 50).map((row) => (
-                  <tr key={String(row.variant_inventory_id)} className="border-t border-zinc-800">
-                    <td className="px-3 py-2">{String(row.product_name ?? row.sku)}</td>
-                    <td className="px-3 py-2">{String(row.stock_quantity)}</td>
-                    <td className="px-3 py-2">{String(row.unit_cost)}</td>
-                    <td className="px-3 py-2">{String(row.cost_value)}</td>
+          <div className="admin-card overflow-hidden">
+            <div className="admin-table-scroll">
+              <table className="admin-table min-w-full">
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th>Qty</th>
+                    <th>Unit cost</th>
+                    <th>Value</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {valuation.rows.slice(0, 50).map((row) => (
+                    <tr key={String(row.variant_inventory_id)}>
+                      <td className="admin-table-primary">
+                        {String(row.product_name ?? row.sku)}
+                      </td>
+                      <td>{String(row.stock_quantity)}</td>
+                      <td>{String(row.unit_cost)}</td>
+                      <td>{String(row.cost_value)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       ) : null}
 
       {tab === "low" ? (
-        <ul className="space-y-2">
-          {low.map((row) => (
-            <li
-              key={String(row.variant_inventory_id)}
-              className="rounded-md border border-zinc-800 px-3 py-2 text-sm text-zinc-300"
-            >
-              {String(row.product_name ?? row.sku)} · available {String(row.available)} / min{" "}
-              {String(row.reorder_level)} · {String(row.status)}
-            </li>
-          ))}
-          {low.length === 0 ? <li className="text-sm text-zinc-500">No low-stock items.</li> : null}
-        </ul>
+        low.length === 0 ? (
+          <AdminEmptyState title="No low-stock items" />
+        ) : (
+          <ul className="space-y-2">
+            {low.map((row) => (
+              <li
+                key={String(row.variant_inventory_id)}
+                className="admin-card px-3 py-2 text-sm text-zinc-700"
+              >
+                {String(row.product_name ?? row.sku)} · available {String(row.available)} / min{" "}
+                {String(row.reorder_level)} · {String(row.status)}
+              </li>
+            ))}
+          </ul>
+        )
       ) : null}
     </div>
   );

@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import {
   AdminAdminsApiError,
   activateAdminUser,
@@ -15,6 +17,8 @@ import {
   type AdminUserRecord,
 } from "@/lib/api/admin-admins";
 import { useAdminPermissions } from "@/hooks/use-admin-permissions";
+import { useAdminAuth } from "@/components/admin/AdminAuthProvider";
+import { setAdminLoginNotice } from "@/lib/admin/login-notice";
 
 type AdminFormState = {
   name: string;
@@ -38,7 +42,9 @@ function StatusBadge({ active }: { active: boolean }) {
   return (
     <span
       className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-        active ? "bg-emerald-950/60 text-emerald-300" : "bg-zinc-800 text-zinc-400"
+        active
+          ? "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200"
+          : "bg-zinc-100 text-zinc-700 ring-1 ring-zinc-200"
       }`}
     >
       {active ? "Active" : "Inactive"}
@@ -48,6 +54,7 @@ function StatusBadge({ active }: { active: boolean }) {
 
 export function AdminUsersPanel() {
   const { permissions, adminId } = useAdminPermissions();
+  const { signOut } = useAdminAuth();
   const globalActions = useMemo(() => resolveAdminUserActions(permissions), [permissions]);
 
   const [rows, setRows] = useState<AdminUserRecord[]>([]);
@@ -145,11 +152,16 @@ export function AdminUsersPanel() {
           is_active: form.is_active,
         });
       } else if (mode === "edit" && editing) {
+        const emailChanged =
+          form.email.trim().toLowerCase() !== editing.email.trim().toLowerCase();
+        const passwordChanged = Boolean(form.password.trim());
+        const isSelf = editing.id === adminId;
+
         await updateAdminUser(editing.id, {
           name: form.name.trim(),
           email: form.email.trim(),
           phone: form.phone.trim() || null,
-          ...(form.password.trim() ? { password: form.password } : {}),
+          ...(passwordChanged ? { password: form.password } : {}),
         });
 
         if (
@@ -157,10 +169,19 @@ export function AdminUsersPanel() {
           form.role_id !== editing.role?.id &&
           resolveAdminUserActions(permissions, {
             targetIsSuperAdmin: editing.is_super_admin,
-            isSelf: editing.id === adminId,
+            isSelf,
           }).canAssignRole
         ) {
           await assignAdminUserRole(editing.id, form.role_id);
+        }
+
+        if (isSelf && (emailChanged || passwordChanged)) {
+          setAdminLoginNotice(
+            "Your account details have been updated. Please sign in again.",
+          );
+          closeForm();
+          await signOut();
+          return;
         }
       }
 
@@ -202,9 +223,9 @@ export function AdminUsersPanel() {
 
   if (!globalActions.canView) {
     return (
-      <div className="space-y-4 p-4 md:p-6">
-        <h1 className="text-xl font-semibold text-zinc-50">Admin Users</h1>
-        <div className="rounded-md border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-sm text-amber-100">
+      <div className="min-w-0 space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+        <AdminPageHeader title="Admin Users" />
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           You do not have permission to view admin users.
         </div>
       </div>
@@ -212,46 +233,40 @@ export function AdminUsersPanel() {
   }
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-zinc-50">Admin Users</h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            Manage admin accounts, roles, and activation status.
-          </p>
-        </div>
-        {globalActions.canCreate ? (
-          <button
-            type="button"
-            onClick={openCreate}
-            className="rounded-md bg-[#c9a227] px-3 py-2 text-sm font-semibold text-zinc-950"
-          >
-            Create admin
-          </button>
-        ) : null}
-      </div>
+    <div className="min-w-0 space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <AdminPageHeader
+        title="Admin Users"
+        description="Manage admin accounts, roles, and activation status."
+        actions={
+          globalActions.canCreate ? (
+            <button type="button" onClick={openCreate} className="admin-btn-primary">
+              Create admin
+            </button>
+          ) : null
+        }
+      />
 
       {error ? (
-        <div className="rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2 text-sm text-red-200">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {error}
         </div>
       ) : null}
 
       {mode ? (
-        <section className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
-          <h2 className="text-sm font-semibold text-zinc-100">
+        <section className="admin-card p-5">
+          <h2 className="text-sm font-semibold text-zinc-900">
             {mode === "create" ? "Create admin" : "Edit admin"}
           </h2>
           <form onSubmit={(e) => void onSubmit(e)} className="mt-4 grid gap-3 sm:grid-cols-2">
             <input
-              className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
+              className="admin-input"
               placeholder="Name *"
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               required
             />
             <input
-              className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
+              className="admin-input"
               placeholder="Email *"
               type="email"
               value={form.email}
@@ -259,13 +274,13 @@ export function AdminUsersPanel() {
               required
             />
             <input
-              className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
+              className="admin-input"
               placeholder="Phone"
               value={form.phone}
               onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
             />
             <input
-              className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
+              className="admin-input"
               placeholder={mode === "create" ? "Password *" : "New password (optional)"}
               type="password"
               value={form.password}
@@ -273,7 +288,7 @@ export function AdminUsersPanel() {
               required={mode === "create"}
             />
             <select
-              className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
+              className="admin-input"
               value={form.role_id}
               onChange={(e) => setForm((f) => ({ ...f, role_id: e.target.value }))}
               required={mode === "create"}
@@ -294,7 +309,7 @@ export function AdminUsersPanel() {
               ))}
             </select>
             {mode === "create" ? (
-              <label className="flex items-center gap-2 text-sm text-zinc-300">
+              <label className="flex items-center gap-2 text-sm text-zinc-600">
                 <input
                   type="checkbox"
                   checked={form.is_active}
@@ -304,18 +319,10 @@ export function AdminUsersPanel() {
               </label>
             ) : null}
             <div className="flex gap-2 sm:col-span-2">
-              <button
-                type="submit"
-                disabled={busy}
-                className="rounded-md bg-[#c9a227] px-3 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-50"
-              >
+              <button type="submit" disabled={busy} className="admin-btn-primary disabled:opacity-50">
                 {busy ? "Saving…" : mode === "create" ? "Create admin" : "Save changes"}
               </button>
-              <button
-                type="button"
-                onClick={closeForm}
-                className="rounded-md border border-zinc-700 px-3 py-2 text-sm text-zinc-300"
-              >
+              <button type="button" onClick={closeForm} className="admin-btn-secondary">
                 Cancel
               </button>
             </div>
@@ -324,7 +331,7 @@ export function AdminUsersPanel() {
       ) : null}
 
       <div className="flex flex-wrap items-end gap-2">
-        <label className="text-xs text-zinc-500">
+        <label className="admin-label">
           Search
           <input
             value={search}
@@ -333,10 +340,10 @@ export function AdminUsersPanel() {
               setSearch(e.target.value);
             }}
             placeholder="Name or email"
-            className="mt-1 block w-64 rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
+            className="admin-input mt-1 w-64"
           />
         </label>
-        <label className="text-xs text-zinc-500">
+        <label className="admin-label">
           Status
           <select
             value={statusFilter}
@@ -344,14 +351,14 @@ export function AdminUsersPanel() {
               setPage(1);
               setStatusFilter(e.target.value as "" | "active" | "inactive");
             }}
-            className="mt-1 block rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
+            className="admin-input mt-1"
           >
             <option value="">All</option>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
           </select>
         </label>
-        <label className="text-xs text-zinc-500">
+        <label className="admin-label">
           Role
           <select
             value={roleFilter}
@@ -359,7 +366,7 @@ export function AdminUsersPanel() {
               setPage(1);
               setRoleFilter(e.target.value);
             }}
-            className="mt-1 block rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
+            className="admin-input mt-1"
           >
             <option value="">All roles</option>
             {roles.map((role) => (
@@ -369,110 +376,110 @@ export function AdminUsersPanel() {
             ))}
           </select>
         </label>
-        <button
-          type="button"
-          onClick={() => void reload()}
-          className="rounded-md border border-zinc-700 px-3 py-2 text-sm text-zinc-300"
-        >
+        <button type="button" onClick={() => void reload()} className="admin-btn-secondary">
           Refresh
         </button>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-zinc-800">
-        <table className="min-w-full text-left text-sm">
-          <thead className="bg-zinc-900 text-[11px] uppercase tracking-wider text-zinc-500">
-            <tr>
-              <th className="px-3 py-2.5">Name</th>
-              <th className="px-3 py-2.5">Email</th>
-              <th className="px-3 py-2.5">Role</th>
-              <th className="px-3 py-2.5">Status</th>
-              <th className="px-3 py-2.5">Created</th>
-              <th className="px-3 py-2.5">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && rows.length === 0 ? (
+      <div className="admin-card overflow-hidden">
+        <div className="admin-table-scroll">
+          <table className="admin-table min-w-full">
+            <thead>
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-zinc-500">
-                  Loading…
-                </td>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Actions</th>
               </tr>
-            ) : rows.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-3 py-6 text-zinc-500">
-                  No admin users match these filters.
-                </td>
-              </tr>
-            ) : (
-              rows.map((row) => {
-                const rowActions = resolveAdminUserActions(permissions, {
-                  targetIsSuperAdmin: row.is_super_admin,
-                  isSelf: row.id === adminId,
-                });
+            </thead>
+            <tbody>
+              {loading && rows.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="text-zinc-600">
+                    Loading…
+                  </td>
+                </tr>
+              ) : rows.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="!p-0">
+                    <AdminEmptyState title="No admin users match these filters." />
+                  </td>
+                </tr>
+              ) : (
+                rows.map((row) => {
+                  const rowActions = resolveAdminUserActions(permissions, {
+                    targetIsSuperAdmin: row.is_super_admin,
+                    isSelf: row.id === adminId,
+                  });
 
-                return (
-                  <tr key={row.id} className="border-t border-zinc-800/80 hover:bg-zinc-900/40">
-                    <td className="px-3 py-2.5 text-zinc-200">
-                      {row.name}
-                      {row.is_super_admin ? (
-                        <span className="ml-2 text-xs text-amber-400">Super admin</span>
-                      ) : null}
-                    </td>
-                    <td className="px-3 py-2.5 text-zinc-400">{row.email}</td>
-                    <td className="px-3 py-2.5 text-zinc-300">{row.role?.name ?? "—"}</td>
-                    <td className="px-3 py-2.5">
-                      <StatusBadge active={row.is_active} />
-                    </td>
-                    <td className="px-3 py-2.5 text-zinc-400">
-                      {row.created_at ? new Date(row.created_at).toLocaleDateString() : "—"}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex flex-wrap gap-2">
-                        {rowActions.canUpdate ? (
-                          <button
-                            type="button"
-                            onClick={() => openEdit(row)}
-                            className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300"
-                          >
-                            Edit
-                          </button>
+                  return (
+                    <tr key={row.id}>
+                      <td className="admin-table-primary">
+                        {row.name}
+                        {row.is_super_admin ? (
+                          <span className="ml-2 text-xs font-medium text-amber-700">
+                            Super admin
+                          </span>
                         ) : null}
-                        {row.is_active && rowActions.canDeactivate ? (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void onToggleActive(row)}
-                            className="rounded border border-red-900/60 px-2 py-1 text-xs text-red-300"
-                          >
-                            Deactivate
-                          </button>
-                        ) : null}
-                        {!row.is_active && rowActions.canActivate ? (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void onToggleActive(row)}
-                            className="rounded border border-emerald-900/60 px-2 py-1 text-xs text-emerald-300"
-                          >
-                            Activate
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                      </td>
+                      <td className="text-zinc-600">{row.email}</td>
+                      <td className="text-zinc-900">{row.role?.name ?? "—"}</td>
+                      <td>
+                        <StatusBadge active={row.is_active} />
+                      </td>
+                      <td className="text-zinc-600">
+                        {row.created_at ? new Date(row.created_at).toLocaleDateString() : "—"}
+                      </td>
+                      <td>
+                        <div className="flex flex-wrap gap-2">
+                          {rowActions.canUpdate ? (
+                            <button
+                              type="button"
+                              onClick={() => openEdit(row)}
+                              className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                            >
+                              Edit
+                            </button>
+                          ) : null}
+                          {row.is_active && rowActions.canDeactivate ? (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void onToggleActive(row)}
+                              className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-800 disabled:opacity-50"
+                            >
+                              Deactivate
+                            </button>
+                          ) : null}
+                          {!row.is_active && rowActions.canActivate ? (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void onToggleActive(row)}
+                              className="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-800 disabled:opacity-50"
+                            >
+                              Activate
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      <div className="flex items-center gap-3 text-sm text-zinc-400">
+      <div className="flex items-center gap-3 text-sm text-zinc-600">
         <button
           type="button"
           disabled={(meta.current_page ?? 1) <= 1}
           onClick={() => setPage((p) => Math.max(1, p - 1))}
-          className="rounded border border-zinc-700 px-2 py-1 disabled:opacity-40"
+          className="admin-btn-secondary disabled:opacity-40"
         >
           Prev
         </button>
@@ -483,7 +490,7 @@ export function AdminUsersPanel() {
           type="button"
           disabled={(meta.current_page ?? 1) >= (meta.last_page ?? 1)}
           onClick={() => setPage((p) => p + 1)}
-          className="rounded border border-zinc-700 px-2 py-1 disabled:opacity-40"
+          className="admin-btn-secondary disabled:opacity-40"
         >
           Next
         </button>

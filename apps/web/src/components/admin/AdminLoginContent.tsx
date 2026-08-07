@@ -1,17 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { HorizontalBrandLogo } from "@/components/branding/HorizontalBrandLogo";
 import { useAdminAuth } from "@/components/admin/AdminAuthProvider";
 import { DEFAULT_ADMIN_EMAIL } from "@/lib/admin/credentials";
+import { consumeAdminLoginNotice } from "@/lib/admin/login-notice";
 
 export function AdminLoginContent() {
   const { signIn } = useAdminAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | undefined>();
+  const [notice, setNotice] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    setNotice(consumeAdminLoginNotice());
+  }, []);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -79,6 +85,15 @@ export function AdminLoginContent() {
           </div>
 
           <form className="mt-6 space-y-5" onSubmit={handleSubmit} noValidate>
+            {notice ? (
+              <div
+                role="status"
+                className="rounded-xl border border-emerald-500/40 bg-emerald-950/50 px-4 py-3 text-sm text-emerald-100"
+              >
+                {notice}
+              </div>
+            ) : null}
+
             <div>
               <label htmlFor="admin-email" className="admin-label text-zinc-300">
                 Email
