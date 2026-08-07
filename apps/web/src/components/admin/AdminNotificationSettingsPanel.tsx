@@ -139,7 +139,7 @@ export function AdminNotificationSettingsPanel() {
 
   if (permissionsLoading) {
     return (
-      <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6 text-sm text-zinc-400">
+      <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6 text-sm text-zinc-600">
         Checking permissions…
       </div>
     );
@@ -148,9 +148,9 @@ export function AdminNotificationSettingsPanel() {
   if (!canView) {
     return (
       <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6">
-        <h1 className="text-xl font-semibold text-zinc-100">Notification configuration</h1>
-        <p className="mt-2 text-sm text-zinc-400">
-          You need <code className="text-zinc-300">notifications.view</code> to open this page.
+        <h1 className="text-xl font-semibold text-zinc-900">Notification configuration</h1>
+        <p className="mt-2 text-sm text-zinc-600">
+          You need <code className="text-zinc-700">notifications.view</code> to open this page.
         </p>
       </div>
     );
@@ -159,33 +159,33 @@ export function AdminNotificationSettingsPanel() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-zinc-100">Notification configuration</h1>
-        <p className="mt-1 text-sm text-zinc-400">
+        <h1 className="text-2xl font-semibold text-zinc-900">Notification configuration</h1>
+        <p className="mt-1 text-sm text-zinc-600">
           Configure delivery channels and event mappings. SMTP/API credentials stay in environment
           variables and are never stored here.
         </p>
       </div>
 
       {error ? (
-        <div className="rounded-lg border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+        <div className="rounded-lg border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-800">
           {error}
         </div>
       ) : null}
       {success ? (
-        <div className="rounded-lg border border-emerald-900/60 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-200">
+        <div className="rounded-lg border border-emerald-900/60 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-800">
           {success}
         </div>
       ) : null}
 
       {loading ? (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6 text-sm text-zinc-400">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6 text-sm text-zinc-600">
           Loading notification configuration…
         </div>
       ) : (
         <>
           <section className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-5">
-            <h2 className="text-lg font-medium text-zinc-100">Channels</h2>
-            <p className="mt-1 text-sm text-zinc-500">
+            <h2 className="text-lg font-medium text-zinc-900">Channels</h2>
+            <p className="mt-1 text-sm text-zinc-600">
               Disabled channels are skipped. Unconfigured external providers fall back to in-app.
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -205,10 +205,10 @@ export function AdminNotificationSettingsPanel() {
                       className="mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-900"
                     />
                     <span>
-                      <span className="block text-sm font-medium text-zinc-100">
+                      <span className="block text-sm font-medium text-zinc-900">
                         {CHANNEL_TOGGLE_LABELS[key]}
                       </span>
-                      <span className="mt-0.5 block text-xs text-zinc-500">
+                      <span className="mt-0.5 block text-xs text-zinc-600">
                         {status?.configured
                           ? `Provider ready (${status.driver ?? channelName})`
                           : channelName === "in_app"
@@ -223,8 +223,8 @@ export function AdminNotificationSettingsPanel() {
           </section>
 
           <section className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-5">
-            <h2 className="text-lg font-medium text-zinc-100">Event channel mapping</h2>
-            <p className="mt-1 text-sm text-zinc-500">
+            <h2 className="text-lg font-medium text-zinc-900">Event channel mapping</h2>
+            <p className="mt-1 text-sm text-zinc-600">
               Choose which channels fire for key commerce events.
             </p>
             <div className="mt-4 space-y-4">
@@ -234,10 +234,10 @@ export function AdminNotificationSettingsPanel() {
                   className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-3"
                 >
                   <div className="mb-2">
-                    <p className="text-sm font-medium text-zinc-100">
+                    <p className="text-sm font-medium text-zinc-900">
                       {EVENT_LABELS[eventKey] ?? eventKey}
                     </p>
-                    <p className="text-xs text-zinc-500">{eventKey}</p>
+                    <p className="text-xs text-zinc-600">{eventKey}</p>
                   </div>
                   <div className="flex flex-wrap gap-3">
                     {allowedChannels.map((channel) => {
@@ -245,7 +245,7 @@ export function AdminNotificationSettingsPanel() {
                       return (
                         <label
                           key={`${eventKey}-${channel}`}
-                          className="inline-flex items-center gap-2 text-sm text-zinc-300"
+                          className="inline-flex items-center gap-2 text-sm text-zinc-700"
                         >
                           <input
                             type="checkbox"

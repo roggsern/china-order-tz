@@ -35,11 +35,11 @@ export function permissionRiskLabel(tier: PermissionRiskTier): string {
 export function permissionRiskBadgeClass(tier: PermissionRiskTier): string {
   switch (tier) {
     case "high":
-      return "border-red-900/60 bg-red-950/40 text-red-200";
+      return "border-red-200 bg-red-50 text-red-800";
     case "medium":
-      return "border-amber-900/60 bg-amber-950/40 text-amber-200";
+      return "border-amber-200 bg-amber-50 text-amber-800";
     default:
-      return "border-emerald-900/60 bg-emerald-950/40 text-emerald-200";
+      return "border-emerald-200 bg-emerald-50 text-emerald-800";
   }
 }
 

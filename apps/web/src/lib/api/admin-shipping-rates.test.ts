@@ -16,19 +16,13 @@ describe("admin shipping rates helpers", () => {
     assert.equal(canManageShippingRates(["shipping.view"]), false);
   });
 
-  it("exposes Settings → Shipping nav item behind shipping.view", () => {
-    const shippingNav = adminSettingsNavItems.find(
-      (item) => item.href === "/admin/settings/shipping",
-    );
-    assert.ok(shippingNav);
-    assert.equal(shippingNav?.permission, "shipping.view");
+  it("keeps Shipping settings permission-gated outside the Settings sidebar", () => {
     assert.equal(
-      hasAdminPermission(["shipping.view"], shippingNav?.permission ?? ""),
-      true,
-    );
-    assert.equal(
-      hasAdminPermission(["settings.view"], shippingNav?.permission ?? ""),
+      adminSettingsNavItems.some((item) => item.href === "/admin/settings/shipping"),
       false,
     );
+    assert.equal(canViewShippingRates(["shipping.view"]), true);
+    assert.equal(hasAdminPermission(["shipping.view"], "shipping.view"), true);
+    assert.equal(hasAdminPermission(["settings.view"], "shipping.view"), false);
   });
 });

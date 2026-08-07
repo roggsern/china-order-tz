@@ -16,13 +16,13 @@ describe("admin payment config helpers", () => {
     assert.equal(canManagePaymentConfig(["payments.config.view"]), false);
   });
 
-  it("exposes Settings → Payments nav item behind payments.config.view", () => {
-    const nav = adminSettingsNavItems.find(
-      (item) => item.href === "/admin/settings/payments",
+  it("keeps Payments settings permission-gated outside the Settings sidebar", () => {
+    assert.equal(
+      adminSettingsNavItems.some((item) => item.href === "/admin/settings/payments"),
+      false,
     );
-    assert.ok(nav);
-    assert.equal(nav?.permission, "payments.config.view");
-    assert.equal(hasAdminPermission(["payments.config.view"], nav?.permission ?? ""), true);
-    assert.equal(hasAdminPermission(["payments.view"], nav?.permission ?? ""), false);
+    assert.equal(canViewPaymentConfig(["payments.config.view"]), true);
+    assert.equal(hasAdminPermission(["payments.config.view"], "payments.config.view"), true);
+    assert.equal(hasAdminPermission(["payments.view"], "payments.config.view"), false);
   });
 });

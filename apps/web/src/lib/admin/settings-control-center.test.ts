@@ -126,4 +126,11 @@ describe("settings control center mapping", () => {
     assert.equal(history?.permission, "settings.view");
     assert.equal(hasAdminPermission(["settings.view"], overview?.permission ?? ""), true);
   });
+
+  it("limits Settings sidebar to Overview, History, Users, Roles, and Permissions", () => {
+    assert.deepEqual(
+      adminSettingsNavItems.map((item) => item.label),
+      ["Overview", "History", "Users", "Roles", "Permissions"],
+    );
+  });
 });

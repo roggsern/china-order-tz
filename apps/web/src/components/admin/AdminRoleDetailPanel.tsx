@@ -36,12 +36,12 @@ function PermissionCard({ permission }: { permission: AdminRolePermission }) {
   return (
     <li className="rounded-md border border-zinc-800 bg-zinc-950/40 px-3 py-2">
       <div className="flex items-start justify-between gap-2">
-        <p className="font-mono text-xs text-zinc-300">{permission.slug}</p>
+        <p className="font-mono text-xs text-zinc-700">{permission.slug}</p>
         <RiskBadge tier={tier} />
       </div>
-      <p className="mt-1 text-sm text-zinc-400">{permission.name}</p>
+      <p className="mt-1 text-sm text-zinc-600">{permission.name}</p>
       {permission.description ? (
-        <p className="mt-1 text-xs text-zinc-500">{permission.description}</p>
+        <p className="mt-1 text-xs text-zinc-600">{permission.description}</p>
       ) : null}
     </li>
   );
@@ -60,7 +60,7 @@ function RiskTierSection({
 
   return (
     <div className="space-y-2">
-      <h4 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+      <h4 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-600">
         {permissionRiskLabel(tier)} risk
       </h4>
       <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -124,8 +124,8 @@ export function AdminRoleDetailPanel({ roleId }: { roleId: string }) {
   if (!canView) {
     return (
       <div className="space-y-4 p-4 md:p-6">
-        <h1 className="text-xl font-semibold text-zinc-50">Role detail</h1>
-        <div className="rounded-md border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-sm text-amber-100">
+        <h1 className="text-xl font-semibold text-zinc-900">Role detail</h1>
+        <div className="rounded-md border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-sm text-amber-900">
           You do not have permission to view roles.
         </div>
       </div>
@@ -134,7 +134,7 @@ export function AdminRoleDetailPanel({ roleId }: { roleId: string }) {
 
   if (loading && !detail) {
     return (
-      <div className="p-4 md:p-6 text-sm text-zinc-500">
+      <div className="p-4 md:p-6 text-sm text-zinc-600">
         Loading role detail…
       </div>
     );
@@ -146,7 +146,7 @@ export function AdminRoleDetailPanel({ roleId }: { roleId: string }) {
         <Link href="/admin/settings/roles" className="text-sm text-[#e8c547] hover:underline">
           ← Back to roles
         </Link>
-        <div className="rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2 text-sm text-red-200">
+        <div className="rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2 text-sm text-red-800">
           {error ?? "Role not found."}
         </div>
       </div>
@@ -160,10 +160,10 @@ export function AdminRoleDetailPanel({ roleId }: { roleId: string }) {
           <Link href="/admin/settings/roles" className="text-sm text-[#e8c547] hover:underline">
             ← Back to roles
           </Link>
-          <h1 className="mt-3 text-xl font-semibold text-zinc-50">{detail.role.name}</h1>
-          <p className="mt-1 font-mono text-sm text-zinc-500">{detail.role.slug}</p>
+          <h1 className="mt-3 text-xl font-semibold text-zinc-900">{detail.role.name}</h1>
+          <p className="mt-1 font-mono text-sm text-zinc-600">{detail.role.slug}</p>
           {detail.role.description ? (
-            <p className="mt-2 text-sm text-zinc-400">{detail.role.description}</p>
+            <p className="mt-2 text-sm text-zinc-600">{detail.role.description}</p>
           ) : null}
         </div>
         {canManagePermissions ? (
@@ -181,33 +181,33 @@ export function AdminRoleDetailPanel({ roleId }: { roleId: string }) {
       </div>
 
       {success ? (
-        <div className="rounded-md border border-emerald-900/50 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200">
+        <div className="rounded-md border border-emerald-900/50 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-800">
           {success}
         </div>
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-600">
             Assigned users
           </p>
-          <p className="mt-1.5 text-lg font-semibold text-zinc-100">{detail.role.users_count}</p>
+          <p className="mt-1.5 text-lg font-semibold text-zinc-900">{detail.role.users_count}</p>
         </div>
         <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-600">
             Permissions
           </p>
-          <p className="mt-1.5 text-lg font-semibold text-zinc-100">
+          <p className="mt-1.5 text-lg font-semibold text-zinc-900">
             {detail.role.permissions_count}
           </p>
         </div>
       </div>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-zinc-100">Assigned admins</h2>
+        <h2 className="text-sm font-semibold text-zinc-900">Assigned admins</h2>
         <div className="overflow-x-auto rounded-lg border border-zinc-800">
           <table className="min-w-full text-left text-sm">
-            <thead className="bg-zinc-900 text-[11px] uppercase tracking-wider text-zinc-500">
+            <thead className="bg-zinc-900 text-[11px] uppercase tracking-wider text-zinc-600">
               <tr>
                 <th className="px-3 py-2.5">Name</th>
                 <th className="px-3 py-2.5">Email</th>
@@ -217,21 +217,21 @@ export function AdminRoleDetailPanel({ roleId }: { roleId: string }) {
             <tbody>
               {detail.assigned_admins.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="px-3 py-6 text-zinc-500">
+                  <td colSpan={3} className="px-3 py-6 text-zinc-600">
                     No admins are assigned to this role.
                   </td>
                 </tr>
               ) : (
                 detail.assigned_admins.map((admin) => (
                   <tr key={admin.id} className="border-t border-zinc-800/80">
-                    <td className="px-3 py-2.5 text-zinc-200">
+                    <td className="px-3 py-2.5 text-zinc-800">
                       {admin.name}
                       {admin.is_super_admin ? (
-                        <span className="ml-2 text-xs text-amber-400">Super admin</span>
+                        <span className="ml-2 text-xs text-amber-700">Super admin</span>
                       ) : null}
                     </td>
-                    <td className="px-3 py-2.5 text-zinc-400">{admin.email}</td>
-                    <td className="px-3 py-2.5 text-zinc-300">
+                    <td className="px-3 py-2.5 text-zinc-600">{admin.email}</td>
+                    <td className="px-3 py-2.5 text-zinc-700">
                       {admin.is_active ? "Active" : "Inactive"}
                     </td>
                   </tr>
@@ -243,15 +243,15 @@ export function AdminRoleDetailPanel({ roleId }: { roleId: string }) {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-sm font-semibold text-zinc-100">Permission matrix</h2>
+        <h2 className="text-sm font-semibold text-zinc-900">Permission matrix</h2>
         {domainGroups.length === 0 ? (
-          <p className="text-sm text-zinc-500">This role has no permissions assigned.</p>
+          <p className="text-sm text-zinc-600">This role has no permissions assigned.</p>
         ) : (
           domainGroups.map((group) => (
             <div key={group.domain} className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-4">
               <h3 className="text-sm font-semibold text-[#e8c547]">
                 {formatPermissionDomainLabel(group.domain)}
-                <span className="ml-2 font-mono text-xs font-normal text-zinc-500">
+                <span className="ml-2 font-mono text-xs font-normal text-zinc-600">
                   {group.domain}.*
                 </span>
               </h3>

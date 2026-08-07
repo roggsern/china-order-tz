@@ -55,7 +55,6 @@ export const adminNavItems: AdminNavItem[] = [
   { label: "Loyalty", href: "/admin/loyalty", icon: StarOutlineIcon, exact: false },
   { label: "Growth", href: "/admin/growth", icon: ChartBarIcon, exact: false },
   { label: "Promotions", href: "/admin/promotions", icon: TagIcon, exact: false },
-  { label: "Settings", href: "/admin/settings", icon: SettingsIcon, exact: false },
 ];
 
 export const adminSettingsNavItems: AdminNavItem[] = [
@@ -79,42 +78,6 @@ export const adminSettingsNavItems: AdminNavItem[] = [
     href: "/admin/settings/permissions",
     icon: TagIcon,
     permission: "roles.manage_permissions",
-  },
-  {
-    label: "Shipping",
-    href: "/admin/settings/shipping",
-    icon: ArrowRightIcon,
-    permission: "shipping.view",
-  },
-  {
-    label: "Notifications",
-    href: "/admin/settings/notifications",
-    icon: DocumentIcon,
-    permission: "notifications.view",
-  },
-  {
-    label: "Payments",
-    href: "/admin/settings/payments",
-    icon: ChartBarIcon,
-    permission: "payments.config.view",
-  },
-  {
-    label: "Features",
-    href: "/admin/settings/features",
-    icon: StarOutlineIcon,
-    permission: "features.view",
-  },
-  {
-    label: "Store",
-    href: "/admin/settings/store",
-    icon: StoreIcon,
-    permission: "stores.view",
-  },
-  {
-    label: "Config Health",
-    href: "/admin/settings/health",
-    icon: ChartBarIcon,
-    permission: "settings.view",
   },
 ];
 

@@ -16,13 +16,13 @@ describe("admin notification config helpers", () => {
     assert.equal(canManageNotificationConfig(["notifications.view"]), false);
   });
 
-  it("exposes Settings → Notifications nav item behind notifications.view", () => {
-    const nav = adminSettingsNavItems.find(
-      (item) => item.href === "/admin/settings/notifications",
+  it("keeps Notifications settings permission-gated outside the Settings sidebar", () => {
+    assert.equal(
+      adminSettingsNavItems.some((item) => item.href === "/admin/settings/notifications"),
+      false,
     );
-    assert.ok(nav);
-    assert.equal(nav?.permission, "notifications.view");
-    assert.equal(hasAdminPermission(["notifications.view"], nav?.permission ?? ""), true);
-    assert.equal(hasAdminPermission(["settings.view"], nav?.permission ?? ""), false);
+    assert.equal(canViewNotificationConfig(["notifications.view"]), true);
+    assert.equal(hasAdminPermission(["notifications.view"], "notifications.view"), true);
+    assert.equal(hasAdminPermission(["settings.view"], "notifications.view"), false);
   });
 });

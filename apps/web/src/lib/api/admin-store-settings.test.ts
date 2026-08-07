@@ -16,11 +16,13 @@ describe("admin store settings helpers", () => {
     assert.equal(canManageStoreSettings(["stores.view"]), false);
   });
 
-  it("exposes Settings → Store nav item behind stores.view", () => {
-    const nav = adminSettingsNavItems.find((item) => item.href === "/admin/settings/store");
-    assert.ok(nav);
-    assert.equal(nav?.permission, "stores.view");
-    assert.equal(hasAdminPermission(["stores.view"], nav?.permission ?? ""), true);
-    assert.equal(hasAdminPermission(["features.view"], nav?.permission ?? ""), false);
+  it("keeps Store settings permission-gated outside the Settings sidebar", () => {
+    assert.equal(
+      adminSettingsNavItems.some((item) => item.href === "/admin/settings/store"),
+      false,
+    );
+    assert.equal(canViewStoreSettings(["stores.view"]), true);
+    assert.equal(hasAdminPermission(["stores.view"], "stores.view"), true);
+    assert.equal(hasAdminPermission(["features.view"], "stores.view"), false);
   });
 });

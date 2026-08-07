@@ -56,8 +56,8 @@ export function AdminRolesPanel() {
   if (!canView) {
     return (
       <div className="space-y-4 p-4 md:p-6">
-        <h1 className="text-xl font-semibold text-zinc-50">Roles</h1>
-        <div className="rounded-md border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-sm text-amber-100">
+        <h1 className="text-xl font-semibold text-zinc-900">Roles</h1>
+        <div className="rounded-md border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-sm text-amber-900">
           You do not have permission to view roles.
         </div>
       </div>
@@ -67,20 +67,20 @@ export function AdminRolesPanel() {
   return (
     <div className="space-y-6 p-4 md:p-6">
       <div>
-        <h1 className="text-xl font-semibold text-zinc-50">Roles</h1>
-        <p className="mt-1 text-sm text-zinc-500">
+        <h1 className="text-xl font-semibold text-zinc-900">Roles</h1>
+        <p className="mt-1 text-sm text-zinc-600">
           Read-only view of platform roles and their permission matrix.
         </p>
       </div>
 
       {error ? (
-        <div className="rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2 text-sm text-red-200">
+        <div className="rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2 text-sm text-red-800">
           {error}
         </div>
       ) : null}
 
       <div className="flex flex-wrap items-end gap-2">
-        <label className="text-xs text-zinc-500">
+        <label className="text-xs text-zinc-600">
           Search
           <input
             value={search}
@@ -92,7 +92,7 @@ export function AdminRolesPanel() {
         <button
           type="button"
           onClick={() => void reload()}
-          className="rounded-md border border-zinc-700 px-3 py-2 text-sm text-zinc-300"
+          className="rounded-md border border-zinc-700 px-3 py-2 text-sm text-zinc-700"
         >
           Refresh
         </button>
@@ -112,31 +112,31 @@ export function AdminRolesPanel() {
           <tbody>
             {loading && filteredRows.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-3 py-6 text-zinc-500">
+                <td colSpan={5} className="px-3 py-6 text-zinc-600">
                   Loading…
                 </td>
               </tr>
             ) : filteredRows.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-3 py-6 text-zinc-500">
+                <td colSpan={5} className="px-3 py-6 text-zinc-600">
                   No roles match this search.
                 </td>
               </tr>
             ) : (
               filteredRows.map((row) => (
-                <tr key={row.id} className="border-t border-zinc-800/80 hover:bg-zinc-900/40">
+                <tr key={row.id} className="border-t border-zinc-800/80 hover:bg-zinc-50">
                   <td className="px-3 py-2.5">
                     <Link
                       href={`/admin/settings/roles/${row.id}`}
-                      className="font-medium text-[#e8c547] hover:underline"
+                      className="font-medium text-[#c9a227] hover:underline"
                     >
                       {row.name}
                     </Link>
                   </td>
-                  <td className="px-3 py-2.5 font-mono text-xs text-zinc-400">{row.slug}</td>
-                  <td className="px-3 py-2.5 text-zinc-300">{row.users_count}</td>
-                  <td className="px-3 py-2.5 text-zinc-300">{row.permissions_count}</td>
-                  <td className="px-3 py-2.5 text-zinc-400">{row.description ?? "—"}</td>
+                  <td className="px-3 py-2.5 font-mono text-xs text-zinc-700">{row.slug}</td>
+                  <td className="px-3 py-2.5 text-zinc-800">{row.users_count}</td>
+                  <td className="px-3 py-2.5 text-zinc-800">{row.permissions_count}</td>
+                  <td className="px-3 py-2.5 text-zinc-700">{row.description ?? "—"}</td>
                 </tr>
               ))
             )}

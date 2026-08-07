@@ -147,20 +147,20 @@ export function mapConfigurationHealthPayload(
 }
 
 export function configurationHealthScoreTone(score: number): string {
-  if (score >= 85) return "text-emerald-300";
-  if (score >= 60) return "text-amber-300";
-  return "text-red-300";
+  if (score >= 85) return "text-emerald-700";
+  if (score >= 60) return "text-amber-600";
+  return "text-red-700";
 }
 
 export function configurationHealthStatusTone(status: ConfigurationHealthStatus): string {
   switch (status) {
     case "critical":
-      return "border-red-900/60 bg-red-950/30 text-red-200";
+      return "border-red-200 bg-red-50 text-red-800";
     case "warning":
-      return "border-amber-900/60 bg-amber-950/30 text-amber-200";
+      return "border-amber-200 bg-amber-50 text-amber-800";
     case "healthy":
-      return "border-emerald-900/60 bg-emerald-950/30 text-emerald-200";
+      return "border-emerald-200 bg-emerald-50 text-emerald-800";
     default:
-      return "border-zinc-700 bg-zinc-900/50 text-zinc-300";
+      return "border-zinc-200 bg-zinc-50 text-zinc-700";
   }
 }

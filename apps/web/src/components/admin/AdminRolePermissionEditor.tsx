@@ -54,14 +54,14 @@ function PreviewPermissionList({
 
   return (
     <div className="space-y-2">
-      <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{title}</h4>
+      <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-600">{title}</h4>
       <ul className="space-y-1.5">
         {permissions.map((permission) => (
           <li
             key={permission.slug}
             className="flex items-center justify-between gap-2 rounded-md border border-zinc-800 bg-zinc-950/40 px-3 py-2"
           >
-            <span className="font-mono text-xs text-zinc-300">{permission.slug}</span>
+            <span className="font-mono text-xs text-zinc-700">{permission.slug}</span>
             <RiskBadge tier={permission.risk_tier} />
           </li>
         ))}
@@ -222,19 +222,19 @@ export function AdminRolePermissionEditor({
       >
         <div className="flex items-start justify-between gap-4 border-b border-zinc-800 px-4 py-4 md:px-6">
           <div>
-            <h2 id="role-permission-editor-title" className="text-lg font-semibold text-zinc-50">
+            <h2 id="role-permission-editor-title" className="text-lg font-semibold text-zinc-900">
               Edit permissions
             </h2>
-            <p className="mt-1 text-sm text-zinc-400">
+            <p className="mt-1 text-sm text-zinc-600">
               {detail.role.name}
-              <span className="ml-2 font-mono text-xs text-zinc-500">{detail.role.slug}</span>
+              <span className="ml-2 font-mono text-xs text-zinc-600">{detail.role.slug}</span>
             </p>
-            <p className="mt-2 text-xs text-zinc-500">{permissionEditorSummary(draft)}</p>
+            <p className="mt-2 text-xs text-zinc-600">{permissionEditorSummary(draft)}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-900"
+            className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100"
           >
             Close
           </button>
@@ -242,14 +242,14 @@ export function AdminRolePermissionEditor({
 
         <div className="space-y-4 px-4 py-4 md:px-6">
           {error ? (
-            <div className="rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2 text-sm text-red-200">
+            <div className="rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2 text-sm text-red-800">
               {error}
             </div>
           ) : null}
 
           <div className="grid gap-3 md:grid-cols-3">
             <label className="block text-sm">
-              <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-500">
+              <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-600">
                 Search
               </span>
               <input
@@ -261,7 +261,7 @@ export function AdminRolePermissionEditor({
               />
             </label>
             <label className="block text-sm">
-              <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-500">
+              <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-600">
                 Domain
               </span>
               <select
@@ -278,7 +278,7 @@ export function AdminRolePermissionEditor({
               </select>
             </label>
             <label className="block text-sm">
-              <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-500">
+              <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-600">
                 Risk
               </span>
               <select
@@ -295,9 +295,9 @@ export function AdminRolePermissionEditor({
           </div>
 
           {loadingCatalog ? (
-            <p className="text-sm text-zinc-500">Loading permission catalog…</p>
+            <p className="text-sm text-zinc-600">Loading permission catalog…</p>
           ) : groupedRows.length === 0 ? (
-            <p className="text-sm text-zinc-500">No permissions match these filters.</p>
+            <p className="text-sm text-zinc-600">No permissions match these filters.</p>
           ) : (
             <div className="max-h-[50vh] space-y-4 overflow-y-auto pr-1">
               {groupedRows.map((group) => (
@@ -328,22 +328,22 @@ export function AdminRolePermissionEditor({
                           />
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-mono text-xs text-zinc-300">
+                              <span className="font-mono text-xs text-zinc-700">
                                 {permission.slug}
                               </span>
                               <RiskBadge tier={permission.risk_tier} />
                               {pendingAdd ? (
-                                <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-400">
+                                <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
                                   Add
                                 </span>
                               ) : null}
                               {pendingRemove ? (
-                                <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-400">
+                                <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">
                                   Remove
                                 </span>
                               ) : null}
                             </div>
-                            <p className="mt-1 text-sm text-zinc-400">{permission.name}</p>
+                            <p className="mt-1 text-sm text-zinc-600">{permission.name}</p>
                           </div>
                         </li>
                       );
@@ -360,7 +360,7 @@ export function AdminRolePermissionEditor({
             type="button"
             onClick={resetEditor}
             disabled={busy}
-            className="rounded-md border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900 disabled:opacity-50"
+            className="rounded-md border border-zinc-700 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
           >
             Reset draft
           </button>
@@ -376,11 +376,11 @@ export function AdminRolePermissionEditor({
 
         {preview && confirmation ? (
           <div className="border-t border-zinc-800 bg-zinc-900/40 px-4 py-4 md:px-6">
-            <h3 className="text-base font-semibold text-zinc-100">{confirmation.title}</h3>
-            <p className="mt-2 text-sm text-zinc-400">{confirmation.message}</p>
+            <h3 className="text-base font-semibold text-zinc-900">{confirmation.title}</h3>
+            <p className="mt-2 text-sm text-zinc-600">{confirmation.message}</p>
 
             {confirmation.showHighRiskWarning ? (
-              <div className="mt-3 rounded-md border border-red-900/60 bg-red-950/30 px-3 py-2 text-sm text-red-200">
+              <div className="mt-3 rounded-md border border-red-900/60 bg-red-950/30 px-3 py-2 text-sm text-red-800">
                 {confirmation.highRiskMessage}
               </div>
             ) : null}
@@ -395,16 +395,16 @@ export function AdminRolePermissionEditor({
 
             {preview.warnings.length > 0 ? (
               <div className="mt-4 space-y-2">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-600">
                   Warnings
                 </h4>
                 {preview.warnings.map((warning) => (
                   <div
                     key={warning.code}
-                    className="rounded-md border border-amber-900/50 bg-amber-950/20 px-3 py-2 text-sm text-amber-100"
+                    className="rounded-md border border-amber-900/50 bg-amber-950/20 px-3 py-2 text-sm text-amber-900"
                   >
                     <p className="font-medium">{warning.label}</p>
-                    <p className="mt-1 text-amber-200/90">{warning.message}</p>
+                    <p className="mt-1 text-amber-800">{warning.message}</p>
                   </div>
                 ))}
               </div>
@@ -415,7 +415,7 @@ export function AdminRolePermissionEditor({
                 type="button"
                 onClick={() => setPreview(null)}
                 disabled={busy}
-                className="rounded-md border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900 disabled:opacity-50"
+                className="rounded-md border border-zinc-700 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
               >
                 Back to editor
               </button>

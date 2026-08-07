@@ -16,13 +16,13 @@ describe("admin feature config helpers", () => {
     assert.equal(canManageFeatureConfig(["features.view"]), false);
   });
 
-  it("exposes Settings → Features nav item behind features.view", () => {
-    const nav = adminSettingsNavItems.find(
-      (item) => item.href === "/admin/settings/features",
+  it("keeps Features settings permission-gated outside the Settings sidebar", () => {
+    assert.equal(
+      adminSettingsNavItems.some((item) => item.href === "/admin/settings/features"),
+      false,
     );
-    assert.ok(nav);
-    assert.equal(nav?.permission, "features.view");
-    assert.equal(hasAdminPermission(["features.view"], nav?.permission ?? ""), true);
-    assert.equal(hasAdminPermission(["settings.view"], nav?.permission ?? ""), false);
+    assert.equal(canViewFeatureConfig(["features.view"]), true);
+    assert.equal(hasAdminPermission(["features.view"], "features.view"), true);
+    assert.equal(hasAdminPermission(["settings.view"], "features.view"), false);
   });
 });

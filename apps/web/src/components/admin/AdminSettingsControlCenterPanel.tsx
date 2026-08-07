@@ -56,7 +56,7 @@ export function AdminSettingsControlCenterPanel() {
 
   if (permissionsLoading) {
     return (
-      <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6 text-sm text-zinc-400">
+      <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6 text-sm text-zinc-600">
         Checking permissions…
       </div>
     );
@@ -65,9 +65,9 @@ export function AdminSettingsControlCenterPanel() {
   if (!canView) {
     return (
       <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6">
-        <h1 className="text-xl font-semibold text-zinc-100">Settings</h1>
-        <p className="mt-2 text-sm text-zinc-400">
-          You need <code className="text-zinc-300">settings.view</code> to open the Settings
+        <h1 className="text-xl font-semibold text-zinc-900">Settings</h1>
+        <p className="mt-2 text-sm text-zinc-600">
+          You need <code className="text-zinc-800">settings.view</code> to open the Settings
           Control Center.
         </p>
       </div>
@@ -78,8 +78,8 @@ export function AdminSettingsControlCenterPanel() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-zinc-100">Settings Control Center</h1>
-          <p className="mt-1 text-sm text-zinc-400">
+          <h1 className="text-2xl font-semibold text-zinc-900">Settings Control Center</h1>
+          <p className="mt-1 text-sm text-zinc-600">
             Read-only overview of configuration health, module status, and recent settings
             changes.
           </p>
@@ -87,14 +87,14 @@ export function AdminSettingsControlCenterPanel() {
         <div className="flex flex-wrap gap-2">
           <Link
             href="/admin/settings/history"
-            className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900"
+            className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-800 hover:bg-zinc-100"
           >
             History
           </Link>
           <button
             type="button"
             onClick={() => void load()}
-            className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900"
+            className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-800 hover:bg-zinc-100"
           >
             Refresh
           </button>
@@ -102,36 +102,36 @@ export function AdminSettingsControlCenterPanel() {
       </div>
 
       {error ? (
-        <div className="rounded-lg border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+        <div className="rounded-lg border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-800">
           {error}
         </div>
       ) : null}
 
       {loading || !dashboard ? (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6 text-sm text-zinc-400">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-6 text-sm text-zinc-600">
           Loading settings dashboard…
         </div>
       ) : (
         <>
           <section className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-5">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">Health score</p>
+              <p className="text-xs uppercase tracking-wide text-zinc-600">Health score</p>
               <p
                 className={`mt-2 text-4xl font-semibold ${configurationHealthScoreTone(dashboard.healthScore)}`}
               >
                 {dashboard.healthScore}
               </p>
-              <p className="mt-1 text-sm text-zinc-400">Status: {dashboard.status}</p>
+              <p className="mt-1 text-sm text-zinc-600">Status: {dashboard.status}</p>
             </div>
             <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-5">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">Critical</p>
-              <p className="mt-2 text-4xl font-semibold text-red-300">
+              <p className="text-xs uppercase tracking-wide text-zinc-600">Critical</p>
+              <p className="mt-2 text-4xl font-semibold text-red-700">
                 {dashboard.summary.criticalCount}
               </p>
             </div>
             <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-5">
-              <p className="text-xs uppercase tracking-wide text-zinc-500">Warnings</p>
-              <p className="mt-2 text-4xl font-semibold text-amber-300">
+              <p className="text-xs uppercase tracking-wide text-zinc-600">Warnings</p>
+              <p className="mt-2 text-4xl font-semibold text-amber-600">
                 {dashboard.summary.warningCount}
               </p>
             </div>
@@ -139,7 +139,7 @@ export function AdminSettingsControlCenterPanel() {
 
           <section>
             <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-medium text-zinc-100">Modules</h2>
+              <h2 className="text-lg font-medium text-zinc-900">Modules</h2>
               <Link
                 href="/admin/settings/health"
                 className="text-sm text-[#c9a227] hover:underline"
@@ -166,13 +166,13 @@ export function AdminSettingsControlCenterPanel() {
 
           {dashboard.quickActions.length > 0 ? (
             <section className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-5">
-              <h2 className="text-lg font-medium text-zinc-100">Quick actions</h2>
+              <h2 className="text-lg font-medium text-zinc-900">Quick actions</h2>
               <ul className="mt-3 flex flex-wrap gap-2">
                 {dashboard.quickActions.map((action) => (
                   <li key={action.key}>
                     <Link
                       href={action.href}
-                      className="inline-flex rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900"
+                      className="inline-flex rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-800 hover:bg-zinc-100"
                     >
                       {action.label}
                     </Link>
@@ -184,7 +184,7 @@ export function AdminSettingsControlCenterPanel() {
 
           <section className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-5">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-medium text-zinc-100">Recent changes</h2>
+              <h2 className="text-lg font-medium text-zinc-900">Recent changes</h2>
               <Link
                 href="/admin/settings/history"
                 className="text-sm text-[#c9a227] hover:underline"
@@ -193,18 +193,18 @@ export function AdminSettingsControlCenterPanel() {
               </Link>
             </div>
             {dashboard.recentChanges.length === 0 ? (
-              <p className="text-sm text-zinc-400">No configuration changes recorded yet.</p>
+              <p className="text-sm text-zinc-600">No configuration changes recorded yet.</p>
             ) : (
               <ul className="divide-y divide-zinc-800">
                 {dashboard.recentChanges.map((change) => (
                   <li key={change.id} className="py-3 first:pt-0 last:pb-0">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <p className="text-sm font-medium text-zinc-100">{change.eventLabel}</p>
-                      <p className="text-xs text-zinc-500">
+                      <p className="text-sm font-medium text-zinc-900">{change.eventLabel}</p>
+                      <p className="text-xs text-zinc-600">
                         {formatSettingsTimestamp(change.timestamp)}
                       </p>
                     </div>
-                    <p className="mt-1 text-sm text-zinc-400">
+                    <p className="mt-1 text-sm text-zinc-600">
                       by {change.actorName}
                       {change.description ? ` — ${change.description}` : ""}
                     </p>

@@ -53,15 +53,16 @@ describe("configuration health mapping", () => {
     assert.equal(view.warnings.length, 1);
     assert.equal(view.groups.length, 3);
     assert.equal(view.groups[0]?.status, "critical");
-    assert.equal(configurationHealthScoreTone(90), "text-emerald-300");
-    assert.equal(configurationHealthScoreTone(70), "text-amber-300");
-    assert.equal(configurationHealthScoreTone(40), "text-red-300");
+    assert.equal(configurationHealthScoreTone(90), "text-emerald-700");
+    assert.equal(configurationHealthScoreTone(70), "text-amber-600");
+    assert.equal(configurationHealthScoreTone(40), "text-red-700");
   });
 
-  it("exposes Settings → Config Health nav item behind settings.view", () => {
-    const nav = adminSettingsNavItems.find((item) => item.href === "/admin/settings/health");
-    assert.ok(nav);
-    assert.equal(nav?.permission, "settings.view");
-    assert.equal(hasAdminPermission(["settings.view"], nav?.permission ?? ""), true);
+  it("keeps Config Health behind settings.view without a Settings sidebar item", () => {
+    assert.equal(
+      adminSettingsNavItems.some((item) => item.href === "/admin/settings/health"),
+      false,
+    );
+    assert.equal(hasAdminPermission(["settings.view"], "settings.view"), true);
   });
 });
