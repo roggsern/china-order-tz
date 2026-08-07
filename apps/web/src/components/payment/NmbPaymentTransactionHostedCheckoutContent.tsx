@@ -141,9 +141,7 @@ export function NmbPaymentTransactionHostedCheckoutContent({
             redirectToReturn(resultIndicator);
           },
           onCancel: () => {
-            setPhase("error");
-            setErrorMessage("Payment was cancelled. You can try again when ready.");
-            void resolveOrderNumber();
+            redirectToReturn();
           },
           onError: (error) => {
             setPhase("error");
