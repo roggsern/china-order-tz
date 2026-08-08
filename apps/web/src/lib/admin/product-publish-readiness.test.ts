@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   calculateProductPublishReadiness,
+  evaluateRequiredSpecifications,
   isLeafCategoryId,
   isSellableVariant,
   variantHasRetailPrice,
@@ -22,6 +23,9 @@ const baseReady = {
   commerceChannelId: "channel-1",
   storeId: null as string | null,
   hasSimpleInventoryPolicy: false,
+  hasCatalogImage: true,
+  hasPrimaryImage: true,
+  requiredSpecificationsComplete: true,
 };
 
 test("calculateProductPublishReadiness marks simple product ready when requirements met", () => {
@@ -440,4 +444,100 @@ test("China shipping Case 3: TZ product does not include shipping readiness item
 
   assert.equal(result.ready, true);
   assert.equal(result.items.some((item) => item.id === "china-shipping"), false);
+});
+
+test("media: product without catalog image cannot publish", () => {
+  const result = calculateProductPublishReadiness({
+    ...baseReady,
+    price: 150000,
+    commerceChannelCode: "TZ_LOCAL",
+    commerceChannelId: "channel-tz",
+    storeId: "store-1",
+    hasSimpleInventoryPolicy: true,
+    variants: [],
+    hasCatalogImage: false,
+    hasPrimaryImage: false,
+  });
+
+  assert.equal(result.ready, false);
+  assert.ok(result.missing.some((item) => item.id === "catalog-image"));
+  assert.ok(result.missing.some((item) => item.id === "primary-image"));
+});
+
+test("media: product with image but no primary cannot publish", () => {
+  const result = calculateProductPublishReadiness({
+    ...baseReady,
+    price: 150000,
+    commerceChannelCode: "TZ_LOCAL",
+    commerceChannelId: "channel-tz",
+    storeId: "store-1",
+    hasSimpleInventoryPolicy: true,
+    variants: [],
+    hasCatalogImage: true,
+    hasPrimaryImage: false,
+  });
+
+  assert.equal(result.ready, false);
+  assert.equal(result.missing.some((item) => item.id === "catalog-image"), false);
+  assert.ok(result.missing.some((item) => item.id === "primary-image"));
+});
+
+test("media: product with primary image can publish", () => {
+  const result = calculateProductPublishReadiness({
+    ...baseReady,
+    price: 150000,
+    commerceChannelCode: "TZ_LOCAL",
+    commerceChannelId: "channel-tz",
+    storeId: "store-1",
+    hasSimpleInventoryPolicy: true,
+    variants: [],
+    hasCatalogImage: true,
+    hasPrimaryImage: true,
+  });
+
+  assert.equal(result.ready, true);
+});
+
+test("specifications: required attributes missing blocks publish", () => {
+  const evaluation = evaluateRequiredSpecifications([
+    { isRequired: true, name: "RAM", value: { display: null } },
+    { isRequired: false, name: "Color", value: { display: null } },
+  ]);
+  assert.equal(evaluation.complete, false);
+  assert.deepEqual(evaluation.missingLabels, ["RAM"]);
+
+  const result = calculateProductPublishReadiness({
+    ...baseReady,
+    price: 150000,
+    commerceChannelCode: "TZ_LOCAL",
+    commerceChannelId: "channel-tz",
+    storeId: "store-1",
+    hasSimpleInventoryPolicy: true,
+    variants: [],
+    requiredSpecificationsComplete: false,
+    missingRequiredSpecificationLabels: ["RAM"],
+  });
+
+  assert.equal(result.ready, false);
+  assert.ok(result.missing.some((item) => item.id === "required-specifications"));
+});
+
+test("specifications: optional attributes do not block publish", () => {
+  const evaluation = evaluateRequiredSpecifications([
+    { isRequired: false, name: "Color", value: { display: null } },
+  ]);
+  assert.equal(evaluation.complete, true);
+
+  const result = calculateProductPublishReadiness({
+    ...baseReady,
+    price: 150000,
+    commerceChannelCode: "TZ_LOCAL",
+    commerceChannelId: "channel-tz",
+    storeId: "store-1",
+    hasSimpleInventoryPolicy: true,
+    variants: [],
+    requiredSpecificationsComplete: true,
+  });
+
+  assert.equal(result.ready, true);
 });

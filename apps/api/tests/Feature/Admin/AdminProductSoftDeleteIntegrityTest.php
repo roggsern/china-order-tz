@@ -7,6 +7,7 @@ use App\Models\Admin;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\ProductMedia;
 use App\Models\ProductVariant;
 use App\Models\User;
 use App\Models\VariantPrice;
@@ -153,6 +154,11 @@ class AdminProductSoftDeleteIntegrityTest extends TestCase
 
         VariantPrice::query()->where('product_variant_id', $variant->id)->delete();
         $variant->forceFill(['price' => null])->save();
+
+        ProductMedia::factory()->primary()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => null,
+        ]);
 
         $fresh = $product->fresh([
             'commerceChannel',

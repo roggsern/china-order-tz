@@ -109,6 +109,11 @@ export type ApiCatalogProductVariant = {
   }>;
 };
 
+export type ApiCatalogProductSpecification = {
+  label: string;
+  value: string;
+};
+
 export type ApiCatalogProductDetail = ApiCatalogProductCard & {
   is_purchasable?: boolean;
   availability_status?: "available" | "out_of_stock" | "unavailable";
@@ -116,6 +121,7 @@ export type ApiCatalogProductDetail = ApiCatalogProductCard & {
   description: string | null;
   weight: string | number | null;
   dimensions: string | null;
+  specifications?: ApiCatalogProductSpecification[] | null;
   stock?: string | number | null;
   in_stock?: boolean | null;
   inventory?: {

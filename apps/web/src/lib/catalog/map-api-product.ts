@@ -243,6 +243,38 @@ export function mapApiProductCardToCatalogProduct(product: ApiCatalogProductCard
   };
 }
 
+function mapApiProductSpecifications(product: ApiCatalogProductDetail): ProductSpecification[] {
+  const fromApi = (product.specifications ?? [])
+    .map((spec) => ({
+      label: String(spec.label ?? "").trim(),
+      value: String(spec.value ?? "").trim(),
+    }))
+    .filter((spec) => spec.label.length > 0 && spec.value.length > 0);
+
+  if (fromApi.length > 0) {
+    return fromApi;
+  }
+
+  const fallback: ProductSpecification[] = [];
+  const dimensions = product.dimensions?.trim();
+  if (dimensions) {
+    fallback.push({ label: "Dimensions", value: dimensions });
+  }
+
+  if (product.weight !== null && product.weight !== undefined && product.weight !== "") {
+    const weightNumber =
+      typeof product.weight === "number"
+        ? product.weight
+        : Number.parseFloat(String(product.weight));
+    fallback.push({
+      label: "Weight",
+      value: Number.isFinite(weightNumber) ? `${weightNumber} kg` : String(product.weight).trim(),
+    });
+  }
+
+  return fallback;
+}
+
 export function mapApiProductDetailToCatalogProduct(product: ApiCatalogProductDetail): Product {
   const card = mapApiProductCardToCatalogProduct(product);
   const stock = resolveApiProductStock(product);
@@ -300,9 +332,7 @@ export function mapApiProductDetailToCatalogProduct(product: ApiCatalogProductDe
     videos: videos.length > 0 ? videos : undefined,
     variantGalleries:
       Object.keys(variantGalleries).length > 0 ? variantGalleries : undefined,
-    specifications: product.dimensions
-      ? [{ label: "Dimensions", value: product.dimensions }]
-      : [],
+    specifications: mapApiProductSpecifications(product),
     isPurchasable: product.is_purchasable,
     availabilityStatus: product.availability_status as ProductAvailabilityStatus | undefined,
     unavailabilityReason: product.unavailability_reason as ProductUnavailabilityReason | undefined,

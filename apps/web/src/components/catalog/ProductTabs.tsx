@@ -117,17 +117,23 @@ export function ProductTabs({
 
             {activeTab === "specifications" && (
               <div className="max-w-3xl overflow-hidden rounded-2xl border border-zinc-100">
-                <dl className="divide-y divide-zinc-100">
-                  {specifications.map((spec) => (
-                    <div
-                      key={spec.label}
-                      className="grid gap-1 px-5 py-4 sm:grid-cols-[200px_1fr]"
-                    >
-                      <dt className="text-sm font-semibold text-zinc-900">{spec.label}</dt>
-                      <dd className="text-sm text-zinc-600">{spec.value}</dd>
-                    </div>
-                  ))}
-                </dl>
+                {specifications.length === 0 ? (
+                  <p className="px-5 py-8 text-sm text-zinc-500">
+                    No specifications available for this product.
+                  </p>
+                ) : (
+                  <dl className="divide-y divide-zinc-100">
+                    {specifications.map((spec) => (
+                      <div
+                        key={spec.label}
+                        className="grid gap-1 px-5 py-4 sm:grid-cols-[200px_1fr]"
+                      >
+                        <dt className="text-sm font-semibold text-zinc-900">{spec.label}</dt>
+                        <dd className="text-sm text-zinc-600">{spec.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
               </div>
             )}
 

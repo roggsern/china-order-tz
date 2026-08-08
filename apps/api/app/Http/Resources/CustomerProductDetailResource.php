@@ -7,6 +7,7 @@ use App\Http\Resources\Concerns\PresentsCustomerCatalogStock;
 use App\Http\Resources\Concerns\PresentsCustomerCatalogPrice;
 use App\Models\Product;
 use App\Services\Catalog\CustomerProductMediaResolver;
+use App\Services\Catalog\CustomerProductSpecificationsPresenter;
 use App\Support\Catalog\ProductConditionResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -35,6 +36,7 @@ class CustomerProductDetailResource extends JsonResource
             'product_condition_label' => $effectiveCondition?->storefrontBadge(),
             'weight' => $this->weight,
             'dimensions' => $this->dimensions,
+            'specifications' => app(CustomerProductSpecificationsPresenter::class)->present($this->resource),
             'category' => new CustomerCategoryResource($this->whenLoaded('category')),
             'brand' => new CustomerBrandResource($this->whenLoaded('brand')),
             'primary_image' => app(CustomerProductMediaResolver::class)->resolvePrimary($this->resource),

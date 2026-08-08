@@ -293,3 +293,34 @@ test("invalid video URLs are still mapped but filtered at gallery layer", () => 
 
   assert.equal(mapped.videos?.length, 1);
 });
+
+test("prefers API specifications over dimensions/weight fallback", () => {
+  const mapped = mapApiProductDetailToCatalogProduct({
+    ...BASE_PRODUCT,
+    dimensions: "10 x 5 x 1 cm",
+    weight: "1.2",
+    specifications: [
+      { label: "RAM", value: "12GB" },
+      { label: "Battery Capacity", value: "5000 mAh" },
+    ],
+  });
+
+  assert.deepEqual(mapped.specifications, [
+    { label: "RAM", value: "12GB" },
+    { label: "Battery Capacity", value: "5000 mAh" },
+  ]);
+});
+
+test("falls back to dimensions and weight when API specifications are empty", () => {
+  const mapped = mapApiProductDetailToCatalogProduct({
+    ...BASE_PRODUCT,
+    dimensions: "10 x 5 x 1 cm",
+    weight: "1.25",
+    specifications: [],
+  });
+
+  assert.deepEqual(mapped.specifications, [
+    { label: "Dimensions", value: "10 x 5 x 1 cm" },
+    { label: "Weight", value: "1.25 kg" },
+  ]);
+});

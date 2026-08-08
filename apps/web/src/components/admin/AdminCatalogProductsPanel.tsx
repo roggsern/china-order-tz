@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { parseCatalogProductEditTab, type CatalogProductEditTab } from "@/lib/admin/product-id-map";
 import {
   calculateProductPublishReadiness,
+  evaluateRequiredSpecifications,
   formatPublishReadinessMissingLabels,
   isLeafCategoryId,
   isSellableVariant,
@@ -64,6 +65,8 @@ import {
   fetchAdminCategories,
   fetchAdminCommerceChannels,
   fetchAdminDepartments,
+  fetchAdminProductMedia,
+  fetchAdminProductSpecifications,
   fetchAdminProductVariants,
   fetchAdminProductShippingOptions,
   fetchAdminStores,
@@ -86,7 +89,9 @@ import { hasAdminPermission } from "@/lib/api/admin-me";
 import { resolveBrandLeafCategoryId } from "@/lib/admin/catalog-selector-utils";
 import { productTypeMatchesCategoryScope } from "@/lib/admin/catalog-product-type-scope";
 import {
+  canAccessProductSpecificationsWorkspace,
   mapWizardPricingModelToApi,
+  resolveProductEditorSurface,
   shouldUseProductCreationWizard,
   wizardSavePricingFields,
   type ProductCreationPricingModel,
@@ -194,6 +199,12 @@ export function AdminCatalogProductsPanel() {
   const [publishShippingOptions, setPublishShippingOptions] = useState<
     AdminProductShippingOption[] | null
   >(null);
+  const [publishHasCatalogImage, setPublishHasCatalogImage] = useState(false);
+  const [publishHasPrimaryImage, setPublishHasPrimaryImage] = useState(false);
+  const [publishRequiredSpecsComplete, setPublishRequiredSpecsComplete] = useState(true);
+  const [publishMissingRequiredSpecLabels, setPublishMissingRequiredSpecLabels] = useState<
+    string[]
+  >([]);
   const deepLinkEditHandledRef = useRef<string | null>(null);
 
   const setCatalogView = useCallback(
@@ -503,6 +514,10 @@ export function AdminCatalogProductsPanel() {
       setPublishContext(null);
       setPublishVariants([]);
       setPublishShippingOptions(null);
+      setPublishHasCatalogImage(false);
+      setPublishHasPrimaryImage(false);
+      setPublishRequiredSpecsComplete(true);
+      setPublishMissingRequiredSpecLabels([]);
       return;
     }
 
@@ -510,9 +525,11 @@ export function AdminCatalogProductsPanel() {
 
     void (async () => {
       try {
-        const [product, variantsPayload] = await Promise.all([
+        const [product, variantsPayload, media, specifications] = await Promise.all([
           fetchAdminCatalogProduct(form.id!),
           fetchAdminProductVariants(form.id!),
+          fetchAdminProductMedia(form.id!).catch(() => []),
+          fetchAdminProductSpecifications(form.id!).catch(() => []),
         ]);
 
         if (cancelled) {
@@ -521,10 +538,22 @@ export function AdminCatalogProductsPanel() {
 
         setPublishContext(product);
         setPublishVariants(variantsPayload.variants);
+
+        const catalogImages = media.filter((item) => item.type === "image");
+        setPublishHasCatalogImage(catalogImages.length > 0);
+        setPublishHasPrimaryImage(catalogImages.some((item) => item.isPrimary));
+
+        const specEvaluation = evaluateRequiredSpecifications(specifications);
+        setPublishRequiredSpecsComplete(specEvaluation.complete);
+        setPublishMissingRequiredSpecLabels(specEvaluation.missingLabels);
       } catch {
         if (!cancelled) {
           setPublishContext(null);
           setPublishVariants([]);
+          setPublishHasCatalogImage(false);
+          setPublishHasPrimaryImage(false);
+          setPublishRequiredSpecsComplete(false);
+          setPublishMissingRequiredSpecLabels([]);
         }
       }
     })();
@@ -675,8 +704,23 @@ export function AdminCatalogProductsPanel() {
       hasPublishableShippingOption: isChinaImportCommerceChannel(commerceChannelCode)
         ? hasPublishableShippingOption(publishShippingOptions ?? [])
         : undefined,
+      hasCatalogImage: Boolean(form.id) && publishHasCatalogImage,
+      hasPrimaryImage: Boolean(form.id) && publishHasPrimaryImage,
+      requiredSpecificationsComplete: !form.id || publishRequiredSpecsComplete,
+      missingRequiredSpecificationLabels: publishMissingRequiredSpecLabels,
     });
-  }, [categories, form, productTypes, publishContext, publishShippingOptions, publishVariants]);
+  }, [
+    categories,
+    form,
+    productTypes,
+    publishContext,
+    publishHasCatalogImage,
+    publishHasPrimaryImage,
+    publishMissingRequiredSpecLabels,
+    publishRequiredSpecsComplete,
+    publishShippingOptions,
+    publishVariants,
+  ]);
 
   const showShippingTab = Boolean(
     form?.id && isChinaImportCommerceChannel(publishContext?.commerceChannelCode),
@@ -726,12 +770,23 @@ export function AdminCatalogProductsPanel() {
     setPublishRefreshError(null);
 
     try {
-      const [product, variantsPayload] = await Promise.all([
+      const [product, variantsPayload, media, specifications] = await Promise.all([
         fetchAdminCatalogProduct(form.id),
         fetchAdminProductVariants(form.id),
+        fetchAdminProductMedia(form.id).catch(() => []),
+        fetchAdminProductSpecifications(form.id).catch(() => []),
       ]);
       setPublishContext(product);
       setPublishVariants(variantsPayload.variants);
+
+      const catalogImages = media.filter((item) => item.type === "image");
+      setPublishHasCatalogImage(catalogImages.length > 0);
+      setPublishHasPrimaryImage(catalogImages.some((item) => item.isPrimary));
+
+      const specEvaluation = evaluateRequiredSpecifications(specifications);
+      setPublishRequiredSpecsComplete(specEvaluation.complete);
+      setPublishMissingRequiredSpecLabels(specEvaluation.missingLabels);
+
       if (isChinaImportCommerceChannel(product.commerceChannelCode)) {
         try {
           const options = await fetchAdminProductShippingOptions(form.id);
@@ -825,6 +880,14 @@ export function AdminCatalogProductsPanel() {
         status: form.status,
       }),
   );
+
+  const editorSurface = resolveProductEditorSurface({
+    productId: form?.id,
+    useWizardFlow,
+    formTab,
+  });
+
+  const canOpenSpecifications = canAccessProductSpecificationsWorkspace(form?.id);
 
   const saveProductDraft = async (options?: {
     strictStepValidation?: boolean;
@@ -1122,30 +1185,57 @@ export function AdminCatalogProductsPanel() {
             </button>
           </div>
 
-          {form.id && !useWizardFlow ? (
+          {form.id ? (
             <div className="mt-4">
               <AdminProductSectionTabs
                 eyebrow="Product workspace"
                 title={form.name.trim() || "Untitled product"}
-                activeTabId={formTab}
-                onSelectTab={(tabId) => setFormTab(tabId as CatalogProductEditTab)}
-                tabs={[
-                  { id: "details", label: "Details" },
-                  { id: "media", label: "Media" },
-                  { id: "specifications", label: "Specifications", shortLabel: "Specs" },
-                  { id: "variants", label: "Variants" },
-                  ...(showStockTab ? [{ id: "stock", label: "Stock" }] : []),
-                  ...(showCommercialAvailabilityTab
+                activeTabId={
+                  useWizardFlow
+                    ? formTab === "specifications"
+                      ? "specifications"
+                      : "details"
+                    : formTab
+                }
+                onSelectTab={(tabId) => {
+                  if (useWizardFlow) {
+                    setFormTab(tabId === "specifications" ? "specifications" : "details");
+                    return;
+                  }
+                  setFormTab(tabId as CatalogProductEditTab);
+                }}
+                tabs={
+                  useWizardFlow
                     ? [
-                        {
-                          id: "commercial-availability",
-                          label: "Commercial Availability",
-                          shortLabel: "Commercial",
-                        },
+                        { id: "details", label: "Setup", shortLabel: "Setup" },
+                        ...(canOpenSpecifications
+                          ? [
+                              {
+                                id: "specifications",
+                                label: "Specifications",
+                                shortLabel: "Specs",
+                              },
+                            ]
+                          : []),
                       ]
-                    : []),
-                  ...(showShippingTab ? [{ id: "shipping", label: "Shipping" }] : []),
-                ]}
+                    : [
+                        { id: "details", label: "Details" },
+                        { id: "media", label: "Media" },
+                        { id: "specifications", label: "Specifications", shortLabel: "Specs" },
+                        { id: "variants", label: "Variants" },
+                        ...(showStockTab ? [{ id: "stock", label: "Stock" }] : []),
+                        ...(showCommercialAvailabilityTab
+                          ? [
+                              {
+                                id: "commercial-availability",
+                                label: "Commercial Availability",
+                                shortLabel: "Commercial",
+                              },
+                            ]
+                          : []),
+                        ...(showShippingTab ? [{ id: "shipping", label: "Shipping" }] : []),
+                      ]
+                }
               />
             </div>
           ) : null}
@@ -1162,7 +1252,26 @@ export function AdminCatalogProductsPanel() {
             </div>
           ) : null}
 
-          {useWizardFlow ? (
+          {editorSurface === "specifications" && form.id ? (
+            <div className="mt-4 min-w-0">
+              {useWizardFlow ? (
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
+                  <p>
+                    Specifications use attributes from this product&apos;s catalog product type.
+                    You can return to setup anytime.
+                  </p>
+                  <button
+                    type="button"
+                    className="admin-btn-secondary shrink-0"
+                    onClick={() => setFormTab("details")}
+                  >
+                    Back to setup
+                  </button>
+                </div>
+              ) : null}
+              <ProductSpecificationsManager productId={form.id} />
+            </div>
+          ) : editorSurface === "wizard" ? (
             <div className="mt-4">
               <AdminProductCreationWizard
                 form={form}
@@ -1198,10 +1307,6 @@ export function AdminCatalogProductsPanel() {
           ) : form.id && formTab === "media" ? (
             <div className="mt-4 min-w-0">
               <ProductMediaManager productId={form.id} productName={form.name || "Product"} />
-            </div>
-          ) : form.id && formTab === "specifications" ? (
-            <div className="mt-4 min-w-0">
-              <ProductSpecificationsManager productId={form.id} />
             </div>
           ) : form.id && formTab === "variants" ? (
             <div className="mt-4 min-w-0">

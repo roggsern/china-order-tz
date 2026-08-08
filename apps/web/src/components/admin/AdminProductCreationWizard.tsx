@@ -249,8 +249,14 @@ export function AdminProductCreationWizard({
         if (cancelled) {
           return;
         }
-        setMediaCount(media.length);
-        setHasPrimaryImage(media.some((item) => item.isPrimary));
+        const images = media.filter((item) => item.type === "image");
+        setMediaCount(images.length);
+        setHasPrimaryImage(images.some((item) => item.isPrimary));
+        try {
+          await onRefreshPublishContext();
+        } catch {
+          // Publish readiness refresh is best-effort while editing media.
+        }
       } catch {
         if (!cancelled) {
           setMediaCount(0);
@@ -262,7 +268,7 @@ export function AdminProductCreationWizard({
     return () => {
       cancelled = true;
     };
-  }, [form.id, currentStepId]);
+  }, [form.id, currentStepId, onRefreshPublishContext]);
 
   useEffect(() => {
     if (form.id) {

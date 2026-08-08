@@ -11,6 +11,7 @@ use App\Models\CommerceChannel;
 use App\Models\Department;
 use App\Models\Inventory;
 use App\Models\Product;
+use App\Models\ProductMedia;
 use App\Models\ProductStoreBackfillLog;
 use App\Models\Store;
 use App\Services\Catalog\TzLocalStoreOwnershipBackfill;
@@ -66,6 +67,11 @@ class TzLocalStoreOwnershipBackfillTest extends TestCase
             'quantity' => 5,
             'reserved_quantity' => 0,
             'low_stock_threshold' => 1,
+        ]);
+
+        ProductMedia::factory()->primary()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => null,
         ]);
 
         try {

@@ -155,6 +155,14 @@ function SpecificationsPanel({
 }: {
   specifications: ProductSpecification[];
 }) {
+  if (specifications.length === 0) {
+    return (
+      <p className="rounded-xl border border-zinc-100 px-3 py-6 text-sm text-zinc-500">
+        No specifications available for this product.
+      </p>
+    );
+  }
+
   return (
     <dl className="divide-y divide-zinc-100 rounded-xl border border-zinc-100">
       {specifications.map((spec) => (

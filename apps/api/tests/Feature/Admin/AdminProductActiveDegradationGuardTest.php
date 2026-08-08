@@ -18,6 +18,7 @@ use App\Models\Inventory;
 use App\Models\Product;
 use App\Models\ProductAttribute;
 use App\Models\ProductAttributeValue;
+use App\Models\ProductMedia;
 use App\Models\ProductShippingOption;
 use App\Models\ProductType;
 use App\Models\ProductVariant;
@@ -433,6 +434,11 @@ class AdminProductActiveDegradationGuardTest extends TestCase
                 'low_stock_threshold' => 2,
             ],
         );
+
+        ProductMedia::factory()->primary()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => null,
+        ]);
 
         return $product->fresh(['inventory', 'variants']) ?? $product;
     }

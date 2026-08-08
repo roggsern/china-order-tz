@@ -43,7 +43,41 @@ export type ProductPublishReadinessInput = {
   hasPublishableShippingOption?: boolean;
   /** Required when commerce channel is CHINA_IMPORT. */
   supplierId?: string | null;
+  /** Product-level catalog images (product_media). */
+  hasCatalogImage?: boolean;
+  /** Explicit primary catalog image flag. */
+  hasPrimaryImage?: boolean;
+  /**
+   * When false, required product-type specifications are incomplete.
+   * Defaults to true when omitted (no required attributes / not loaded yet for unit tests).
+   */
+  requiredSpecificationsComplete?: boolean;
+  missingRequiredSpecificationLabels?: string[];
 };
+
+export type PublishReadinessSpecAttribute = {
+  isRequired: boolean;
+  name: string;
+  value: { display: string | null };
+};
+
+/** Aligns with backend GetProductCatalogAttributesAction display + is_required. */
+export function evaluateRequiredSpecifications(
+  attributes: ReadonlyArray<PublishReadinessSpecAttribute>,
+): { complete: boolean; missingLabels: string[] } {
+  const missingLabels = attributes
+    .filter((attribute) => attribute.isRequired)
+    .filter((attribute) => {
+      const display = attribute.value.display;
+      return display === null || display.trim() === "";
+    })
+    .map((attribute) => attribute.name);
+
+  return {
+    complete: missingLabels.length === 0,
+    missingLabels,
+  };
+}
 
 export function isLeafCategoryId(
   categoryId: string,
@@ -166,6 +200,33 @@ export function calculateProductPublishReadiness(
       met: input.hasPublishableShippingOption === true,
     });
   }
+
+  const hasCatalogImage = input.hasCatalogImage === true;
+  const hasPrimaryImage = input.hasPrimaryImage === true;
+
+  items.push({
+    id: "catalog-image",
+    label: "Catalog image uploaded",
+    met: hasCatalogImage,
+  });
+  items.push({
+    id: "primary-image",
+    label: "Primary image set",
+    met: hasCatalogImage && hasPrimaryImage,
+  });
+
+  const requiredSpecsComplete = input.requiredSpecificationsComplete !== false;
+  const missingSpecLabels = (input.missingRequiredSpecificationLabels ?? []).filter(
+    (label) => label.trim().length > 0,
+  );
+  items.push({
+    id: "required-specifications",
+    label:
+      !requiredSpecsComplete && missingSpecLabels.length > 0
+        ? `Required specifications incomplete: ${missingSpecLabels.join(", ")}`
+        : "Required specifications complete",
+    met: requiredSpecsComplete,
+  });
 
   if (input.isDemo) {
     items.push({

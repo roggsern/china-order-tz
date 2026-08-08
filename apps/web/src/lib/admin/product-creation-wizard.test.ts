@@ -14,6 +14,8 @@ import {
   resolveProductCreationWizardSteps,
   resolveWizardPricingModelFromProduct,
   resolveWizardStepStatus,
+  canAccessProductSpecificationsWorkspace,
+  resolveProductEditorSurface,
   shouldUseProductCreationWizard,
   validateWizardBasicStep,
   validateWizardStepBeforeContinue,
@@ -327,6 +329,55 @@ describe("product creation wizard", () => {
     assert.equal(shouldUseProductCreationWizard({ isNewProduct: true, status: "draft" }), true);
     assert.equal(shouldUseProductCreationWizard({ isNewProduct: false, status: "draft" }), true);
     assert.equal(shouldUseProductCreationWizard({ isNewProduct: false, status: "active" }), false);
+  });
+
+  it("allows specifications workspace once a product id exists", () => {
+    assert.equal(canAccessProductSpecificationsWorkspace(undefined), false);
+    assert.equal(canAccessProductSpecificationsWorkspace(""), false);
+    assert.equal(canAccessProductSpecificationsWorkspace("prod-draft-1"), true);
+  });
+
+  it("draft products can open specifications without leaving wizard architecture", () => {
+    assert.equal(
+      resolveProductEditorSurface({
+        productId: "prod-draft-1",
+        useWizardFlow: true,
+        formTab: "specifications",
+      }),
+      "specifications",
+    );
+    assert.equal(
+      resolveProductEditorSurface({
+        productId: "prod-draft-1",
+        useWizardFlow: true,
+        formTab: "details",
+      }),
+      "wizard",
+    );
+    assert.equal(
+      resolveProductEditorSurface({
+        productId: "prod-active-1",
+        useWizardFlow: false,
+        formTab: "specifications",
+      }),
+      "specifications",
+    );
+    assert.equal(
+      resolveProductEditorSurface({
+        productId: "prod-active-1",
+        useWizardFlow: false,
+        formTab: "media",
+      }),
+      "standard",
+    );
+    assert.equal(
+      resolveProductEditorSurface({
+        productId: undefined,
+        useWizardFlow: true,
+        formTab: "specifications",
+      }),
+      "wizard",
+    );
   });
 
   it("before draft only basic section is selectable", () => {

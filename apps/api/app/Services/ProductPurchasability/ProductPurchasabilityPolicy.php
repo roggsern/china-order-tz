@@ -2,6 +2,7 @@
 
 namespace App\Services\ProductPurchasability;
 
+use App\Actions\AdminProductAttributes\GetProductCatalogAttributesAction;
 use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductVisibility;
 use App\Enums\PurchasabilityPath;
@@ -10,6 +11,7 @@ use App\Enums\CommerceChannelCode;
 use App\Models\CatalogProductType;
 use App\Models\CommerceChannel;
 use App\Models\Product;
+use App\Models\ProductMedia;
 use App\Models\ProductVariant;
 use App\Services\Inventory\StockResolver;
 use App\Services\ProductShipping\ProductShippingOptionEngine;
@@ -29,6 +31,7 @@ final class ProductPurchasabilityPolicy
     public function __construct(
         private readonly StockResolver $stockResolver,
         private readonly ProductShippingOptionEngine $shippingOptionEngine,
+        private readonly GetProductCatalogAttributesAction $getProductCatalogAttributes,
     ) {}
 
     public function evaluate(Product $product): ProductPurchasabilityResult
@@ -175,7 +178,10 @@ final class ProductPurchasabilityPolicy
 
         $this->collectLeafCategoryErrors($product, $messages);
         $this->collectCatalogProductTypeErrors($product, $messages);
+        $this->collectPrimaryImageErrors($product, $messages);
+        $this->collectRequiredSpecificationErrors($product, $messages);
         $this->collectChinaImportShippingErrors($product, $messages);
+        $this->collectChinaImportSupplierErrors($product, $messages);
         $this->collectTzLocalStoreErrors($product, $messages);
 
         $path = $this->resolvePath($product);
@@ -421,6 +427,68 @@ final class ProductPurchasabilityPolicy
     /**
      * @param  array<string, list<string>>  $messages
      */
+    private function collectPrimaryImageErrors(Product $product, array &$messages): void
+    {
+        $images = ProductMedia::query()
+            ->where('product_id', $product->id)
+            ->productLevel()
+            ->images()
+            ->active()
+            ->get();
+
+        if ($images->isEmpty()) {
+            $messages['media'] = ['Product requires at least one catalog image before publishing.'];
+
+            return;
+        }
+
+        if (! $images->contains(fn (ProductMedia $media) => (bool) $media->is_primary)) {
+            $messages['media'] = ['Product requires a primary image before publishing.'];
+        }
+    }
+
+    /**
+     * Only product-type required catalog attributes block publish.
+     *
+     * @param  array<string, list<string>>  $messages
+     */
+    private function collectRequiredSpecificationErrors(Product $product, array &$messages): void
+    {
+        if (! filled($product->catalog_product_type_id)) {
+            return;
+        }
+
+        try {
+            $attributes = $this->getProductCatalogAttributes->handle($product);
+        } catch (ValidationException) {
+            return;
+        }
+
+        $missing = [];
+
+        foreach ($attributes as $attribute) {
+            if (! ($attribute['is_required'] ?? false)) {
+                continue;
+            }
+
+            $display = $attribute['value']['display'] ?? null;
+            if ($display === null || $display === '') {
+                $missing[] = (string) $attribute['name'];
+            }
+        }
+
+        if ($missing === []) {
+            return;
+        }
+
+        $messages['attributes'] = [
+            'Required specifications are incomplete: '.implode(', ', $missing).'.',
+        ];
+    }
+
+    /**
+     * @param  array<string, list<string>>  $messages
+     */
     private function collectChinaImportShippingErrors(Product $product, array &$messages): void
     {
         if (! $this->isChinaImportProduct($product)) {
@@ -434,6 +502,22 @@ final class ProductPurchasabilityPolicy
         $messages['shipping_options'] = [
             'China import products require at least one available shipping option with a price greater than zero.',
         ];
+    }
+
+    /**
+     * @param  array<string, list<string>>  $messages
+     */
+    private function collectChinaImportSupplierErrors(Product $product, array &$messages): void
+    {
+        if (! $this->isChinaImportProduct($product)) {
+            return;
+        }
+
+        if (filled($product->supplier_id)) {
+            return;
+        }
+
+        $messages['supplier_id'] = ['China import products require a supplier before publishing.'];
     }
 
     private function isChinaImportProduct(Product $product): bool

@@ -434,6 +434,38 @@ export function shouldUseProductCreationWizard(input: {
   return input.isNewProduct || input.status === "draft";
 }
 
+/**
+ * Specs are product-level catalog attributes. Editing requires a persisted product
+ * (draft or published); schema comes from the product's catalog product type.
+ */
+export function canAccessProductSpecificationsWorkspace(
+  productId: string | null | undefined,
+): boolean {
+  return typeof productId === "string" && productId.trim() !== "";
+}
+
+export type ProductEditorSurface = "specifications" | "wizard" | "standard";
+
+/**
+ * Draft products stay in the creation wizard, but Specs can open as a workspace
+ * overlay when a product id exists — without adding a wizard step.
+ */
+export function resolveProductEditorSurface(input: {
+  productId: string | null | undefined;
+  useWizardFlow: boolean;
+  formTab: string;
+}): ProductEditorSurface {
+  if (canAccessProductSpecificationsWorkspace(input.productId) && input.formTab === "specifications") {
+    return "specifications";
+  }
+
+  if (input.useWizardFlow) {
+    return "wizard";
+  }
+
+  return "standard";
+}
+
 export function mapWizardMissingSummary(progress: ProductCreationWizardProgress): string[] {
   if (progress.missingPublishLabels.length > 0) {
     return progress.missingPublishLabels;

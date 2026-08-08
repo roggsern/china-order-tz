@@ -7,16 +7,23 @@ use App\Enums\ProductVisibility;
 use App\Enums\PurchasabilityPath;
 use App\Enums\CommerceChannelCode;
 use App\Enums\VariantPriceType;
+use App\Enums\CatalogAttributeType;
 use App\Models\Admin;
+use App\Models\CatalogAttribute;
+use App\Models\CatalogProductAttributeValue;
 use App\Models\CatalogProductType;
 use App\Models\Category;
+use App\Models\ChinaCommercialStock;
 use App\Models\CommerceChannel;
 use App\Models\Department;
 use App\Models\Inventory;
+use App\Models\InventoryLocation;
 use App\Models\Product;
+use App\Models\ProductMedia;
 use App\Models\ProductShippingOption;
 use App\Models\ProductVariant;
 use App\Models\Store;
+use App\Models\Supplier;
 use App\Services\Cart\ResolveCartPurchasable;
 use App\Services\ProductPurchasability\ProductPurchasabilityPolicy;
 use Database\Factories\Support\CatalogCartFixture;
@@ -156,10 +163,13 @@ class ProductPurchasabilityPolicyTest extends TestCase
     {
         $product = $this->makeSimpleProduct(['price' => 18000]);
 
-        Inventory::query()
-            ->where('product_id', $product->id)
-            ->whereNull('product_variant_id')
-            ->update(['quantity' => 8]);
+        ChinaCommercialStock::query()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => null,
+            'available_quantity' => 8,
+            'reserved_quantity' => 0,
+            'ordered_quantity' => 0,
+        ]);
 
         $resolved = app(ResolveCartPurchasable::class)->handle(
             $product->id,
@@ -266,6 +276,234 @@ class ProductPurchasabilityPolicyTest extends TestCase
         ]);
 
         $this->policy->assertPublishable($fresh ?? $product);
+    }
+
+    public function test_product_without_catalog_images_cannot_be_published(): void
+    {
+        $product = $this->makePublishableProduct(CommerceChannelCode::TzLocal);
+        ProductMedia::query()->where('product_id', $product->id)->forceDelete();
+
+        try {
+            $this->policy->assertPublishable($product->fresh([
+                'commerceChannel',
+                'catalogProductType',
+                'category',
+                'inventory',
+            ]) ?? $product);
+            $this->fail('Expected ValidationException for missing catalog images.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('media', $exception->errors());
+            $this->assertContains(
+                'Product requires at least one catalog image before publishing.',
+                $exception->errors()['media'],
+            );
+        }
+    }
+
+    public function test_product_with_image_but_no_primary_cannot_be_published(): void
+    {
+        $product = $this->makePublishableProduct(CommerceChannelCode::TzLocal);
+        ProductMedia::query()->where('product_id', $product->id)->update(['is_primary' => false]);
+
+        try {
+            $this->policy->assertPublishable($product->fresh([
+                'commerceChannel',
+                'catalogProductType',
+                'category',
+                'inventory',
+            ]) ?? $product);
+            $this->fail('Expected ValidationException for missing primary image.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('media', $exception->errors());
+            $this->assertContains(
+                'Product requires a primary image before publishing.',
+                $exception->errors()['media'],
+            );
+        }
+    }
+
+    public function test_product_with_primary_image_can_be_published(): void
+    {
+        $product = $this->makePublishableProduct(CommerceChannelCode::TzLocal);
+
+        $this->policy->assertPublishable($product->fresh([
+            'commerceChannel',
+            'catalogProductType',
+            'category',
+            'inventory',
+        ]) ?? $product);
+        $this->assertTrue(true);
+    }
+
+    public function test_required_catalog_attributes_missing_blocks_publish(): void
+    {
+        $product = $this->makePublishableProduct(CommerceChannelCode::TzLocal);
+        $ram = CatalogAttribute::factory()->create([
+            'name' => 'RAM',
+            'slug' => 'publish-req-ram',
+            'type' => CatalogAttributeType::Text,
+            'is_required' => true,
+        ]);
+        $product->catalogProductType?->attributes()->sync([
+            $ram->id => ['is_required' => true, 'sort_order' => 1],
+        ]);
+
+        try {
+            $this->policy->assertPublishable($product->fresh([
+                'commerceChannel',
+                'catalogProductType.attributes',
+                'catalogAttributeValues',
+                'category',
+                'inventory',
+            ]) ?? $product);
+            $this->fail('Expected ValidationException for missing required specifications.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('attributes', $exception->errors());
+            $this->assertTrue(
+                collect($exception->errors()['attributes'])
+                    ->contains(fn (string $message) => str_contains($message, 'RAM')),
+            );
+        }
+    }
+
+    public function test_optional_catalog_attributes_do_not_block_publish(): void
+    {
+        $product = $this->makePublishableProduct(CommerceChannelCode::TzLocal);
+        $color = CatalogAttribute::factory()->create([
+            'name' => 'Color',
+            'slug' => 'publish-opt-color',
+            'type' => CatalogAttributeType::Text,
+            'is_required' => false,
+        ]);
+        $product->catalogProductType?->attributes()->sync([
+            $color->id => ['is_required' => false, 'sort_order' => 1],
+        ]);
+
+        $this->policy->assertPublishable($product->fresh([
+            'commerceChannel',
+            'catalogProductType.attributes',
+            'catalogAttributeValues',
+            'category',
+            'inventory',
+        ]) ?? $product);
+        $this->assertTrue(true);
+    }
+
+    public function test_required_catalog_attributes_are_scoped_to_product_type(): void
+    {
+        $phone = $this->makePublishableProduct(CommerceChannelCode::TzLocal);
+        $camera = $this->makePublishableProduct(CommerceChannelCode::TzLocal);
+
+        $ram = CatalogAttribute::factory()->create([
+            'name' => 'RAM',
+            'slug' => 'publish-scope-ram',
+            'type' => CatalogAttributeType::Text,
+        ]);
+        $sensor = CatalogAttribute::factory()->create([
+            'name' => 'Sensor',
+            'slug' => 'publish-scope-sensor',
+            'type' => CatalogAttributeType::Text,
+        ]);
+
+        $phone->catalogProductType?->attributes()->sync([
+            $ram->id => ['is_required' => true, 'sort_order' => 1],
+        ]);
+        $camera->catalogProductType?->attributes()->sync([
+            $sensor->id => ['is_required' => true, 'sort_order' => 1],
+        ]);
+
+        CatalogProductAttributeValue::factory()->create([
+            'product_id' => $phone->id,
+            'catalog_attribute_id' => $ram->id,
+            'value_text' => '8GB',
+            'is_active' => true,
+        ]);
+
+        $this->policy->assertPublishable($phone->fresh([
+            'commerceChannel',
+            'catalogProductType.attributes',
+            'catalogAttributeValues.option',
+            'category',
+            'inventory',
+        ]) ?? $phone);
+
+        try {
+            $this->policy->assertPublishable($camera->fresh([
+                'commerceChannel',
+                'catalogProductType.attributes',
+                'catalogAttributeValues.option',
+                'category',
+                'inventory',
+            ]) ?? $camera);
+            $this->fail('Expected ValidationException for camera missing Sensor.');
+        } catch (ValidationException $exception) {
+            $this->assertTrue(
+                collect($exception->errors()['attributes'] ?? [])
+                    ->contains(fn (string $message) => str_contains($message, 'Sensor')),
+            );
+            $this->assertFalse(
+                collect($exception->errors()['attributes'] ?? [])
+                    ->contains(fn (string $message) => str_contains($message, 'RAM')),
+            );
+        }
+    }
+
+    public function test_china_import_product_without_supplier_cannot_be_published(): void
+    {
+        $product = $this->makePublishableProduct(CommerceChannelCode::ChinaImport, [
+            'supplier_id' => null,
+        ]);
+        ProductShippingOption::factory()->air(8000)->create(['product_id' => $product->id]);
+
+        try {
+            $this->policy->assertPublishable($product->fresh([
+                'commerceChannel',
+                'catalogProductType',
+                'category',
+                'inventory',
+                'shippingOptions',
+            ]) ?? $product);
+            $this->fail('Expected ValidationException for missing China supplier.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('supplier_id', $exception->errors());
+            $this->assertContains(
+                'China import products require a supplier before publishing.',
+                $exception->errors()['supplier_id'],
+            );
+        }
+    }
+
+    public function test_china_import_product_with_supplier_can_be_published(): void
+    {
+        $supplier = Supplier::factory()->create();
+        $product = $this->makePublishableProduct(CommerceChannelCode::ChinaImport, [
+            'supplier_id' => $supplier->id,
+        ]);
+        ProductShippingOption::factory()->air(8000)->create(['product_id' => $product->id]);
+
+        $this->policy->assertPublishable($product->fresh([
+            'commerceChannel',
+            'catalogProductType',
+            'category',
+            'inventory',
+            'shippingOptions',
+        ]) ?? $product);
+        $this->assertTrue(true);
+    }
+
+    public function test_tz_local_publish_does_not_require_supplier(): void
+    {
+        $product = $this->makePublishableProduct(CommerceChannelCode::TzLocal, [
+            'supplier_id' => null,
+        ]);
+
+        $this->policy->assertPublishable($product->fresh([
+            'commerceChannel',
+            'catalogProductType',
+            'category',
+            'inventory',
+        ]) ?? $product);
+        $this->assertTrue(true);
     }
 
     public function test_tz_local_simple_product_without_inventory_policy_is_blocked_from_publish(): void
@@ -468,23 +706,30 @@ class ProductPurchasabilityPolicyTest extends TestCase
             ->assertJsonValidationErrors(['store_id']);
     }
 
-    public function test_updating_draft_tz_local_product_can_remove_store(): void
+    public function test_draft_tz_local_product_is_not_blocked_by_publish_policy_without_store(): void
     {
-        Sanctum::actingAs(Admin::factory()->create());
-
-        $store = $this->makeTzStore();
         $product = $this->makePublishableProduct(CommerceChannelCode::TzLocal, [
-            'store_id' => $store->id,
+            'store_id' => null,
             'lifecycle_status' => ProductLifecycleStatus::Draft,
             'is_active' => false,
         ]);
 
-        $this->putJson('/api/v1/admin/products/'.$product->id, [
-            'store_id' => null,
-        ])
-            ->assertOk();
+        // Drafts may exist without a store; publish gates apply only on activation.
+        $this->assertNull($product->store_id);
+        $result = $this->policy->evaluate($product->fresh(['commerceChannel', 'inventory', 'variants']));
+        $this->assertFalse($result->isPurchasable);
 
-        $this->assertNull(Product::query()->whereKey($product->id)->value('store_id'));
+        try {
+            $this->policy->assertPublishable($product->fresh([
+                'commerceChannel',
+                'catalogProductType',
+                'category',
+                'inventory',
+            ]) ?? $product);
+            $this->fail('Expected ValidationException when activating without store.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('store_id', $exception->errors());
+        }
     }
 
     /**
@@ -540,17 +785,32 @@ class ProductPurchasabilityPolicyTest extends TestCase
             ],
         );
 
+        ProductMedia::factory()->primary()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => null,
+        ]);
+
         return $product->fresh(['inventory', 'variants']) ?? $product;
     }
 
     private function makeTzStore(): Store
     {
-        return Store::query()->create([
+        $store = Store::query()->create([
             'code' => 'TZ'.strtoupper(substr((string) str()->uuid(), 0, 4)),
             'name' => 'Test TZ Store',
             'slug' => 'test-tz-store-'.str()->random(8),
             'is_active' => true,
         ]);
+
+        InventoryLocation::query()->create([
+            'store_id' => $store->id,
+            'code' => 'MAIN',
+            'name' => 'Main',
+            'is_default' => true,
+            'is_active' => true,
+        ]);
+
+        return $store;
     }
 
     /**
