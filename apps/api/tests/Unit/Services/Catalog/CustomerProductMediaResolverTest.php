@@ -155,4 +155,38 @@ class CustomerProductMediaResolverTest extends TestCase
         $this->assertCount(1, $gallery);
         $this->assertSame($image->id, $gallery[0]['id']);
     }
+
+    public function test_resolve_gallery_keeps_primary_first_and_sort_order_ascending_when_relation_is_shuffled(): void
+    {
+        $product = Product::factory()->create();
+
+        $ordered = [];
+        for ($sortOrder = 0; $sortOrder < 6; $sortOrder++) {
+            $ordered[] = ProductMedia::factory()->create([
+                'product_id' => $product->id,
+                'url' => 'https://cdn.example.com/image-'.$sortOrder.'.jpg',
+                'sort_order' => $sortOrder,
+                'is_primary' => $sortOrder === 0,
+                'created_at' => now()->subMinutes(6 - $sortOrder),
+            ]);
+        }
+
+        $product->load(CustomerProductMediaResolver::catalogEagerLoads());
+        $product->setRelation('media', $product->media->shuffle()->values());
+
+        $gallery = $this->resolver->resolveGallery($product);
+        $adminGallery = $this->resolver->resolveAdminGallery($product);
+
+        $this->assertSame(
+            array_map(static fn (ProductMedia $media) => $media->id, $ordered),
+            array_column($gallery, 'id'),
+        );
+        $this->assertSame($ordered[0]->id, $gallery[0]['id']);
+        $this->assertSame(
+            array_map(static fn (ProductMedia $media) => $media->id, $ordered),
+            array_column($adminGallery, 'id'),
+        );
+        $this->assertTrue($adminGallery[0]['is_primary']);
+        $this->assertSame([0, 1, 2, 3, 4, 5], array_column($adminGallery, 'sort_order'));
+    }
 }

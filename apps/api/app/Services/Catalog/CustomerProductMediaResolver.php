@@ -134,14 +134,9 @@ class CustomerProductMediaResolver
     private function activeCatalogImages(Product $product): Collection
     {
         if ($product->relationLoaded('media')) {
-            return $product->media
-                ->filter(fn (ProductMedia $media) => $this->isActiveCatalogImage($media))
-                ->sortBy([
-                    fn (ProductMedia $media) => $media->is_primary ? 0 : 1,
-                    fn (ProductMedia $media) => $media->sort_order,
-                    fn (ProductMedia $media) => $media->created_at?->getTimestamp() ?? 0,
-                ])
-                ->values();
+            return $this->orderPrimaryThenSortOrder(
+                $product->media->filter(fn (ProductMedia $media) => $this->isActiveCatalogImage($media)),
+            );
         }
 
         return $product->media()->images()->active()->ordered()->get();
@@ -153,13 +148,7 @@ class CustomerProductMediaResolver
     private function legacyImages(Product $product): Collection
     {
         if ($product->relationLoaded('images')) {
-            return $product->images
-                ->sortBy([
-                    fn (ProductImage $image) => $image->is_primary ? 0 : 1,
-                    fn (ProductImage $image) => $image->sort_order,
-                    fn (ProductImage $image) => $image->created_at?->getTimestamp() ?? 0,
-                ])
-                ->values();
+            return $this->orderPrimaryThenSortOrder($product->images);
         }
 
         return $product->images()
@@ -175,16 +164,46 @@ class CustomerProductMediaResolver
     private function activeCatalogVideos(Product $product): Collection
     {
         if ($product->relationLoaded('videos')) {
-            return $product->videos
-                ->filter(fn (ProductMedia $media) => $this->isActiveCatalogVideo($media))
-                ->sortBy([
-                    fn (ProductMedia $media) => $media->sort_order,
-                    fn (ProductMedia $media) => $media->created_at?->getTimestamp() ?? 0,
-                ])
-                ->values();
+            return $this->orderBySortOrder(
+                $product->videos->filter(fn (ProductMedia $media) => $this->isActiveCatalogVideo($media)),
+            );
         }
 
         return $product->videos()->active()->get();
+    }
+
+    /**
+     * Deterministic gallery order for eager-loaded collections.
+     * Laravel sortBy([...closures]) treats closures as two-arg comparators — use attribute tuples instead.
+     *
+     * @template TModel of ProductMedia|ProductImage
+     *
+     * @param  Collection<int, TModel>  $items
+     * @return Collection<int, TModel>
+     */
+    private function orderPrimaryThenSortOrder(Collection $items): Collection
+    {
+        return $items
+            ->sortBy([
+                ['is_primary', 'desc'],
+                ['sort_order', 'asc'],
+                ['created_at', 'asc'],
+            ])
+            ->values();
+    }
+
+    /**
+     * @param  Collection<int, ProductMedia>  $items
+     * @return Collection<int, ProductMedia>
+     */
+    private function orderBySortOrder(Collection $items): Collection
+    {
+        return $items
+            ->sortBy([
+                ['sort_order', 'asc'],
+                ['created_at', 'asc'],
+            ])
+            ->values();
     }
 
     private function isActiveCatalogImage(ProductMedia $media): bool

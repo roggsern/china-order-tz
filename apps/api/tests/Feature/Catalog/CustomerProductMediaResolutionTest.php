@@ -143,6 +143,35 @@ class CustomerProductMediaResolutionTest extends TestCase
             ->assertJsonPath('data.primary_image.url', 'https://cdn.example.com/primary.jpg');
     }
 
+    public function test_pdp_gallery_returns_images_in_sort_order_with_primary_first(): void
+    {
+        $product = $this->createPurchasableProduct([
+            'slug' => 'gallery-order-product',
+        ]);
+
+        $orderedIds = [];
+        for ($sortOrder = 0; $sortOrder < 6; $sortOrder++) {
+            $media = ProductMedia::factory()->create([
+                'product_id' => $product->id,
+                'url' => 'https://cdn.example.com/gallery-'.$sortOrder.'.jpg',
+                'sort_order' => $sortOrder,
+                'is_primary' => $sortOrder === 0,
+            ]);
+            $orderedIds[] = $media->id;
+        }
+
+        $response = $this->getJson('/api/v1/products/gallery-order-product')
+            ->assertOk()
+            ->assertJsonCount(6, 'data.images')
+            ->assertJsonPath('data.primary_image.id', $orderedIds[0])
+            ->assertJsonPath('data.images.0.id', $orderedIds[0]);
+
+        $this->assertSame(
+            $orderedIds,
+            collect($response->json('data.images'))->pluck('id')->all(),
+        );
+    }
+
     public function test_missing_media_falls_back_to_null_primary_and_empty_gallery(): void
     {
         $product = $this->createPurchasableProduct([

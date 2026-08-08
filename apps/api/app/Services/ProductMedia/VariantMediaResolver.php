@@ -54,13 +54,7 @@ class VariantMediaResolver
     private function variantMedia(Product $product, ProductVariant $variant): Collection
     {
         if ($variant->relationLoaded('media')) {
-            return $variant->media
-                ->sortBy([
-                    fn (ProductMedia $media) => $media->is_primary ? 0 : 1,
-                    fn (ProductMedia $media) => $media->sort_order,
-                    fn (ProductMedia $media) => $media->created_at?->getTimestamp() ?? 0,
-                ])
-                ->values();
+            return $this->orderPrimaryThenSortOrder($variant->media);
         }
 
         return ProductMedia::query()
@@ -76,15 +70,30 @@ class VariantMediaResolver
     private function productLevelMedia(Product $product): Collection
     {
         if ($product->relationLoaded('media')) {
-            return $product->media
-                ->sortBy([
-                    fn (ProductMedia $media) => $media->is_primary ? 0 : 1,
-                    fn (ProductMedia $media) => $media->sort_order,
-                    fn (ProductMedia $media) => $media->created_at?->getTimestamp() ?? 0,
-                ])
-                ->values();
+            return $this->orderPrimaryThenSortOrder($product->media);
         }
 
         return $product->media()->ordered()->get();
+    }
+
+    /**
+     * Deterministic gallery order for eager-loaded collections.
+     * Laravel sortBy([...closures]) treats closures as two-arg comparators — use attribute tuples instead.
+     *
+     * @param  Collection<int, ProductMedia>  $items
+     * @return Collection<int, ProductMedia>
+     */
+    private function orderPrimaryThenSortOrder(Collection $items): Collection
+    {
+        return new Collection(
+            $items
+                ->sortBy([
+                    ['is_primary', 'desc'],
+                    ['sort_order', 'asc'],
+                    ['created_at', 'asc'],
+                ])
+                ->values()
+                ->all(),
+        );
     }
 }

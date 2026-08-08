@@ -90,4 +90,38 @@ class CustomerProductVariantMediaResolverTest extends TestCase
         $this->assertSame($legacy->id, $primary['id']);
         $this->assertSame(DemoProductImageLibrary::publicPath('phone.jpg'), $primary['path']);
     }
+
+    public function test_resolve_gallery_orders_variant_media_primary_first_then_sort_order_when_shuffled(): void
+    {
+        $product = Product::factory()->create();
+        $variant = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'is_active' => true,
+        ]);
+
+        $ordered = [];
+        for ($sortOrder = 0; $sortOrder < 6; $sortOrder++) {
+            $ordered[] = ProductMedia::factory()->create([
+                'product_id' => $product->id,
+                'product_variant_id' => $variant->id,
+                'url' => '/storage/variant-'.$sortOrder.'.jpg',
+                'sort_order' => $sortOrder,
+                'is_primary' => $sortOrder === 0,
+            ]);
+        }
+
+        $variant->load(CustomerProductMediaResolver::variantMediaEagerLoads());
+        $variant->setRelation('media', $variant->media->shuffle()->values());
+
+        $gallery = app(CustomerProductMediaResolver::class)->resolveGallery(
+            $product->fresh(['media']),
+            $variant,
+        );
+
+        $this->assertSame(
+            array_map(static fn (ProductMedia $media) => $media->id, $ordered),
+            array_column($gallery, 'id'),
+        );
+        $this->assertSame($ordered[0]->id, $gallery[0]['id']);
+    }
 }
