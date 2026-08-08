@@ -17,6 +17,9 @@ type AdminCatalogProductTypeSelectProps = {
   options: AdminCatalogProductType[];
   disabled?: boolean;
   selectedLabel?: string;
+  placeholder?: string;
+  /** Shown when `options` is empty (context-specific: category-scoped vs all types). */
+  emptyOptionsMessage?: string;
   onChange: (typeId: string, type: AdminCatalogProductType | null) => void;
 };
 
@@ -28,6 +31,8 @@ export function AdminCatalogProductTypeSelect({
   options,
   disabled = false,
   selectedLabel,
+  placeholder = "Search product types...",
+  emptyOptionsMessage = "Select a category first to see product types.",
   onChange,
 }: AdminCatalogProductTypeSelectProps) {
   const selected = useMemo(
@@ -63,9 +68,7 @@ export function AdminCatalogProductTypeSelect({
   );
 
   const emptyMessage =
-    options.length === 0
-      ? "Select a category first to see product types."
-      : "No product types match your search.";
+    options.length === 0 ? emptyOptionsMessage : "No product types match your search.";
 
   return (
     <AdminAsyncSearchSelect
@@ -73,7 +76,7 @@ export function AdminCatalogProductTypeSelect({
       value={value}
       selectedLabel={effectiveLabel}
       disabled={disabled}
-      placeholder="Search product types..."
+      placeholder={placeholder}
       emptyMessage={emptyMessage}
       debounceMs={0}
       reloadKey={reloadKey}

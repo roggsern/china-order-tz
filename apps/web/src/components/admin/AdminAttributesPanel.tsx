@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AdminCatalogProductTypeSelect } from "@/components/admin/AdminCatalogProductTypeSelect";
 import {
   AdminCatalogApiError,
   createAdminCatalogAttribute,
@@ -516,18 +517,22 @@ export function AdminAttributesPanel() {
           </p>
         </div>
         <div className="space-y-3 p-5">
-          <select
-            className="admin-input"
-            value={mappingTypeId}
-            onChange={(event) => setMappingTypeId(event.target.value)}
-          >
-            <option value="">Select Catalog Product Type</option>
-            {productTypes.map((type) => (
-              <option key={type.id} value={type.id}>
-                {type.name}
-              </option>
-            ))}
-          </select>
+          <div>
+            <label className="admin-label" htmlFor="attributes-mapping-type">
+              Catalog Product Type
+            </label>
+            <AdminCatalogProductTypeSelect
+              id="attributes-mapping-type"
+              value={mappingTypeId}
+              options={productTypes}
+              selectedLabel={
+                productTypes.find((type) => type.id === mappingTypeId)?.name
+              }
+              placeholder="Search product types..."
+              emptyOptionsMessage="No catalog product types available."
+              onChange={(nextTypeId) => setMappingTypeId(nextTypeId)}
+            />
+          </div>
           {mappingTypeId ? (
             <>
               <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-zinc-200 p-3">

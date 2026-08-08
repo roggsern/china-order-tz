@@ -175,4 +175,20 @@ describe("catalog product type search", () => {
       "Power · UPS",
     );
   });
+
+  it("attributes mapping: search and select updates product type id", () => {
+    let mappingTypeId = "";
+    const selectType = (typeId: string) => {
+      mappingTypeId = typeId;
+    };
+
+    const matches = filterCatalogProductTypesByQuery(searchableTypes, "Android");
+    assert.equal(matches.length, 1);
+    assert.equal(matches[0]?.name, "Android Smartphone");
+    selectType(matches[0]!.id);
+    assert.equal(mappingTypeId, "phone-1");
+
+    const selected = searchableTypes.find((type) => type.id === mappingTypeId);
+    assert.equal(selected?.name, "Android Smartphone");
+  });
 });
