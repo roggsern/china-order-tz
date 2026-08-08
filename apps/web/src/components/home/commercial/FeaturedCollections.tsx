@@ -43,17 +43,40 @@ export function FeaturedCollections({ collections, copy }: FeaturedCollectionsPr
             <li key={collection.id}>
               <Link
                 href={collection.href}
-                className={`group flex h-full flex-col overflow-hidden rounded-2xl border border-zinc-200/80 bg-gradient-to-br ${collection.gradient} p-4 transition hover:-translate-y-0.5 hover:border-[#c9a227]/35 hover:shadow-[0_10px_28px_rgba(0,0,0,0.06)]`}
+                className={`group relative flex h-full min-h-[220px] flex-col overflow-hidden rounded-2xl bg-gradient-to-br ${collection.gradient} p-5 shadow-[0_8px_24px_rgba(0,0,0,0.08)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_16px_36px_rgba(0,0,0,0.14)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c9a227] focus-visible:ring-offset-2 sm:min-h-[240px] sm:p-5`}
               >
-                <span className="text-3xl" aria-hidden>
-                  {collection.icon}
-                </span>
-                <h3 className="mt-4 text-sm font-bold text-zinc-900 group-hover:text-[#8b6914]">
-                  {collection.name}
-                </h3>
-                <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-zinc-500">
-                  {collection.description}
-                </p>
+                <div
+                  className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-black/10 transition duration-300 group-hover:from-black/85 group-hover:via-black/40"
+                  aria-hidden
+                />
+
+                <div className="relative flex flex-1 flex-col">
+                  <span
+                    className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/25 bg-white/15 text-2xl shadow-sm backdrop-blur-md sm:text-[1.75rem]"
+                    aria-hidden
+                  >
+                    {collection.icon}
+                  </span>
+
+                  <div className="mt-5 flex flex-1 flex-col">
+                    <h3 className="text-base font-bold leading-snug tracking-tight text-white drop-shadow-sm sm:text-lg">
+                      {collection.name}
+                    </h3>
+                    <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-white/80 sm:text-[13px]">
+                      {collection.description}
+                    </p>
+
+                    <span className="mt-auto inline-flex items-center gap-1.5 pt-5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#e8c547] transition duration-300 group-hover:gap-2.5 sm:text-xs">
+                      Explore collection
+                      <ArrowRightIcon className="h-3.5 w-3.5 transition duration-300 group-hover:translate-x-0.5" />
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-transparent via-[#c9a227] to-transparent opacity-70 transition duration-300 group-hover:opacity-100"
+                  aria-hidden
+                />
               </Link>
             </li>
           ))}
