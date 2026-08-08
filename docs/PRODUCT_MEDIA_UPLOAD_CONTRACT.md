@@ -51,20 +51,27 @@ It is not used by the live product/variant media managers. Do not treat it as th
 ## VPS verification (after API image rebuild)
 
 ```bash
-docker compose -f docker-compose.prod.yml exec -T api php -i | grep -E "upload_max_filesize|post_max_size|memory_limit"
-docker compose -f docker-compose.prod.yml exec -T api php artisan ops:upload-limits
-docker compose -f docker-compose.prod.yml exec -T nginx sh -c "grep client_max_body_size /etc/nginx/conf.d/default.conf"
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T api php -m | grep -i gd
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T api php -r "var_export(function_exists('getimagesize')); echo PHP_EOL;"
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T api php -i | grep -E "upload_max_filesize|post_max_size|memory_limit"
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T api php artisan ops:upload-limits
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T nginx sh -c "grep client_max_body_size /etc/nginx/conf.d/default.conf"
 ```
 
 Expected PHP:
 
 ```
+gd
+true   # getimagesize available
 upload_max_filesize => 10M
 post_max_size => 12M
 memory_limit => 256M
+ops:upload-limits → ok: yes (includes gd: yes)
 ```
 
 Expected Nginx: `client_max_body_size 20M` (must remain ≥ 10M).
+
+GD is required for Laravel `dimensions` validation (`getimagesize`). The shared `docker/php/Dockerfile` base stage installs `gd` for api, queue, and scheduler images.
 
 ## Deploy notes
 

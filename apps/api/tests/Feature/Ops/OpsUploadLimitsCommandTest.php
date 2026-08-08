@@ -20,6 +20,13 @@ class OpsUploadLimitsCommandTest extends TestCase
         $this->assertIsArray($decoded);
         $this->assertArrayHasKey('ok', $decoded);
         $this->assertSame(10240, $decoded['contract']['max_kilobytes'] ?? null);
+        $this->assertArrayHasKey('gd', $decoded['expected_php'] ?? []);
+        $this->assertArrayHasKey('gd', $decoded['actual_php'] ?? []);
+        $this->assertArrayHasKey('getimagesize', $decoded['actual_php'] ?? []);
+        $this->assertTrue($decoded['expected_php']['gd'] ?? false);
+        $this->assertTrue($decoded['expected_php']['getimagesize'] ?? false);
+        $this->assertIsBool($decoded['actual_php']['gd'] ?? null);
+        $this->assertIsBool($decoded['actual_php']['getimagesize'] ?? null);
     }
 
     public function test_ops_upload_limits_text_mode_mentions_contract(): void
@@ -29,5 +36,7 @@ class OpsUploadLimitsCommandTest extends TestCase
 
         $this->assertStringContainsString('contract_max_kb: 10240', $output);
         $this->assertStringContainsString('legacy_images_max_kb: 2048', $output);
+        $this->assertStringContainsString('gd:', $output);
+        $this->assertStringContainsString('getimagesize:', $output);
     }
 }

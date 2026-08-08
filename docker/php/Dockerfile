@@ -9,6 +9,11 @@ RUN apk add --no-cache \
     icu-dev \
     libzip-dev \
     oniguruma-dev \
+    # Product media dimensions validation (Laravel getimagesize) + PNG/JPEG/WebP decode
+    freetype-dev \
+    libjpeg-turbo-dev \
+    libpng-dev \
+    libwebp-dev \
     unzip \
     zip \
     tar \
@@ -17,8 +22,13 @@ RUN apk add --no-cache \
     gcompat \
     libstdc++ \
     && docker-php-ext-configure intl \
+    && docker-php-ext-configure gd \
+        --with-freetype \
+        --with-jpeg \
+        --with-webp \
     && docker-php-ext-install \
     bcmath \
+    gd \
     intl \
     mbstring \
     opcache \
