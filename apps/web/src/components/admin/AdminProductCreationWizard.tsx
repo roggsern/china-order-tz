@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AdminBrandAsyncSelect } from "@/components/admin/AdminBrandAsyncSelect";
+import { AdminCatalogProductTypeSelect } from "@/components/admin/AdminCatalogProductTypeSelect";
 import { AdminCategoryTreeSelect } from "@/components/admin/AdminCategoryTreeSelect";
 import { AdminProductWizardProgress } from "@/components/admin/AdminProductWizardProgress";
 import { AdminSupplierAsyncSelect } from "@/components/admin/AdminSupplierAsyncSelect";
@@ -594,14 +595,16 @@ export function AdminProductCreationWizard({
             <label className="admin-label" htmlFor="wizard-type">
               Product type *
             </label>
-            <select
+            <AdminCatalogProductTypeSelect
               id="wizard-type"
-              className="admin-input mt-1.5"
               value={form.catalogProductTypeId}
+              options={formTypes}
               disabled={!form.subcategoryId && !form.categoryId}
-              onChange={(event) => {
-                const nextTypeId = event.target.value;
-                const nextType = formTypes.find((type) => type.id === nextTypeId);
+              selectedLabel={
+                formTypes.find((type) => type.id === form.catalogProductTypeId)?.name ??
+                productTypes.find((type) => type.id === form.catalogProductTypeId)?.name
+              }
+              onChange={(nextTypeId, nextType) => {
                 setForm((current) => ({
                   ...current,
                   catalogProductTypeId: nextTypeId,
@@ -610,14 +613,7 @@ export function AdminProductCreationWizard({
                     : "",
                 }));
               }}
-            >
-              <option value="">Select product type</option>
-              {formTypes.map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.name}
-                </option>
-              ))}
-            </select>
+            />
           </div>
           {formTypes.find((type) => type.id === form.catalogProductTypeId)?.supportsProductCondition ? (
             <div className="sm:col-span-2">

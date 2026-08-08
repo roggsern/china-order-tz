@@ -29,6 +29,7 @@ import { AdminProductBulkActionBar } from "@/components/admin/AdminProductBulkAc
 import { AdminProductCreationWizard } from "@/components/admin/AdminProductCreationWizard";
 import { AdminProductSectionTabs } from "@/components/admin/AdminProductSectionTabs";
 import { AdminBrandAsyncSelect } from "@/components/admin/AdminBrandAsyncSelect";
+import { AdminCatalogProductTypeSelect } from "@/components/admin/AdminCatalogProductTypeSelect";
 import { AdminCategoryTreeSelect } from "@/components/admin/AdminCategoryTreeSelect";
 import { AdminSupplierAsyncSelect } from "@/components/admin/AdminSupplierAsyncSelect";
 import { ProductForceDeleteDialog } from "@/components/admin/ProductForceDeleteDialog";
@@ -1543,14 +1544,16 @@ export function AdminCatalogProductsPanel() {
               <label className="admin-label" htmlFor="form-type">
                 Product Type *
               </label>
-              <select
+              <AdminCatalogProductTypeSelect
                 id="form-type"
-                className="admin-input mt-1.5"
                 value={form.catalogProductTypeId}
+                options={formTypes}
                 disabled={!form.subcategoryId && !form.categoryId}
-                onChange={(event) => {
-                  const nextTypeId = event.target.value;
-                  const nextType = formTypes.find((type) => type.id === nextTypeId);
+                selectedLabel={
+                  formTypes.find((type) => type.id === form.catalogProductTypeId)?.name ??
+                  productTypes.find((type) => type.id === form.catalogProductTypeId)?.name
+                }
+                onChange={(nextTypeId, nextType) => {
                   setForm({
                     ...form,
                     catalogProductTypeId: nextTypeId,
@@ -1559,14 +1562,7 @@ export function AdminCatalogProductsPanel() {
                       : "",
                   });
                 }}
-              >
-                <option value="">Select product type</option>
-                {formTypes.map((type) => (
-                  <option key={type.id} value={type.id}>
-                    {type.name}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
             {formTypes.find((type) => type.id === form.catalogProductTypeId)?.supportsProductCondition ? (
               <div className="sm:col-span-2">

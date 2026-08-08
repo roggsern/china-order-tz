@@ -55,8 +55,8 @@ describe("hero brand content — premium journey slides", () => {
 
     assert.equal(china?.ctaLabel, "Explore China Catalog");
     assert.equal(china?.ctaHref, "/products?origin=china");
-    assert.equal(china?.secondaryCtaLabel, "How it works");
-    assert.equal(china?.secondaryCtaHref, "/#why-choose-us");
+    assert.equal(china?.secondaryCtaLabel, undefined);
+    assert.equal(china?.secondaryCtaHref, undefined);
     assert.equal(tz?.ctaLabel, "Explore TZ Stores");
     assert.equal(tz?.ctaHref, "/buy-from-tz");
   });

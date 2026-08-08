@@ -250,8 +250,8 @@ export const homepageContentSeed: HomepageContent = {
     },
     collections: {
       eyebrow: "Browse",
-      title: "Featured Collections",
-      description: "Shop by popular categories across both commerce journeys.",
+      title: "Order from China Collections",
+      description: "Explore popular product categories sourced from China.",
       viewAllLabel: "All categories",
       viewAllHref: "/categories",
     },

@@ -72,3 +72,51 @@ export function filterCatalogProductTypesForCategoryScope<T extends { id: string
     return false;
   });
 }
+
+export type CatalogProductTypeSearchable = {
+  id: string;
+  name: string;
+  slug?: string | null;
+  subcategoryName?: string | null;
+  categoryName?: string | null;
+  departmentName?: string | null;
+};
+
+/** Case-insensitive keyword match across type name and category context. */
+export function filterCatalogProductTypesByQuery<T extends CatalogProductTypeSearchable>(
+  productTypes: readonly T[],
+  query: string,
+): T[] {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) {
+    return [...productTypes];
+  }
+
+  const tokens = normalized.split(/\s+/).filter(Boolean);
+
+  return productTypes.filter((type) => {
+    const haystack = [
+      type.name,
+      type.slug ?? "",
+      type.subcategoryName ?? "",
+      type.categoryName ?? "",
+      type.departmentName ?? "",
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    return tokens.every((token) => haystack.includes(token));
+  });
+}
+
+export function formatCatalogProductTypeOptionDescription(
+  type: CatalogProductTypeSearchable,
+): string | undefined {
+  const parts = [type.categoryName, type.subcategoryName].filter(
+    (part): part is string => Boolean(part?.trim()),
+  );
+  if (parts.length === 0) {
+    return type.departmentName?.trim() || undefined;
+  }
+  return parts.join(" · ");
+}

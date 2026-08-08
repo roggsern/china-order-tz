@@ -114,7 +114,11 @@ describe("homepage commercial content — flash deals & sections", () => {
   it("exposes store and collection section copy for CMS-ready UI", async () => {
     const content = await getHomepageContent();
     assert.equal(content.sections.shopByStore.title, "Shop by Store");
-    assert.equal(content.sections.collections.title, "Featured Collections");
+    assert.equal(content.sections.collections.title, "Order from China Collections");
+    assert.equal(
+      content.sections.collections.description,
+      "Explore popular product categories sourced from China.",
+    );
     assert.ok(Array.isArray(content.collections));
     assert.ok(content.trendingSearches.includes("iPhone"));
     assert.equal(content.newsletter.title, "Stay Updated");

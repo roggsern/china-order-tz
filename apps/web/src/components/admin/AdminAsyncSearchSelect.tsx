@@ -36,6 +36,8 @@ type AdminAsyncSearchSelectProps = {
   onChange: (id: string, option: AdminAsyncOption | null) => void;
   /** Extra deps that should re-run the search (e.g. category filter). */
   reloadKey?: string;
+  /** Override search debounce (use 0 for local/instant lists). */
+  debounceMs?: number;
 };
 
 export function AdminAsyncSearchSelect({
@@ -49,12 +51,13 @@ export function AdminAsyncSearchSelect({
   loadOptions,
   onChange,
   reloadKey = "",
+  debounceMs = ADMIN_SEARCH_DEBOUNCE_MS,
 }: AdminAsyncSearchSelectProps) {
   const listboxId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const debouncedQuery = useDebouncedValue(query, ADMIN_SEARCH_DEBOUNCE_MS);
+  const debouncedQuery = useDebouncedValue(query, debounceMs);
   const [options, setOptions] = useState<AdminAsyncOption[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);

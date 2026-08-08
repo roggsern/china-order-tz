@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { filterCatalogProductTypesForCategoryScope } from "@/lib/admin/catalog-product-type-scope";
+import {
+  filterCatalogProductTypesByQuery,
+  filterCatalogProductTypesForCategoryScope,
+  formatCatalogProductTypeOptionDescription,
+} from "@/lib/admin/catalog-product-type-scope";
 import type { AdminCategory } from "@/lib/api/admin-catalog";
 
 describe("catalog product type scope", () => {
@@ -92,5 +96,83 @@ describe("catalog product type scope", () => {
     });
 
     assert.equal(matches[0]?.name, "Wigs Type");
+  });
+});
+
+describe("catalog product type search", () => {
+  const searchableTypes = [
+    {
+      id: "ups-1",
+      name: "DC Mini UPS",
+      slug: "dc-mini-ups",
+      categoryName: "Power",
+      subcategoryName: "UPS",
+    },
+    {
+      id: "phone-1",
+      name: "Android Smartphone",
+      slug: "android-smartphone",
+      categoryName: "Phones",
+      subcategoryName: "Smartphones",
+    },
+    {
+      id: "phone-2",
+      name: "iPhone",
+      slug: "iphone",
+      categoryName: "Phones",
+      subcategoryName: "Smartphones",
+    },
+    {
+      id: "camera-1",
+      name: "Mirrorless Camera",
+      slug: "mirrorless-camera",
+      categoryName: "Cameras",
+      subcategoryName: "Mirrorless",
+    },
+    {
+      id: "dress-1",
+      name: "Summer Dress",
+      slug: "summer-dress",
+      categoryName: "Apparel",
+      subcategoryName: "Dresses",
+    },
+  ];
+
+  it('search "UPS" returns DC Mini UPS', () => {
+    const matches = filterCatalogProductTypesByQuery(searchableTypes, "UPS");
+    assert.deepEqual(
+      matches.map((type) => type.name),
+      ["DC Mini UPS"],
+    );
+  });
+
+  it('search "phone" returns smartphone types', () => {
+    const matches = filterCatalogProductTypesByQuery(searchableTypes, "phone");
+    assert.deepEqual(
+      matches.map((type) => type.id).sort(),
+      ["phone-1", "phone-2"].sort(),
+    );
+  });
+
+  it("selecting a result resolves the matching product type id", () => {
+    const matches = filterCatalogProductTypesByQuery(searchableTypes, "camera");
+    assert.equal(matches.length, 1);
+    const selectedId = matches[0]?.id ?? "";
+    const selected = searchableTypes.find((type) => type.id === selectedId) ?? null;
+    assert.equal(selected?.id, "camera-1");
+    assert.equal(selected?.name, "Mirrorless Camera");
+  });
+
+  it("existing selected type remains available after edit reopen (empty query)", () => {
+    const matches = filterCatalogProductTypesByQuery(searchableTypes, "");
+    assert.equal(matches.length, searchableTypes.length);
+    assert.ok(matches.some((type) => type.id === "ups-1" && type.name === "DC Mini UPS"));
+  });
+
+  it("formats category context for dropdown description", () => {
+    assert.equal(
+      formatCatalogProductTypeOptionDescription(searchableTypes[0]!),
+      "Power · UPS",
+    );
   });
 });

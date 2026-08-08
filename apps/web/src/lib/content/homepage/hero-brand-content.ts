@@ -52,8 +52,6 @@ export function buildPremiumJourneyHeroSlides(): Pick<
         "Premium products sourced in China — air and sea logistics, warehouse-ready fulfillment, and trusted delivery to Tanzania.",
       ctaLabel: "Explore China Catalog",
       ctaHref: "/products?origin=china",
-      secondaryCtaLabel: "How it works",
-      secondaryCtaHref: "/#why-choose-us",
       desktopImageUrl: HERO_ASSET_PATHS.orderFromChina.desktop,
       mobileImageUrl: HERO_ASSET_PATHS.orderFromChina.mobile,
       imageAlt:
