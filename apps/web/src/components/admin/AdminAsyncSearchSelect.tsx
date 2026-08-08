@@ -148,7 +148,10 @@ export function AdminAsyncSearchSelect({
   };
 
   return (
-    <div ref={containerRef} className="relative">
+    <div
+      ref={containerRef}
+      className={`relative ${open ? "z-50" : ""}`}
+    >
       <div className="flex gap-2">
         <input
           id={id}
@@ -188,7 +191,7 @@ export function AdminAsyncSearchSelect({
       ) : null}
 
       {open ? (
-        <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg">
+        <div className="absolute left-0 right-0 z-50 mt-1 w-full overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg">
           <ul id={listboxId} role="listbox" className="max-h-60 overflow-y-auto py-1">
             {loading && options.length === 0 ? (
               <li className="px-3 py-2 text-sm text-zinc-500">Searching…</li>

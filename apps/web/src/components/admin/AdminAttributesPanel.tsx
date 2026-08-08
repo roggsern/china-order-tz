@@ -509,7 +509,7 @@ export function AdminAttributesPanel() {
         </div>
       ) : null}
 
-      <div className="admin-card mb-4 overflow-hidden">
+      <div className="admin-card relative z-10 mb-4 overflow-visible">
         <div className="border-b border-zinc-200 px-5 py-3">
           <h2 className="text-sm font-semibold text-zinc-900">Catalog Product Type mapping</h2>
           <p className="mt-1 text-xs text-zinc-500">
