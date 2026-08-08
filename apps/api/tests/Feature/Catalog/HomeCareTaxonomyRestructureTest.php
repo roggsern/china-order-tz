@@ -36,9 +36,16 @@ class HomeCareTaxonomyRestructureTest extends TestCase
         $this->assertNull($department->deleted_at);
         $this->assertTrue($department->is_active);
 
+        $bibleRoot = Category::query()->where('slug', 'home-care')->first();
+        $this->assertNotNull($bibleRoot);
+        $this->assertNull($bibleRoot->department_id);
+        $this->assertNull($bibleRoot->store_id);
+        $this->assertNull($bibleRoot->parent_id);
+        $this->assertSame($bibleRoot->id, $result['bible_root_id']);
+
         $categories = Category::query()
             ->where('department_id', $department->id)
-            ->whereNull('parent_id')
+            ->where('parent_id', $bibleRoot->id)
             ->orderBy('sort_order')
             ->get();
 
@@ -51,7 +58,7 @@ class HomeCareTaxonomyRestructureTest extends TestCase
             fn (Category $category) => $category->origin === CatalogOrigin::China
                 && $category->store_id === null
                 && $category->is_active
-                && $category->parent_id === null,
+                && $category->parent_id === $bibleRoot->id,
         ));
 
         $pestControl = $categories->firstWhere('slug', 'pest-control');
@@ -96,7 +103,7 @@ class HomeCareTaxonomyRestructureTest extends TestCase
             4,
             Category::query()
                 ->where('department_id', $second['department_id'])
-                ->whereNull('parent_id')
+                ->where('parent_id', $second['bible_root_id'])
                 ->whereNull('deleted_at')
                 ->count(),
         );
@@ -118,13 +125,17 @@ class HomeCareTaxonomyRestructureTest extends TestCase
         $this->assertNull(Category::query()->where('slug', 'cleaning-hygiene')->first());
     }
 
-    public function test_restructure_does_not_add_home_care_to_catalog_bible(): void
+    public function test_restructure_does_not_mutate_catalog_bible_home_care_root(): void
     {
+        $before = collect(CatalogBible::categories())->pluck('slug')->all();
+        $this->assertContains('home-care', $before);
+
         $this->seedSoftDeletedHomeCareFixture();
         app(HomeCareTaxonomyRestructureService::class)->restructure(dryRun: false);
 
-        $bibleSlugs = collect(CatalogBible::categories())->pluck('slug')->all();
-        $this->assertNotContains('home-care', $bibleSlugs);
+        $after = collect(CatalogBible::categories())->pluck('slug')->all();
+        $this->assertSame($before, $after);
+        $this->assertContains('home-care', $after);
     }
 
     public function test_artisan_command_execute_flag(): void

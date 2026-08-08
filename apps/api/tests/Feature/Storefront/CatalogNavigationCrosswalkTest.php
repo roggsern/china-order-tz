@@ -8,6 +8,7 @@ use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductVisibility;
 use App\Models\Category;
 use App\Models\CommerceChannel;
+use App\Models\Department;
 use App\Models\Product;
 use App\Services\Storefront\CatalogNavigationCrosswalkResolver;
 use App\Services\Storefront\ChinaStorefrontCatalog;
@@ -110,6 +111,7 @@ class CatalogNavigationCrosswalkTest extends TestCase
     {
         $this->assertFalse($this->resolver->isBibleNodeVisible('building-materials'));
         $this->assertFalse($this->resolver->isBibleNodeVisible('beauty'));
+        $this->assertFalse($this->resolver->isBibleNodeVisible('home-care'));
 
         $navSlugs = app(ChinaStorefrontCatalog::class)
             ->navigationCategories()
@@ -118,6 +120,70 @@ class CatalogNavigationCrosswalkTest extends TestCase
 
         $this->assertNotContains('building-materials', $navSlugs);
         $this->assertNotContains('beauty', $navSlugs);
+        $this->assertNotContains('home-care', $navSlugs);
+    }
+
+    public function test_home_care_department_products_make_home_care_nav_root_visible(): void
+    {
+        $expectedRoots = collect(CatalogBible::categories())->pluck('slug')->all();
+        $this->assertContains('home-care', $expectedRoots);
+        $this->assertContains('mens-fashion', $expectedRoots);
+        $this->assertContains('womens-fashion', $expectedRoots);
+        $this->assertContains('electronics', $expectedRoots);
+        $this->assertContains('beauty', $expectedRoots);
+
+        $department = Department::query()->updateOrCreate(
+            ['slug' => 'home-care'],
+            [
+                'name' => 'Home Care',
+                'icon' => '🧹',
+                'sort_order' => 99,
+                'is_active' => true,
+            ],
+        );
+
+        $pestControl = Category::query()->updateOrCreate(
+            ['slug' => 'pest-control'],
+            [
+                'name' => 'Pest Control',
+                'origin' => CatalogOrigin::China,
+                'department_id' => $department->id,
+                'parent_id' => null,
+                'store_id' => null,
+                'is_active' => true,
+                'sort_order' => 10,
+            ],
+        );
+
+        $this->createNavigationVisibleProduct($pestControl, 'home-care-insecticide', null);
+
+        $this->assertTrue($this->resolver->isBibleNodeVisible('home-care'));
+
+        $navSlugs = app(ChinaStorefrontCatalog::class)
+            ->navigationCategories()
+            ->pluck('slug')
+            ->all();
+
+        $this->assertContains('home-care', $navSlugs);
+
+        foreach ($navSlugs as $slug) {
+            $this->assertContains($slug, $expectedRoots);
+        }
+
+        $this->assertNotContains('home-appliances', $navSlugs);
+        $this->assertNotContains('pet-supplies', $navSlugs);
+        $this->assertNotContains('groceries', $navSlugs);
+
+        $menuRoots = collect(
+            $this->getJson('/api/v1/storefront/china/menu')
+                ->assertOk()
+                ->json('data.categories'),
+        )->pluck('slug')->all();
+
+        $this->assertContains('home-care', $menuRoots);
+        foreach ($menuRoots as $slug) {
+            $this->assertContains($slug, $expectedRoots);
+        }
     }
 
     public function test_orphan_category_is_excluded_from_crosswalk_visibility(): void

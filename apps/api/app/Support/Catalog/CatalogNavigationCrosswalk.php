@@ -127,6 +127,11 @@ final class CatalogNavigationCrosswalk
                 'department_slugs' => ['beauty-personal-care'],
             ],
 
+            // --- Home Care ---
+            'home-care' => [
+                'department_slugs' => ['home-care'],
+            ],
+
             // --- Building materials (placeholder — no DB mapping) ---
             'building-materials' => [],
         ];

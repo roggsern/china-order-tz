@@ -351,6 +351,8 @@ class CategorySeeder extends Seeder
                 ['slug' => $rootDefinition['slug']],
                 [
                     'parent_id' => null,
+                    'department_id' => null,
+                    'store_id' => null,
                     'origin' => CatalogOrigin::from($rootDefinition['origin']),
                     'name' => $rootDefinition['name'],
                     'sort_order' => $rootDefinition['sort_order'],
@@ -363,6 +365,8 @@ class CategorySeeder extends Seeder
                     ['slug' => $childDefinition['slug']],
                     [
                         'parent_id' => $root->id,
+                        'department_id' => null,
+                        'store_id' => null,
                         'origin' => $root->origin,
                         'name' => $childDefinition['name'],
                         'sort_order' => $childDefinition['sort_order'],

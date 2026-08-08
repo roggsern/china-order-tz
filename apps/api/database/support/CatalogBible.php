@@ -71,9 +71,16 @@ final class CatalogBible
             ],
             [
                 'origin' => 'china',
+                'name' => 'Home Care',
+                'slug' => 'home-care',
+                'sort_order' => 50,
+                'children' => [],
+            ],
+            [
+                'origin' => 'china',
                 'name' => 'Building Materials',
                 'slug' => 'building-materials',
-                'sort_order' => 50,
+                'sort_order' => 60,
                 'children' => [],
             ],
         ];

@@ -13,7 +13,8 @@ use RuntimeException;
 /**
  * Restores and restructures the soft-deleted Home Care China taxonomy.
  *
- * Does not touch CatalogBible, navigation crosswalk, or storefront surfaces.
+ * Parents department leaves under the CatalogBible Home Care root category.
+ * Does not modify navigation crosswalk mappings.
  */
 class HomeCareTaxonomyRestructureService
 {
@@ -32,6 +33,10 @@ class HomeCareTaxonomyRestructureService
     public const FLAVOUR_ATTRIBUTE_SLUG = 'flavour';
 
     public const VOLUME_ATTRIBUTE_SLUG = 'volume';
+
+    public function __construct(
+        private readonly HomeCareCatalogBibleRootService $bibleRootService,
+    ) {}
 
     /**
      * @return list<array{name: string, slug: string, sort_order: int}>
@@ -55,7 +60,8 @@ class HomeCareTaxonomyRestructureService
      *     product_type_id: string,
      *     removed_duplicate_category_id: string|null,
      *     created_category_slugs: list<string>,
-     *     removed_attribute_slugs: list<string>
+     *     removed_attribute_slugs: list<string>,
+     *     bible_root_id: string|null
      * }
      */
     public function restructure(bool $dryRun = true): array
@@ -76,7 +82,8 @@ class HomeCareTaxonomyRestructureService
      *     product_type_id: string,
      *     removed_duplicate_category_id: string|null,
      *     created_category_slugs: list<string>,
-     *     removed_attribute_slugs: list<string>
+     *     removed_attribute_slugs: list<string>,
+     *     bible_root_id: string|null
      * }
      */
     private function buildPlan(bool $dryRun): array
@@ -111,15 +118,18 @@ class HomeCareTaxonomyRestructureService
             }
         }
 
+        $bibleRootResult = $this->bibleRootService->ensureRoot(dryRun: $dryRun);
+        $steps = array_merge($steps, $bibleRootResult['steps']);
+        $bibleRootId = $bibleRootResult['root_id'];
+
         $pestControl = Category::withTrashed()
             ->where('department_id', $department->id)
             ->where('slug', self::PEST_CONTROL_SLUG)
-            ->whereNull('parent_id')
             ->first();
 
         if ($pestControl === null) {
             throw new RuntimeException(
-                'Root Pest Control category (slug=pest-control, parent_id=null) was not found under Home Care.',
+                'Pest Control category (slug=pest-control) was not found under Home Care.',
             );
         }
 
@@ -136,7 +146,7 @@ class HomeCareTaxonomyRestructureService
             $pestControl->refresh();
             $pestControl->update([
                 'department_id' => $department->id,
-                'parent_id' => null,
+                'parent_id' => $bibleRootId,
                 'origin' => CatalogOrigin::China,
                 'store_id' => null,
                 'name' => 'Pest Control',
@@ -296,7 +306,7 @@ class HomeCareTaxonomyRestructureService
                     $existing->refresh();
                     $existing->update([
                         'department_id' => $department->id,
-                        'parent_id' => null,
+                        'parent_id' => $bibleRootId,
                         'origin' => CatalogOrigin::China,
                         'store_id' => null,
                         'name' => $definition['name'],
@@ -315,7 +325,7 @@ class HomeCareTaxonomyRestructureService
                 Category::query()->create([
                     'department_id' => $department->id,
                     'store_id' => null,
-                    'parent_id' => null,
+                    'parent_id' => $bibleRootId,
                     'origin' => CatalogOrigin::China,
                     'name' => $definition['name'],
                     'slug' => $this->ensureUniqueCategorySlug($definition['slug']),
@@ -327,6 +337,14 @@ class HomeCareTaxonomyRestructureService
             }
         }
 
+        if (! $dryRun) {
+            $attachResult = $this->bibleRootService->ensure(dryRun: false);
+            $steps = array_merge($steps, [
+                'Confirm CatalogBible Home Care root parenting',
+            ]);
+            $bibleRootId = $attachResult['root_id'] ?? $bibleRootId;
+        }
+
         return [
             'dry_run' => $dryRun,
             'steps' => $steps,
@@ -336,6 +354,7 @@ class HomeCareTaxonomyRestructureService
             'removed_duplicate_category_id' => $removedDuplicateCategoryId,
             'created_category_slugs' => $createdCategorySlugs,
             'removed_attribute_slugs' => $removedAttributeSlugs,
+            'bible_root_id' => $bibleRootId,
         ];
     }
 
