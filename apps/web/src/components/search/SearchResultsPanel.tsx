@@ -177,7 +177,8 @@ export function SearchResultsPanel({
                 <SearchCategoryRow
                   key={category.slug}
                   category={category}
-                  onSelect={() => onSelect(`/categories/${category.slug}`, category.name)}
+                  origin={origin}
+                  onSelect={(href) => onSelect(href, category.name)}
                 />
               ))}
             </div>

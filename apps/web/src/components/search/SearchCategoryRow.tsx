@@ -1,19 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import type { Category } from "@/lib/types/catalog";
-import { buildSearchCategoryHref } from "@/lib/search/search-url";
+import type { Category, ProductOrigin } from "@/lib/types/catalog";
+import { buildSearchBrandHref, buildSearchCategoryHref } from "@/lib/search/search-url";
 
 interface SearchCategoryRowProps {
   category: Category;
-  onSelect: () => void;
+  origin?: ProductOrigin;
+  onSelect: (href: string) => void;
 }
 
-export function SearchCategoryRow({ category, onSelect }: SearchCategoryRowProps) {
+export function SearchCategoryRow({ category, origin, onSelect }: SearchCategoryRowProps) {
+  const href =
+    category.searchSuggestionType === "brand"
+      ? buildSearchBrandHref(category.slug, origin)
+      : buildSearchCategoryHref(category.slug, origin);
+
   return (
     <Link
-      href={buildSearchCategoryHref(category.slug)}
-      onClick={onSelect}
+      href={href}
+      onClick={() => onSelect(href)}
       className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition hover:bg-zinc-50 active:bg-zinc-100"
     >
       <span

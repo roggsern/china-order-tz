@@ -1,12 +1,15 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { SearchIcon } from "@/components/home/icons";
 import { useSearchSuggestions } from "@/hooks/use-search-suggestions";
 import { addRecentSearch, clearRecentSearches } from "@/lib/search/recent-searches";
-import { buildProductSearchHref } from "@/lib/search/search-url";
+import {
+  buildProductSearchHref,
+  resolveDefaultSearchMarketplaceScope,
+} from "@/lib/search/search-url";
 import type { SearchMarketplaceScope } from "@/components/search/SearchMarketplaceScope";
 import { scopeToOrigin } from "@/components/search/SearchMarketplaceScope";
 import { SearchResultsPanel } from "./SearchResultsPanel";
@@ -25,13 +28,17 @@ export function SearchExperience({
   inputId,
 }: SearchExperienceProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
-  const [marketplaceScope, setMarketplaceScope] = useState<SearchMarketplaceScope>(() => {
-    const origin = searchParams.get("origin");
-    return origin === "china" || origin === "tz" ? origin : "all";
-  });
+  const [marketplaceScope, setMarketplaceScope] = useState<SearchMarketplaceScope>(() =>
+    resolveDefaultSearchMarketplaceScope({
+      origin: searchParams.get("origin"),
+      pathname,
+    }),
+  );
+  const scopeTouchedRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { results, recentSearches, isLoading, isSearching, origin } = useSearchSuggestions(
@@ -44,7 +51,19 @@ export function SearchExperience({
 
   useEffect(() => {
     if (!open) {
+      scopeTouchedRef.current = false;
       return;
+    }
+
+    // Default from current storefront URL when the dropdown opens.
+    // Manual tab changes during an open session are preserved.
+    if (!scopeTouchedRef.current) {
+      setMarketplaceScope(
+        resolveDefaultSearchMarketplaceScope({
+          origin: searchParams.get("origin"),
+          pathname,
+        }),
+      );
     }
 
     const handlePointerDown = (event: MouseEvent) => {
@@ -66,14 +85,12 @@ export function SearchExperience({
       document.removeEventListener("mousedown", handlePointerDown);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [open]);
+  }, [open, pathname, searchParams]);
 
-  useEffect(() => {
-    const origin = searchParams.get("origin");
-    if (origin === "china" || origin === "tz") {
-      setMarketplaceScope(origin);
-    }
-  }, [searchParams]);
+  const handleMarketplaceScopeChange = useCallback((scope: SearchMarketplaceScope) => {
+    scopeTouchedRef.current = true;
+    setMarketplaceScope(scope);
+  }, []);
 
   const handleSelect = useCallback(
     (href: string, label?: string) => {
@@ -154,7 +171,7 @@ export function SearchExperience({
               isSearching={isSearching}
               origin={origin}
               marketplaceScope={marketplaceScope}
-              onMarketplaceScopeChange={setMarketplaceScope}
+              onMarketplaceScopeChange={handleMarketplaceScopeChange}
               onSelect={handleSelect}
               onClearRecent={() => clearRecentSearches()}
             />
