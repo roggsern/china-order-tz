@@ -4,6 +4,8 @@ export type Category = {
   description: string;
   gradient: string;
   icon: string;
+  /** Search overlay only — brand rows use brand listing hrefs. */
+  searchSuggestionType?: "brand";
 };
 
 export type ProductStatus = "draft" | "active" | "out_of_stock" | "archived" | "hidden";

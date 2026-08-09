@@ -289,6 +289,91 @@ class ChinaStorefrontSearchTest extends TestCase
         $this->assertSame($baseline, $whitespace);
     }
 
+    public function test_china_search_ranks_name_match_above_description_match(): void
+    {
+        $descriptionOnly = $this->makeChinaListableProduct('china-desc-only-rank', [
+            'name' => 'Plain Accessory Kit',
+            'description' => 'Includes ZenithProbe ceramic insert for testing',
+            'created_at' => now()->subMinute(),
+            'updated_at' => now()->subMinute(),
+        ]);
+        $nameMatch = $this->makeChinaListableProduct('china-name-rank', [
+            'name' => 'ZenithProbe Travel Case',
+            'description' => 'Generic travel packaging',
+            'created_at' => now()->subHour(),
+            'updated_at' => now()->subHour(),
+        ]);
+
+        $slugs = collect(
+            $this->getJson('/api/v1/storefront/china/products?search=ZenithProbe')
+                ->assertOk()
+                ->json('data'),
+        )->pluck('slug')->values()->all();
+
+        $this->assertContains($nameMatch->slug, $slugs);
+        $this->assertContains($descriptionOnly->slug, $slugs);
+        $this->assertLessThan(
+            array_search($descriptionOnly->slug, $slugs, true),
+            array_search($nameMatch->slug, $slugs, true),
+        );
+    }
+
+    public function test_china_brands_endpoint_only_includes_brands_with_china_sellable_products(): void
+    {
+        $chinaBrand = Brand::factory()->create([
+            'name' => 'China Only Suggest Brand',
+            'slug' => 'china-only-suggest-brand',
+            'is_active' => true,
+        ]);
+        $tzOnlyBrand = Brand::factory()->create([
+            'name' => 'TZ Only Suggest Brand',
+            'slug' => 'tz-only-suggest-brand',
+            'is_active' => true,
+        ]);
+
+        $this->makeChinaListableProduct('china-brand-suggest-product', [
+            'name' => 'China Brand Suggest Product',
+            'brand_id' => $chinaBrand->id,
+        ]);
+
+        $store = app(StoreService::class)->create([
+            'code' => 'TZBRND',
+            'name' => 'TZ Brand Suggest Store',
+            'slug' => 'tz-brand-suggest-store',
+            'is_active' => true,
+            'storefront_enabled' => true,
+            'storefront_visible' => true,
+        ]);
+        $tzCategory = Category::factory()->create([
+            'store_id' => $store->id,
+            'slug' => 'tz-brand-suggest-cat',
+            'is_active' => true,
+        ]);
+        Product::factory()->create([
+            'name' => 'TZ Brand Suggest Product',
+            'slug' => 'tz-brand-suggest-product',
+            'store_id' => $store->id,
+            'category_id' => $tzCategory->id,
+            'brand_id' => $tzOnlyBrand->id,
+            'commerce_channel_id' => $this->tz->id,
+            'fulfillment_source' => CommerceChannelCode::TzLocal->fulfillmentSource(),
+            'is_active' => true,
+            'is_demo' => false,
+            'lifecycle_status' => ProductLifecycleStatus::Active,
+            'visibility' => ProductVisibility::Public,
+            'price' => 18000,
+        ]);
+
+        $slugs = collect(
+            $this->getJson('/api/v1/storefront/china/brands')
+                ->assertOk()
+                ->json('data'),
+        )->pluck('slug')->all();
+
+        $this->assertContains($chinaBrand->slug, $slugs);
+        $this->assertNotContains($tzOnlyBrand->slug, $slugs);
+    }
+
     /**
      * @param  array<string, mixed>  $overrides
      */

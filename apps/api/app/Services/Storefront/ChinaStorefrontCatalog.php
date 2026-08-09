@@ -133,23 +133,9 @@ class ChinaStorefrontCatalog
                 ['reviews as review_count' => fn ($query) => $query->where('is_approved', true)],
             )
             ->when($search !== '', function (Builder $query) use ($search) {
-                $term = '%'.mb_strtolower($search).'%';
-
-                $query->where(function (Builder $q) use ($term) {
-                    $q->whereRaw('LOWER(name) LIKE ?', [$term])
-                        ->orWhereRaw('LOWER(COALESCE(short_description, \'\')) LIKE ?', [$term])
-                        ->orWhereRaw('LOWER(COALESCE(description, \'\')) LIKE ?', [$term])
-                        ->orWhereRaw('LOWER(COALESCE(sku, \'\')) LIKE ?', [$term])
-                        ->orWhereHas(
-                            'brand',
-                            fn (Builder $brandQuery) => $brandQuery->whereRaw('LOWER(name) LIKE ?', [$term]),
-                        )
-                        ->orWhereHas(
-                            'catalogProductType',
-                            fn (Builder $typeQuery) => $typeQuery->whereRaw('LOWER(name) LIKE ?', [$term]),
-                        );
-                });
-            })
+                $this->applyProductSearchFilter($query, $search);
+                $this->applyProductSearchRelevanceOrder($query, $search);
+            }, fn (Builder $query) => $query->latest())
             ->when(filled($category), fn (Builder $query) => $this->applyDiscoveryCategoryFilter($query, $category))
             ->when(filled($brand), function (Builder $query) use ($brand) {
                 $query->where(function (Builder $q) use ($brand) {
@@ -158,9 +144,70 @@ class ChinaStorefrontCatalog
                 });
             })
             ->when(in_array($featured, ['1', 'true', 1, true], true), fn (Builder $q) => $q->where('is_featured', true))
-            ->latest()
             ->paginate($perPage)
             ->withQueryString();
+    }
+
+    private function applyProductSearchFilter(Builder $query, string $search): void
+    {
+        $term = '%'.mb_strtolower($search).'%';
+
+        $query->where(function (Builder $q) use ($term) {
+            $q->whereRaw('LOWER(name) LIKE ?', [$term])
+                ->orWhereRaw('LOWER(COALESCE(short_description, \'\')) LIKE ?', [$term])
+                ->orWhereRaw('LOWER(COALESCE(description, \'\')) LIKE ?', [$term])
+                ->orWhereRaw('LOWER(COALESCE(sku, \'\')) LIKE ?', [$term])
+                ->orWhereHas(
+                    'brand',
+                    fn (Builder $brandQuery) => $brandQuery->whereRaw('LOWER(name) LIKE ?', [$term]),
+                )
+                ->orWhereHas(
+                    'catalogProductType',
+                    fn (Builder $typeQuery) => $typeQuery->whereRaw('LOWER(name) LIKE ?', [$term]),
+                )
+                ->orWhereHas(
+                    'category',
+                    fn (Builder $categoryQuery) => $categoryQuery->whereRaw('LOWER(name) LIKE ?', [$term]),
+                );
+        });
+    }
+
+    /**
+     * Rank search hits by field strength. Secondary sort keeps newest within the same tier.
+     */
+    private function applyProductSearchRelevanceOrder(Builder $query, string $search): void
+    {
+        $normalized = mb_strtolower($search);
+        $like = '%'.$normalized.'%';
+
+        $query->orderByRaw(
+            'CASE
+                WHEN LOWER(products.name) = ? THEN 600
+                WHEN LOWER(products.name) LIKE ? THEN 500
+                WHEN EXISTS (
+                    SELECT 1 FROM brands
+                    WHERE brands.id = products.brand_id
+                      AND brands.deleted_at IS NULL
+                      AND LOWER(brands.name) LIKE ?
+                ) THEN 400
+                WHEN LOWER(COALESCE(products.sku, \'\')) LIKE ? THEN 300
+                WHEN EXISTS (
+                    SELECT 1 FROM catalog_product_types
+                    WHERE catalog_product_types.id = products.catalog_product_type_id
+                      AND catalog_product_types.deleted_at IS NULL
+                      AND LOWER(catalog_product_types.name) LIKE ?
+                ) OR EXISTS (
+                    SELECT 1 FROM categories
+                    WHERE categories.id = products.category_id
+                      AND categories.deleted_at IS NULL
+                      AND LOWER(categories.name) LIKE ?
+                ) THEN 200
+                WHEN LOWER(COALESCE(products.short_description, \'\')) LIKE ? THEN 100
+                WHEN LOWER(COALESCE(products.description, \'\')) LIKE ? THEN 50
+                ELSE 0
+            END DESC',
+            [$normalized, $like, $like, $like, $like, $like, $like, $like],
+        )->latest('products.created_at');
     }
 
     private function applyDiscoveryCategoryFilter(Builder $query, string $category): Builder

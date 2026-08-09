@@ -3,7 +3,10 @@
  * Never reads seed products, localStorage admin catalog, or hardcoded demo terms.
  */
 
-import { getChinaStorefrontProducts } from "@/lib/api/china-storefront";
+import {
+  getChinaStorefrontBrands,
+  getChinaStorefrontProducts,
+} from "@/lib/api/china-storefront";
 import { getBrands, getCategories, getProducts } from "@/lib/api/products";
 import { mapApiProductCardToCatalogProduct } from "@/lib/catalog/map-api-product";
 import type { Category, Product, ProductOrigin } from "@/lib/types/catalog";
@@ -19,11 +22,19 @@ export type LiveSearchCatalog = {
 };
 
 export type LiveSearchProductSource = "china-storefront" | "catalog";
+export type LiveSearchBrandSource = "china-storefront" | "catalog";
 
 /** China scope uses the China storefront products API; All/TZ keep the generic catalog search. */
 export function resolveLiveSearchProductSource(
   origin?: ProductOrigin,
 ): LiveSearchProductSource {
+  return origin === "china" ? "china-storefront" : "catalog";
+}
+
+/** China scope uses product-relevant China brands (same source as China filters). */
+export function resolveLiveSearchBrandSource(
+  origin?: ProductOrigin,
+): LiveSearchBrandSource {
   return origin === "china" ? "china-storefront" : "catalog";
 }
 
@@ -50,6 +61,7 @@ function mapApiBrandToSearchCategory(entry: {
     description: `${entry.name} brand`,
     gradient: "from-amber-200 via-orange-100 to-rose-200",
     icon: "🏷",
+    searchSuggestionType: "brand",
   };
 }
 
@@ -90,8 +102,15 @@ export async function fetchLiveSearchCategories(): Promise<Category[]> {
   return (categories ?? []).map(mapApiCategoryToSearchCategory);
 }
 
-/** Fetch live brands as category-shaped suggestions. */
-export async function fetchLiveSearchBrands(): Promise<Category[]> {
+/** Fetch live brands as category-shaped suggestions (China uses storefront brands). */
+export async function fetchLiveSearchBrands(
+  origin?: ProductOrigin,
+): Promise<Category[]> {
+  if (resolveLiveSearchBrandSource(origin) === "china-storefront") {
+    const brands = await getChinaStorefrontBrands();
+    return (brands ?? []).map(mapApiBrandToSearchCategory);
+  }
+
   const brands = await getBrands();
   return (brands ?? []).map(mapApiBrandToSearchCategory);
 }
@@ -114,7 +133,9 @@ export async function fetchLiveSearchCatalog(
   const [products, categories, brands] = await Promise.all([
     fetchLiveSearchProducts(trimmed, options?.origin),
     includeTaxonomy ? fetchLiveSearchCategories().catch(() => []) : Promise.resolve([]),
-    includeTaxonomy ? fetchLiveSearchBrands().catch(() => []) : Promise.resolve([]),
+    includeTaxonomy
+      ? fetchLiveSearchBrands(options?.origin).catch(() => [])
+      : Promise.resolve([]),
   ]);
 
   return { products, categories, brands };

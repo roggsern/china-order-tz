@@ -75,9 +75,9 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
     }
 
     const pageTitle = category ? category.name : query ? `Results for "${query}"` : "All Products";
+    // Origin is applied server-side (China storefront API or catalog ?origin=).
     const hasClientFilters =
       inStockOnly ||
-      Boolean(params.origin) ||
       Boolean(params.minRating) ||
       Boolean(params.minPrice) ||
       Boolean(params.maxPrice) ||

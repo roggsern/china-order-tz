@@ -276,12 +276,9 @@ function computeSearchResults(
           )
           .slice(0, MAX_CATEGORY_RESULTS);
 
-  const matchedBrands =
-    origin === "china"
-      ? []
-      : liveBrands
-          .filter((brand) => categoryMatchesQuery(brand.name, brand.slug, normalizedQuery))
-          .slice(0, MAX_CATEGORY_RESULTS);
+  const matchedBrands = liveBrands
+    .filter((brand) => categoryMatchesQuery(brand.name, brand.slug, normalizedQuery))
+    .slice(0, MAX_CATEGORY_RESULTS);
 
   const terms = buildLiveTermSuggestions(
     normalizedQuery,

@@ -4,6 +4,7 @@ import {
   getProduct as fetchApiProduct,
   getProducts as fetchApiProducts,
 } from "@/lib/api/products";
+import { getChinaStorefrontProductsPage } from "@/lib/api/china-storefront";
 import {
   mapApiProductCardToCatalogProduct,
   mapApiProductDetailToCatalogProduct,
@@ -23,6 +24,13 @@ export type CatalogProductsResult = {
   };
 };
 
+/** China origin listings/search use the China storefront API (sellable gates + relevance). */
+export function resolveProductsPageSource(
+  origin?: ProductOrigin,
+): "china-storefront" | "catalog" {
+  return origin === "china" ? "china-storefront" : "catalog";
+}
+
 export async function getProductsPage(options?: {
   page?: number;
   per_page?: number;
@@ -33,6 +41,22 @@ export async function getProductsPage(options?: {
   origin?: ProductOrigin;
   search?: string;
 }): Promise<CatalogProductsResult> {
+  if (resolveProductsPageSource(options?.origin) === "china-storefront") {
+    const result = await getChinaStorefrontProductsPage({
+      category: options?.category,
+      brand: options?.brand,
+      featured: options?.featured,
+      search: options?.search,
+      page: options?.page,
+      per_page: options?.per_page,
+    });
+
+    return {
+      products: result.products.map(mapApiProductCardToCatalogProduct),
+      meta: result.meta,
+    };
+  }
+
   const result = await fetchApiProducts(options);
 
   return {
