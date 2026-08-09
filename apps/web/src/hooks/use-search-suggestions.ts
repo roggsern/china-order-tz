@@ -66,10 +66,18 @@ export function useSearchSuggestions(
 
     void (async () => {
       try {
-        const live = await fetchLiveSearchCatalog(trimmed, { includeTaxonomy: true });
+        const live = await fetchLiveSearchCatalog(trimmed, {
+          includeTaxonomy: true,
+          origin,
+        });
         if (cancelled) return;
 
-        const products = filterProductsByOrigin(live.products, origin);
+        // China products are already CHINA_IMPORT-scoped by the storefront API.
+        const products =
+          origin === "china"
+            ? live.products
+            : filterProductsByOrigin(live.products, origin);
+
         clearSearchQueryCache();
         setResults(
           searchCatalog(products, trimmed, {

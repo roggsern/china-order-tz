@@ -114,6 +114,7 @@ class ChinaStorefrontCatalog
         $category = $filters['category'] ?? null;
         $brand = $filters['brand'] ?? null;
         $featured = $filters['featured'] ?? null;
+        $search = trim((string) ($filters['search'] ?? ''));
 
         return $this->chinaPublishedProductQuery(Product::query())
             ->real()
@@ -131,6 +132,24 @@ class ChinaStorefrontCatalog
             ->withCount(
                 ['reviews as review_count' => fn ($query) => $query->where('is_approved', true)],
             )
+            ->when($search !== '', function (Builder $query) use ($search) {
+                $term = '%'.mb_strtolower($search).'%';
+
+                $query->where(function (Builder $q) use ($term) {
+                    $q->whereRaw('LOWER(name) LIKE ?', [$term])
+                        ->orWhereRaw('LOWER(COALESCE(short_description, \'\')) LIKE ?', [$term])
+                        ->orWhereRaw('LOWER(COALESCE(description, \'\')) LIKE ?', [$term])
+                        ->orWhereRaw('LOWER(COALESCE(sku, \'\')) LIKE ?', [$term])
+                        ->orWhereHas(
+                            'brand',
+                            fn (Builder $brandQuery) => $brandQuery->whereRaw('LOWER(name) LIKE ?', [$term]),
+                        )
+                        ->orWhereHas(
+                            'catalogProductType',
+                            fn (Builder $typeQuery) => $typeQuery->whereRaw('LOWER(name) LIKE ?', [$term]),
+                        );
+                });
+            })
             ->when(filled($category), fn (Builder $query) => $this->applyDiscoveryCategoryFilter($query, $category))
             ->when(filled($brand), function (Builder $query) use ($brand) {
                 $query->where(function (Builder $q) use ($brand) {

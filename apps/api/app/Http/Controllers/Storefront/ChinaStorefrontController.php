@@ -41,7 +41,7 @@ class ChinaStorefrontController extends Controller
     public function products(Request $request): AnonymousResourceCollection
     {
         return CustomerProductCardResource::collection(
-            $this->catalog->products($request->only(['category', 'brand', 'featured', 'per_page', 'page']))
+            $this->catalog->products($request->only(['category', 'brand', 'featured', 'search', 'per_page', 'page']))
         )->additional(['success' => true]);
     }
 

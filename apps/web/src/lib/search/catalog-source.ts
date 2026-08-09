@@ -3,6 +3,7 @@
  * Never reads seed products, localStorage admin catalog, or hardcoded demo terms.
  */
 
+import { getChinaStorefrontProducts } from "@/lib/api/china-storefront";
 import { getBrands, getCategories, getProducts } from "@/lib/api/products";
 import { mapApiProductCardToCatalogProduct } from "@/lib/catalog/map-api-product";
 import type { Category, Product, ProductOrigin } from "@/lib/types/catalog";
@@ -16,6 +17,15 @@ export type LiveSearchCatalog = {
   categories: Category[];
   brands: Category[];
 };
+
+export type LiveSearchProductSource = "china-storefront" | "catalog";
+
+/** China scope uses the China storefront products API; All/TZ keep the generic catalog search. */
+export function resolveLiveSearchProductSource(
+  origin?: ProductOrigin,
+): LiveSearchProductSource {
+  return origin === "china" ? "china-storefront" : "catalog";
+}
 
 function mapApiCategoryToSearchCategory(entry: {
   name: string;
@@ -44,16 +54,31 @@ function mapApiBrandToSearchCategory(entry: {
 }
 
 /** Fetch products matching `search` from the live catalog API. */
-export async function fetchLiveSearchProducts(search: string): Promise<Product[]> {
+export async function fetchLiveSearchProducts(
+  search: string,
+  origin?: ProductOrigin,
+): Promise<Product[]> {
   const trimmed = search.trim();
   if (!trimmed) {
     return [];
   }
 
+  const perPage = Math.max(MAX_PRODUCT_RESULTS * 3, 24);
+
+  if (resolveLiveSearchProductSource(origin) === "china-storefront") {
+    const products = await getChinaStorefrontProducts({
+      search: trimmed,
+      page: 1,
+      per_page: perPage,
+    });
+
+    return (products ?? []).map(mapApiProductCardToCatalogProduct);
+  }
+
   const result = await getProducts({
     search: trimmed,
     page: 1,
-    per_page: Math.max(MAX_PRODUCT_RESULTS * 3, 24),
+    per_page: perPage,
   });
 
   return (result.products ?? []).map(mapApiProductCardToCatalogProduct);
@@ -77,7 +102,7 @@ export async function fetchLiveSearchBrands(): Promise<Category[]> {
  */
 export async function fetchLiveSearchCatalog(
   search: string,
-  options?: { includeTaxonomy?: boolean },
+  options?: { includeTaxonomy?: boolean; origin?: ProductOrigin },
 ): Promise<LiveSearchCatalog> {
   const trimmed = search.trim();
   if (!trimmed) {
@@ -87,7 +112,7 @@ export async function fetchLiveSearchCatalog(
   const includeTaxonomy = options?.includeTaxonomy !== false;
 
   const [products, categories, brands] = await Promise.all([
-    fetchLiveSearchProducts(trimmed),
+    fetchLiveSearchProducts(trimmed, options?.origin),
     includeTaxonomy ? fetchLiveSearchCategories().catch(() => []) : Promise.resolve([]),
     includeTaxonomy ? fetchLiveSearchBrands().catch(() => []) : Promise.resolve([]),
   ]);

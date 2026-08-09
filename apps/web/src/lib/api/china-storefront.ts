@@ -83,13 +83,17 @@ export async function getChinaStorefrontProducts(params?: {
   category?: string;
   brand?: string;
   featured?: boolean;
+  search?: string;
   per_page?: number;
+  page?: number;
 }): Promise<ApiCatalogProductCard[]> {
   const search = new URLSearchParams();
   if (params?.category) search.set("category", params.category);
   if (params?.brand) search.set("brand", params.brand);
   if (params?.featured) search.set("featured", "1");
+  if (params?.search?.trim()) search.set("search", params.search.trim());
   if (params?.per_page) search.set("per_page", String(params.per_page));
+  if (params?.page) search.set("page", String(params.page));
   const payload = await fetchJson<{ data?: ApiCatalogProductCard[] }>("/products", search);
   return payload.data ?? [];
 }
