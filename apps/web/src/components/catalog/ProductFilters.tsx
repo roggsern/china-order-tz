@@ -1,13 +1,11 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useCatalogProducts } from "@/lib/catalog/use-catalog-products";
 import { useCatalogCategories } from "@/lib/catalog/use-catalog-categories";
 import { useCatalogBrands } from "@/lib/catalog/use-catalog-brands";
 import type { ProductOrigin, SortOption } from "@/lib/types/catalog";
-import { ProductFiltersSkeleton } from "@/components/catalog/ProductFiltersSkeleton";
-import { CatalogErrorState } from "@/components/catalog/CatalogErrorState";
 
 const sortOptions: { value: SortOption; label: string }[] = [
   { value: "featured", label: "Featured" },
@@ -37,6 +35,23 @@ function FilterSection({
       <div className="mt-3">{children}</div>
     </div>
   );
+}
+
+function FilterSectionPlaceholder({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="animate-pulse space-y-2" aria-hidden>
+      {Array.from({ length: rows }, (_, index) => (
+        <div
+          key={index}
+          className={`rounded-lg bg-zinc-100 ${index === 0 ? "h-10" : "h-8"}`}
+        />
+      ))}
+    </div>
+  );
+}
+
+function FilterSectionError({ message }: { message: string }) {
+  return <p className="text-sm text-zinc-400">{message}</p>;
 }
 
 function FilterPanel({ className = "" }: { className?: string }) {
@@ -79,11 +94,17 @@ function FilterPanel({ className = "" }: { className?: string }) {
   const maxPrice = searchParams.get("maxPrice") ?? "";
   const inStockOnly = searchParams.get("inStock") === "true";
 
-  const [localMinPrice, setLocalMinPrice] = useState(minPrice || String(priceRange.min));
-  const [localMaxPrice, setLocalMaxPrice] = useState(maxPrice || String(priceRange.max));
+  const [localMinPrice, setLocalMinPrice] = useState(minPrice || "");
+  const [localMaxPrice, setLocalMaxPrice] = useState(maxPrice || "");
 
-  const isLoading = productsLoading || categoriesLoading || brandsLoading;
-  const loadError = productsError || categoriesError || brandsError;
+  useEffect(() => {
+    if (productsLoading) {
+      return;
+    }
+
+    setLocalMinPrice(minPrice || String(priceRange.min));
+    setLocalMaxPrice(maxPrice || String(priceRange.max));
+  }, [productsLoading, priceRange.min, priceRange.max, minPrice, maxPrice]);
 
   const updateParams = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -135,20 +156,6 @@ function FilterPanel({ className = "" }: { className?: string }) {
     inStockOnly ||
     currentSort !== "featured";
 
-  if (isLoading) {
-    return <ProductFiltersSkeleton className={className} />;
-  }
-
-  if (loadError) {
-    return (
-      <CatalogErrorState
-        title="Filters unavailable"
-        message={loadError}
-        className={className}
-      />
-    );
-  }
-
   return (
     <aside className={`space-y-6 ${className}`}>
       <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm">
@@ -167,42 +174,56 @@ function FilterPanel({ className = "" }: { className?: string }) {
 
         <div className="mt-5 space-y-5">
           <FilterSection title="Price">
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-2">
-                <label className="block">
-                  <span className="text-[11px] text-zinc-500">Min (TZS)</span>
-                  <input
-                    type="number"
-                    value={localMinPrice}
-                    onChange={(e) => setLocalMinPrice(e.target.value)}
-                    min={priceRange.min}
-                    max={priceRange.max}
-                    className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-[#c9a227]/50 focus:ring-2 focus:ring-[#c9a227]/20"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-[11px] text-zinc-500">Max (TZS)</span>
-                  <input
-                    type="number"
-                    value={localMaxPrice}
-                    onChange={(e) => setLocalMaxPrice(e.target.value)}
-                    min={priceRange.min}
-                    max={priceRange.max}
-                    className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-[#c9a227]/50 focus:ring-2 focus:ring-[#c9a227]/20"
-                  />
-                </label>
+            {productsLoading ? (
+              <FilterSectionPlaceholder rows={3} />
+            ) : productsError ? (
+              <FilterSectionError message={productsError} />
+            ) : (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="block">
+                    <span className="text-[11px] text-zinc-500">Min (TZS)</span>
+                    <input
+                      type="number"
+                      value={localMinPrice}
+                      onChange={(e) => setLocalMinPrice(e.target.value)}
+                      min={priceRange.min}
+                      max={priceRange.max}
+                      className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-[#c9a227]/50 focus:ring-2 focus:ring-[#c9a227]/20"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-[11px] text-zinc-500">Max (TZS)</span>
+                    <input
+                      type="number"
+                      value={localMaxPrice}
+                      onChange={(e) => setLocalMaxPrice(e.target.value)}
+                      min={priceRange.min}
+                      max={priceRange.max}
+                      className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-[#c9a227]/50 focus:ring-2 focus:ring-[#c9a227]/20"
+                    />
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  onClick={applyPriceRange}
+                  className="w-full rounded-lg bg-zinc-900 py-2 text-xs font-semibold text-white transition hover:bg-[#c9a227] hover:text-zinc-900"
+                >
+                  Apply Price
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={applyPriceRange}
-                className="w-full rounded-lg bg-zinc-900 py-2 text-xs font-semibold text-white transition hover:bg-[#c9a227] hover:text-zinc-900"
-              >
-                Apply Price
-              </button>
-            </div>
+            )}
           </FilterSection>
 
-          {brands.length > 0 && (
+          {brandsLoading ? (
+            <FilterSection title="Brand">
+              <FilterSectionPlaceholder rows={4} />
+            </FilterSection>
+          ) : brandsError ? (
+            <FilterSection title="Brand">
+              <FilterSectionError message={brandsError} />
+            </FilterSection>
+          ) : brands.length > 0 ? (
             <FilterSection title="Brand">
               <ul className="space-y-1">
                 <li>
@@ -235,44 +256,50 @@ function FilterPanel({ className = "" }: { className?: string }) {
                 ))}
               </ul>
             </FilterSection>
-          )}
+          ) : null}
 
           <FilterSection title="Category">
-            <ul className="max-h-48 space-y-1 overflow-y-auto">
-              <li>
-                <button
-                  type="button"
-                  onClick={() => updateParams("category", "")}
-                  className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
-                    !currentCategory
-                      ? "bg-[#c9a227]/10 font-semibold text-[#8b6914]"
-                      : "text-zinc-600 hover:bg-zinc-50"
-                  }`}
-                >
-                  All Categories
-                </button>
-              </li>
-              {categories.length === 0 ? (
-                <li className="px-3 py-2 text-sm text-zinc-400">No categories configured.</li>
-              ) : (
-                categories.map((category) => (
-                  <li key={category.slug}>
-                    <button
-                      type="button"
-                      onClick={() => updateParams("category", category.slug)}
-                      className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition ${
-                        currentCategory === category.slug
-                          ? "bg-[#c9a227]/10 font-semibold text-[#8b6914]"
-                          : "text-zinc-600 hover:bg-zinc-50"
-                      }`}
-                    >
-                      <span>{category.icon}</span>
-                      {category.name}
-                    </button>
-                  </li>
-                ))
-              )}
-            </ul>
+            {categoriesLoading ? (
+              <FilterSectionPlaceholder rows={5} />
+            ) : categoriesError ? (
+              <FilterSectionError message={categoriesError} />
+            ) : (
+              <ul className="max-h-48 space-y-1 overflow-y-auto">
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => updateParams("category", "")}
+                    className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
+                      !currentCategory
+                        ? "bg-[#c9a227]/10 font-semibold text-[#8b6914]"
+                        : "text-zinc-600 hover:bg-zinc-50"
+                    }`}
+                  >
+                    All Categories
+                  </button>
+                </li>
+                {categories.length === 0 ? (
+                  <li className="px-3 py-2 text-sm text-zinc-400">No categories configured.</li>
+                ) : (
+                  categories.map((category) => (
+                    <li key={category.slug}>
+                      <button
+                        type="button"
+                        onClick={() => updateParams("category", category.slug)}
+                        className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition ${
+                          currentCategory === category.slug
+                            ? "bg-[#c9a227]/10 font-semibold text-[#8b6914]"
+                            : "text-zinc-600 hover:bg-zinc-50"
+                        }`}
+                      >
+                        <span>{category.icon}</span>
+                        {category.name}
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            )}
           </FilterSection>
 
           <FilterSection title="Rating">
