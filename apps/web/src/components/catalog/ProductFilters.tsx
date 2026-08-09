@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useCatalogProducts } from "@/lib/catalog/use-catalog-products";
 import { useCatalogCategories } from "@/lib/catalog/use-catalog-categories";
 import { useCatalogBrands } from "@/lib/catalog/use-catalog-brands";
+import { resolveStorefrontBrandQuery } from "@/lib/catalog/storefront-brand-filter";
 import type { ProductOrigin, SortOption } from "@/lib/types/catalog";
 
 const sortOptions: { value: SortOption; label: string }[] = [
@@ -58,10 +59,31 @@ function FilterPanel({ className = "" }: { className?: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+
+  const basePath = pathname.startsWith("/categories/") ? pathname : "/products";
+
+  const currentCategory = searchParams.get("category") ?? "";
+  const currentSort = (searchParams.get("sort") as SortOption) ?? "featured";
+  const currentBrand = searchParams.get("brand") ?? "";
+  const currentOrigin = (searchParams.get("origin") as ProductOrigin | "") ?? "";
+  const currentMinRating = searchParams.get("minRating") ?? "";
+  const minPrice = searchParams.get("minPrice") ?? "";
+  const maxPrice = searchParams.get("maxPrice") ?? "";
+  const inStockOnly = searchParams.get("inStock") === "true";
+
+  const brandQuery = useMemo(
+    () =>
+      resolveStorefrontBrandQuery({
+        origin: currentOrigin || null,
+        categorySlug: currentCategory || null,
+      }),
+    [currentOrigin, currentCategory],
+  );
+
   const { products, isLoading: productsLoading, error: productsError } = useCatalogProducts();
   const { categories: categoryTree, isLoading: categoriesLoading, error: categoriesError } =
     useCatalogCategories({ chinaNavigation: true });
-  const { brands, isLoading: brandsLoading, error: brandsError } = useCatalogBrands();
+  const { brands, isLoading: brandsLoading, error: brandsError } = useCatalogBrands(brandQuery);
 
   const categories = useMemo(() => {
     const flat: typeof categoryTree = [];
@@ -82,17 +104,6 @@ function FilterPanel({ className = "" }: { className?: string }) {
     const prices = products.map((product) => product.price);
     return { min: Math.min(...prices), max: Math.max(...prices) };
   }, [products]);
-
-  const basePath = pathname.startsWith("/categories/") ? pathname : "/products";
-
-  const currentCategory = searchParams.get("category") ?? "";
-  const currentSort = (searchParams.get("sort") as SortOption) ?? "featured";
-  const currentBrand = searchParams.get("brand") ?? "";
-  const currentOrigin = (searchParams.get("origin") as ProductOrigin | "") ?? "";
-  const currentMinRating = searchParams.get("minRating") ?? "";
-  const minPrice = searchParams.get("minPrice") ?? "";
-  const maxPrice = searchParams.get("maxPrice") ?? "";
-  const inStockOnly = searchParams.get("inStock") === "true";
 
   const [localMinPrice, setLocalMinPrice] = useState(minPrice || "");
   const [localMaxPrice, setLocalMaxPrice] = useState(maxPrice || "");
