@@ -92,6 +92,142 @@ class UnifiedMarketplaceSearchService
     }
 
     /**
+     * Paginated product results for the unified search results page.
+     *
+     * @return array{
+     *   data: list<array<string, mixed>>,
+     *   meta: array{
+     *     current_page: int,
+     *     last_page: int,
+     *     per_page: int,
+     *     total: int,
+     *     q: string,
+     *     scope: string
+     *   }
+     * }
+     */
+    public function products(
+        string $q,
+        string $scope = 'all',
+        int $page = 1,
+        int $perPage = 24,
+        string $sort = 'relevance',
+    ): array {
+        $q = trim($q);
+        $scope = $this->normalizeScope($scope);
+        $sort = $this->normalizeSort($sort);
+        $page = max(1, $page);
+        $perPage = $this->clamp($perPage, 1, 48);
+
+        if ($q === '') {
+            return [
+                'data' => [],
+                'meta' => [
+                    'current_page' => 1,
+                    'last_page' => 1,
+                    'per_page' => $perPage,
+                    'total' => 0,
+                    'q' => '',
+                    'scope' => $scope,
+                ],
+            ];
+        }
+
+        if ($scope === 'china' || $scope === 'tz') {
+            return $this->paginateSingleScope($q, $scope, $page, $perPage, $sort);
+        }
+
+        return $this->paginateMergedScope($q, $page, $perPage, $sort);
+    }
+
+    /**
+     * @return array{data: list<array<string, mixed>>, meta: array<string, mixed>}
+     */
+    private function paginateSingleScope(
+        string $q,
+        string $scope,
+        int $page,
+        int $perPage,
+        string $sort,
+    ): array {
+        $query = $scope === 'china'
+            ? $this->productCorpus->buildChinaQuery($q, $sort)
+            : $this->productCorpus->buildTzQuery($q, $sort);
+
+        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
+
+        $data = collect($paginator->items())
+            ->map(fn (Product $product) => $this->mapProduct($product, $q))
+            ->values()
+            ->all();
+
+        return [
+            'data' => $data,
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => max(1, $paginator->lastPage()),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'q' => $q,
+                'scope' => $scope,
+            ],
+        ];
+    }
+
+    /**
+     * Merge China + TZ ranked hits, then slice for the requested page.
+     *
+     * @return array{data: list<array<string, mixed>>, meta: array<string, mixed>}
+     */
+    private function paginateMergedScope(string $q, int $page, int $perPage, string $sort): array
+    {
+        $total = $this->productCorpus->countChina($q) + $this->productCorpus->countTz($q);
+        $lastPage = max(1, (int) ceil($total / $perPage));
+        $page = min($page, $lastPage);
+
+        // Pull enough from each channel to fill the merged page window.
+        $channelLimit = min(
+            ProductSearchCorpus::MAX_MERGED_FETCH,
+            max($page * $perPage, $total, $perPage),
+        );
+
+        $merged = collect()
+            ->merge($this->productCorpus->searchChina($q, $channelLimit, $sort))
+            ->merge($this->productCorpus->searchTz($q, $channelLimit, $sort))
+            ->unique('id');
+
+        if ($sort === 'newest') {
+            $merged = $merged->sortByDesc(
+                fn (Product $product) => $product->created_at?->getTimestamp() ?? 0,
+            );
+        } else {
+            $merged = $merged->sortByDesc(fn (Product $product) => [
+                $this->relevance->score($product, $q),
+                $product->slug,
+            ]);
+        }
+
+        $data = $merged
+            ->values()
+            ->slice(($page - 1) * $perPage, $perPage)
+            ->map(fn (Product $product) => $this->mapProduct($product, $q))
+            ->values()
+            ->all();
+
+        return [
+            'data' => $data,
+            'meta' => [
+                'current_page' => $page,
+                'last_page' => $lastPage,
+                'per_page' => $perPage,
+                'total' => $total,
+                'q' => $q,
+                'scope' => 'all',
+            ],
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function mapProduct(Product $product, string $q): array
@@ -252,6 +388,13 @@ class UnifiedMarketplaceSearchService
         $scope = strtolower(trim($scope));
 
         return in_array($scope, ['all', 'china', 'tz'], true) ? $scope : 'all';
+    }
+
+    private function normalizeSort(string $sort): string
+    {
+        $sort = strtolower(trim($sort));
+
+        return in_array($sort, ['relevance', 'newest'], true) ? $sort : 'relevance';
     }
 
     private function clamp(int $value, int $min, int $max): int

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { ProductOrigin } from "@/lib/types/catalog";
 import type { SearchResults } from "@/lib/search/types";
-import { buildProductSearchHref } from "@/lib/search/search-url";
+import { buildUnifiedSearchHref } from "@/lib/search/search-url";
 import { SearchProductRow } from "./SearchProductRow";
 import { SearchCategoryRow } from "./SearchCategoryRow";
 import { SearchResultsSkeleton } from "./SearchResultsSkeleton";
@@ -82,7 +82,7 @@ export function SearchResultsPanel({
     !hasStores &&
     !hasTerms &&
     !showLoadingState;
-  const resultsHref = buildProductSearchHref(trimmed, origin);
+  const resultsHref = buildUnifiedSearchHref(trimmed, marketplaceScope);
 
   return (
     <div className={`overflow-hidden ${className}`}>
@@ -117,7 +117,7 @@ export function SearchResultsPanel({
                 <TermChip
                   key={term}
                   label={term}
-                  href={buildProductSearchHref(term, origin)}
+                  href={buildUnifiedSearchHref(term, marketplaceScope)}
                   onSelect={onSelect}
                 />
               ))}

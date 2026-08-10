@@ -16,19 +16,55 @@ export function resolveDefaultSearchMarketplaceScope(_input?: {
   return "all";
 }
 
-export function buildProductSearchHref(query: string, origin?: ProductOrigin): string {
+/**
+ * Free-text search results destination (header Enter / View all / term chips).
+ * Uses unified search page — not legacy /products?q=.
+ */
+export function buildUnifiedSearchHref(
+  query: string,
+  scope: SearchMarketplaceScope = "all",
+): string {
   const params = new URLSearchParams();
 
   if (query.trim()) {
     params.set("q", query.trim());
   }
 
-  if (origin) {
-    params.set("origin", origin);
-  }
+  params.set("scope", scope === "china" || scope === "tz" ? scope : "all");
 
   const queryString = params.toString();
-  return queryString ? `/products?${queryString}` : "/products";
+  return queryString ? `/search?${queryString}` : "/search";
+}
+
+/** @deprecated Prefer buildUnifiedSearchHref — kept as alias for free-text search links. */
+export function buildProductSearchHref(
+  query: string,
+  origin?: ProductOrigin | SearchMarketplaceScope,
+): string {
+  const scope: SearchMarketplaceScope =
+    origin === "china" || origin === "tz" ? origin : "all";
+  return buildUnifiedSearchHref(query, scope);
+}
+
+/** Heading helpers for the unified search results page. */
+export function resolveSearchPageHeading(query: string): string {
+  const trimmed = query.trim();
+  return trimmed ? `Results for "${trimmed}"` : "Search";
+}
+
+export function resolveSearchPageScopeLabel(scope: SearchMarketplaceScope): string {
+  if (scope === "china") return "China";
+  if (scope === "tz") return "Buy from Dar";
+  return "All marketplaces";
+}
+
+export function resolveSearchPageScope(
+  raw?: string | null,
+): SearchMarketplaceScope {
+  if (raw === "china" || raw === "tz") {
+    return raw;
+  }
+  return "all";
 }
 
 /**

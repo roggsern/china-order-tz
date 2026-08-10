@@ -7,11 +7,10 @@ import { SearchIcon } from "@/components/home/icons";
 import { useSearchSuggestions } from "@/hooks/use-search-suggestions";
 import { addRecentSearch, clearRecentSearches } from "@/lib/search/recent-searches";
 import {
-  buildProductSearchHref,
+  buildUnifiedSearchHref,
   resolveDefaultSearchMarketplaceScope,
 } from "@/lib/search/search-url";
 import type { SearchMarketplaceScope } from "@/components/search/SearchMarketplaceScope";
-import { scopeToOrigin } from "@/components/search/SearchMarketplaceScope";
 import { SearchResultsPanel } from "./SearchResultsPanel";
 
 interface SearchExperienceProps {
@@ -99,9 +98,9 @@ export function SearchExperience({
     if (trimmed) {
       addRecentSearch(trimmed);
       setOpen(false);
-      router.push(buildProductSearchHref(trimmed, scopeToOrigin(marketplaceScope)));
+      router.push(buildUnifiedSearchHref(trimmed, marketplaceScope));
     } else {
-      router.push("/products");
+      router.push(buildUnifiedSearchHref("", marketplaceScope));
     }
   };
 

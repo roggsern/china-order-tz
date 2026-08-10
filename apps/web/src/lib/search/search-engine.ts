@@ -16,7 +16,7 @@ import {
   tokenizeSearchQuery,
 } from "@/lib/search/normalize";
 import { resolveProductSearchLabels } from "@/lib/search/product-search-labels";
-import { buildProductSearchHref } from "@/lib/search/search-url";
+import { buildUnifiedSearchHref } from "@/lib/search/search-url";
 import type {
   SearchMatchTier,
   SearchProductGroup,
@@ -225,7 +225,10 @@ function buildLiveTermSuggestions(
     terms.push({
       type: "term",
       label: trimmed,
-      href: buildProductSearchHref(trimmed, origin),
+      href: buildUnifiedSearchHref(
+        trimmed,
+        origin === "china" || origin === "tz" ? origin : "all",
+      ),
     });
   };
 

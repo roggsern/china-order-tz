@@ -8,8 +8,10 @@ import {
   buildSearchBrandHref,
   buildSearchCategoryHref,
   buildSearchStoreHref,
-  buildProductSearchHref,
+  buildUnifiedSearchHref,
   resolveDefaultSearchMarketplaceScope,
+  resolveSearchPageHeading,
+  resolveSearchPageScope,
 } from "./search-url";
 
 describe("resolveDefaultSearchMarketplaceScope", () => {
@@ -100,11 +102,36 @@ describe("buildSearchStoreHref", () => {
   });
 });
 
-describe("buildProductSearchHref", () => {
-  it("keeps China context on product search result pages", () => {
+describe("buildUnifiedSearchHref", () => {
+  it("Enter navigation goes to /search with query", () => {
+    assert.equal(buildUnifiedSearchHref("UPS", "all"), "/search?q=UPS&scope=all");
+  });
+
+  it("preserves China marketplace scope", () => {
     assert.equal(
-      buildProductSearchHref("UPS", "china"),
-      "/products?q=UPS&origin=china",
+      buildUnifiedSearchHref("UPS", "china"),
+      "/search?q=UPS&scope=china",
     );
+  });
+
+  it("preserves TZ marketplace scope", () => {
+    assert.equal(
+      buildUnifiedSearchHref("zion", "tz"),
+      "/search?q=zion&scope=tz",
+    );
+  });
+});
+
+describe("search page query state", () => {
+  it("renders heading from query", () => {
+    assert.equal(resolveSearchPageHeading("zion"), 'Results for "zion"');
+    assert.equal(resolveSearchPageHeading("  "), "Search");
+  });
+
+  it("normalizes scope from URL", () => {
+    assert.equal(resolveSearchPageScope("china"), "china");
+    assert.equal(resolveSearchPageScope("tz"), "tz");
+    assert.equal(resolveSearchPageScope("bogus"), "all");
+    assert.equal(resolveSearchPageScope(undefined), "all");
   });
 });

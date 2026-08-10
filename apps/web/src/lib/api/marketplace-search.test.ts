@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  buildUnifiedSearchProductsQuery,
   buildUnifiedSuggestQuery,
   resolveUnifiedSuggestScope,
 } from "./marketplace-search";
@@ -35,5 +36,31 @@ describe("buildUnifiedSuggestQuery", () => {
   it("TZ scope sends scope=tz", () => {
     const params = buildUnifiedSuggestQuery({ q: "zion", scope: "tz" });
     assert.equal(params.get("scope"), "tz");
+  });
+});
+
+describe("buildUnifiedSearchProductsQuery", () => {
+  it("sends q, scope, page, and per_page for unified results", () => {
+    const params = buildUnifiedSearchProductsQuery({
+      q: "zion",
+      scope: "all",
+      page: 2,
+      perPage: 24,
+      sort: "relevance",
+    });
+    assert.equal(params.get("q"), "zion");
+    assert.equal(params.get("scope"), "all");
+    assert.equal(params.get("page"), "2");
+    assert.equal(params.get("per_page"), "24");
+    assert.equal(params.get("sort"), "relevance");
+  });
+
+  it("preserves China scope on products search params", () => {
+    const params = buildUnifiedSearchProductsQuery({
+      q: "UPS",
+      scope: "china",
+    });
+    assert.equal(params.get("q"), "UPS");
+    assert.equal(params.get("scope"), "china");
   });
 });

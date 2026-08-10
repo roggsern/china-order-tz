@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { FormEvent, useState, type RefObject } from "react";
+import { buildUnifiedSearchHref } from "@/lib/search/search-url";
 import { SearchIcon } from "./icons";
 
 interface SearchBarProps {
@@ -25,11 +26,7 @@ export function SearchBar({
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     const trimmed = query.trim();
-    if (trimmed) {
-      router.push(`/products?q=${encodeURIComponent(trimmed)}`);
-    } else {
-      router.push("/products");
-    }
+    router.push(buildUnifiedSearchHref(trimmed, "all"));
   };
 
   const isLarge = size === "large";

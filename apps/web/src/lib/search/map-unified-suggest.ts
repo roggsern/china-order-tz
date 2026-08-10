@@ -8,8 +8,9 @@ import type {
   UnifiedSuggestStore,
 } from "@/lib/api/marketplace-search";
 import type { Category, Product, ProductOrigin } from "@/lib/types/catalog";
+import type { SearchMarketplaceScope } from "@/components/search/SearchMarketplaceScope";
 import {
-  buildProductSearchHref,
+  buildUnifiedSearchHref,
   buildSearchBrandHref,
   buildSearchCategoryHref,
   buildSearchStoreHref,
@@ -24,13 +25,6 @@ import {
 const CATEGORY_GRADIENT = "from-zinc-200 via-zinc-100 to-zinc-300";
 const BRAND_GRADIENT = "from-amber-200 via-orange-100 to-rose-200";
 const STORE_GRADIENT = "from-emerald-200 via-teal-100 to-cyan-200";
-
-function scopeToOrigin(scope: string | undefined): ProductOrigin | undefined {
-  if (scope === "china" || scope === "tz") {
-    return scope;
-  }
-  return undefined;
-}
 
 function mapSuggestProduct(entry: UnifiedSuggestProduct): Product {
   const card = {
@@ -96,7 +90,7 @@ function buildTerms(
   products: Product[],
   brands: Category[],
   stores: Category[],
-  origin?: ProductOrigin,
+  scope: SearchMarketplaceScope = "all",
 ): SearchTermSuggestion[] {
   const seen = new Set<string>();
   const terms: SearchTermSuggestion[] = [];
@@ -110,7 +104,7 @@ function buildTerms(
     terms.push({
       type: "term",
       label: trimmed,
-      href: buildProductSearchHref(trimmed, origin),
+      href: buildUnifiedSearchHref(trimmed, scope),
     });
   };
 
@@ -134,7 +128,8 @@ function buildTerms(
 export function mapUnifiedSuggestToSearchResults(
   data: UnifiedSearchSuggestData,
 ): SearchResults {
-  const origin = scopeToOrigin(data.scope);
+  const scope: SearchMarketplaceScope =
+    data.scope === "china" || data.scope === "tz" ? data.scope : "all";
   const products = (data.products ?? [])
     .slice(0, MAX_PRODUCT_RESULTS)
     .map(mapSuggestProduct);
@@ -157,7 +152,7 @@ export function mapUnifiedSuggestToSearchResults(
     categories,
     brands,
     stores,
-    terms: buildTerms(products, brands, stores, origin),
+    terms: buildTerms(products, brands, stores, scope),
   };
 }
 

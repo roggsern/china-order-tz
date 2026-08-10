@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { buildProductSearchHref } from "@/lib/search/search-url";
+import { buildUnifiedSearchHref } from "@/lib/search/search-url";
 
 type TrendingSearchesProps = {
   terms: string[];
@@ -21,7 +21,7 @@ export function TrendingSearches({ terms, className = "" }: TrendingSearchesProp
       {terms.map((term) => (
         <Link
           key={term}
-          href={buildProductSearchHref(term)}
+          href={buildUnifiedSearchHref(term, "all")}
           className="rounded-full px-2 py-0.5 text-[12px] font-medium text-zinc-500 transition hover:bg-zinc-50 hover:text-zinc-900"
         >
           {term}

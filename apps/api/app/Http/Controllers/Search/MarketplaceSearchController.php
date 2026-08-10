@@ -40,4 +40,30 @@ class MarketplaceSearchController extends Controller
             'data' => $payload,
         ]);
     }
+
+    public function products(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            // Empty string / null q yields empty results; omit max-length failures for blanks.
+            'q' => ['nullable', 'string', 'max:64'],
+            'scope' => ['nullable', 'string', 'in:all,china,tz'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:48'],
+            'sort' => ['nullable', 'string', 'in:relevance,newest'],
+        ]);
+
+        $result = $this->search->products(
+            (string) ($validated['q'] ?? ''),
+            (string) ($validated['scope'] ?? 'all'),
+            (int) ($validated['page'] ?? 1),
+            (int) ($validated['per_page'] ?? 24),
+            (string) ($validated['sort'] ?? 'relevance'),
+        );
+
+        return response()->json([
+            'success' => true,
+            'data' => $result['data'],
+            'meta' => $result['meta'],
+        ]);
+    }
 }

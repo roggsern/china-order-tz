@@ -131,4 +131,11 @@ describe("mapUnifiedSuggestToSearchResults", () => {
       "/categories/zion-dresses",
     );
   });
+
+  it("routes term suggestions to unified /search with scope", () => {
+    const results = mapUnifiedSuggestToSearchResults(sampleSuggestPayload());
+    assert.ok(results.terms.length > 0);
+    assert.match(results.terms[0]!.href, /^\/search\?/);
+    assert.match(results.terms[0]!.href, /scope=all/);
+  });
 });

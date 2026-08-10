@@ -8,11 +8,10 @@ import { CloseIcon, SearchIcon } from "@/components/home/icons";
 import { useSearchSuggestions } from "@/hooks/use-search-suggestions";
 import { addRecentSearch, clearRecentSearches } from "@/lib/search/recent-searches";
 import {
-  buildProductSearchHref,
+  buildUnifiedSearchHref,
   resolveDefaultSearchMarketplaceScope,
 } from "@/lib/search/search-url";
 import type { SearchMarketplaceScope } from "@/components/search/SearchMarketplaceScope";
-import { scopeToOrigin } from "@/components/search/SearchMarketplaceScope";
 import { SearchResultsPanel } from "./SearchResultsPanel";
 
 interface SearchOverlayProps {
@@ -92,7 +91,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
     if (trimmed) {
       addRecentSearch(trimmed);
       onClose();
-      router.push(buildProductSearchHref(trimmed, scopeToOrigin(marketplaceScope)));
+      router.push(buildUnifiedSearchHref(trimmed, marketplaceScope));
     }
   };
 

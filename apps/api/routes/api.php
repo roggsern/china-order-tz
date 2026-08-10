@@ -190,6 +190,7 @@ Route::post('/admin/login', [AdminAuthController::class, 'login'])
     ->middleware('throttle:admin-login');
 
 Route::get('/search/suggest', [MarketplaceSearchController::class, 'suggest']);
+Route::get('/search/products', [MarketplaceSearchController::class, 'products']);
 
 Route::get('/products', [CustomerProductController::class, 'index']);
 Route::get('/products/{product:slug}', [CustomerProductController::class, 'show']);
