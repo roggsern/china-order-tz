@@ -71,14 +71,14 @@ describe("searchCatalog China brand suggestions", () => {
     });
 
     assert.ok(
-      results.categories.some(
+      results.brands.some(
         (entry) =>
           entry.slug === "search-brand-co" && entry.searchSuggestionType === "brand",
       ),
       "expected China brand suggestion to appear",
     );
     assert.ok(
-      !results.categories.some((entry) => entry.slug === "other-brand"),
+      !results.brands.some((entry) => entry.slug === "other-brand"),
       "unrelated brands must not appear",
     );
   });

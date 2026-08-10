@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import type { Category, ProductOrigin } from "@/lib/types/catalog";
-import { buildSearchBrandHref, buildSearchCategoryHref } from "@/lib/search/search-url";
+import {
+  buildSearchBrandHref,
+  buildSearchCategoryHref,
+  buildSearchStoreHref,
+} from "@/lib/search/search-url";
 
 interface SearchCategoryRowProps {
   category: Category;
@@ -14,7 +18,9 @@ export function SearchCategoryRow({ category, origin, onSelect }: SearchCategory
   const href =
     category.searchSuggestionType === "brand"
       ? buildSearchBrandHref(category.slug, origin)
-      : buildSearchCategoryHref(category.slug, origin);
+      : category.searchSuggestionType === "store"
+        ? buildSearchStoreHref(category.slug)
+        : buildSearchCategoryHref(category.slug, origin);
 
   return (
     <Link

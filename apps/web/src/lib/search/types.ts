@@ -34,6 +34,10 @@ export type SearchResults = {
   products: Product[];
   groups: SearchProductGroup[];
   categories: Category[];
+  /** Catalog brand suggestions (separate from TZ stores). */
+  brands: Category[];
+  /** Tanzania storefront store suggestions. */
+  stores: Category[];
   terms: SearchTermSuggestion[];
 };
 

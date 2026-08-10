@@ -3,15 +3,13 @@
 namespace App\Services\Storefront;
 
 use App\Enums\CatalogOrigin;
-use App\Enums\CommerceChannelCode;
-use App\Enums\ProductLifecycleStatus;
-use App\Enums\ProductVisibility;
-use App\Enums\VariantPriceType;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
 use App\Services\Catalog\CustomerProductMediaResolver;
 use App\Services\Inventory\CatalogStockPresenter;
+use App\Services\Search\ChinaSellableProductQuery;
+use App\Services\Search\SearchRelevance;
 use App\Support\Catalog\CatalogNavigationCrosswalk;
 use Database\Support\CatalogBible;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -26,6 +24,8 @@ class ChinaStorefrontCatalog
 {
     public function __construct(
         private readonly CatalogNavigationCrosswalkResolver $crosswalkResolver,
+        private readonly ChinaSellableProductQuery $chinaSellable,
+        private readonly SearchRelevance $relevance,
     ) {}
 
     /**
@@ -133,8 +133,8 @@ class ChinaStorefrontCatalog
                 ['reviews as review_count' => fn ($query) => $query->where('is_approved', true)],
             )
             ->when($search !== '', function (Builder $query) use ($search) {
-                $this->applyProductSearchFilter($query, $search);
-                $this->applyProductSearchRelevanceOrder($query, $search);
+                $this->relevance->applyProductMatchFilter($query, $search, ['include_store' => false]);
+                $this->relevance->applyProductRelevanceOrder($query, $search, ['include_store' => false]);
             }, fn (Builder $query) => $query->latest())
             ->when(filled($category), fn (Builder $query) => $this->applyDiscoveryCategoryFilter($query, $category))
             ->when(filled($brand), function (Builder $query) use ($brand) {
@@ -146,68 +146,6 @@ class ChinaStorefrontCatalog
             ->when(in_array($featured, ['1', 'true', 1, true], true), fn (Builder $q) => $q->where('is_featured', true))
             ->paginate($perPage)
             ->withQueryString();
-    }
-
-    private function applyProductSearchFilter(Builder $query, string $search): void
-    {
-        $term = '%'.mb_strtolower($search).'%';
-
-        $query->where(function (Builder $q) use ($term) {
-            $q->whereRaw('LOWER(name) LIKE ?', [$term])
-                ->orWhereRaw('LOWER(COALESCE(short_description, \'\')) LIKE ?', [$term])
-                ->orWhereRaw('LOWER(COALESCE(description, \'\')) LIKE ?', [$term])
-                ->orWhereRaw('LOWER(COALESCE(sku, \'\')) LIKE ?', [$term])
-                ->orWhereHas(
-                    'brand',
-                    fn (Builder $brandQuery) => $brandQuery->whereRaw('LOWER(name) LIKE ?', [$term]),
-                )
-                ->orWhereHas(
-                    'catalogProductType',
-                    fn (Builder $typeQuery) => $typeQuery->whereRaw('LOWER(name) LIKE ?', [$term]),
-                )
-                ->orWhereHas(
-                    'category',
-                    fn (Builder $categoryQuery) => $categoryQuery->whereRaw('LOWER(name) LIKE ?', [$term]),
-                );
-        });
-    }
-
-    /**
-     * Rank search hits by field strength. Secondary sort keeps newest within the same tier.
-     */
-    private function applyProductSearchRelevanceOrder(Builder $query, string $search): void
-    {
-        $normalized = mb_strtolower($search);
-        $like = '%'.$normalized.'%';
-
-        $query->orderByRaw(
-            'CASE
-                WHEN LOWER(products.name) = ? THEN 600
-                WHEN LOWER(products.name) LIKE ? THEN 500
-                WHEN EXISTS (
-                    SELECT 1 FROM brands
-                    WHERE brands.id = products.brand_id
-                      AND brands.deleted_at IS NULL
-                      AND LOWER(brands.name) LIKE ?
-                ) THEN 400
-                WHEN LOWER(COALESCE(products.sku, \'\')) LIKE ? THEN 300
-                WHEN EXISTS (
-                    SELECT 1 FROM catalog_product_types
-                    WHERE catalog_product_types.id = products.catalog_product_type_id
-                      AND catalog_product_types.deleted_at IS NULL
-                      AND LOWER(catalog_product_types.name) LIKE ?
-                ) OR EXISTS (
-                    SELECT 1 FROM categories
-                    WHERE categories.id = products.category_id
-                      AND categories.deleted_at IS NULL
-                      AND LOWER(categories.name) LIKE ?
-                ) THEN 200
-                WHEN LOWER(COALESCE(products.short_description, \'\')) LIKE ? THEN 100
-                WHEN LOWER(COALESCE(products.description, \'\')) LIKE ? THEN 50
-                ELSE 0
-            END DESC',
-            [$normalized, $like, $like, $like, $like, $like, $like, $like],
-        )->latest('products.created_at');
     }
 
     private function applyDiscoveryCategoryFilter(Builder $query, string $category): Builder
@@ -237,54 +175,6 @@ class ChinaStorefrontCatalog
 
     private function chinaPublishedProductQuery(Builder $query): Builder
     {
-        return $query
-            ->where('is_active', true)
-            ->where('is_demo', false)
-            ->where('lifecycle_status', ProductLifecycleStatus::Active)
-            ->where('visibility', ProductVisibility::Public)
-            ->whereNull('store_id')
-            ->whereHas('commerceChannel', fn (Builder $q) => $q->where('code', CommerceChannelCode::ChinaImport->value))
-            ->whereHas('shippingOptions', fn (Builder $q) => $q->available()->where('price', '>', 0))
-            ->where(function (Builder $q) {
-                $q->whereHas('variants', fn (Builder $variant) => $this->applySellableVariantConstraints($variant))
-                    ->orWhere(function (Builder $simple) {
-                        $simple->where('price', '>', 0)
-                            ->where(function (Builder $stock) {
-                                $stock->whereHas('inventory', fn (Builder $inventory) => $inventory->whereNull('product_variant_id'))
-                                    ->orWhereHas('chinaCommercialStocks', function (Builder $commercial) {
-                                        $commercial->whereNull('product_variant_id')
-                                            ->where('available_quantity', '>', 0);
-                                    });
-                            })
-                            ->whereDoesntHave('variants', fn (Builder $variant) => $this->applySellableVariantConstraints($variant));
-                    });
-            });
-    }
-
-    /**
-     * Mirrors ProductPurchasabilityPolicy sellable-variant rules for listing safety.
-     */
-    private function applySellableVariantConstraints(Builder $query): Builder
-    {
-        return $query
-            ->where('is_active', true)
-            ->where(function (Builder $variant) {
-                $variant->where(function (Builder $priced) {
-                    $priced->whereNotNull('price')->where('price', '>', 0);
-                })->orWhereHas('prices', function (Builder $prices) {
-                    $prices->ofType(VariantPriceType::Retail)
-                        ->active()
-                        ->where('amount', '>', 0);
-                });
-            })
-            ->where(function (Builder $variant) {
-                $variant->whereHas('inventories', function (Builder $inventory) {
-                    $inventory->where('warehouse_code', 'MAIN')->where('is_active', true);
-                })
-                    ->orWhereHas('inventory')
-                    ->orWhereHas('chinaCommercialStock', function (Builder $commercial) {
-                        $commercial->where('available_quantity', '>', 0);
-                    });
-            });
+        return $this->chinaSellable->apply($query);
     }
 }

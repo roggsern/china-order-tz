@@ -42,6 +42,7 @@ use App\Http\Controllers\Storefront\StorefrontEventController;
 use App\Http\Controllers\Storefront\StorefrontVisitorController;
 use App\Http\Controllers\Storefront\StorefrontCmsHomepageController;
 use App\Http\Controllers\Storefront\StorefrontCmsNavigationController;
+use App\Http\Controllers\Search\MarketplaceSearchController;
 use App\Http\Controllers\Storefront\StorefrontMaintenanceController;
 use App\Http\Controllers\CustomerLoyaltyController;
 use App\Http\Controllers\CustomerGrowthController;
@@ -187,6 +188,8 @@ Route::post('/account/email/verify', [CustomerEmailVerificationController::class
 
 Route::post('/admin/login', [AdminAuthController::class, 'login'])
     ->middleware('throttle:admin-login');
+
+Route::get('/search/suggest', [MarketplaceSearchController::class, 'suggest']);
 
 Route::get('/products', [CustomerProductController::class, 'index']);
 Route::get('/products/{product:slug}', [CustomerProductController::class, 'show']);

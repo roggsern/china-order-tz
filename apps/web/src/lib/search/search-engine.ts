@@ -54,6 +54,8 @@ const EMPTY_RESULTS: SearchResults = {
   products: [],
   groups: [],
   categories: [],
+  brands: [],
+  stores: [],
   terms: [],
 };
 
@@ -291,7 +293,9 @@ function computeSearchResults(
   return {
     products,
     groups,
-    categories: [...matchedCategories, ...matchedBrands].slice(0, MAX_CATEGORY_RESULTS),
+    categories: matchedCategories,
+    brands: matchedBrands,
+    stores: [],
     terms,
   };
 }

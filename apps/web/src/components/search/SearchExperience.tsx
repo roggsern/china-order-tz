@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { SearchIcon } from "@/components/home/icons";
 import { useSearchSuggestions } from "@/hooks/use-search-suggestions";
@@ -28,15 +28,10 @@ export function SearchExperience({
   inputId,
 }: SearchExperienceProps) {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [marketplaceScope, setMarketplaceScope] = useState<SearchMarketplaceScope>(() =>
-    resolveDefaultSearchMarketplaceScope({
-      origin: searchParams.get("origin"),
-      pathname,
-    }),
+    resolveDefaultSearchMarketplaceScope(),
   );
   const scopeTouchedRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -55,15 +50,9 @@ export function SearchExperience({
       return;
     }
 
-    // Default from current storefront URL when the dropdown opens.
-    // Manual tab changes during an open session are preserved.
+    // Header search always opens on All. Manual tab changes stay until close.
     if (!scopeTouchedRef.current) {
-      setMarketplaceScope(
-        resolveDefaultSearchMarketplaceScope({
-          origin: searchParams.get("origin"),
-          pathname,
-        }),
-      );
+      setMarketplaceScope(resolveDefaultSearchMarketplaceScope());
     }
 
     const handlePointerDown = (event: MouseEvent) => {
@@ -85,7 +74,7 @@ export function SearchExperience({
       document.removeEventListener("mousedown", handlePointerDown);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [open, pathname, searchParams]);
+  }, [open]);
 
   const handleMarketplaceScopeChange = useCallback((scope: SearchMarketplaceScope) => {
     scopeTouchedRef.current = true;

@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { CloseIcon, SearchIcon } from "@/components/home/icons";
 import { useSearchSuggestions } from "@/hooks/use-search-suggestions";
@@ -22,14 +22,9 @@ interface SearchOverlayProps {
 
 export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
   const [marketplaceScope, setMarketplaceScope] = useState<SearchMarketplaceScope>(() =>
-    resolveDefaultSearchMarketplaceScope({
-      origin: searchParams.get("origin"),
-      pathname,
-    }),
+    resolveDefaultSearchMarketplaceScope(),
   );
   const scopeTouchedRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -46,15 +41,9 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
       return;
     }
 
-    // Default from current storefront URL when the overlay opens.
-    // Manual tab changes during an open session are preserved.
+    // Header search always opens on All. Manual tab changes stay until close.
     if (!scopeTouchedRef.current) {
-      setMarketplaceScope(
-        resolveDefaultSearchMarketplaceScope({
-          origin: searchParams.get("origin"),
-          pathname,
-        }),
-      );
+      setMarketplaceScope(resolveDefaultSearchMarketplaceScope());
     }
 
     document.body.style.overflow = "hidden";
@@ -64,7 +53,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
       window.clearTimeout(timer);
       document.body.style.overflow = "";
     };
-  }, [open, pathname, searchParams]);
+  }, [open]);
 
   const handleMarketplaceScopeChange = useCallback((scope: SearchMarketplaceScope) => {
     scopeTouchedRef.current = true;

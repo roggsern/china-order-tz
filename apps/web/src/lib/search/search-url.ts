@@ -3,21 +3,16 @@ import type { ProductOrigin } from "@/lib/types/catalog";
 import type { SearchMarketplaceScope } from "@/components/search/SearchMarketplaceScope";
 
 /**
- * Default search marketplace scope from the current URL / route.
- * Used only for initial defaults — not after the user manually switches tabs.
+ * Header search always defaults to All (global marketplace).
+ * Page URL / pathname must not change the default corpus — All / China / TZ
+ * tabs are explicit user filters only.
+ *
+ * Optional input is accepted for call-site compatibility and ignored.
  */
-export function resolveDefaultSearchMarketplaceScope(input: {
+export function resolveDefaultSearchMarketplaceScope(_input?: {
   origin?: string | null;
   pathname?: string | null;
 }): SearchMarketplaceScope {
-  if (input.origin === "china" || input.origin === "tz") {
-    return input.origin;
-  }
-
-  if (input.pathname?.startsWith("/buy-from-tz")) {
-    return "tz";
-  }
-
   return "all";
 }
 
@@ -78,4 +73,9 @@ export function buildSearchBrandHref(slug: string, origin?: ProductOrigin): stri
   }
 
   return `/products?brand=${encodeURIComponent(slug)}`;
+}
+
+/** TZ store suggestion destinations. */
+export function buildSearchStoreHref(slug: string): string {
+  return `/buy-from-tz/${encodeURIComponent(slug)}`;
 }

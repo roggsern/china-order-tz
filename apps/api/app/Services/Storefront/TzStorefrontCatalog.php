@@ -2,12 +2,12 @@
 
 namespace App\Services\Storefront;
 
-use App\Enums\CommerceChannelCode;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\Store;
 use App\Services\Catalog\CustomerProductMediaResolver;
 use App\Services\Inventory\CatalogStockPresenter;
+use App\Services\Search\TzStorefrontProductCorpus;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -19,6 +19,10 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  */
 class TzStorefrontCatalog
 {
+    public function __construct(
+        private readonly TzStorefrontProductCorpus $tzProductCorpus,
+    ) {}
+
     /**
      * @return Collection<int, Store>
      */
@@ -131,31 +135,6 @@ class TzStorefrontCatalog
 
     private function storeProductQuery(Store $store): Builder
     {
-        $warehouseCode = strtoupper((string) $store->code);
-
-        return Product::query()
-            ->real()
-            ->published()
-            ->where('store_id', $store->id)
-            ->whereHas('commerceChannel', fn (Builder $q) => $q->where('code', CommerceChannelCode::TzLocal->value))
-            ->where(function (Builder $q) use ($warehouseCode, $store) {
-                // StockResolver-aligned visibility: active store-location available > 0, or no inventory rows yet.
-                $q->whereHas('variants', function (Builder $vq) use ($warehouseCode, $store) {
-                    $vq->where('is_active', true)
-                        ->where(function (Builder $inv) use ($warehouseCode, $store) {
-                            $inv->whereDoesntHave('inventories')
-                                ->orWhereHas('inventories', function (Builder $iq) use ($warehouseCode, $store) {
-                                    $iq->where('is_active', true)
-                                        ->where(function (Builder $loc) use ($warehouseCode, $store) {
-                                            $loc->where('warehouse_code', $warehouseCode)
-                                                ->orWhereHas('inventoryLocation', fn (Builder $lq) => $lq
-                                                    ->where('store_id', $store->id)
-                                                    ->where('is_default', true));
-                                        })
-                                        ->whereRaw('(on_hand - reserved) > 0');
-                                });
-                        });
-                })->orWhereDoesntHave('variants');
-            });
+        return $this->tzProductCorpus->apply(Product::query(), $store);
     }
 }

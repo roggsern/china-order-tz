@@ -2,11 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { SEARCH_DEBOUNCE_MS } from "@/lib/search/constants";
-import { clearSearchQueryCache, searchCatalog } from "@/lib/search/search-engine";
-import {
-  fetchLiveSearchCatalog,
-  filterProductsByOrigin,
-} from "@/lib/search/catalog-source";
+import { clearSearchQueryCache } from "@/lib/search/search-engine";
+import { fetchUnifiedSearchSuggest } from "@/lib/api/marketplace-search";
+import { mapUnifiedSuggestToSearchResults } from "@/lib/search/map-unified-suggest";
 import { getRecentSearches } from "@/lib/search/recent-searches";
 import type { SearchResults } from "@/lib/search/types";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
@@ -17,12 +15,14 @@ const EMPTY_RESULTS: SearchResults = {
   products: [],
   groups: [],
   categories: [],
+  brands: [],
+  stores: [],
   terms: [],
 };
 
 /**
- * Live search suggestions — products/categories/brands from Customer API only.
- * Never loads seed products, mock catalogs, or hardcoded trending/popular terms.
+ * Live search suggestions via unified marketplace suggest API.
+ * Scope tabs map to API scope=all|china|tz.
  */
 export function useSearchSuggestions(
   query: string,
@@ -66,30 +66,16 @@ export function useSearchSuggestions(
 
     void (async () => {
       try {
-        const live = await fetchLiveSearchCatalog(trimmed, {
-          includeTaxonomy: true,
-          origin,
+        const payload = await fetchUnifiedSearchSuggest({
+          q: trimmed,
+          scope,
         });
         if (cancelled) return;
 
-        // China products are already CHINA_IMPORT-scoped by the storefront API.
-        const products =
-          origin === "china"
-            ? live.products
-            : filterProductsByOrigin(live.products, origin);
-
         clearSearchQueryCache();
-        setResults(
-          searchCatalog(products, trimmed, {
-            origin,
-            liveCategories: live.categories,
-            liveBrands: live.brands,
-            activeOnly: true,
-          }),
-        );
+        setResults(mapUnifiedSuggestToSearchResults(payload));
       } catch {
         if (cancelled) return;
-        // API failure → empty results (never seed/demo fallback)
         clearSearchQueryCache();
         setResults(EMPTY_RESULTS);
       } finally {
@@ -102,7 +88,7 @@ export function useSearchSuggestions(
     return () => {
       cancelled = true;
     };
-  }, [debouncedQuery, enabled, origin]);
+  }, [debouncedQuery, enabled, scope]);
 
   const isSearching = enabled && query.trim().length > 0 && debouncedQuery !== query;
 

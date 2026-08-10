@@ -70,10 +70,18 @@ export function SearchResultsPanel({
   const hasProducts = results.products.length > 0;
   const hasGroups = results.groups.some((group) => group.products.length > 0);
   const hasCategories = results.categories.length > 0;
+  const hasBrands = (results.brands?.length ?? 0) > 0;
+  const hasStores = (results.stores?.length ?? 0) > 0;
   const hasTerms = results.terms.length > 0;
   const showLoadingState = isLoading || isSearching;
   const showEmpty =
-    hasQuery && !hasProducts && !hasCategories && !hasTerms && !showLoadingState;
+    hasQuery &&
+    !hasProducts &&
+    !hasCategories &&
+    !hasBrands &&
+    !hasStores &&
+    !hasTerms &&
+    !showLoadingState;
   const resultsHref = buildProductSearchHref(trimmed, origin);
 
   return (
@@ -175,10 +183,46 @@ export function SearchResultsPanel({
             <div className="space-y-0.5">
               {results.categories.map((category) => (
                 <SearchCategoryRow
-                  key={category.slug}
+                  key={`category-${category.slug}`}
                   category={category}
                   origin={origin}
                   onSelect={(href) => onSelect(href, category.name)}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {!showLoadingState && hasQuery && hasBrands && (
+          <section className="mb-3">
+            <div className="mb-1 px-2">
+              <SectionHeading>Brands</SectionHeading>
+            </div>
+            <div className="space-y-0.5">
+              {results.brands.map((brand) => (
+                <SearchCategoryRow
+                  key={`brand-${brand.slug}`}
+                  category={brand}
+                  origin={origin}
+                  onSelect={(href) => onSelect(href, brand.name)}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {!showLoadingState && hasQuery && hasStores && (
+          <section className="mb-3">
+            <div className="mb-1 px-2">
+              <SectionHeading>Stores</SectionHeading>
+            </div>
+            <div className="space-y-0.5">
+              {results.stores.map((store) => (
+                <SearchCategoryRow
+                  key={`store-${store.slug}`}
+                  category={store}
+                  origin={origin}
+                  onSelect={(href) => onSelect(href, store.name)}
                 />
               ))}
             </div>
@@ -225,7 +269,9 @@ export function SearchResultsPanel({
           </div>
         )}
 
-        {!showLoadingState && hasQuery && (hasProducts || hasCategories) && (
+        {!showLoadingState &&
+          hasQuery &&
+          (hasProducts || hasCategories || hasBrands || hasStores) && (
           <div className="border-t border-zinc-100 px-2 pt-3">
             <Link
               href={resultsHref}
