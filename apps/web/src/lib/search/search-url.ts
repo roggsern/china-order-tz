@@ -54,7 +54,7 @@ export function resolveSearchPageHeading(query: string): string {
 
 export function resolveSearchPageScopeLabel(scope: SearchMarketplaceScope): string {
   if (scope === "china") return "China";
-  if (scope === "tz") return "Buy from Dar";
+  if (scope === "tz") return "Buy from TZ";
   return "All marketplaces";
 }
 

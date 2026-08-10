@@ -15,7 +15,7 @@ describe("resolveUnifiedSuggestScope", () => {
     assert.equal(resolveUnifiedSuggestScope("china"), "china");
   });
 
-  it("maps Buy from Dar tab to scope=tz", () => {
+  it("maps Buy from TZ tab to scope=tz", () => {
     assert.equal(resolveUnifiedSuggestScope("tz"), "tz");
   });
 });

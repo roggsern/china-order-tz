@@ -73,7 +73,7 @@ export function clearSearchQueryCache(): void {
   searchCache.clear();
 }
 
-/** Strict origin filter — no cross-contamination between China and Buy from Dar. */
+/** Strict origin filter — no cross-contamination between China and Buy from TZ. */
 function applyOriginFilter(products: Product[], origin?: ProductOrigin): Product[] {
   if (!origin) {
     return products;

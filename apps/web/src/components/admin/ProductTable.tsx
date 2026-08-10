@@ -234,7 +234,7 @@ export function ProductTable({
             chips={[
               { id: "all", label: "All Origins" },
               { id: "china", label: "China Orders" },
-              { id: "tz", label: "Buy from Dar" },
+              { id: "tz", label: "Buy from TZ" },
             ]}
             activeId={originFilter}
             onChange={(id) => setOriginFilter(id as OriginFilter)}

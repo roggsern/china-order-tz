@@ -12,6 +12,7 @@ import {
   resolveDefaultSearchMarketplaceScope,
   resolveSearchPageHeading,
   resolveSearchPageScope,
+  resolveSearchPageScopeLabel,
 } from "./search-url";
 
 describe("resolveDefaultSearchMarketplaceScope", () => {
@@ -143,5 +144,11 @@ describe("search page query state", () => {
     assert.equal(resolveSearchPageScope("tz"), "tz");
     assert.equal(resolveSearchPageScope("bogus"), "all");
     assert.equal(resolveSearchPageScope(undefined), "all");
+  });
+
+  it("labels TZ marketplace scope as Buy from TZ", () => {
+    assert.equal(resolveSearchPageScopeLabel("tz"), "Buy from TZ");
+    assert.equal(resolveSearchPageScopeLabel("china"), "China");
+    assert.equal(resolveSearchPageScopeLabel("all"), "All marketplaces");
   });
 });

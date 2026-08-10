@@ -978,7 +978,7 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
                   {form.name || "Product title"}
                 </p>
                 <p className="mt-0.5 text-xs text-zinc-500">
-                  {form.type === "china" ? "China Order" : "Buy from Dar"}
+                  {form.type === "china" ? "China Order" : "Buy from TZ"}
                 </p>
                 <p className="mt-1 text-xs font-semibold text-zinc-900">
                   {form.price ? `TZS ${form.price.toLocaleString("en-TZ")}` : "—"}

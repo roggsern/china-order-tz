@@ -255,7 +255,7 @@ export function SearchResultsPanel({
               <p className="mt-1 text-xs leading-relaxed text-zinc-500">
                 Try different keywords
                 {origin === "china"
-                  ? " or search in Buy from Dar"
+                  ? " or search in Buy from TZ"
                   : origin === "tz"
                     ? " or search China products"
                     : ""}

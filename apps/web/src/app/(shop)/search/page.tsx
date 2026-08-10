@@ -15,7 +15,7 @@ import { CatalogErrorState } from "@/components/catalog/CatalogErrorState";
 
 export const metadata: Metadata = {
   title: "Search — CHINA ORDER TZ",
-  description: "Search products across China imports and Buy from Dar.",
+  description: "Search products across China imports and Buy from TZ.",
 };
 
 interface SearchPageProps {

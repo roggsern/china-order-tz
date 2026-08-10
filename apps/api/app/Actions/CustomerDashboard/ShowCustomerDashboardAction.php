@@ -67,7 +67,7 @@ class ShowCustomerDashboardAction
                 ]),
             'quick_actions' => [
                 ['label' => 'Order From China'],
-                ['label' => 'Buy From Dar'],
+                ['label' => 'Buy from TZ'],
                 ['label' => 'My Orders'],
                 ['label' => 'My Payments'],
             ],

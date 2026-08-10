@@ -13,7 +13,7 @@ interface SearchMarketplaceScopeProps {
 const OPTIONS: { id: SearchMarketplaceScope; label: string }[] = [
   { id: "all", label: "All" },
   { id: "china", label: "China" },
-  { id: "tz", label: "Buy from Dar" },
+  { id: "tz", label: "Buy from TZ" },
 ];
 
 export function SearchMarketplaceScope({
