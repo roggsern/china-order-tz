@@ -127,8 +127,20 @@ describe("mapUnifiedSuggestToSearchResults", () => {
     );
     assert.equal(resolveSuggestionHref(results.stores[0]!), "/buy-from-tz/zion-mode");
     assert.equal(
-      resolveSuggestionHref(results.categories[0]!),
-      "/categories/zion-dresses",
+      resolveSuggestionHref(results.categories[0]!, "all"),
+      "/search?q=Zion+Dresses&scope=all",
+    );
+  });
+
+  it("routes category suggestions with China and TZ scope to unified search", () => {
+    const results = mapUnifiedSuggestToSearchResults(sampleSuggestPayload());
+    assert.equal(
+      resolveSuggestionHref(results.categories[0]!, "china"),
+      "/search?q=Zion+Dresses&scope=china",
+    );
+    assert.equal(
+      resolveSuggestionHref(results.categories[0]!, "tz"),
+      "/search?q=Zion+Dresses&scope=tz",
     );
   });
 

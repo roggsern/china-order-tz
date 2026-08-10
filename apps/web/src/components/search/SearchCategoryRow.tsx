@@ -2,25 +2,48 @@
 
 import Link from "next/link";
 import type { Category, ProductOrigin } from "@/lib/types/catalog";
+import type { SearchMarketplaceScope } from "@/components/search/SearchMarketplaceScope";
 import {
   buildSearchBrandHref,
-  buildSearchCategoryHref,
+  buildSearchCategorySuggestionHref,
   buildSearchStoreHref,
 } from "@/lib/search/search-url";
 
 interface SearchCategoryRowProps {
   category: Category;
+  /** Marketplace tab for category → /search; brand hrefs still use origin. */
+  marketplaceScope?: SearchMarketplaceScope;
+  /** @deprecated Prefer marketplaceScope; kept for brand listing context. */
   origin?: ProductOrigin;
   onSelect: (href: string) => void;
 }
 
-export function SearchCategoryRow({ category, origin, onSelect }: SearchCategoryRowProps) {
+function scopeToBrandOrigin(
+  scope: SearchMarketplaceScope,
+  origin?: ProductOrigin,
+): ProductOrigin | undefined {
+  if (origin === "china" || origin === "tz") {
+    return origin;
+  }
+  if (scope === "china" || scope === "tz") {
+    return scope;
+  }
+  return undefined;
+}
+
+export function SearchCategoryRow({
+  category,
+  marketplaceScope = "all",
+  origin,
+  onSelect,
+}: SearchCategoryRowProps) {
+  const brandOrigin = scopeToBrandOrigin(marketplaceScope, origin);
   const href =
     category.searchSuggestionType === "brand"
-      ? buildSearchBrandHref(category.slug, origin)
+      ? buildSearchBrandHref(category.slug, brandOrigin)
       : category.searchSuggestionType === "store"
         ? buildSearchStoreHref(category.slug)
-        : buildSearchCategoryHref(category.slug, origin);
+        : buildSearchCategorySuggestionHref(category.name, marketplaceScope);
 
   return (
     <Link

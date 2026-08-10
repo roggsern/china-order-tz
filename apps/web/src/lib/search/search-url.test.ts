@@ -6,7 +6,7 @@ import {
 } from "./catalog-source";
 import {
   buildSearchBrandHref,
-  buildSearchCategoryHref,
+  buildSearchCategorySuggestionHref,
   buildSearchStoreHref,
   buildUnifiedSearchHref,
   resolveDefaultSearchMarketplaceScope,
@@ -74,16 +74,26 @@ describe("explicit marketplace tab source routing", () => {
   });
 });
 
-describe("buildSearchCategoryHref", () => {
-  it("keeps China listing context for China category suggestions", () => {
+describe("buildSearchCategorySuggestionHref", () => {
+  it("routes All-scope category suggestions to unified search", () => {
     assert.equal(
-      buildSearchCategoryHref("power-backup", "china"),
-      "/products?origin=china&category=power-backup",
+      buildSearchCategorySuggestionHref("Power Backup / UPS", "all"),
+      "/search?q=Power+Backup+%2F+UPS&scope=all",
     );
   });
 
-  it("uses generic category route when scope is All", () => {
-    assert.equal(buildSearchCategoryHref("electronics"), "/categories/electronics");
+  it("preserves China marketplace scope", () => {
+    assert.equal(
+      buildSearchCategorySuggestionHref("Power Backup / UPS", "china"),
+      "/search?q=Power+Backup+%2F+UPS&scope=china",
+    );
+  });
+
+  it("preserves TZ marketplace scope", () => {
+    assert.equal(
+      buildSearchCategorySuggestionHref("Electronics", "tz"),
+      "/search?q=Electronics&scope=tz",
+    );
   });
 });
 

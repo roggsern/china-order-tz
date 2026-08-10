@@ -12,7 +12,7 @@ import type { SearchMarketplaceScope } from "@/components/search/SearchMarketpla
 import {
   buildUnifiedSearchHref,
   buildSearchBrandHref,
-  buildSearchCategoryHref,
+  buildSearchCategorySuggestionHref,
   buildSearchStoreHref,
 } from "@/lib/search/search-url";
 import type { SearchResults, SearchTermSuggestion } from "@/lib/search/types";
@@ -159,15 +159,18 @@ export function mapUnifiedSuggestToSearchResults(
 /** Href helpers for tests / consumers — keep in sync with SearchCategoryRow. */
 export function resolveSuggestionHref(
   entry: Category,
-  origin?: ProductOrigin,
+  scope: SearchMarketplaceScope = "all",
 ): string {
+  const origin: ProductOrigin | undefined =
+    scope === "china" || scope === "tz" ? scope : undefined;
+
   if (entry.searchSuggestionType === "brand") {
     return buildSearchBrandHref(entry.slug, origin);
   }
   if (entry.searchSuggestionType === "store") {
     return buildSearchStoreHref(entry.slug);
   }
-  return buildSearchCategoryHref(entry.slug, origin);
+  return buildSearchCategorySuggestionHref(entry.name, scope);
 }
 
 export function resolveProductSuggestionHref(product: Product): string {

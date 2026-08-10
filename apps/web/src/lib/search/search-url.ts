@@ -68,29 +68,14 @@ export function resolveSearchPageScope(
 }
 
 /**
- * Category/brand suggestion destinations.
- * China scope must keep CHINA_IMPORT listing context (origin + category/brand).
+ * Header search category suggestion → unified search results.
+ * Uses category display name as q so relevance matches product/category text.
  */
-export function buildSearchCategoryHref(slug: string, origin?: ProductOrigin): string {
-  if (origin === "china") {
-    return `/products?origin=china&category=${encodeURIComponent(slug)}`;
-  }
-
-  if (origin === "tz") {
-    const brand = getBrandBySlug(slug);
-    if (brand) {
-      return `/buy-from-tz/${brand.slug}`;
-    }
-
-    return `/products?origin=tz&category=${encodeURIComponent(slug)}`;
-  }
-
-  const brand = getBrandBySlug(slug);
-  if (brand) {
-    return `/buy-from-tz/${brand.slug}`;
-  }
-
-  return `/categories/${slug}`;
+export function buildSearchCategorySuggestionHref(
+  categoryName: string,
+  scope: SearchMarketplaceScope = "all",
+): string {
+  return buildUnifiedSearchHref(categoryName, scope);
 }
 
 /** Brand suggestion destinations (China keeps storefront listing context). */

@@ -185,6 +185,7 @@ export function SearchResultsPanel({
                 <SearchCategoryRow
                   key={`category-${category.slug}`}
                   category={category}
+                  marketplaceScope={marketplaceScope}
                   origin={origin}
                   onSelect={(href) => onSelect(href, category.name)}
                 />
@@ -203,6 +204,7 @@ export function SearchResultsPanel({
                 <SearchCategoryRow
                   key={`brand-${brand.slug}`}
                   category={brand}
+                  marketplaceScope={marketplaceScope}
                   origin={origin}
                   onSelect={(href) => onSelect(href, brand.name)}
                 />
@@ -221,6 +223,7 @@ export function SearchResultsPanel({
                 <SearchCategoryRow
                   key={`store-${store.slug}`}
                   category={store}
+                  marketplaceScope={marketplaceScope}
                   origin={origin}
                   onSelect={(href) => onSelect(href, store.name)}
                 />
