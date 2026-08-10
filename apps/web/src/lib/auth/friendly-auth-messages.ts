@@ -63,6 +63,11 @@ export function getAuthInviteCopy(context: AuthInviteContext): AuthInviteCopy {
 
 const TECHNICAL_PATTERNS: Array<{ pattern: RegExp; friendly: string }> = [
   {
+    pattern: /failed to fetch|networkerror|network request failed|load failed/i,
+    friendly:
+      "Unable to reach the server. If you just created an account, try signing in with the same email.",
+  },
+  {
     pattern: /unauthenticated|authentication required|auth(entication)?\s+required/i,
     friendly: "Please sign in to continue.",
   },

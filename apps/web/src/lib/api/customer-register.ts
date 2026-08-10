@@ -45,6 +45,24 @@ function extractRegisterErrorMessage(payload: CustomerRegisterResponse): string 
   return "Unable to create your account. Please check the form and try again.";
 }
 
+/** Maps browser/network failures to a customer-safe registration message. */
+export function mapRegisterNetworkError(error: unknown): CustomerRegisterError {
+  const message =
+    error instanceof Error ? error.message.trim() : "";
+
+  if (/failed to fetch|networkerror|network request failed|load failed|aborted|timeout/i.test(message)) {
+    return new CustomerRegisterError(
+      "Unable to reach the server. If you just created an account, try signing in with the same email.",
+      0,
+    );
+  }
+
+  return new CustomerRegisterError(
+    message || "Unable to create your account. Please try again.",
+    0,
+  );
+}
+
 export type CustomerRegisterInput = {
   firstName: string;
   lastName: string;
@@ -62,24 +80,39 @@ export async function registerCustomer(
 ): Promise<CustomerRegisterResult> {
   const name = `${input.firstName.trim()} ${input.lastName.trim()}`.trim();
 
-  const response = await fetch("/api/auth/register", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({
-      name,
-      first_name: input.firstName.trim(),
-      last_name: input.lastName.trim(),
-      email: input.email.trim(),
-      phone: input.phone.trim() || undefined,
-      password: input.password,
-      password_confirmation: input.passwordConfirmation,
-    }),
-  });
+  let response: Response;
 
-  const payload = (await response.json()) as CustomerRegisterResponse;
+  try {
+    response = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        name,
+        first_name: input.firstName.trim(),
+        last_name: input.lastName.trim(),
+        email: input.email.trim(),
+        phone: input.phone.trim() || undefined,
+        password: input.password,
+        password_confirmation: input.passwordConfirmation,
+      }),
+    });
+  } catch (error) {
+    throw mapRegisterNetworkError(error);
+  }
+
+  let payload: CustomerRegisterResponse;
+
+  try {
+    payload = (await response.json()) as CustomerRegisterResponse;
+  } catch {
+    throw new CustomerRegisterError(
+      "Unable to read the registration response. If you just created an account, try signing in.",
+      response.status,
+    );
+  }
 
   if (!response.ok || payload.success === false) {
     throw new CustomerRegisterError(

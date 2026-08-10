@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { saveCustomerApiToken } from "@/lib/api/customer-auth";
@@ -142,6 +142,7 @@ export function RegisterForm() {
   const [phoneValue, setPhoneValue] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const submitLockRef = useRef(false);
 
   const passwordStrength = useMemo(() => getPasswordStrength(password), [password]);
 
@@ -152,6 +153,11 @@ export function RegisterForm() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (submitLockRef.current || isSubmitting) {
+      return;
+    }
+
     setError(undefined);
     setFieldErrors({});
 
@@ -204,6 +210,7 @@ export function RegisterForm() {
       ? normalizePhoneForBackend(phoneCountryIso, rawPhone)
       : "";
 
+    submitLockRef.current = true;
     setIsSubmitting(true);
 
     try {
@@ -247,6 +254,7 @@ export function RegisterForm() {
       } else {
         setError("Unable to create your account. Please try again.");
       }
+      submitLockRef.current = false;
       setIsSubmitting(false);
     }
   };

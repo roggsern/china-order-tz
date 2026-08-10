@@ -3,13 +3,17 @@
 namespace Tests\Feature\Auth;
 
 use App\Enums\ActivityEventType;
+use App\Jobs\Auth\SendCustomerEmailVerificationJob;
 use App\Models\ActivityLog;
 use App\Models\Admin;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\Notifications\NotificationPlatform;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -36,9 +40,10 @@ class CustomerAuthenticationTest extends TestCase
 
         $response->assertCreated()
             ->assertJsonPath('success', true)
+            ->assertJsonPath('message', 'Registration successful')
             ->assertJsonPath('token_type', 'Bearer')
             ->assertJsonPath('data.email', 'jane@example.com')
-            ->assertJsonStructure(['token']);
+            ->assertJsonStructure(['token', 'token_type', 'data']);
 
         $this->assertDatabaseHas('users', [
             'email' => 'jane@example.com',
@@ -122,8 +127,9 @@ class CustomerAuthenticationTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('message', 'Login successful')
+            ->assertJsonPath('token_type', 'Bearer')
             ->assertJsonPath('data.id', $user->id)
-            ->assertJsonStructure(['token']);
+            ->assertJsonStructure(['token', 'token_type', 'data']);
     }
 
     public function test_login_rejects_invalid_credentials(): void
@@ -137,7 +143,9 @@ class CustomerAuthenticationTest extends TestCase
 
         $response->assertUnprocessable()
             ->assertJsonPath('success', false)
-            ->assertJsonPath('message', 'Invalid credentials');
+            ->assertJsonPath('code', 'invalid_credentials')
+            ->assertJsonPath('message', 'Invalid credentials')
+            ->assertJsonPath('errors.email.0', 'Invalid credentials');
     }
 
     public function test_login_rejects_inactive_account(): void
@@ -154,6 +162,7 @@ class CustomerAuthenticationTest extends TestCase
 
         $response->assertForbidden()
             ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'account_disabled')
             ->assertJsonPath('message', 'Your account has been disabled.');
     }
 
@@ -167,7 +176,8 @@ class CustomerAuthenticationTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.id', $user->id)
-            ->assertJsonPath('data.email', $user->email);
+            ->assertJsonPath('data.email', $user->email)
+            ->assertJsonStructure(['success', 'data']);
     }
 
     public function test_customer_can_logout(): void
@@ -178,7 +188,8 @@ class CustomerAuthenticationTest extends TestCase
         $this->withToken($token)->postJson('/api/v1/logout')
             ->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('message', 'Logged out successfully');
+            ->assertJsonPath('message', 'Logged out successfully')
+            ->assertJsonPath('data', null);
 
         $this->assertSame(0, $user->fresh()->tokens()->count());
 
@@ -240,9 +251,96 @@ class CustomerAuthenticationTest extends TestCase
             ->assertJsonPath('data.id', $userB->id);
     }
 
+    public function test_registration_queues_email_verification_and_still_returns_token(): void
+    {
+        Queue::fake();
+
+        $response = $this->postJson('/api/v1/register', [
+            'name' => 'Async Customer',
+            'email' => 'async.customer@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('message', 'Registration successful')
+            ->assertJsonStructure(['token', 'token_type', 'data']);
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'async.customer@example.com',
+        ]);
+
+        Queue::assertPushed(SendCustomerEmailVerificationJob::class, function (SendCustomerEmailVerificationJob $job) {
+            $user = User::query()->where('email', 'async.customer@example.com')->first();
+
+            return $user !== null && $job->userId === $user->id;
+        });
+    }
+
+    public function test_registration_succeeds_when_email_verification_service_fails(): void
+    {
+        $this->mock(NotificationPlatform::class, function ($mock) {
+            $mock->shouldReceive('notifyCustomer')
+                ->once()
+                ->andThrow(new \RuntimeException('SMTP unavailable'));
+        });
+
+        Log::spy();
+
+        $response = $this->postJson('/api/v1/register', [
+            'name' => 'Mail Fail Customer',
+            'email' => 'mail.fail@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonStructure(['token', 'token_type', 'data']);
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'mail.fail@example.com',
+        ]);
+
+        Log::shouldHaveReceived('warning')
+            ->withArgs(function (string $message, array $context = []) {
+                return $message === 'auth.email_verification_job.failed'
+                    && isset($context['user_id']);
+            })
+            ->atLeast()
+            ->once();
+    }
+
+    public function test_email_verification_job_logs_failure_without_throwing(): void
+    {
+        $user = User::factory()->unverified()->create([
+            'email' => 'job.fail@example.com',
+        ]);
+
+        $this->mock(NotificationPlatform::class, function ($mock) {
+            $mock->shouldReceive('notifyCustomer')
+                ->once()
+                ->andThrow(new \RuntimeException('provider down'));
+        });
+
+        Log::spy();
+
+        (new SendCustomerEmailVerificationJob($user->id))->handle();
+
+        Log::shouldHaveReceived('warning')
+            ->withArgs(function (string $message) {
+                return $message === 'auth.email_verification_job.failed';
+            })
+            ->once();
+    }
+
     public function test_unauthenticated_me_returns_401(): void
     {
-        $this->getJson('/api/v1/me')->assertUnauthorized();
+        $this->getJson('/api/v1/me')
+            ->assertUnauthorized()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'unauthenticated');
     }
 
     public function test_admin_token_rejected_on_customer_me(): void

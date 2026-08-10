@@ -4,11 +4,13 @@ namespace App\Actions\UserAuth;
 
 use App\Enums\CustomerRegistrationSource;
 use App\Http\Requests\Auth\RegisterRequest;
+use App\Jobs\Auth\SendCustomerEmailVerificationJob;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\Crm\CustomerProfileService;
 use App\Support\Auth\SanctumTokenIssuer;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class RegisterUserAction
 {
@@ -41,23 +43,24 @@ class RegisterUserAction
 
         try {
             $this->customerProfiles->ensureForUser($user, $source);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             Log::warning('crm.profile_on_register_failed', [
                 'user_id' => $user->id,
                 'message' => $e->getMessage(),
             ]);
         }
 
+        // Issue token before any notification side effects so the HTTP response is not blocked by SMTP.
+        $token = SanctumTokenIssuer::issueCustomer($user)->plainTextToken;
+
         try {
-            $user->sendEmailVerificationNotification();
-        } catch (\Throwable $e) {
-            Log::warning('auth.email_verification_on_register_failed', [
+            SendCustomerEmailVerificationJob::dispatch($user->id);
+        } catch (Throwable $e) {
+            Log::warning('auth.email_verification_dispatch_failed', [
                 'user_id' => $user->id,
                 'message' => $e->getMessage(),
             ]);
         }
-
-        $token = SanctumTokenIssuer::issueCustomer($user)->plainTextToken;
 
         return [
             'user' => $user->load('roles'),
