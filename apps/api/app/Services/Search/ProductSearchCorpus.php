@@ -116,10 +116,13 @@ class ProductSearchCorpus
         return $query
             ->with(array_merge([
                 'commerceChannel:id,name,code',
-                'category:id,name,slug,store_id',
+                'category:id,name,slug,store_id,parent_id',
+                'category.parent:id,name,slug',
                 'brand:id,name,slug',
                 'store:id,name,slug,code',
-                'catalogProductType:id,name',
+                'catalogProductType:id,name,subcategory_id',
+                'catalogProductType.subcategory:id,name,slug,parent_id',
+                'catalogProductType.subcategory.parent:id,name,slug',
             ], CustomerProductMediaResolver::catalogEagerLoads(), CatalogStockPresenter::catalogListingEagerLoads()))
             ->withAvg(
                 ['reviews as average_rating' => fn ($q) => $q->where('is_approved', true)],

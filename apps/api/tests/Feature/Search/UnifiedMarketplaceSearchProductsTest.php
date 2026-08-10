@@ -274,6 +274,164 @@ class UnifiedMarketplaceSearchProductsTest extends TestCase
         );
     }
 
+    public function test_category_name_search_returns_products_in_subcategory(): void
+    {
+        $powerBackup = Category::factory()->create([
+            'name' => 'Power Backup',
+            'slug' => 'power-backup',
+            'parent_id' => null,
+            'store_id' => null,
+            'is_active' => true,
+        ]);
+        $ups = Category::factory()->child($powerBackup)->create([
+            'name' => 'UPS',
+            'slug' => 'ups-subcategory',
+            'is_active' => true,
+        ]);
+
+        $product = $this->makeChinaListableProduct('dc-mini-ups', [
+            'name' => 'DC MINI UPS',
+            'category_id' => $ups->id,
+            'short_description' => 'Compact backup power unit',
+            'description' => 'Desk-friendly DC mini UPS for routers',
+        ]);
+
+        $byCategory = collect(
+            $this->getJson('/api/v1/search/products?q='.rawurlencode('Power Backup').'&scope=all')
+                ->assertOk()
+                ->json('data'),
+        )->pluck('slug')->all();
+
+        $this->assertContains($product->slug, $byCategory);
+
+        $hit = collect(
+            $this->getJson('/api/v1/search/products?q='.rawurlencode('Power Backup').'&scope=all')->json('data'),
+        )->firstWhere('slug', $product->slug);
+
+        $this->assertContains('category', $hit['matched_on'] ?? []);
+
+        $byUps = collect(
+            $this->getJson('/api/v1/search/products?q=UPS&scope=all')
+                ->assertOk()
+                ->json('data'),
+        )->pluck('slug')->all();
+
+        $this->assertContains($product->slug, $byUps);
+    }
+
+    public function test_subcategory_name_search_returns_products(): void
+    {
+        $powerBackup = Category::factory()->create([
+            'name' => 'Power Backup',
+            'slug' => 'power-backup-sub-test',
+            'parent_id' => null,
+            'store_id' => null,
+            'is_active' => true,
+        ]);
+        $ups = Category::factory()->child($powerBackup)->create([
+            'name' => 'UPS',
+            'slug' => 'ups-leaf',
+            'is_active' => true,
+        ]);
+
+        // Name intentionally without the subcategory token so the hit is taxonomy-driven.
+        $product = $this->makeChinaListableProduct('dc-mini-backup-unit', [
+            'name' => 'DC MINI Backup Unit',
+            'category_id' => $ups->id,
+        ]);
+
+        $slugs = collect(
+            $this->getJson('/api/v1/search/products?q=UPS&scope=china')
+                ->assertOk()
+                ->json('data'),
+        )->pluck('slug')->all();
+
+        $this->assertContains($product->slug, $slugs);
+
+        $hit = collect(
+            $this->getJson('/api/v1/search/products?q=UPS&scope=china')->json('data'),
+        )->firstWhere('slug', $product->slug);
+
+        $this->assertContains('subcategory', $hit['matched_on'] ?? []);
+    }
+
+    public function test_category_keyword_excludes_inactive_products(): void
+    {
+        $powerBackup = Category::factory()->create([
+            'name' => 'Power Backup',
+            'slug' => 'power-backup-inactive-test',
+            'parent_id' => null,
+            'store_id' => null,
+            'is_active' => true,
+        ]);
+        $ups = Category::factory()->child($powerBackup)->create([
+            'name' => 'UPS',
+            'slug' => 'ups-inactive-leaf',
+            'is_active' => true,
+        ]);
+
+        $active = $this->makeChinaListableProduct('dc-mini-ups-active', [
+            'name' => 'DC MINI UPS Active',
+            'category_id' => $ups->id,
+        ]);
+        $inactive = $this->makeChinaListableProduct('dc-mini-ups-inactive', [
+            'name' => 'DC MINI UPS Inactive',
+            'category_id' => $ups->id,
+            'is_active' => false,
+        ]);
+
+        $slugs = collect(
+            $this->getJson('/api/v1/search/products?q='.rawurlencode('Power Backup').'&scope=all')
+                ->assertOk()
+                ->json('data'),
+        )->pluck('slug')->all();
+
+        $this->assertContains($active->slug, $slugs);
+        $this->assertNotContains($inactive->slug, $slugs);
+    }
+
+    public function test_name_match_ranks_above_category_match(): void
+    {
+        $powerBackup = Category::factory()->create([
+            'name' => 'Power Backup',
+            'slug' => 'power-backup-rank-test',
+            'parent_id' => null,
+            'store_id' => null,
+            'is_active' => true,
+        ]);
+        $ups = Category::factory()->child($powerBackup)->create([
+            'name' => 'UPS',
+            'slug' => 'ups-rank-leaf',
+            'is_active' => true,
+        ]);
+
+        $categoryOnly = $this->makeChinaListableProduct('category-only-backup', [
+            'name' => 'Router Companion Brick',
+            'category_id' => $ups->id,
+            'created_at' => now()->subMinute(),
+            'updated_at' => now()->subMinute(),
+        ]);
+        $nameHit = $this->makeChinaListableProduct('name-power-backup', [
+            'name' => 'Power Backup Travel Kit',
+            'category_id' => $this->phones->id,
+            'created_at' => now()->subHour(),
+            'updated_at' => now()->subHour(),
+        ]);
+
+        $slugs = collect(
+            $this->getJson('/api/v1/search/products?q='.rawurlencode('Power Backup').'&scope=china&sort=relevance')
+                ->assertOk()
+                ->json('data'),
+        )->pluck('slug')->values()->all();
+
+        $this->assertContains($nameHit->slug, $slugs);
+        $this->assertContains($categoryOnly->slug, $slugs);
+        $this->assertLessThan(
+            array_search($categoryOnly->slug, $slugs, true),
+            array_search($nameHit->slug, $slugs, true),
+        );
+    }
+
     /**
      * @param  array<string, mixed>  $overrides
      */
