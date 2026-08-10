@@ -16,7 +16,7 @@ export type ProductType = "china" | "local";
 export type CommerceSourceLabel = "china" | "local";
 
 export const LOCAL_DELIVERY_NEGOTIATED_LABEL =
-  "We will contact you to arrange delivery after your order is ready.";
+  "Delivery available — cost to be negotiated";
 
 /** Map canonical ProductOrigin to UI commerce source label. */
 export function originToCommerceSourceLabel(origin: ProductOrigin): CommerceSourceLabel {
