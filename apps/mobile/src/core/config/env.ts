@@ -7,7 +7,12 @@ import Constants from 'expo-constants';
 export type MobileEnv = {
   apiBaseUrl: string;
   appScheme: string;
-  /** MPGS / NMB gateway origin used for Website Hosted Checkout SDK. */
+  /**
+   * Merchant web app origin for NMB Website Hosted Checkout launcher
+   * (`/payments/{transactionId}/nmb`). Opened in the system browser.
+   */
+  webAppBaseUrl: string;
+  /** MPGS / NMB gateway origin (redirect checkout_url allowlist / diagnostics). */
   nmbGatewayBaseUrl: string;
   /** Exact hostnames allowed for NMB / payment hosted checkout. */
   paymentCheckoutAllowedHosts: string[];
@@ -20,7 +25,10 @@ export const PRODUCTION_API_BASE_URL = 'https://api.chinaordertz.com/api/v1';
 export const MISSING_PRODUCTION_API_URL_MESSAGE =
   'EXPO_PUBLIC_API_BASE_URL (or app.json extra.apiBaseUrl) must be set to a non-localhost API for production builds.';
 
-/** Default MPGS sandbox gateway (Website Hosted Checkout SDK host). */
+/** Default storefront origin — NMB Website Hosted Checkout launcher host. */
+export const DEFAULT_WEB_APP_BASE_URL = 'https://chinaordertz.com';
+
+/** Default MPGS sandbox gateway (redirect checkout_url allowlist). */
 export const DEFAULT_NMB_GATEWAY_BASE_URL =
   'https://test-nmbbank.mtf.gateway.mastercard.com';
 
@@ -145,8 +153,8 @@ function resolvePaymentCheckoutAllowedHostSuffixes(): string[] {
 }
 
 /**
- * Gateway origin for Checkout.js (Website Hosted Checkout).
- * Must be HTTPS and allowlisted.
+ * Gateway origin for redirect checkout_url allowlist / diagnostics.
+ * Must be HTTPS and allowlisted when used as a checkout host.
  */
 export function resolveNmbGatewayBaseUrl(input?: {
   fromProcess?: string;
@@ -163,9 +171,24 @@ export function resolveNmbGatewayBaseUrl(input?: {
   return candidate;
 }
 
+/**
+ * Merchant web origin for `/payments/{id}/nmb` launcher (system browser).
+ */
+export function resolveWebAppBaseUrl(input?: {
+  fromProcess?: string;
+  fromExtra?: string;
+}): string {
+  const fromProcess = (
+    input?.fromProcess ?? process.env.EXPO_PUBLIC_WEB_APP_BASE_URL
+  )?.trim();
+  const fromExtra = (input?.fromExtra ?? readExtra('webAppBaseUrl'))?.trim();
+  return (fromProcess || fromExtra || DEFAULT_WEB_APP_BASE_URL).replace(/\/$/, '');
+}
+
 export const env: MobileEnv = {
   apiBaseUrl: resolveApiBaseUrl(),
   appScheme: Constants.expoConfig?.scheme?.toString() ?? 'chinaordertz',
+  webAppBaseUrl: resolveWebAppBaseUrl(),
   nmbGatewayBaseUrl: resolveNmbGatewayBaseUrl(),
   paymentCheckoutAllowedHosts: resolvePaymentCheckoutAllowedHosts(),
   paymentCheckoutAllowedHostSuffixes: resolvePaymentCheckoutAllowedHostSuffixes(),

@@ -1,7 +1,6 @@
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { env } from '@/src/core/config';
-import { useNmbWebsiteCheckoutStore } from '../state/nmbWebsiteCheckoutStore';
 import type {
   NmbBrowserReturnParams,
   PaymentTransaction,
@@ -13,7 +12,7 @@ import {
 } from './mapPayment';
 
 export type NmbBrowserSessionResult = {
-  type: 'success' | 'cancel' | 'dismiss' | 'locked' | string;
+  type: 'success' | 'cancel' | 'dismiss' | string;
   url: string | null;
   returnParams: NmbBrowserReturnParams;
 };
@@ -35,21 +34,9 @@ function emptyReturnParams(): NmbBrowserReturnParams {
   };
 }
 
-/**
- * Opens NMB Hosted Checkout in an auth session browser (redirect checkout_url).
- * Return URL params are proof material for server reconcile only — never local paid.
- * Rejects non-HTTPS / non-allowlisted hosts before opening.
- */
-export async function openNmbHostedCheckout(
-  checkoutUrl: string,
-): Promise<NmbBrowserSessionResult> {
-  if (!canOpenCheckoutUrl(checkoutUrl)) {
-    throw new Error('Payment service is unavailable. Please try again.');
-  }
-
-  const redirectUrl = buildPaymentReturnRedirectUrl();
-  const result = await WebBrowser.openAuthSessionAsync(checkoutUrl, redirectUrl);
-
+function mapAuthSessionResult(
+  result: WebBrowser.WebBrowserAuthSessionResult,
+): NmbBrowserSessionResult {
   if (result.type === 'success' && 'url' in result && typeof result.url === 'string') {
     return {
       type: result.type,
@@ -66,39 +53,113 @@ export async function openNmbHostedCheckout(
 }
 
 /**
- * Website Hosted Checkout when API returns session id without checkout_url.
- * Uses Checkout.js against the configured MPGS gateway (allowlisted HTTPS host).
+ * True when URL is HTTPS on the configured merchant web app host
+ * (chinaordertz.com launcher — not the MPGS gateway).
+ */
+export function canOpenNmbWebLauncherUrl(url: string | null | undefined): boolean {
+  if (!url?.trim()) return false;
+  try {
+    const parsed = new URL(url.trim());
+    if (parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname.toLowerCase();
+    const allowed = new URL(env.webAppBaseUrl).hostname.toLowerCase();
+    if (!host || !allowed) return false;
+    if (host === allowed) return true;
+    if (allowed.startsWith('www.') && host === allowed.slice(4)) return true;
+    if (!allowed.startsWith('www.') && host === `www.${allowed}`) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Existing web NMB Website Hosted Checkout launcher.
+ * Passes sessionId so the page can run Checkout.js without a web login cookie.
+ * mobileReturn=1 asks the web app to hand off to chinaordertz://payment-return.
+ */
+export function buildNmbWebHostedCheckoutLauncherUrl(input: {
+  paymentTransactionId: string;
+  sessionId?: string | null;
+  successIndicator?: string | null;
+  webAppBaseUrl?: string;
+}): string {
+  const base = (input.webAppBaseUrl ?? env.webAppBaseUrl).replace(/\/$/, '');
+  const txnId = input.paymentTransactionId.trim();
+  if (!txnId) {
+    throw new Error('Payment transaction is required to open NMB checkout.');
+  }
+
+  const url = new URL(`${base}/payments/${encodeURIComponent(txnId)}/nmb`);
+  const sessionId = input.sessionId?.trim();
+  if (sessionId) {
+    url.searchParams.set('sessionId', sessionId);
+  }
+  const successIndicator = input.successIndicator?.trim();
+  if (successIndicator) {
+    url.searchParams.set('successIndicator', successIndicator);
+  }
+  url.searchParams.set('mobileReturn', '1');
+  return url.toString();
+}
+
+/**
+ * Opens an allowlisted HTTPS URL in an auth session browser.
+ * Return URL params are proof material for server reconcile only — never local paid.
+ */
+export async function openNmbHostedCheckout(
+  checkoutUrl: string,
+): Promise<NmbBrowserSessionResult> {
+  if (!canOpenCheckoutUrl(checkoutUrl) && !canOpenNmbWebLauncherUrl(checkoutUrl)) {
+    throw new Error('Payment service is unavailable. Please try again.');
+  }
+
+  const redirectUrl = buildPaymentReturnRedirectUrl();
+  const result = await WebBrowser.openAuthSessionAsync(checkoutUrl, redirectUrl);
+  return mapAuthSessionResult(result);
+}
+
+/**
+ * Website Hosted Checkout via the working web launcher in the system browser.
+ * Replaces the previous in-app WebView + Checkout.js bootstrap.
  */
 export async function openNmbWebsiteHostedCheckout(input: {
+  paymentTransactionId: string;
   sessionId: string;
-  gatewayBaseUrl?: string;
+  successIndicator?: string | null;
 }): Promise<NmbBrowserSessionResult> {
-  const gatewayBaseUrl = (input.gatewayBaseUrl ?? env.nmbGatewayBaseUrl).replace(
-    /\/$/,
-    '',
-  );
-  if (!canOpenCheckoutUrl(`${gatewayBaseUrl}/static/checkout/checkout.min.js`)) {
-    throw new Error(
-      'Payment gateway is not configured for this app build. Please try again later.',
-    );
+  if (!input.paymentTransactionId.trim()) {
+    throw new Error('Payment transaction is required to open NMB checkout.');
   }
   if (!input.sessionId.trim()) {
     throw new Error('NMB did not return a checkout session. Please try again.');
   }
 
-  if (__DEV__) {
-    // Sanitized diagnostics only — no secrets.
-    console.info('[nmb] website_hosted_checkout', {
-      stage: 'open_sdk',
-      host: new URL(gatewayBaseUrl).hostname,
-      sessionIdPrefix: input.sessionId.slice(0, 12),
-    });
+  const launcherUrl = buildNmbWebHostedCheckoutLauncherUrl({
+    paymentTransactionId: input.paymentTransactionId,
+    sessionId: input.sessionId,
+    successIndicator: input.successIndicator,
+  });
+
+  if (!canOpenNmbWebLauncherUrl(launcherUrl)) {
+    throw new Error(
+      'Payment website is not configured for this app build. Please try again later.',
+    );
   }
 
-  return useNmbWebsiteCheckoutStore.getState().open({
-    sessionId: input.sessionId.trim(),
-    gatewayBaseUrl,
-  });
+  if (__DEV__) {
+    try {
+      console.info('[nmb] website_hosted_checkout', {
+        stage: 'open_web_launcher',
+        host: new URL(launcherUrl).hostname,
+        path: '/payments/.../nmb',
+      });
+    } catch {
+      // ignore
+    }
+  }
+
+  return openNmbHostedCheckout(launcherUrl);
 }
 
 /**
@@ -123,7 +184,9 @@ export async function launchNmbCheckoutForTransaction(
 
   if (isNmbWebsiteHostedCheckout(transaction)) {
     return openNmbWebsiteHostedCheckout({
+      paymentTransactionId: transaction.id,
       sessionId: transaction.providerReference!,
+      successIndicator: transaction.successIndicator,
     });
   }
 

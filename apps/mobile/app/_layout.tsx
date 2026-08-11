@@ -8,7 +8,6 @@ import 'react-native-reanimated';
 import { createAppQueryClient } from '@/src/core/api/queryClient';
 import { registerAppQueryClient } from '@/src/core/api/queryClientRegistry';
 import { SplashView } from '@/src/features/auth';
-import { NmbWebsiteCheckoutModal } from '@/src/features/payments/components/NmbWebsiteCheckoutModal';
 import { AppErrorBoundary } from '@/src/shared/components/AppErrorBoundary';
 import { useAuthBootstrap } from '@/src/shared/hooks/useAuthBootstrap';
 
@@ -85,7 +84,6 @@ export default function RootLayout() {
           />
           <Stack.Screen name="+not-found" />
         </Stack>
-        <NmbWebsiteCheckoutModal />
       </QueryClientProvider>
     </AppErrorBoundary>
   );

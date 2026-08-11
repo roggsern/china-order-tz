@@ -45,6 +45,7 @@
     },
     "extra": {
       "apiBaseUrl": "https://api.chinaordertz.com/api/v1",
+      "webAppBaseUrl": "https://chinaordertz.com",
       "nmbGatewayBaseUrl": "https://test-nmbbank.mtf.gateway.mastercard.com",
       "router": {
         "origin": false

@@ -1,10 +1,12 @@
 import {
   DEFAULT_NMB_GATEWAY_BASE_URL,
+  DEFAULT_WEB_APP_BASE_URL,
   isLoopbackApiUrl,
   MISSING_PRODUCTION_API_URL_MESSAGE,
   resolveApiBaseUrl,
   resolveNmbGatewayBaseUrl,
   resolvePaymentCheckoutAllowedHosts,
+  resolveWebAppBaseUrl,
 } from './env';
 
 describe('resolveApiBaseUrl', () => {
@@ -61,6 +63,23 @@ describe('isLoopbackApiUrl', () => {
     expect(isLoopbackApiUrl('http://localhost:8000/api/v1')).toBe(true);
     expect(isLoopbackApiUrl('http://10.0.2.2:8000/api/v1')).toBe(true);
     expect(isLoopbackApiUrl('https://api.chinaordertz.com/api/v1')).toBe(false);
+  });
+});
+
+describe('resolveWebAppBaseUrl', () => {
+  it('defaults to chinaordertz.com storefront origin', () => {
+    expect(
+      resolveWebAppBaseUrl({ fromProcess: undefined, fromExtra: undefined }),
+    ).toBe(DEFAULT_WEB_APP_BASE_URL);
+  });
+
+  it('prefers EXPO_PUBLIC_WEB_APP_BASE_URL when set', () => {
+    expect(
+      resolveWebAppBaseUrl({
+        fromProcess: 'https://www.chinaordertz.com/',
+        fromExtra: 'https://chinaordertz.com',
+      }),
+    ).toBe('https://www.chinaordertz.com');
   });
 });
 
