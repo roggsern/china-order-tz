@@ -16,6 +16,7 @@ import {
   peekNmbPendingPaymentId,
   readNmbCheckoutContext,
 } from "@/lib/nmb/checkout-context";
+import { redirectToNmbMobileAppReturnIfNeeded } from "@/lib/nmb/mobile-app-return";
 import {
   buildPaymentReturnPath,
   buildSuccessHref,
@@ -40,6 +41,14 @@ export function NmbPaymentReturnContent() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reconciliationStartedRef = useRef(false);
   const resolutionStartedRef = useRef(false);
+  const mobileRedirectStartedRef = useRef(false);
+
+  // Mobile AuthSession: hand off gateway return URL to chinaordertz://payment-return.
+  useEffect(() => {
+    if (mobileRedirectStartedRef.current) return;
+    mobileRedirectStartedRef.current = true;
+    redirectToNmbMobileAppReturnIfNeeded(searchParams);
+  }, [searchParams]);
 
   const recovery = useMemo(
     () =>

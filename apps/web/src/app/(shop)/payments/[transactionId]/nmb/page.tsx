@@ -5,6 +5,7 @@ type PageProps = {
   searchParams: Promise<{
     sessionId?: string;
     successIndicator?: string;
+    mobileReturn?: string;
   }>;
 };
 
@@ -21,6 +22,7 @@ export default async function NmbPaymentTransactionCheckoutPage({
         paymentTransactionId={transactionId}
         sessionId={query.sessionId}
         successIndicator={query.successIndicator ?? null}
+        mobileReturn={query.mobileReturn === "1"}
       />
     </main>
   );

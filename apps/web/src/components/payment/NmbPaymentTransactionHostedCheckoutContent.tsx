@@ -19,6 +19,10 @@ import {
   describeHostedCheckoutError,
   launchMpgsHostedCheckout,
 } from "@/lib/nmb/hosted-checkout";
+import {
+  buildNmbMobileAppPaymentReturnUrl,
+  markNmbMobileAppReturn,
+} from "@/lib/nmb/mobile-app-return";
 import { prepareNmbHostedCheckoutLaunch } from "@/lib/nmb/orchestrator-checkout";
 import { buildPaymentReturnPath } from "@/lib/nmb/payment-return";
 
@@ -26,6 +30,8 @@ type NmbPaymentTransactionHostedCheckoutContentProps = {
   paymentTransactionId: string;
   sessionId?: string;
   successIndicator?: string | null;
+  /** When true, launch without web login token and return via chinaordertz://payment-return. */
+  mobileReturn?: boolean;
 };
 
 type CheckoutPhase = "loading" | "redirecting" | "error";
@@ -54,6 +60,7 @@ export function NmbPaymentTransactionHostedCheckoutContent({
   paymentTransactionId,
   sessionId: sessionIdProp,
   successIndicator: successIndicatorProp,
+  mobileReturn = false,
 }: NmbPaymentTransactionHostedCheckoutContentProps) {
   const router = useRouter();
   const launchedRef = useRef(false);
@@ -102,6 +109,13 @@ export function NmbPaymentTransactionHostedCheckoutContent({
         successIndicator: context?.successIndicator ?? successIndicatorProp,
       });
 
+      if (mobileReturn) {
+        markNmbMobileAppReturn();
+        const query = path.includes("?") ? path.slice(path.indexOf("?") + 1) : "";
+        window.location.href = buildNmbMobileAppPaymentReturnUrl(query);
+        return;
+      }
+
       // Keep absolute origin from configured return URL when available.
       try {
         const configured = new URL(getNmbReturnUrl());
@@ -110,7 +124,7 @@ export function NmbPaymentTransactionHostedCheckoutContent({
         router.replace(path);
       }
     },
-    [paymentTransactionId, router, successIndicatorProp],
+    [mobileReturn, paymentTransactionId, router, successIndicatorProp],
   );
 
   const launchWithSession = useCallback(
@@ -160,16 +174,17 @@ export function NmbPaymentTransactionHostedCheckoutContent({
   );
 
   const startHostedCheckout = useCallback(async () => {
-    const token = getCustomerApiToken();
-    if (!token) {
-      throw new PaymentOrchestratorApiError("Please sign in to continue with payment.", 401);
-    }
-
     let sessionId = sessionIdProp?.trim() || readNmbCheckoutContext()?.gatewaySessionId?.trim();
     let successIndicator =
       successIndicatorProp ?? readNmbCheckoutContext()?.successIndicator ?? null;
 
+    // Mobile AuthSession passes sessionId so Checkout.js can run without a web login cookie.
     if (!sessionId) {
+      const token = getCustomerApiToken();
+      if (!token) {
+        throw new PaymentOrchestratorApiError("Please sign in to continue with payment.", 401);
+      }
+
       const transaction = await fetchPaymentTransaction(paymentTransactionId, token);
 
       if (transaction.provider !== "nmb") {
@@ -203,9 +218,14 @@ export function NmbPaymentTransactionHostedCheckoutContent({
       });
     }
 
+    if (mobileReturn) {
+      markNmbMobileAppReturn();
+    }
+
     await launchWithSession(sessionId, successIndicator);
   }, [
     launchWithSession,
+    mobileReturn,
     paymentTransactionId,
     sessionIdProp,
     successIndicatorProp,
@@ -219,6 +239,11 @@ export function NmbPaymentTransactionHostedCheckoutContent({
     // Mastercard Hosted Checkout cancel returns to this page with #__hc-action-cancel.
     // Do not auto-relaunch the gateway on remount.
     if (typeof window !== "undefined" && window.location.hash === "#__hc-action-cancel") {
+      if (mobileReturn) {
+        launchedRef.current = true;
+        redirectToReturn();
+        return;
+      }
       setPhase("error");
       setErrorMessage("Payment was cancelled. You can try again when ready.");
       void resolveOrderNumber();
@@ -243,7 +268,7 @@ export function NmbPaymentTransactionHostedCheckoutContent({
         void resolveOrderNumber();
       }
     })();
-  }, [resolveOrderNumber, startHostedCheckout]);
+  }, [mobileReturn, redirectToReturn, resolveOrderNumber, startHostedCheckout]);
 
   const orderDetailsHref = orderNumber
     ? `/orders/${encodeURIComponent(orderNumber)}`
