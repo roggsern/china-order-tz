@@ -1,4 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { Badge } from '@/src/shared/ui/Badge';
+import { Card } from '@/src/shared/ui/Card';
+import { PriceText } from '@/src/shared/ui/PriceText';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import type { CatalogProductVariant } from '../models/types';
 
 type Props = {
@@ -15,9 +19,11 @@ export function ProductVariantsList({ variants }: Props) {
     <View style={styles.wrap}>
       <Text style={styles.title}>Variants</Text>
       {variants.map((variant) => (
-        <View key={variant.id} style={styles.row}>
+        <Card key={variant.id} elevated={false} style={styles.row}>
           <View style={styles.copy}>
-            <Text style={styles.name}>{variant.name || variant.sku || variant.id}</Text>
+            <Text style={styles.name}>
+              {variant.name || variant.sku || variant.id}
+            </Text>
             {variant.displayAttributes?.length ? (
               <Text style={styles.attrs}>
                 {variant.displayAttributes
@@ -26,15 +32,15 @@ export function ProductVariantsList({ variants }: Props) {
               </Text>
             ) : null}
             {variant.inStock != null ? (
-              <Text style={styles.stock}>
-                {variant.inStock ? 'In stock' : 'Out of stock'}
-              </Text>
+              <Badge
+                label={variant.inStock ? 'In stock' : 'Out of stock'}
+                tone={variant.inStock ? 'success' : 'neutral'}
+                style={styles.stockBadge}
+              />
             ) : null}
           </View>
-          <Text style={styles.price}>
-            {variant.price != null ? String(variant.price) : '—'}
-          </Text>
-        </View>
+          <PriceText value={variant.price} style={styles.price} />
+        </Card>
       ))}
     </View>
   );
@@ -42,42 +48,36 @@ export function ProductVariantsList({ variants }: Props) {
 
 const styles = StyleSheet.create({
   wrap: {
-    marginTop: 20,
+    marginTop: spacing.xxl,
+    gap: spacing.sm,
   },
   title: {
+    ...typography.title,
     fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 10,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 12,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#ddd',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    backgroundColor: colors.backgroundMuted,
+    borderColor: colors.border,
   },
   copy: {
     flex: 1,
+    gap: spacing.xs,
   },
   name: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#222',
+    ...typography.bodyStrong,
   },
   attrs: {
-    marginTop: 2,
-    fontSize: 12,
-    color: '#666',
+    ...typography.caption,
   },
-  stock: {
-    marginTop: 2,
-    fontSize: 12,
-    color: '#555',
+  stockBadge: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.xs,
   },
   price: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#0a7ea4',
   },
 });

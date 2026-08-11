@@ -1,7 +1,18 @@
+import { useRef, useState } from 'react';
+import {
+  Dimensions,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { Image } from 'expo-image';
-import { StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { brandColors, colors, radius, spacing, typography } from '@/src/shared/theme';
 import type { HomepageHeroSlide } from '../models/types';
-import { SectionHeader } from './SectionHeader';
 
 type Props = {
   title?: string | null;
@@ -9,76 +20,192 @@ type Props = {
   slides: HomepageHeroSlide[];
 };
 
-/** MVP hero — shows primary slide content from CMS (no hardcoded marketing). */
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const HERO_HEIGHT = 220;
+
+function slideImageUrl(slide: HomepageHeroSlide): string | null {
+  return slide.mobile_media?.url ?? slide.desktop_media?.url ?? null;
+}
+
+/**
+ * CMS-driven hero carousel — no placeholder marketing copy beyond slide fields.
+ */
 export function HeroSection({ title, subtitle, slides }: Props) {
-  const slide = slides[0];
-  const imageUrl = slide?.mobile_media?.url ?? slide?.desktop_media?.url ?? null;
+  const [index, setIndex] = useState(0);
+  const scrolling = useRef(false);
+
+  if (slides.length === 0) {
+    return null;
+  }
+
+  function onScrollEnd(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    const next = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+    setIndex(Math.max(0, Math.min(next, slides.length - 1)));
+    scrolling.current = false;
+  }
 
   return (
     <View style={styles.section}>
-      <SectionHeader title={title || 'Hero'} subtitle={subtitle} />
-      <View style={styles.hero}>
-        {imageUrl ? (
-          <Image source={{ uri: imageUrl }} style={styles.image} contentFit="cover" />
-        ) : (
-          <View style={[styles.image, styles.placeholder]}>
-            <Text style={styles.placeholderText}>Hero</Text>
-          </View>
-        )}
-        <View style={styles.copy}>
-          {slide?.eyebrow_text ? (
-            <Text style={styles.eyebrow}>{slide.eyebrow_text}</Text>
-          ) : null}
-          <Text style={styles.headline}>{slide?.headline || 'Welcome'}</Text>
-          {slide?.subheadline ? (
-            <Text style={styles.subheadline}>{slide.subheadline}</Text>
-          ) : null}
+      {(title || subtitle) && (
+        <View style={styles.copyHeader}>
+          {title ? <Text style={styles.sectionEyebrow}>{title}</Text> : null}
+          {subtitle ? <Text style={styles.sectionSubtitle}>{subtitle}</Text> : null}
         </View>
-      </View>
+      )}
+
+      <ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={onScrollEnd}
+        decelerationRate="fast"
+        style={styles.carousel}
+      >
+        {slides.map((slide) => {
+          const imageUrl = slideImageUrl(slide);
+          const ctaLabel = slide.primary_cta?.label?.trim();
+          return (
+            <View key={slide.id} style={styles.slide}>
+              {imageUrl ? (
+                <Image
+                  source={{ uri: imageUrl }}
+                  style={styles.image}
+                  contentFit="cover"
+                  accessibilityLabel={slide.headline ?? 'Hero'}
+                />
+              ) : (
+                <View style={[styles.image, styles.imageFallback]} />
+              )}
+              <View style={styles.overlay}>
+                {slide.eyebrow_text ? (
+                  <Text style={styles.eyebrow}>{slide.eyebrow_text}</Text>
+                ) : null}
+                <Text style={styles.headline} numberOfLines={3}>
+                  {slide.headline || 'CHINA ORDER TZ'}
+                </Text>
+                {slide.subheadline ? (
+                  <Text style={styles.subheadline} numberOfLines={3}>
+                    {slide.subheadline}
+                  </Text>
+                ) : null}
+                {ctaLabel ? (
+                  <Pressable
+                    style={styles.cta}
+                    onPress={() => router.push('/(app)/(tabs)/browse')}
+                  >
+                    <Text style={styles.ctaText}>{ctaLabel}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          );
+        })}
+      </ScrollView>
+
+      {slides.length > 1 ? (
+        <View style={styles.dots}>
+          {slides.map((slide, i) => (
+            <View
+              key={slide.id}
+              style={[styles.dot, i === index ? styles.dotActive : null]}
+            />
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   section: {
-    marginBottom: 24,
+    marginBottom: spacing.xxl,
   },
-  hero: {
-    marginHorizontal: 16,
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: '#e8eef2',
+  copyHeader: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  sectionEyebrow: {
+    ...typography.caption,
+    color: colors.primaryPressed,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: spacing.xs,
+  },
+  sectionSubtitle: {
+    ...typography.body,
+  },
+  carousel: {
+    flexGrow: 0,
+  },
+  slide: {
+    width: SCREEN_WIDTH,
+    height: HERO_HEIGHT,
+    paddingHorizontal: spacing.lg,
   },
   image: {
     width: '100%',
-    height: 180,
+    height: '100%',
+    borderRadius: radius.xl,
+    backgroundColor: colors.backgroundMuted,
   },
-  placeholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#d7e3ea',
+  imageFallback: {
+    backgroundColor: colors.primaryMuted,
   },
-  placeholderText: {
-    color: '#668',
-    fontSize: 14,
-  },
-  copy: {
-    padding: 16,
+  overlay: {
+    ...StyleSheet.absoluteFill,
+    marginHorizontal: spacing.lg,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(17,17,17,0.28)',
   },
   eyebrow: {
-    fontSize: 12,
-    color: '#0a7ea4',
-    marginBottom: 4,
-    fontWeight: '600',
+    ...typography.caption,
+    color: brandColors.goldLight,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: spacing.xs,
   },
   headline: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111',
+    ...typography.heading,
+    color: colors.textInverse,
+    fontSize: 24,
+    lineHeight: 30,
   },
   subheadline: {
-    marginTop: 6,
-    fontSize: 14,
-    color: '#444',
+    ...typography.body,
+    color: 'rgba(255,255,255,0.92)',
+    marginTop: spacing.xs,
+  },
+  cta: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.md,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+  },
+  ctaText: {
+    ...typography.label,
+    color: colors.onPrimary,
+    fontWeight: '700',
+  },
+  dots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.md,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.borderStrong,
+  },
+  dotActive: {
+    width: 16,
+    backgroundColor: colors.primary,
   },
 });

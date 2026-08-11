@@ -68,7 +68,7 @@ export default function RootLayout() {
   }, [bootstrapStatus]);
 
   if (bootstrapStatus !== 'complete') {
-    return <SplashView />;
+    return <SplashView message="Preparing CHINA ORDER TZ…" />;
   }
 
   return (

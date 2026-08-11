@@ -1,21 +1,13 @@
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { StyleSheet } from 'react-native';
+import { EmptyState } from '@/src/shared/ui/EmptyState';
+import { ScreenLoadingState } from '@/src/shared/ui/ScreenLoadingState';
+import { colors } from '@/src/shared/theme';
 import { getCatalogErrorMessage } from '../utils/catalogErrorMessage';
 
 type LoadingProps = { label?: string };
 
 export function CatalogLoadingState({ label = 'Loading…' }: LoadingProps) {
-  return (
-    <View style={styles.centered}>
-      <ActivityIndicator size="large" color="#0a7ea4" />
-      <Text style={styles.muted}>{label}</Text>
-    </View>
-  );
+  return <ScreenLoadingState label={label} />;
 }
 
 type EmptyAction = {
@@ -30,31 +22,23 @@ type EmptyProps = {
   actions?: EmptyAction[];
 };
 
+/** Maps catalog empty actions onto shared EmptyState (primary + optional secondary). */
 export function CatalogEmptyState({ title, message, actions }: EmptyProps) {
+  const primary =
+    actions?.find((action) => action.primary) ??
+    (actions?.length === 1 ? actions[0] : undefined);
+  const secondary = actions?.find((action) => action !== primary);
+
   return (
-    <View style={styles.centered}>
-      <Text style={styles.title}>{title}</Text>
-      {message ? <Text style={styles.muted}>{message}</Text> : null}
-      {actions?.length ? (
-        <View style={styles.actions}>
-          {actions.map((action) => (
-            <Pressable
-              key={action.label}
-              style={action.primary ? styles.primaryButton : styles.secondaryButton}
-              onPress={action.onPress}
-            >
-              <Text
-                style={
-                  action.primary ? styles.primaryButtonText : styles.secondaryButtonText
-                }
-              >
-                {action.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-    </View>
+    <EmptyState
+      title={title}
+      message={message}
+      actionLabel={primary?.label}
+      onActionPress={primary?.onPress}
+      secondaryLabel={secondary?.label}
+      onSecondaryPress={secondary?.onPress}
+      style={styles.fill}
+    />
   );
 }
 
@@ -65,66 +49,19 @@ type ErrorProps = {
 
 export function CatalogErrorState({ error, onRetry }: ErrorProps) {
   return (
-    <View style={styles.centered}>
-      <Text style={styles.title}>Something went wrong</Text>
-      <Text style={styles.muted}>{getCatalogErrorMessage(error)}</Text>
-      {onRetry ? (
-        <Pressable style={styles.primaryButton} onPress={onRetry}>
-          <Text style={styles.primaryButtonText}>Retry</Text>
-        </Pressable>
-      ) : null}
-    </View>
+    <EmptyState
+      title="Something went wrong"
+      message={getCatalogErrorMessage(error)}
+      actionLabel={onRetry ? 'Retry' : undefined}
+      onActionPress={onRetry}
+      style={styles.fill}
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  centered: {
+  fill: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  muted: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-  },
-  actions: {
-    marginTop: 16,
-    gap: 10,
-    alignItems: 'center',
-    width: '100%',
-  },
-  primaryButton: {
-    marginTop: 8,
-    backgroundColor: '#0a7ea4',
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 8,
-    minWidth: 160,
-    alignItems: 'center',
-  },
-  primaryButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  secondaryButton: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#0a7ea4',
-    minWidth: 160,
-    alignItems: 'center',
-  },
-  secondaryButtonText: {
-    color: '#0a7ea4',
-    fontWeight: '600',
+    backgroundColor: colors.background,
   },
 });

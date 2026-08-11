@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import { CatalogProductCardView } from './CatalogProductCardView';
 import { CategoryChips } from './CategoryChips';
 import {
@@ -60,12 +61,17 @@ export function ChinaCatalogScreen() {
             void categoriesQuery.refetch();
             void productsQuery.refetch();
           }}
+          tintColor={colors.primary}
+          colors={[colors.primary]}
         />
       }
       ListHeaderComponent={
-        <View>
+        <View style={styles.header}>
+          <Text style={styles.eyebrow}>Catalog</Text>
           <Text style={styles.heading}>Order from China</Text>
-          <Text style={styles.subheading}>China import catalog</Text>
+          <Text style={styles.subheading}>
+            Factory-direct import products
+          </Text>
           <CategoryChips
             categories={categoriesQuery.data ?? []}
             selectedSlug={category}
@@ -92,7 +98,7 @@ export function ChinaCatalogScreen() {
       onEndReachedThreshold={0.4}
       ListFooterComponent={
         productsQuery.isFetchingNextPage ? (
-          <ActivityIndicator style={styles.footer} color="#0a7ea4" />
+          <ActivityIndicator style={styles.footer} color={colors.primary} />
         ) : !productsQuery.hasNextPage && products.length > 0 ? (
           <Text style={styles.end}>You have reached the end</Text>
         ) : productsQuery.isFetchNextPageError ? (
@@ -106,16 +112,29 @@ export function ChinaCatalogScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#fff' },
-  content: { paddingTop: 16, paddingBottom: 40, paddingHorizontal: 16 },
-  heading: {
-    fontSize: 22,
+  screen: { flex: 1, backgroundColor: colors.background },
+  content: {
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.huge,
+    paddingHorizontal: spacing.lg,
+  },
+  header: {
+    marginBottom: spacing.sm,
+  },
+  eyebrow: {
+    ...typography.caption,
+    color: colors.primaryPressed,
     fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: spacing.xs,
+  },
+  heading: {
+    ...typography.heading,
   },
   subheading: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 12,
+    ...typography.caption,
+    marginBottom: spacing.md,
   },
   row: {
     justifyContent: 'space-between',
@@ -123,17 +142,16 @@ const styles = StyleSheet.create({
   cardWrap: {
     width: '48%',
   },
-  footer: { marginVertical: 16 },
+  footer: { marginVertical: spacing.lg },
   end: {
+    ...typography.caption,
     textAlign: 'center',
-    color: '#888',
-    marginVertical: 16,
-    fontSize: 13,
+    marginVertical: spacing.lg,
   },
   footerError: {
+    ...typography.caption,
+    color: colors.error,
     textAlign: 'center',
-    color: '#b00020',
-    marginVertical: 16,
-    fontSize: 13,
+    marginVertical: spacing.lg,
   },
 });

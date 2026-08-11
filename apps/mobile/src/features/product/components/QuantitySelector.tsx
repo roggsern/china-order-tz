@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { colors, radius, spacing, typography } from '@/src/shared/theme';
 
 type Props = {
   quantity: number;
@@ -20,14 +21,20 @@ export function QuantitySelector({
       <Text style={styles.label}>Quantity</Text>
       <View style={styles.controls}>
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Decrease quantity"
           style={[styles.button, disabled ? styles.disabled : null]}
           disabled={disabled || quantity <= min}
           onPress={() => onChange(Math.max(min, quantity - 1))}
         >
           <Text style={styles.buttonText}>−</Text>
         </Pressable>
-        <Text style={styles.value}>{quantity}</Text>
+        <Text style={styles.value} accessibilityLabel={`Quantity ${quantity}`}>
+          {quantity}
+        </Text>
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Increase quantity"
           style={[styles.button, disabled ? styles.disabled : null]}
           disabled={disabled || quantity >= max}
           onPress={() => onChange(Math.min(max, quantity + 1))}
@@ -41,41 +48,40 @@ export function QuantitySelector({
 
 const styles = StyleSheet.create({
   wrap: {
-    marginTop: 16,
+    marginTop: spacing.lg,
   },
   label: {
-    fontSize: 14,
+    ...typography.label,
+    color: colors.text,
     fontWeight: '700',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   controls: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: spacing.lg,
   },
   button: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
+    width: 44,
+    height: 44,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
   },
   disabled: {
     opacity: 0.4,
   },
   buttonText: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#222',
+    ...typography.title,
+    color: colors.text,
   },
   value: {
-    minWidth: 28,
+    minWidth: 32,
     textAlign: 'center',
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#222',
+    ...typography.bodyStrong,
+    fontSize: 18,
   },
 });

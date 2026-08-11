@@ -1,12 +1,8 @@
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Card } from '@/src/shared/ui/Card';
+import { PrimaryButton } from '@/src/shared/ui/PrimaryButton';
+import { colors, radius, spacing, typography } from '@/src/shared/theme';
 import type {
   ApplyShippingChoiceInput,
   CheckoutShippingChoiceValue,
@@ -70,7 +66,7 @@ export function ShippingChoicePicker({
   }
 
   return (
-    <View style={styles.wrap}>
+    <Card elevated={false} style={styles.wrap}>
       <Text style={styles.title}>Shipping / receiving</Text>
       <Text style={styles.note}>
         Options follow your cart’s commerce channel. The server validates the final choice.
@@ -81,6 +77,8 @@ export function ShippingChoicePicker({
         return (
           <Pressable
             key={option.value}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
             style={[styles.option, active ? styles.optionActive : null]}
             onPress={() => setChoice(option.value)}
             disabled={submitting}
@@ -99,6 +97,8 @@ export function ShippingChoicePicker({
             return (
               <Pressable
                 key={value}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
                 style={[styles.methodChip, active ? styles.optionActive : null]}
                 onPress={() => setMethod(value)}
                 disabled={submitting}
@@ -117,14 +117,14 @@ export function ShippingChoicePicker({
           <TextInput
             style={styles.input}
             placeholder="Agent name"
-            placeholderTextColor="#999"
+            placeholderTextColor={colors.textSubtle}
             value={agentName}
             onChangeText={setAgentName}
           />
           <TextInput
             style={styles.input}
             placeholder="Agent contact"
-            placeholderTextColor="#999"
+            placeholderTextColor={colors.textSubtle}
             value={agentContact}
             onChangeText={setAgentContact}
           />
@@ -133,66 +133,71 @@ export function ShippingChoicePicker({
 
       {localError ? <Text style={styles.error}>{localError}</Text> : null}
 
-      <Pressable
-        style={[styles.button, submitting ? styles.disabled : null]}
+      <PrimaryButton
+        label="Save shipping choice"
+        loading={submitting}
         disabled={submitting}
         onPress={handleSubmit}
-      >
-        {submitting ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Save shipping choice</Text>
-        )}
-      </Pressable>
-    </View>
+        style={styles.button}
+      />
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginTop: 16 },
-  title: { fontSize: 16, fontWeight: '700', color: '#222' },
-  note: { marginTop: 4, marginBottom: 10, fontSize: 12, color: '#666', lineHeight: 17 },
+  wrap: {
+    marginTop: spacing.lg,
+    backgroundColor: colors.backgroundMuted,
+    borderColor: colors.border,
+  },
+  title: { ...typography.title, fontSize: 16 },
+  note: {
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
+    ...typography.caption,
+  },
   option: {
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    marginBottom: 8,
-    backgroundColor: '#fff',
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.surface,
   },
   optionActive: {
-    borderColor: '#0a7ea4',
-    backgroundColor: '#e7f5fa',
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryMuted,
   },
-  optionText: { fontSize: 14, color: '#333', fontWeight: '500' },
-  optionTextActive: { color: '#0a7ea4', fontWeight: '700' },
-  methodRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  optionText: {
+    ...typography.bodyStrong,
+    color: colors.textSecondary,
+  },
+  optionTextActive: {
+    color: colors.primaryPressed,
+    fontWeight: '700',
+  },
+  methodRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
   methodChip: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingVertical: 10,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.sm + 2,
     alignItems: 'center',
+    backgroundColor: colors.surface,
   },
-  agentFields: { gap: 8, marginBottom: 8 },
+  agentFields: { gap: spacing.sm, marginBottom: spacing.sm },
   input: {
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
-    color: '#222',
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    ...typography.bodyStrong,
+    color: colors.text,
+    backgroundColor: colors.surface,
   },
-  error: { color: '#b00020', marginBottom: 8, fontSize: 13 },
-  button: {
-    backgroundColor: '#0a7ea4',
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  disabled: { opacity: 0.6 },
-  buttonText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  error: { ...typography.caption, color: colors.error, marginBottom: spacing.sm },
+  button: { alignSelf: 'stretch' },
 });

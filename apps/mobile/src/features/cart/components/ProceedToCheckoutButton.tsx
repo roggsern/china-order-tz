@@ -1,5 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { PrimaryButton } from '@/src/shared/ui/PrimaryButton';
+import { colors, spacing, typography } from '@/src/shared/theme';
 
 type Props = {
   disabled?: boolean;
@@ -12,40 +14,32 @@ type Props = {
 export function ProceedToCheckoutButton({ disabled }: Props) {
   return (
     <View style={styles.wrap}>
-      <Pressable
-        style={[styles.button, disabled ? styles.buttonDisabled : null]}
+      <PrimaryButton
+        label="Proceed to Checkout"
         disabled={disabled}
         onPress={() => router.push('/(app)/checkout')}
-      >
-        <Text style={styles.buttonText}>Proceed to Checkout</Text>
-      </Pressable>
-      <Text style={styles.note}>Review totals and shipping before payment.</Text>
+        style={styles.button}
+      />
+      <Text style={styles.note}>
+        Review totals and shipping before payment.
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    marginTop: 16,
+    marginTop: spacing.sm,
+    paddingTop: spacing.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
   button: {
-    backgroundColor: '#0a7ea4',
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  buttonDisabled: {
-    backgroundColor: '#9bbdca',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
+    alignSelf: 'stretch',
   },
   note: {
-    marginTop: 8,
-    fontSize: 12,
-    color: '#666',
+    marginTop: spacing.sm,
+    ...typography.caption,
     textAlign: 'center',
   },
 });

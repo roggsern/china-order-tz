@@ -1,11 +1,12 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { colors, spacing, typography } from '../theme';
 
 type Props = {
   title: string;
   subtitle?: string;
 };
 
-/** Temporary scaffold UI — replace in later milestones. */
+/** Temporary scaffold UI — prefer feature screens over this helper. */
 export function ScreenPlaceholder({ title, subtitle }: Props) {
   return (
     <View style={styles.container}>
@@ -20,18 +21,16 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
-    backgroundColor: '#fff',
+    padding: spacing.xxl,
+    backgroundColor: colors.background,
   },
   title: {
-    fontSize: 22,
-    fontWeight: '600',
-    marginBottom: 8,
+    ...typography.heading,
+    marginBottom: spacing.sm,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 14,
-    color: '#555',
+    ...typography.body,
     textAlign: 'center',
   },
 });

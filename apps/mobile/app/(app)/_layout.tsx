@@ -1,6 +1,22 @@
 import { Redirect, Stack, useGlobalSearchParams, usePathname } from 'expo-router';
 import { useAuthStore } from '@/src/core/auth';
+import { useCart } from '@/src/features/cart/hooks/useCart';
 import { buildLoginHref } from '@/src/features/cart/utils/authReturn';
+import { AppHeader } from '@/src/shared/ui/AppHeader';
+
+function StackAppHeader({ title }: { title: string }) {
+  const cartQuery = useCart();
+  return (
+    <AppHeader
+      title={title}
+      showBrand={false}
+      showBack
+      showSearch
+      showCart
+      cartCount={cartQuery.data?.itemCount ?? 0}
+    />
+  );
+}
 
 /**
  * Rebuild an in-app returnTo from the current private route + query.
@@ -52,13 +68,26 @@ export default function AppLayout() {
   return (
     <Stack>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="product/[id]" options={{ title: 'Product' }} />
+      <Stack.Screen
+        name="product/[id]"
+        options={{
+          header: () => <StackAppHeader title="Product" />,
+        }}
+      />
+      {/* Default headers for checkout/payment — no payment UX changes. */}
       <Stack.Screen name="checkout" options={{ title: 'Checkout' }} />
       <Stack.Screen name="payment" options={{ title: 'Payment' }} />
-      <Stack.Screen name="orders/[id]/index" options={{ title: 'Order' }} />
+      <Stack.Screen
+        name="orders/[id]/index"
+        options={{
+          header: () => <StackAppHeader title="Order" />,
+        }}
+      />
       <Stack.Screen
         name="orders/[id]/tracking"
-        options={{ title: 'Tracking' }}
+        options={{
+          header: () => <StackAppHeader title="Tracking" />,
+        }}
       />
     </Stack>
   );

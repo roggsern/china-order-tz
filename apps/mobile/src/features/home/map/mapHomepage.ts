@@ -2,12 +2,15 @@ import { ApiError } from '@/src/core/errors';
 import type { CommerceJourney } from '@/src/shared/types/commerce';
 import { homepageResponseSchema } from '../api/schemas';
 import type {
+  HomepageCategoryCard,
   HomepageFeaturedContent,
   HomepageHeroSlide,
   HomepageLayout,
   HomepageMeta,
   HomepageProductCard,
   HomepageSection,
+  HomepageStoreCard,
+  HomepageTrustItem,
   HomepageViewModel,
   HomepageCommerceContext,
   RenderableHomepageSection,
@@ -18,6 +21,13 @@ const PRODUCT_SECTION_TYPES = new Set([
   'NEW_ARRIVALS',
   'BEST_SELLERS',
 ]);
+
+const CATEGORY_SECTION_TYPES = new Set([
+  'FEATURED_CATEGORIES',
+  'FEATURED_COLLECTIONS',
+]);
+
+const TRUST_SECTION_TYPES = new Set(['WHY_CHOOSE_US', 'TRUST_INDICATORS']);
 
 export function resolveHomepageCommerceContext(
   journey: CommerceJourney,
@@ -82,6 +92,63 @@ export function mapProductCard(data: unknown): HomepageProductCard | null {
   };
 }
 
+export function mapCategoryCard(data: unknown, itemId?: string): HomepageCategoryCard | null {
+  const record = asRecord(data);
+  const name = stringField(record, 'name');
+  const slug = stringField(record, 'slug');
+  if (!name || !slug) return null;
+  const image =
+    mediaUrl(record.image) ??
+    mediaUrl(record.primary_image) ??
+    stringField(record, 'image_url') ??
+    stringField(record, 'logo_url');
+  return {
+    id: stringField(record, 'id') ?? itemId ?? slug,
+    name,
+    slug,
+    description: stringField(record, 'description'),
+    imageUrl: image,
+  };
+}
+
+export function mapStoreCard(data: unknown, itemId?: string): HomepageStoreCard | null {
+  const record = asRecord(data);
+  const name = stringField(record, 'name');
+  const slug = stringField(record, 'slug');
+  if (!name || !slug) return null;
+  const image =
+    stringField(record, 'logo_url') ??
+    mediaUrl(record.logo) ??
+    stringField(record, 'banner_url') ??
+    mediaUrl(record.banner) ??
+    stringField(record, 'image_url');
+  return {
+    id: stringField(record, 'id') ?? itemId ?? slug,
+    name,
+    slug,
+    description: stringField(record, 'description'),
+    imageUrl: image,
+  };
+}
+
+export function mapTrustItem(data: unknown, itemId: string): HomepageTrustItem | null {
+  const record = asRecord(data);
+  const title =
+    stringField(record, 'title') ??
+    stringField(record, 'name') ??
+    stringField(record, 'label');
+  if (!title) return null;
+  return {
+    id: stringField(record, 'id') ?? itemId,
+    title,
+    description:
+      stringField(record, 'description') ??
+      stringField(record, 'body') ??
+      stringField(record, 'subtitle') ??
+      stringField(record, 'text'),
+  };
+}
+
 export function collectFeaturedItems(
   featuredContents: HomepageFeaturedContent[] | undefined,
 ): HomepageFeaturedContent['items'] {
@@ -103,6 +170,46 @@ export function productsFromFeatured(
   return products;
 }
 
+export function categoriesFromFeatured(
+  featuredContents: HomepageFeaturedContent[] | undefined,
+): HomepageCategoryCard[] {
+  const categories: HomepageCategoryCard[] = [];
+  for (const item of collectFeaturedItems(featuredContents) ?? []) {
+    const type = (item.item_type || '').toUpperCase();
+    if (type !== 'CATEGORY' && type !== 'BRAND') continue;
+    const category = mapCategoryCard(item.data, item.id);
+    if (category) categories.push(category);
+  }
+  return categories;
+}
+
+export function storesFromFeatured(
+  featuredContents: HomepageFeaturedContent[] | undefined,
+): HomepageStoreCard[] {
+  const stores: HomepageStoreCard[] = [];
+  for (const item of collectFeaturedItems(featuredContents) ?? []) {
+    if ((item.item_type || '').toUpperCase() !== 'STORE') continue;
+    const store = mapStoreCard(item.data, item.id);
+    if (store) stores.push(store);
+  }
+  return stores;
+}
+
+export function trustItemsFromSection(section: HomepageSection): HomepageTrustItem[] {
+  const items: HomepageTrustItem[] = [];
+  for (const item of collectFeaturedItems(section.featured_contents) ?? []) {
+    const mapped = mapTrustItem(item.data, item.id);
+    if (mapped) items.push(mapped);
+  }
+  const config = asRecord(section.configuration);
+  const configItems = Array.isArray(config.items) ? config.items : [];
+  configItems.forEach((raw, index) => {
+    const mapped = mapTrustItem(raw, `config-${section.id}-${index}`);
+    if (mapped) items.push(mapped);
+  });
+  return items;
+}
+
 function sortedVisibleSections(sections: HomepageSection[]): HomepageSection[] {
   return [...sections]
     .filter((section) => section.is_visible !== false)
@@ -116,21 +223,31 @@ function sortedSlides(slides: HomepageHeroSlide[] | undefined): HomepageHeroSlid
 
 /**
  * Build reusable render list from CMS layout + campaign meta.
- * Unknown section types are ignored safely.
+ * Preserves CMS section order. Unknown section types are ignored safely.
  */
 export function buildRenderableSections(
   layout: HomepageLayout | null,
   meta: HomepageMeta,
 ): RenderableHomepageSection[] {
-  const heroes: RenderableHomepageSection[] = [];
-  const products: RenderableHomepageSection[] = [];
+  const out: RenderableHomepageSection[] = [];
+  let campaignInserted = false;
+
+  const insertCampaign = () => {
+    if (campaignInserted || !meta.campaign) return;
+    out.push({
+      kind: 'CAMPAIGN',
+      key: `campaign:${meta.campaign.id}`,
+      campaign: meta.campaign,
+    });
+    campaignInserted = true;
+  };
 
   if (layout) {
     for (const section of sortedVisibleSections(layout.sections ?? [])) {
       const type = (section.section_type || '').toUpperCase();
 
       if (type === 'HERO') {
-        heroes.push({
+        out.push({
           kind: 'HERO',
           key: section.id,
           title: section.title,
@@ -140,29 +257,60 @@ export function buildRenderableSections(
         continue;
       }
 
+      insertCampaign();
+
       if (PRODUCT_SECTION_TYPES.has(type)) {
-        products.push({
+        out.push({
           kind: type as 'FEATURED_PRODUCTS' | 'NEW_ARRIVALS' | 'BEST_SELLERS',
           key: section.id,
           title: section.title,
           subtitle: section.subtitle,
           products: productsFromFeatured(section.featured_contents),
         });
+        continue;
+      }
+
+      if (CATEGORY_SECTION_TYPES.has(type)) {
+        const categories = categoriesFromFeatured(section.featured_contents);
+        if (categories.length === 0) continue;
+        out.push({
+          kind: 'FEATURED_CATEGORIES',
+          key: section.id,
+          title: section.title,
+          subtitle: section.subtitle,
+          categories,
+        });
+        continue;
+      }
+
+      if (type === 'SHOP_BY_STORE') {
+        const stores = storesFromFeatured(section.featured_contents);
+        if (stores.length === 0) continue;
+        out.push({
+          kind: 'SHOP_BY_STORE',
+          key: section.id,
+          title: section.title,
+          subtitle: section.subtitle,
+          stores,
+        });
+        continue;
+      }
+
+      if (TRUST_SECTION_TYPES.has(type)) {
+        const items = trustItemsFromSection(section);
+        if (!section.title && !section.subtitle && items.length === 0) continue;
+        out.push({
+          kind: 'TRUST',
+          key: section.id,
+          title: section.title,
+          subtitle: section.subtitle,
+          items,
+        });
       }
     }
   }
 
-  const out: RenderableHomepageSection[] = [...heroes];
-
-  if (meta.campaign) {
-    out.push({
-      kind: 'CAMPAIGN',
-      key: `campaign:${meta.campaign.id}`,
-      campaign: meta.campaign,
-    });
-  }
-
-  out.push(...products);
+  insertCampaign();
   return out;
 }
 

@@ -1,4 +1,7 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
+import { Badge, type BadgeTone } from '@/src/shared/ui/Badge';
+import { Card } from '@/src/shared/ui/Card';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import type { CatalogProductDetail, ProductConfiguration } from '../models/types';
 import { resolveCustomerAvailabilityLabel } from '../utils/resolveCustomerAvailabilityLabel';
 
@@ -7,35 +10,36 @@ type Props = {
   configuration?: ProductConfiguration | null;
 };
 
+function toneForLabel(label: string): BadgeTone {
+  if (label === 'Available') return 'success';
+  if (label === 'Out of stock' || label === 'Unavailable') return 'error';
+  if (label === 'Select options') return 'warning';
+  return 'neutral';
+}
+
 /** Customer availability from server fields — no conflicting technical flags. */
 export function ProductAvailabilityBadge({ product, configuration }: Props) {
   const label = resolveCustomerAvailabilityLabel({ product, configuration });
 
   return (
-    <View style={styles.wrap}>
-      <Text style={styles.status}>{label}</Text>
+    <Card elevated={false} style={styles.wrap}>
+      <Badge label={label} tone={toneForLabel(label)} />
       {product.unavailabilityReason ? (
         <Text style={styles.reason}>{product.unavailabilityReason}</Text>
       ) : null}
-    </View>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: '#f5f7f8',
-  },
-  status: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#222',
+    marginTop: spacing.md,
+    backgroundColor: colors.backgroundMuted,
+    borderColor: colors.border,
+    gap: spacing.sm,
   },
   reason: {
-    marginTop: 6,
-    fontSize: 13,
-    color: '#b00020',
+    ...typography.caption,
+    color: colors.error,
   },
 });

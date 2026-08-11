@@ -1,15 +1,21 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { BRAND_NAME, BRAND_TAGLINE, BrandMark } from '@/src/shared/branding';
+import { colors, spacing, typography } from '@/src/shared/theme';
 
 type Props = {
   message?: string;
 };
 
-/** MVP splash while SecureStore + GET /me bootstrap runs. */
+/** Branded splash while SecureStore + GET /me bootstrap runs. */
 export function SplashView({ message = 'Restoring session…' }: Props) {
   return (
     <View style={styles.container} accessibilityLabel="splash">
-      <Text style={styles.title}>CHINA ORDER TZ</Text>
-      <ActivityIndicator size="large" color="#0a7ea4" style={styles.spinner} />
+      <View style={styles.hero}>
+        <BrandMark variant="splash" size={56} style={styles.logo} />
+        <Text style={styles.title}>{BRAND_NAME}</Text>
+        <Text style={styles.tagline}>{BRAND_TAGLINE}</Text>
+      </View>
+      <ActivityIndicator size="large" color={colors.primary} style={styles.spinner} />
       <Text style={styles.message}>{message}</Text>
     </View>
   );
@@ -20,19 +26,36 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
-    backgroundColor: '#fff',
+    padding: spacing.xxl,
+    backgroundColor: colors.surfaceCream,
+  },
+  hero: {
+    alignItems: 'center',
+    marginBottom: spacing.xxxl,
+    paddingHorizontal: spacing.lg,
+  },
+  logo: {
+    marginBottom: spacing.lg,
+    backgroundColor: 'transparent',
   },
   title: {
-    fontSize: 22,
-    fontWeight: '700',
-    marginBottom: 24,
+    ...typography.heading,
+    textAlign: 'center',
+    color: colors.text,
+    letterSpacing: 0.6,
+  },
+  tagline: {
+    ...typography.caption,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    color: colors.textMuted,
+    maxWidth: 280,
   },
   spinner: {
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
   message: {
-    fontSize: 14,
-    color: '#555',
+    ...typography.body,
+    textAlign: 'center',
   },
 });

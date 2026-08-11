@@ -13,6 +13,7 @@ export function NewArrivalsSection({ title, subtitle, products }: Props) {
       title={title || 'New arrivals'}
       subtitle={subtitle}
       products={products}
+      badgeLabel="New"
     />
   );
 }

@@ -1,13 +1,15 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SectionHeader } from '@/src/shared/ui/SectionHeader';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import type { HomepageProductCard } from '../models/types';
 import { ProductCard } from './ProductCard';
-import { SectionHeader } from './SectionHeader';
 
 type Props = {
   title: string;
   subtitle?: string | null;
   products: HomepageProductCard[];
   emptyLabel?: string;
+  badgeLabel?: string;
 };
 
 /** Reusable horizontal product rail for featured / new / best-seller sections. */
@@ -16,6 +18,7 @@ export function ProductRailSection({
   subtitle,
   products,
   emptyLabel = 'No products in this section yet.',
+  badgeLabel,
 }: Props) {
   return (
     <View style={styles.section}>
@@ -29,7 +32,11 @@ export function ProductRailSection({
           contentContainerStyle={styles.rail}
         >
           {products.map((product) => (
-            <ProductCard key={product.id} product={product} />
+            <ProductCard
+              key={product.id}
+              product={product}
+              badgeLabel={badgeLabel}
+            />
           ))}
         </ScrollView>
       )}
@@ -39,14 +46,15 @@ export function ProductRailSection({
 
 const styles = StyleSheet.create({
   section: {
-    marginBottom: 24,
+    marginBottom: spacing.xxl,
   },
   rail: {
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xs,
   },
   empty: {
-    paddingHorizontal: 16,
-    fontSize: 13,
-    color: '#888',
+    paddingHorizontal: spacing.lg,
+    ...typography.caption,
+    color: colors.textSubtle,
   },
 });

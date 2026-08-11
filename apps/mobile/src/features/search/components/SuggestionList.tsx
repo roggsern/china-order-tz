@@ -1,4 +1,6 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Badge } from '@/src/shared/ui/Badge';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import type { SearchSuggestion } from '../models/types';
 
 type Props = {
@@ -20,18 +22,36 @@ function kindLabel(kind: SearchSuggestion['kind']): string {
   }
 }
 
+function kindTone(
+  kind: SearchSuggestion['kind'],
+): 'brand' | 'neutral' | 'success' | 'info' {
+  switch (kind) {
+    case 'brand':
+      return 'info';
+    case 'store':
+      return 'success';
+    case 'category':
+      return 'neutral';
+    default:
+      return 'brand';
+  }
+}
+
 export function SuggestionList({ suggestions, isLoading, onSelect }: Props) {
   if (isLoading && suggestions.length === 0) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator color="#0a7ea4" />
+        <ActivityIndicator color={colors.primary} />
+        <Text style={styles.loadingLabel}>Looking up suggestions…</Text>
       </View>
     );
   }
 
   if (suggestions.length === 0) {
     return (
-      <Text style={styles.empty}>No suggestions yet. Keep typing or submit to search.</Text>
+      <Text style={styles.empty}>
+        No suggestions yet. Keep typing or submit to search.
+      </Text>
     );
   }
 
@@ -42,11 +62,12 @@ export function SuggestionList({ suggestions, isLoading, onSelect }: Props) {
           key={suggestion.id}
           style={styles.row}
           onPress={() => onSelect(suggestion)}
+          accessibilityRole="button"
         >
           <Text style={styles.label} numberOfLines={1}>
             {suggestion.label}
           </Text>
-          <Text style={styles.kind}>{kindLabel(suggestion.kind)}</Text>
+          <Badge label={kindLabel(suggestion.kind)} tone={kindTone(suggestion.kind)} />
         </Pressable>
       ))}
     </View>
@@ -55,37 +76,33 @@ export function SuggestionList({ suggestions, isLoading, onSelect }: Props) {
 
 const styles = StyleSheet.create({
   list: {
-    paddingHorizontal: 8,
+    paddingHorizontal: spacing.sm,
   },
   row: {
-    paddingHorizontal: 12,
-    paddingVertical: 14,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e5e5e5',
+    borderBottomColor: colors.border,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: spacing.md,
   },
   label: {
     flex: 1,
-    fontSize: 15,
-    color: '#222',
-  },
-  kind: {
-    fontSize: 11,
-    color: '#888',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
+    ...typography.bodyStrong,
   },
   empty: {
-    paddingHorizontal: 16,
-    paddingVertical: 24,
-    color: '#666',
-    fontSize: 14,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xxl,
+    ...typography.body,
   },
   centered: {
-    paddingVertical: 32,
+    paddingVertical: spacing.xxxl,
     alignItems: 'center',
+    gap: spacing.sm,
+  },
+  loadingLabel: {
+    ...typography.caption,
   },
 });

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { useQueryClient } from '@tanstack/react-query';
@@ -7,6 +7,8 @@ import { bootstrapAuth, useAuthStore } from '@/src/core/auth';
 import { secureTokenStorage } from '@/src/core/storage';
 import { buildLoginHref } from '@/src/features/cart/utils/authReturn';
 import { invalidateAfterPaymentSuccess } from '@/src/features/orders/hooks/useOrders';
+import { ScreenLoadingState } from '@/src/shared/ui/ScreenLoadingState';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import { pendingPaymentContextStorage } from '../storage/pendingPaymentContextStorage';
 import { handleNmbPaymentReturn } from '../utils/handlePaymentReturn';
 import { isSuccessfulPaymentStatus } from '../utils/mapPayment';
@@ -149,21 +151,25 @@ export function PaymentReturnScreen() {
   }, [authStatus, bootstrapStatus, params, queryClient]);
 
   return (
-    <View style={styles.centered}>
-      <ActivityIndicator size="large" color="#0a7ea4" />
-      <Text style={styles.message}>{statusMessage}</Text>
+    <View style={styles.wrap}>
+      <ScreenLoadingState label={statusMessage} />
+      <Text style={styles.hint}>
+        Returning from NMB Hosted Checkout. Paid status is confirmed by the server.
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  centered: {
+  wrap: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-    backgroundColor: '#fff',
-    gap: 12,
+    backgroundColor: colors.background,
   },
-  message: { fontSize: 14, color: '#666', textAlign: 'center' },
+  hint: {
+    ...typography.caption,
+    textAlign: 'center',
+    paddingHorizontal: spacing.xxl,
+    paddingBottom: spacing.huge,
+    marginTop: -spacing.xl,
+  },
 });

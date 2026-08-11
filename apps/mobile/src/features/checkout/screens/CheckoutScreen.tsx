@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -11,8 +9,21 @@ import {
 import { router } from 'expo-router';
 import { useAuthStore } from '@/src/core/auth';
 import { buildLoginHref } from '@/src/features/cart/utils/authReturn';
+import { Badge } from '@/src/shared/ui/Badge';
+import { Card } from '@/src/shared/ui/Card';
+import { EmptyState } from '@/src/shared/ui/EmptyState';
+import { PrimaryButton } from '@/src/shared/ui/PrimaryButton';
+import { ScreenContainer } from '@/src/shared/ui/ScreenContainer';
+import { ScreenLoadingState } from '@/src/shared/ui/ScreenLoadingState';
+import { SecondaryButton } from '@/src/shared/ui/SecondaryButton';
+import { TrustStrip } from '@/src/shared/ui/TrustStrip';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import { fetchCheckoutSession } from '../api/checkoutApi';
 import { CheckoutItemsList } from '../components/CheckoutItemsList';
+import {
+  CheckoutProgress,
+  type CheckoutProgressStep,
+} from '../components/CheckoutProgress';
 import { CheckoutTotals } from '../components/CheckoutTotals';
 import { ContinueToPaymentButton } from '../components/ContinueToPaymentButton';
 import { DeliveryAddressForm } from '../components/DeliveryAddressForm';
@@ -122,6 +133,12 @@ export function CheckoutScreen() {
   const journeyLabel = journeyLabelFromCheckoutItems(prepare?.items ?? []);
   const readyForPayment = isReadyForPayment(session);
 
+  const progressStep: CheckoutProgressStep = !session
+    ? 'review'
+    : readyForPayment
+      ? 'payment'
+      : 'shipping';
+
   async function continueRecoveredCheckout(sessionId: string) {
     setRecoveryBusy(true);
     setActionError(null);
@@ -154,99 +171,85 @@ export function CheckoutScreen() {
 
   if (authStatus !== 'authenticated') {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.title}>Checkout</Text>
-        <Text style={styles.body}>Please sign in to continue checkout.</Text>
-        <Pressable
-          style={styles.primaryButton}
-          onPress={() => router.push(buildLoginHref('/(app)/checkout'))}
-        >
-          <Text style={styles.primaryButtonText}>Sign in</Text>
-        </Pressable>
-      </View>
+      <EmptyState
+        title="Checkout"
+        message="Please sign in to continue checkout."
+        actionLabel="Sign in"
+        onActionPress={() => router.push(buildLoginHref('/(app)/checkout'))}
+        style={styles.fill}
+      />
     );
   }
 
   if (!recoveryChecked || (prepareQuery.isLoading && !prepare)) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#0a7ea4" />
-        <Text style={styles.muted}>Preparing checkout…</Text>
-      </View>
-    );
+    return <ScreenLoadingState label="Preparing checkout…" />;
   }
 
   if (prepareQuery.isError && !prepare) {
     const error = prepareQuery.error;
     if (isMissingDeliveryAddressError(error) || needsAddress) {
       return (
-        <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-          <Text style={styles.heading}>Checkout</Text>
-          <Text style={styles.subheading}>{getCheckoutErrorMessage(error)}</Text>
-          <DeliveryAddressForm
-            submitting={addressMutation.isPending}
-            onSubmit={(input) => {
-              setActionError(null);
-              addressMutation.mutate(input, {
-                onSuccess: () => {
-                  setNeedsAddress(false);
-                  void prepareQuery.refetch();
-                },
-                onError: (err) => setActionError(getCheckoutErrorMessage(err)),
-              });
-            }}
-          />
-          {actionError ? <Text style={styles.error}>{actionError}</Text> : null}
-        </ScrollView>
+        <ScreenContainer padded={false} style={styles.screen}>
+          <ScrollView contentContainerStyle={styles.content}>
+            <Text style={styles.eyebrow}>Checkout</Text>
+            <Text style={styles.heading}>Add delivery address</Text>
+            <Text style={styles.subheading}>{getCheckoutErrorMessage(error)}</Text>
+            <DeliveryAddressForm
+              submitting={addressMutation.isPending}
+              onSubmit={(input) => {
+                setActionError(null);
+                addressMutation.mutate(input, {
+                  onSuccess: () => {
+                    setNeedsAddress(false);
+                    void prepareQuery.refetch();
+                  },
+                  onError: (err) => setActionError(getCheckoutErrorMessage(err)),
+                });
+              }}
+            />
+            {actionError ? <Text style={styles.error}>{actionError}</Text> : null}
+          </ScrollView>
+        </ScreenContainer>
       );
     }
 
     if (isEmptyCartCheckoutError(error)) {
       return (
-        <View style={styles.centered}>
-          <Text style={styles.title}>Cart is empty</Text>
-          <Text style={styles.body}>Add products before starting checkout.</Text>
-          <Pressable
-            style={styles.primaryButton}
-            onPress={() => router.replace('/(app)/(tabs)/cart')}
-          >
-            <Text style={styles.primaryButtonText}>Back to cart</Text>
-          </Pressable>
-        </View>
+        <EmptyState
+          title="Cart is empty"
+          message="Add products before starting checkout."
+          actionLabel="Back to cart"
+          onActionPress={() => router.replace('/(app)/(tabs)/cart')}
+          style={styles.fill}
+        />
       );
     }
 
     return (
-      <View style={styles.centered}>
-        <Text style={styles.title}>Checkout unavailable</Text>
-        <Text style={styles.body}>{getCheckoutErrorMessage(error)}</Text>
-        <Pressable
-          style={styles.primaryButton}
-          onPress={() => {
-            if (isMissingDeliveryAddressError(error)) {
-              setNeedsAddress(true);
-            }
-            void prepareQuery.refetch();
-          }}
-        >
-          <Text style={styles.primaryButtonText}>Retry</Text>
-        </Pressable>
-      </View>
+      <EmptyState
+        title="Checkout unavailable"
+        message={getCheckoutErrorMessage(error)}
+        actionLabel="Retry"
+        onActionPress={() => {
+          if (isMissingDeliveryAddressError(error)) {
+            setNeedsAddress(true);
+          }
+          void prepareQuery.refetch();
+        }}
+        style={styles.fill}
+      />
     );
   }
 
   if (!prepare || prepare.items.length === 0) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.title}>Cart is empty</Text>
-        <Text style={styles.body}>Add products before starting checkout.</Text>
-        <Pressable
-          style={styles.primaryButton}
-          onPress={() => router.replace('/(app)/(tabs)/cart')}
-        >
-          <Text style={styles.primaryButtonText}>Back to cart</Text>
-        </Pressable>
-      </View>
+      <EmptyState
+        title="Cart is empty"
+        message="Add products before starting checkout."
+        actionLabel="Back to cart"
+        onActionPress={() => router.replace('/(app)/(tabs)/cart')}
+        style={styles.fill}
+      />
     );
   }
 
@@ -258,247 +261,254 @@ export function CheckoutScreen() {
     recoveryBusy;
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.content}
-      refreshControl={
-        <RefreshControl
-          refreshing={prepareQuery.isRefetching}
-          onRefresh={() => {
-            void prepareQuery.refetch();
-            if (session?.id) {
-              refreshMutation.mutate(session.id, {
-                onSuccess: setSession,
-                onError: (err) => {
-                  setActionError(getCheckoutErrorMessage(err));
-                  if (isStaleOrExpiredCheckoutError(err)) {
-                    setSession(null);
-                  }
-                },
-              });
-            }
-          }}
-        />
-      }
-    >
-      <Text style={styles.journey}>{journeyLabel}</Text>
-      <Text style={styles.subheading}>
-        Review your order. Prices and shipping rules come from the server.
-      </Text>
-
-      {actionError ? <Text style={styles.error}>{actionError}</Text> : null}
-
-      {recoveryOffer && !session ? (
-        <View style={styles.recoveryCard}>
-          <Text style={styles.cardTitle}>Continue checkout?</Text>
-          <Text style={styles.meta}>
-            We found an unfinished checkout session from before the app closed.
-          </Text>
-          <Pressable
-            style={[styles.primaryButton, recoveryBusy ? styles.disabled : null]}
-            disabled={recoveryBusy}
-            onPress={() => void continueRecoveredCheckout(recoveryOffer.checkoutSessionId)}
-          >
-            {recoveryBusy ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.primaryButtonText}>Continue checkout</Text>
-            )}
-          </Pressable>
-          <Pressable
-            style={styles.secondaryButton}
-            disabled={recoveryBusy}
-            onPress={() => void discardRecoveredCheckout()}
-          >
-            <Text style={styles.secondaryButtonText}>Start fresh</Text>
-          </Pressable>
-        </View>
-      ) : null}
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Delivery address</Text>
-        <Text style={styles.meta}>
-          {address.recipientName} · {address.phone}
+    <ScreenContainer padded={false} style={styles.screen}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={prepareQuery.isRefetching}
+            onRefresh={() => {
+              void prepareQuery.refetch();
+              if (session?.id) {
+                refreshMutation.mutate(session.id, {
+                  onSuccess: setSession,
+                  onError: (err) => {
+                    setActionError(getCheckoutErrorMessage(err));
+                    if (isStaleOrExpiredCheckoutError(err)) {
+                      setSession(null);
+                    }
+                  },
+                });
+              }
+            }}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
+      >
+        <Text style={styles.eyebrow}>Checkout</Text>
+        <Text style={styles.heading}>Review & ship</Text>
+        <Badge label={journeyLabel} tone="brand" style={styles.journeyBadge} />
+        <Text style={styles.subheading}>
+          Review your order. Prices and shipping rules come from the server.
         </Text>
-        <Text style={styles.meta}>
-          {[address.street, address.district, address.city, address.region, address.country]
-            .filter(Boolean)
-            .join(', ')}
-        </Text>
-      </View>
 
-      <CheckoutItemsList items={prepare.items} />
-      <CheckoutTotals prepare={prepare} session={session} />
+        <CheckoutProgress current={progressStep} />
 
-      {!session ? (
-        <Pressable
-          style={[
-            styles.primaryButton,
-            busy || Boolean(recoveryOffer) ? styles.disabled : null,
-          ]}
-          disabled={busy || Boolean(recoveryOffer)}
-          onPress={() => {
-            setActionError(null);
-            startMutation.mutate(undefined, {
-              onSuccess: setSession,
-              onError: (err) => setActionError(getCheckoutErrorMessage(err)),
-            });
-          }}
-        >
-          {startMutation.isPending ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.primaryButtonText}>Start checkout session</Text>
-          )}
-        </Pressable>
-      ) : (
-        <View style={styles.sessionBox}>
-          <Text style={styles.cardTitle}>Checkout session</Text>
-          <Text style={styles.meta}>Status: {session.status}</Text>
-          {session.expiresAt ? (
-            <Text style={styles.meta}>Expires: {session.expiresAt}</Text>
-          ) : null}
-          {session.shippingChoice ? (
+        {actionError ? <Text style={styles.error}>{actionError}</Text> : null}
+
+        {recoveryOffer && !session ? (
+          <Card elevated style={styles.recoveryCard}>
+            <Text style={styles.cardTitle}>Continue checkout?</Text>
             <Text style={styles.meta}>
-              Choice: {session.shippingChoice}
-              {session.shippingMethod ? ` (${session.shippingMethod})` : ''}
+              We found an unfinished checkout session from before the app closed.
             </Text>
-          ) : null}
-          {session.isExpired || session.status === 'expired' ? (
-            <Text style={styles.error}>
-              Session expired. Refresh or start checkout again.
-            </Text>
-          ) : null}
+            <PrimaryButton
+              label="Continue checkout"
+              loading={recoveryBusy}
+              disabled={recoveryBusy}
+              onPress={() => void continueRecoveredCheckout(recoveryOffer.checkoutSessionId)}
+              style={styles.inlineButton}
+            />
+            <SecondaryButton
+              label="Start fresh"
+              disabled={recoveryBusy}
+              onPress={() => void discardRecoveredCheckout()}
+              style={styles.inlineButton}
+            />
+          </Card>
+        ) : null}
 
-          <Pressable
-            style={styles.secondaryButton}
-            disabled={busy}
+        <Card elevated={false} style={styles.addressCard}>
+          <Text style={styles.cardTitle}>Delivery address</Text>
+          <Text style={styles.meta}>
+            {address.recipientName} · {address.phone}
+          </Text>
+          <Text style={styles.meta}>
+            {[address.street, address.district, address.city, address.region, address.country]
+              .filter(Boolean)
+              .join(', ')}
+          </Text>
+        </Card>
+
+        <CheckoutItemsList items={prepare.items} />
+        <CheckoutTotals prepare={prepare} session={session} />
+
+        {!session ? (
+          <PrimaryButton
+            label="Start checkout session"
+            loading={startMutation.isPending}
+            disabled={busy || Boolean(recoveryOffer)}
             onPress={() => {
               setActionError(null);
-              refreshMutation.mutate(session.id, {
+              startMutation.mutate(undefined, {
                 onSuccess: setSession,
-                onError: (err) => {
-                  setActionError(getCheckoutErrorMessage(err));
-                  if (isStaleOrExpiredCheckoutError(err)) {
-                    setSession(null);
-                  }
-                },
+                onError: (err) => setActionError(getCheckoutErrorMessage(err)),
               });
             }}
-          >
-            <Text style={styles.secondaryButtonText}>Refresh session</Text>
-          </Pressable>
+            style={styles.inlineButton}
+          />
+        ) : (
+          <Card elevated={false} style={styles.sessionBox}>
+            <Text style={styles.cardTitle}>Checkout session</Text>
+            <View style={styles.badgeRow}>
+              <Badge label={session.status} tone="info" />
+              {session.shippingChoice ? (
+                <Badge label={session.shippingChoice} tone="neutral" />
+              ) : null}
+            </View>
+            {session.expiresAt ? (
+              <Text style={styles.meta}>Expires: {session.expiresAt}</Text>
+            ) : null}
+            {session.shippingChoice ? (
+              <Text style={styles.meta}>
+                Choice: {session.shippingChoice}
+                {session.shippingMethod ? ` (${session.shippingMethod})` : ''}
+              </Text>
+            ) : null}
+            {session.isExpired || session.status === 'expired' ? (
+              <Text style={styles.error}>
+                Session expired. Refresh or start checkout again.
+              </Text>
+            ) : null}
 
-          {!session.isExpired && session.status !== 'expired' ? (
-            <ShippingChoicePicker
-              options={shippingOptions}
-              submitting={shippingMutation.isPending}
-              currentChoice={session.shippingChoice}
-              currentMethod={session.shippingMethod}
-              onSubmit={(input) => {
-                setActionError(null);
-                shippingMutation.mutate(
-                  { sessionId: session.id, ...input },
-                  {
-                    onSuccess: setSession,
-                    onError: (err) => {
-                      setActionError(getCheckoutErrorMessage(err));
-                      if (isStaleOrExpiredCheckoutError(err)) {
-                        setSession(null);
-                      }
-                    },
-                  },
-                );
-              }}
-            />
-          ) : (
-            <Pressable
-              style={styles.primaryButton}
+            <SecondaryButton
+              label="Refresh session"
+              disabled={busy}
               onPress={() => {
-                setSession(null);
                 setActionError(null);
-                startMutation.mutate(undefined, {
+                refreshMutation.mutate(session.id, {
                   onSuccess: setSession,
-                  onError: (err) => setActionError(getCheckoutErrorMessage(err)),
+                  onError: (err) => {
+                    setActionError(getCheckoutErrorMessage(err));
+                    if (isStaleOrExpiredCheckoutError(err)) {
+                      setSession(null);
+                    }
+                  },
                 });
               }}
-            >
-              <Text style={styles.primaryButtonText}>Restart checkout</Text>
-            </Pressable>
-          )}
-        </View>
-      )}
+              style={styles.inlineButton}
+            />
 
-      <ContinueToPaymentButton
-        enabled={readyForPayment && !busy}
-        checkoutSessionId={session?.id}
-      />
-    </ScrollView>
+            {!session.isExpired && session.status !== 'expired' ? (
+              <ShippingChoicePicker
+                options={shippingOptions}
+                submitting={shippingMutation.isPending}
+                currentChoice={session.shippingChoice}
+                currentMethod={session.shippingMethod}
+                onSubmit={(input) => {
+                  setActionError(null);
+                  shippingMutation.mutate(
+                    { sessionId: session.id, ...input },
+                    {
+                      onSuccess: setSession,
+                      onError: (err) => {
+                        setActionError(getCheckoutErrorMessage(err));
+                        if (isStaleOrExpiredCheckoutError(err)) {
+                          setSession(null);
+                        }
+                      },
+                    },
+                  );
+                }}
+              />
+            ) : (
+              <PrimaryButton
+                label="Restart checkout"
+                onPress={() => {
+                  setSession(null);
+                  setActionError(null);
+                  startMutation.mutate(undefined, {
+                    onSuccess: setSession,
+                    onError: (err) => setActionError(getCheckoutErrorMessage(err)),
+                  });
+                }}
+                style={styles.inlineButton}
+              />
+            )}
+          </Card>
+        )}
+
+        <ContinueToPaymentButton
+          enabled={readyForPayment && !busy}
+          checkoutSessionId={session?.id}
+        />
+
+        <TrustStrip
+          title="Secure checkout"
+          items={[
+            {
+              id: 'server',
+              title: 'Server-owned totals',
+              description: 'Shipping and grand totals are confirmed by the API.',
+            },
+            {
+              id: 'nmb',
+              title: 'NMB Hosted Checkout',
+              description: 'Payment opens in a secure bank handoff. Paid status is never guessed on device.',
+            },
+          ]}
+        />
+      </ScrollView>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#fff' },
-  content: { padding: 16, paddingBottom: 48 },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-    backgroundColor: '#fff',
-    gap: 10,
+  screen: { backgroundColor: colors.background },
+  content: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.huge,
   },
-  heading: { fontSize: 22, fontWeight: '700', color: '#111' },
-  journey: {
-    marginTop: 4,
-    fontSize: 12,
+  fill: { flex: 1, backgroundColor: colors.background },
+  eyebrow: {
+    ...typography.caption,
+    color: colors.primaryPressed,
     fontWeight: '700',
-    color: '#0a7ea4',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: spacing.xs,
   },
+  heading: { ...typography.heading },
+  journeyBadge: { alignSelf: 'flex-start', marginTop: spacing.sm },
   subheading: {
-    marginTop: 6,
-    marginBottom: 12,
-    fontSize: 13,
-    color: '#666',
-    lineHeight: 18,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+    ...typography.caption,
   },
-  title: { fontSize: 18, fontWeight: '700', color: '#222' },
-  body: { fontSize: 14, color: '#666', textAlign: 'center' },
-  muted: { fontSize: 14, color: '#666' },
-  error: { marginVertical: 8, color: '#b00020', fontSize: 14 },
-  card: {
-    padding: 12,
-    borderRadius: 10,
-    backgroundColor: '#f5f7f8',
-    marginBottom: 8,
+  error: { marginVertical: spacing.sm, ...typography.body, color: colors.error },
+  addressCard: {
+    backgroundColor: colors.backgroundMuted,
+    borderColor: colors.border,
+    marginBottom: spacing.md,
   },
   recoveryCard: {
-    padding: 12,
-    borderRadius: 10,
-    backgroundColor: '#eef7fa',
-    borderWidth: 1,
-    borderColor: '#b6d9e6',
-    marginBottom: 12,
+    backgroundColor: colors.surfaceCream,
+    borderColor: colors.primary,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
   },
-  cardTitle: { fontSize: 14, fontWeight: '700', color: '#222', marginBottom: 4 },
-  meta: { fontSize: 13, color: '#555', marginTop: 2 },
-  sessionBox: { marginTop: 16 },
-  primaryButton: {
-    marginTop: 16,
-    backgroundColor: '#0a7ea4',
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
+  cardTitle: {
+    ...typography.label,
+    color: colors.text,
+    fontWeight: '700',
+    marginBottom: spacing.xs,
   },
-  primaryButtonText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  secondaryButton: {
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: '#0a7ea4',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
+  meta: { ...typography.caption, marginTop: spacing.xxs },
+  sessionBox: {
+    marginTop: spacing.lg,
+    backgroundColor: colors.backgroundMuted,
+    borderColor: colors.border,
   },
-  secondaryButtonText: { color: '#0a7ea4', fontWeight: '700' },
-  disabled: { opacity: 0.6 },
+  badgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  inlineButton: {
+    marginTop: spacing.md,
+    alignSelf: 'stretch',
+  },
 });

@@ -1,6 +1,9 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { Badge } from '@/src/shared/ui/Badge';
+import { Card } from '@/src/shared/ui/Card';
+import { PriceText } from '@/src/shared/ui/PriceText';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import type { OrderPaymentSnapshot } from '../models/types';
-import { formatOrderMoney } from '../utils/mapOrders';
 
 type Props = {
   payment: OrderPaymentSnapshot;
@@ -10,10 +13,10 @@ export function OrderPaymentBlock({ payment }: Props) {
   const currency = payment.currency ?? 'TZS';
 
   return (
-    <View style={styles.block}>
+    <Card elevated={false} style={styles.block}>
       <Text style={styles.title}>Payment</Text>
       {payment.paymentStatus ? (
-        <Text style={styles.line}>Status: {payment.paymentStatus}</Text>
+        <Badge label={payment.paymentStatus} tone="info" style={styles.badge} />
       ) : null}
       {payment.paymentMethod || payment.provider ? (
         <Text style={styles.line}>
@@ -24,25 +27,46 @@ export function OrderPaymentBlock({ payment }: Props) {
         <Text style={styles.line}>Reference: {payment.reference}</Text>
       ) : null}
       {payment.amount != null ? (
-        <Text style={styles.line}>
-          Amount: {formatOrderMoney(payment.amount, currency)}
-        </Text>
+        <View style={styles.amountRow}>
+          <Text style={styles.line}>Amount</Text>
+          <PriceText
+            value={payment.amount}
+            currency={currency}
+            accessibilityLabelPrefix="Payment amount"
+          />
+        </View>
       ) : null}
       {payment.paidAt ? (
         <Text style={styles.line}>Paid at: {payment.paidAt}</Text>
       ) : null}
-    </View>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
   block: {
-    marginTop: 16,
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    marginTop: spacing.lg,
+    backgroundColor: colors.backgroundMuted,
+    borderColor: colors.border,
   },
-  title: { fontSize: 15, fontWeight: '700', color: '#111', marginBottom: 8 },
-  line: { fontSize: 14, color: '#444', marginBottom: 4 },
+  title: {
+    ...typography.label,
+    color: colors.text,
+    fontWeight: '700',
+    marginBottom: spacing.sm,
+  },
+  badge: {
+    alignSelf: 'flex-start',
+    marginBottom: spacing.sm,
+  },
+  line: {
+    ...typography.body,
+    marginBottom: spacing.xs,
+  },
+  amountRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: spacing.xs,
+  },
 });

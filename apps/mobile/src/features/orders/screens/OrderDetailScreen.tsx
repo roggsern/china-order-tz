@@ -1,7 +1,5 @@
 import { useState } from 'react';
 import {
-  ActivityIndicator,
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -12,6 +10,12 @@ import { router } from 'expo-router';
 import { useAuthStore } from '@/src/core/auth';
 import { buildLoginHref } from '@/src/features/cart/utils/authReturn';
 import { formatCustomerDateTime } from '@/src/shared/utils/formatCustomerDateTime';
+import { Badge } from '@/src/shared/ui/Badge';
+import { Card } from '@/src/shared/ui/Card';
+import { EmptyState } from '@/src/shared/ui/EmptyState';
+import { ScreenLoadingState } from '@/src/shared/ui/ScreenLoadingState';
+import { SecondaryButton } from '@/src/shared/ui/SecondaryButton';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import { CancelOrderButton } from '../components/CancelOrderButton';
 import { ContinuePaymentButton } from '../components/ContinuePaymentButton';
 import { OrderItemRow } from '../components/OrderItemRow';
@@ -40,53 +44,42 @@ export function OrderDetailScreen({ orderId }: Props) {
 
   if (authStatus !== 'authenticated') {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.title}>Order</Text>
-        <Text style={styles.body}>Please sign in to view this order.</Text>
-        <Pressable
-          style={styles.primaryButton}
-          onPress={() =>
-            router.push(buildLoginHref(buildOrderDetailHref(orderId)))
-          }
-        >
-          <Text style={styles.primaryButtonText}>Sign in</Text>
-        </Pressable>
-      </View>
+      <EmptyState
+        title="Order"
+        message="Please sign in to view this order."
+        actionLabel="Sign in"
+        onActionPress={() =>
+          router.push(buildLoginHref(buildOrderDetailHref(orderId)))
+        }
+        style={styles.fill}
+      />
     );
   }
 
   if (detailQuery.isLoading && !detailQuery.data) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#0a7ea4" />
-        <Text style={styles.muted}>Loading order…</Text>
-      </View>
-    );
+    return <ScreenLoadingState label="Loading order…" />;
   }
 
   if (detailQuery.isError && !detailQuery.data) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.title}>Order unavailable</Text>
-        <Text style={styles.body}>
-          {getOrderErrorMessage(detailQuery.error)}
-        </Text>
-        <Pressable
-          style={styles.primaryButton}
-          onPress={() => void detailQuery.refetch()}
-        >
-          <Text style={styles.primaryButtonText}>Retry</Text>
-        </Pressable>
-      </View>
+      <EmptyState
+        title="Order unavailable"
+        message={getOrderErrorMessage(detailQuery.error)}
+        actionLabel="Retry"
+        onActionPress={() => void detailQuery.refetch()}
+        style={styles.fill}
+      />
     );
   }
 
   const order = detailQuery.data;
   if (!order) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.title}>Order not found</Text>
-      </View>
+      <EmptyState
+        title="Order not found"
+        message="This order could not be loaded."
+        style={styles.fill}
+      />
     );
   }
 
@@ -106,18 +99,22 @@ export function OrderDetailScreen({ orderId }: Props) {
         <RefreshControl
           refreshing={detailQuery.isRefetching}
           onRefresh={() => void detailQuery.refetch()}
+          tintColor={colors.primary}
+          colors={[colors.primary]}
         />
       }
     >
-      <Text style={styles.heading}>
-        {order.orderNumber ?? order.id}
-      </Text>
-      {order.journeyLabel ? (
-        <Text style={styles.journey}>{order.journeyLabel}</Text>
-      ) : null}
-      <Text style={styles.status}>
-        {order.statusLabel ?? order.status ?? 'Status unavailable'}
-      </Text>
+      <Text style={styles.eyebrow}>Order detail</Text>
+      <Text style={styles.heading}>{order.orderNumber ?? order.id}</Text>
+      <View style={styles.badgeRow}>
+        {order.journeyLabel ? (
+          <Badge label={order.journeyLabel} tone="brand" />
+        ) : null}
+        <Badge
+          label={order.statusLabel ?? order.status ?? 'Status unavailable'}
+          tone="neutral"
+        />
+      </View>
       {order.createdAt ? (
         <Text style={styles.meta}>{formatCustomerDateTime(order.createdAt)}</Text>
       ) : null}
@@ -147,19 +144,18 @@ export function OrderDetailScreen({ orderId }: Props) {
       <OrderTimeline progress={order.progress} />
 
       {order.shipment?.status ? (
-        <View style={styles.shipmentBox}>
+        <Card elevated={false} style={styles.shipmentBox}>
           <Text style={styles.section}>Shipment</Text>
           <Text style={styles.meta}>{order.shipment.status}</Text>
-        </View>
+        </Card>
       ) : null}
 
       {hasOrderTrackingEntry(order) ? (
-        <Pressable
-          style={styles.secondaryButton}
+        <SecondaryButton
+          label="View tracking"
           onPress={() => router.push(buildOrderTrackingHref(orderId))}
-        >
-          <Text style={styles.secondaryButtonText}>View tracking</Text>
-        </Pressable>
+          style={styles.trackingButton}
+        />
       ) : null}
 
       <CancelOrderButton
@@ -180,64 +176,48 @@ export function OrderDetailScreen({ orderId }: Props) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#fff' },
-  content: { padding: 16, paddingBottom: 40 },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-    backgroundColor: '#fff',
-    gap: 10,
+  screen: { flex: 1, backgroundColor: colors.background },
+  content: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.huge,
   },
-  heading: { fontSize: 22, fontWeight: '700', color: '#111' },
-  title: { fontSize: 18, fontWeight: '700', color: '#222' },
-  journey: {
-    marginTop: 6,
-    alignSelf: 'flex-start',
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#0a7ea4',
-    backgroundColor: '#e8f6fa',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    overflow: 'hidden',
+  fill: { flex: 1, backgroundColor: colors.background },
+  eyebrow: {
+    ...typography.caption,
+    color: colors.primaryPressed,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: spacing.xs,
   },
-  status: { marginTop: 8, fontSize: 15, fontWeight: '600', color: '#333' },
-  meta: { marginTop: 4, fontSize: 13, color: '#666' },
-  body: { fontSize: 14, color: '#666', textAlign: 'center' },
-  muted: { marginTop: 8, color: '#666' },
+  heading: { ...typography.heading },
+  badgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  meta: { marginTop: spacing.sm, ...typography.caption },
   notice: {
-    marginTop: 12,
-    color: '#0a7ea4',
-    fontSize: 14,
-    fontWeight: '600',
+    marginTop: spacing.md,
+    ...typography.bodyStrong,
+    color: colors.primaryPressed,
   },
   section: {
-    marginTop: 18,
-    marginBottom: 4,
-    fontSize: 15,
+    marginTop: spacing.xl,
+    marginBottom: spacing.sm,
+    ...typography.label,
+    color: colors.text,
     fontWeight: '700',
-    color: '#111',
   },
-  shipmentBox: { marginTop: 8 },
-  primaryButton: {
-    marginTop: 12,
-    backgroundColor: '#0a7ea4',
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    alignItems: 'center',
+  shipmentBox: {
+    marginTop: spacing.md,
+    backgroundColor: colors.backgroundMuted,
+    borderColor: colors.border,
   },
-  primaryButtonText: { color: '#fff', fontWeight: '700' },
-  secondaryButton: {
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: '#0a7ea4',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
+  trackingButton: {
+    marginTop: spacing.lg,
+    alignSelf: 'stretch',
   },
-  secondaryButtonText: { color: '#0a7ea4', fontWeight: '700' },
 });

@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { colors, radius, spacing, typography } from '@/src/shared/theme';
 import type { ProductConfigurationAttribute } from '../models/types';
 
 type Props = {
@@ -29,6 +30,8 @@ export function ConfigurationAttributePicker({
           return (
             <Pressable
               key={value.id}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isSelected, disabled: isDisabled }}
               style={[
                 styles.chip,
                 isSelected ? styles.chipSelected : null,
@@ -56,44 +59,43 @@ export function ConfigurationAttributePicker({
 
 const styles = StyleSheet.create({
   wrap: {
-    marginBottom: 14,
+    marginBottom: spacing.md,
   },
   label: {
-    fontSize: 14,
+    ...typography.label,
+    color: colors.text,
     fontWeight: '700',
-    color: '#222',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   row: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: spacing.sm,
   },
   chip: {
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#fff',
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
   },
   chipSelected: {
-    borderColor: '#0a7ea4',
-    backgroundColor: '#e7f5fa',
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryMuted,
   },
   chipDisabled: {
     opacity: 0.35,
   },
   chipText: {
-    fontSize: 13,
-    color: '#333',
-    fontWeight: '500',
+    ...typography.label,
+    color: colors.textSecondary,
   },
   chipTextSelected: {
-    color: '#0a7ea4',
+    color: colors.primaryPressed,
     fontWeight: '700',
   },
   chipTextDisabled: {
-    color: '#888',
+    color: colors.textSubtle,
   },
 });

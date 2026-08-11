@@ -1,15 +1,16 @@
 import {
-  ActivityIndicator,
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  View,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/src/core/auth';
 import { buildLoginHref } from '@/src/features/cart/utils/authReturn';
+import { Card } from '@/src/shared/ui/Card';
+import { EmptyState } from '@/src/shared/ui/EmptyState';
+import { ScreenLoadingState } from '@/src/shared/ui/ScreenLoadingState';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import { OrderTimeline } from '../components/OrderTimeline';
 import { useOrderTracking } from '../hooks/useOrders';
 import { getOrderErrorMessage } from '../utils/orderErrorMessage';
@@ -25,53 +26,42 @@ export function OrderTrackingScreen({ orderId }: Props) {
 
   if (authStatus !== 'authenticated') {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.title}>Tracking</Text>
-        <Text style={styles.body}>Please sign in to view tracking.</Text>
-        <Pressable
-          style={styles.primaryButton}
-          onPress={() =>
-            router.push(buildLoginHref(buildOrderTrackingHref(orderId)))
-          }
-        >
-          <Text style={styles.primaryButtonText}>Sign in</Text>
-        </Pressable>
-      </View>
+      <EmptyState
+        title="Tracking"
+        message="Please sign in to view tracking."
+        actionLabel="Sign in"
+        onActionPress={() =>
+          router.push(buildLoginHref(buildOrderTrackingHref(orderId)))
+        }
+        style={styles.fill}
+      />
     );
   }
 
   if (trackingQuery.isLoading && !trackingQuery.data) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#0a7ea4" />
-        <Text style={styles.muted}>Loading tracking…</Text>
-      </View>
-    );
+    return <ScreenLoadingState label="Loading tracking…" />;
   }
 
   if (trackingQuery.isError && !trackingQuery.data) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.title}>Tracking unavailable</Text>
-        <Text style={styles.body}>
-          {getOrderErrorMessage(trackingQuery.error)}
-        </Text>
-        <Pressable
-          style={styles.primaryButton}
-          onPress={() => void trackingQuery.refetch()}
-        >
-          <Text style={styles.primaryButtonText}>Retry</Text>
-        </Pressable>
-      </View>
+      <EmptyState
+        title="Tracking unavailable"
+        message={getOrderErrorMessage(trackingQuery.error)}
+        actionLabel="Retry"
+        onActionPress={() => void trackingQuery.refetch()}
+        style={styles.fill}
+      />
     );
   }
 
   const tracking = trackingQuery.data;
   if (!tracking) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.title}>No tracking data</Text>
-      </View>
+      <EmptyState
+        title="No tracking data"
+        message="Tracking details are not available for this order yet."
+        style={styles.fill}
+      />
     );
   }
 
@@ -88,11 +78,16 @@ export function OrderTrackingScreen({ orderId }: Props) {
         <RefreshControl
           refreshing={trackingQuery.isRefetching}
           onRefresh={() => void trackingQuery.refetch()}
+          tintColor={colors.primary}
+          colors={[colors.primary]}
         />
       }
     >
+      <Text style={styles.eyebrow}>Tracking</Text>
       <Text style={styles.heading}>
-        Tracking{tracking.orderNumber ? ` · ${tracking.orderNumber}` : ''}
+        {tracking.orderNumber
+          ? `Order ${tracking.orderNumber}`
+          : 'Shipment progress'}
       </Text>
 
       <Text style={styles.status}>
@@ -102,7 +97,7 @@ export function OrderTrackingScreen({ orderId }: Props) {
       </Text>
 
       {tracking.shipment ? (
-        <View style={styles.box}>
+        <Card elevated={false} style={styles.box}>
           <Text style={styles.section}>Shipment</Text>
           {tracking.shipment.statusLabel || tracking.shipment.status ? (
             <Text style={styles.line}>
@@ -125,7 +120,7 @@ export function OrderTrackingScreen({ orderId }: Props) {
               Mode: {tracking.shipment.transportModeLabel}
             </Text>
           ) : null}
-        </View>
+        </Card>
       ) : null}
 
       <OrderTimeline
@@ -138,37 +133,36 @@ export function OrderTrackingScreen({ orderId }: Props) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#fff' },
-  content: { padding: 16, paddingBottom: 40 },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-    backgroundColor: '#fff',
-    gap: 10,
+  screen: { flex: 1, backgroundColor: colors.background },
+  content: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.huge,
   },
-  heading: { fontSize: 22, fontWeight: '700', color: '#111' },
-  title: { fontSize: 18, fontWeight: '700', color: '#222' },
-  status: { marginTop: 8, fontSize: 15, fontWeight: '600', color: '#333' },
-  body: { fontSize: 14, color: '#666', textAlign: 'center' },
-  muted: { marginTop: 8, color: '#666' },
+  fill: { flex: 1, backgroundColor: colors.background },
+  eyebrow: {
+    ...typography.caption,
+    color: colors.primaryPressed,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: spacing.xs,
+  },
+  heading: { ...typography.heading },
+  status: {
+    marginTop: spacing.sm,
+    ...typography.bodyStrong,
+  },
   box: {
-    marginTop: 16,
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    marginTop: spacing.lg,
+    backgroundColor: colors.backgroundMuted,
+    borderColor: colors.border,
   },
-  section: { fontSize: 15, fontWeight: '700', color: '#111', marginBottom: 8 },
-  line: { fontSize: 14, color: '#444', marginBottom: 4 },
-  primaryButton: {
-    marginTop: 12,
-    backgroundColor: '#0a7ea4',
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    alignItems: 'center',
+  section: {
+    ...typography.label,
+    color: colors.text,
+    fontWeight: '700',
+    marginBottom: spacing.sm,
   },
-  primaryButtonText: { color: '#fff', fontWeight: '700' },
+  line: { ...typography.body, marginBottom: spacing.xs },
 });

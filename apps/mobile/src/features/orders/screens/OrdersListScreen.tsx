@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
@@ -11,6 +10,10 @@ import {
 import { router } from 'expo-router';
 import { useAuthStore } from '@/src/core/auth';
 import { buildLoginHref } from '@/src/features/cart/utils/authReturn';
+import { EmptyState } from '@/src/shared/ui/EmptyState';
+import { PrimaryButton } from '@/src/shared/ui/PrimaryButton';
+import { ScreenLoadingState } from '@/src/shared/ui/ScreenLoadingState';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import { OrderListCard } from '../components/OrderListCard';
 import { useOrdersList } from '../hooks/useOrders';
 import type { OrderListItem } from '../models/types';
@@ -44,40 +47,29 @@ export function OrdersListScreen() {
 
   if (authStatus !== 'authenticated') {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.title}>Orders</Text>
-        <Text style={styles.body}>Please sign in to view your orders.</Text>
-        <Pressable
-          style={styles.primaryButton}
-          onPress={() => router.push(buildLoginHref(buildOrdersListHref()))}
-        >
-          <Text style={styles.primaryButtonText}>Sign in</Text>
-        </Pressable>
-      </View>
+      <EmptyState
+        title="Orders"
+        message="Please sign in to view your orders."
+        actionLabel="Sign in"
+        onActionPress={() => router.push(buildLoginHref(buildOrdersListHref()))}
+        style={styles.fill}
+      />
     );
   }
 
   if (listQuery.isLoading && !listQuery.data) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#0a7ea4" />
-        <Text style={styles.muted}>Loading orders…</Text>
-      </View>
-    );
+    return <ScreenLoadingState label="Loading orders…" />;
   }
 
   if (listQuery.isError && !listQuery.data) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.title}>Orders unavailable</Text>
-        <Text style={styles.body}>{getOrderErrorMessage(listQuery.error)}</Text>
-        <Pressable
-          style={styles.primaryButton}
-          onPress={() => void listQuery.refetch()}
-        >
-          <Text style={styles.primaryButtonText}>Retry</Text>
-        </Pressable>
-      </View>
+      <EmptyState
+        title="Orders unavailable"
+        message={getOrderErrorMessage(listQuery.error)}
+        actionLabel="Retry"
+        onActionPress={() => void listQuery.refetch()}
+        style={styles.fill}
+      />
     );
   }
 
@@ -91,10 +83,14 @@ export function OrdersListScreen() {
         <RefreshControl
           refreshing={listQuery.isRefetching && !listQuery.isFetchingNextPage}
           onRefresh={() => void listQuery.refetch()}
+          tintColor={colors.primary}
+          colors={[colors.primary]}
         />
       }
       ListHeaderComponent={
         <View style={styles.header}>
+          <Text style={styles.eyebrow}>Orders</Text>
+          <Text style={styles.heading}>My orders</Text>
           <Text style={styles.subheading}>
             Status, payment, and totals come from the server.
           </Text>
@@ -102,12 +98,13 @@ export function OrdersListScreen() {
       }
       ListEmptyComponent={
         empty ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>No orders yet</Text>
-            <Text style={styles.body}>
-              When you complete a purchase, your orders will appear here.
-            </Text>
-          </View>
+          <EmptyState
+            title="No orders yet"
+            message="When you complete a purchase, your orders will appear here."
+            actionLabel="Browse products"
+            onActionPress={() => router.push('/(app)/(tabs)/browse')}
+            style={styles.empty}
+          />
         ) : null
       }
       renderItem={({ item }) => (
@@ -124,18 +121,17 @@ export function OrdersListScreen() {
       onEndReachedThreshold={0.4}
       ListFooterComponent={
         listQuery.isFetchingNextPage ? (
-          <ActivityIndicator style={styles.footer} color="#0a7ea4" />
+          <ActivityIndicator style={styles.footer} color={colors.primary} />
         ) : listQuery.isFetchNextPageError && orders.length > 0 ? (
           <View style={styles.footerError}>
             <Text style={styles.footerErrorText}>
               Could not load more orders. Your current list is still shown.
             </Text>
-            <Pressable
-              style={styles.primaryButton}
+            <PrimaryButton
+              label="Retry"
               onPress={() => void listQuery.fetchNextPage()}
-            >
-              <Text style={styles.primaryButtonText}>Retry</Text>
-            </Pressable>
+              style={styles.retry}
+            />
           </View>
         ) : null
       }
@@ -144,53 +140,39 @@ export function OrdersListScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#fff' },
-  content: { padding: 16, paddingBottom: 40, flexGrow: 1 },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-    backgroundColor: '#fff',
-    gap: 10,
+  screen: { flex: 1, backgroundColor: colors.background },
+  content: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.huge,
+    flexGrow: 1,
   },
-  header: { marginBottom: 12 },
-  heading: { fontSize: 22, fontWeight: '700', color: '#111' },
-  title: { fontSize: 18, fontWeight: '700', color: '#222' },
+  fill: { flex: 1, backgroundColor: colors.background },
+  header: { marginBottom: spacing.md },
+  eyebrow: {
+    ...typography.caption,
+    color: colors.primaryPressed,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: spacing.xs,
+  },
+  heading: { ...typography.heading },
   subheading: {
-    marginTop: 6,
-    fontSize: 13,
-    color: '#666',
-    lineHeight: 18,
+    marginTop: spacing.xs,
+    ...typography.caption,
   },
-  body: { fontSize: 14, color: '#666', textAlign: 'center' },
-  muted: { marginTop: 8, color: '#666' },
-  empty: {
-    marginTop: 40,
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-  },
-  emptyTitle: { fontSize: 17, fontWeight: '700', color: '#222' },
-  primaryButton: {
-    marginTop: 12,
-    backgroundColor: '#0a7ea4',
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-  },
-  primaryButtonText: { color: '#fff', fontWeight: '700' },
-  footer: { marginVertical: 16 },
+  empty: { paddingVertical: spacing.xxxl },
+  footer: { marginVertical: spacing.lg },
   footerError: {
-    marginVertical: 16,
+    marginVertical: spacing.lg,
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
   footerErrorText: {
-    fontSize: 13,
-    color: '#666',
+    ...typography.caption,
     textAlign: 'center',
   },
+  retry: { minWidth: 140 },
 });

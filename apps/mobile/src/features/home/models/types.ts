@@ -121,6 +121,31 @@ export type HomepageProductCard = {
   storeSlug?: string | null;
 };
 
+/** Category / collection tile from CMS FEATURED_CATEGORIES or FEATURED_COLLECTIONS. */
+export type HomepageCategoryCard = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  imageUrl: string | null;
+};
+
+/** Store tile from CMS SHOP_BY_STORE. */
+export type HomepageStoreCard = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  imageUrl: string | null;
+};
+
+/** Trust / why-choose row from CMS copy or featured items — never invented. */
+export type HomepageTrustItem = {
+  id: string;
+  title: string;
+  description: string | null;
+};
+
 /** UI-ready section after mapping (unknown CMS types dropped). */
 export type RenderableHomepageSection =
   | {
@@ -136,6 +161,27 @@ export type RenderableHomepageSection =
       title: string | null;
       subtitle: string | null;
       products: HomepageProductCard[];
+    }
+  | {
+      kind: 'FEATURED_CATEGORIES';
+      key: string;
+      title: string | null;
+      subtitle: string | null;
+      categories: HomepageCategoryCard[];
+    }
+  | {
+      kind: 'SHOP_BY_STORE';
+      key: string;
+      title: string | null;
+      subtitle: string | null;
+      stores: HomepageStoreCard[];
+    }
+  | {
+      kind: 'TRUST';
+      key: string;
+      title: string | null;
+      subtitle: string | null;
+      items: HomepageTrustItem[];
     }
   | {
       kind: 'CAMPAIGN';

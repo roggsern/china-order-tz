@@ -1,4 +1,5 @@
 import { TextInput, StyleSheet, View } from 'react-native';
+import { colors, radius, spacing, typography } from '@/src/shared/theme';
 
 type Props = {
   value: string;
@@ -13,7 +14,7 @@ export function SearchInput({
   onChangeText,
   onSubmit,
   autoFocus = true,
-  placeholder = 'Search products…',
+  placeholder = 'Search products, brands, stores…',
 }: Props) {
   return (
     <View style={styles.wrap}>
@@ -28,7 +29,7 @@ export function SearchInput({
         autoCorrect={false}
         clearButtonMode="while-editing"
         placeholder={placeholder}
-        placeholderTextColor="#999"
+        placeholderTextColor={colors.textSubtle}
         accessibilityLabel="Search"
       />
     </View>
@@ -37,17 +38,17 @@ export function SearchInput({
 
 const styles = StyleSheet.create({
   wrap: {
-    paddingHorizontal: 16,
-    marginBottom: 12,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#222',
-    backgroundColor: '#fafafa',
+    borderColor: colors.border,
+    borderRadius: radius.xl,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    ...typography.bodyStrong,
+    color: colors.text,
+    backgroundColor: colors.backgroundMuted,
   },
 });

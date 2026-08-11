@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { clearSessionOnAuthFailure, useAuthStore } from '@/src/core/auth';
 import {
@@ -8,9 +8,16 @@ import {
   isCartUnauthenticatedError,
   useAddToCartMutation,
 } from '@/src/features/cart';
+import { journeyLabelFromChannel } from '@/src/features/cart/utils/journeyLabel';
 import { formatCustomerMoney } from '@/src/shared/utils/formatCustomerMoney';
 import { normalizeCustomerPlainText } from '@/src/shared/utils/normalizeCustomerPlainText';
 import type { CommerceJourney } from '@/src/shared/types/commerce';
+import { Badge } from '@/src/shared/ui/Badge';
+import { Card } from '@/src/shared/ui/Card';
+import { PriceText } from '@/src/shared/ui/PriceText';
+import { ScreenContainer } from '@/src/shared/ui/ScreenContainer';
+import { TrustStrip, type TrustStripItem } from '@/src/shared/ui/TrustStrip';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import {
   useProductDetail,
   useProductQuote,
@@ -41,6 +48,56 @@ type Props = {
   journey: CommerceJourney;
   storeSlug?: string | null;
 };
+
+function buildTrustItems(params: {
+  product: CatalogProductDetail;
+  journey: CommerceJourney;
+  storeSlug?: string | null;
+}): TrustStripItem[] {
+  const { product, journey, storeSlug } = params;
+  const items: TrustStripItem[] = [
+    {
+      id: 'journey',
+      title: journeyLabelFromChannel(product.commerceChannelCode ?? journey),
+      description: product.commerceSourceLabel?.trim() || null,
+    },
+  ];
+
+  const resolvedStore = storeSlug?.trim() || product.storeSlug?.trim() || null;
+  if (resolvedStore) {
+    items.push({
+      id: 'store',
+      title: 'Store context',
+      description: resolvedStore,
+    });
+  }
+
+  if (product.brand?.name) {
+    items.push({
+      id: 'brand',
+      title: product.brand.name,
+      description: 'Brand',
+    });
+  }
+
+  if (
+    product.shippingPrices &&
+    (product.shippingPrices.air != null || product.shippingPrices.sea != null)
+  ) {
+    items.push({
+      id: 'shipping',
+      title: 'Shipping options available',
+      description: [
+        product.shippingPrices.air != null ? 'Air' : null,
+        product.shippingPrices.sea != null ? 'Sea' : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    });
+  }
+
+  return items;
+}
 
 export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
   const authStatus = useAuthStore((s) => s.status);
@@ -148,6 +205,17 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
   const productId = detailProduct.id;
   const productSlug = detailProduct.slug;
   const matchedConfigurationId = configuration?.matchedConfigurationId ?? null;
+  const showSale =
+    detailProduct.compareAtPrice != null &&
+    displayedPrice.source === 'base' &&
+    displayedPrice.amount != null &&
+    Number(detailProduct.compareAtPrice) > Number(displayedPrice.amount);
+
+  const trustItems = buildTrustItems({
+    product: detailProduct,
+    journey,
+    storeSlug,
+  });
 
   async function handleAddToCart() {
     if (!canAddToCart({
@@ -199,33 +267,49 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScreenContainer padded={false} scroll contentStyle={styles.content}>
       <ProductImageGallery images={product.images} />
+
       <View style={styles.body}>
-        <Text style={styles.journey}>
-          {journey === 'TZ_LOCAL' ? 'Buy from TZ' : 'Order from China'}
-        </Text>
+        <View style={styles.badgeRow}>
+          <Badge
+            label={journey === 'TZ_LOCAL' ? 'Tanzania' : 'China'}
+            tone={journey === 'TZ_LOCAL' ? 'success' : 'brand'}
+          />
+          {product.commerceSourceLabel ? (
+            <Badge label={product.commerceSourceLabel} tone="neutral" />
+          ) : null}
+          {(storeSlug || product.storeSlug) ? (
+            <Badge
+              label={storeSlug || product.storeSlug || ''}
+              tone="info"
+            />
+          ) : null}
+          {product.brand?.name ? (
+            <Badge label={product.brand.name} tone="neutral" />
+          ) : null}
+        </View>
+
         <Text style={styles.name}>{product.name}</Text>
-        {product.commerceSourceLabel ? (
-          <Text style={styles.source}>{product.commerceSourceLabel}</Text>
-        ) : null}
-        <Text style={styles.price}>
-          {displayedPrice.source === 'pending'
-            ? 'Checking price…'
-            : displayedPrice.amount != null
-              ? formatCustomerMoney(
-                  displayedPrice.amount,
-                  displayedPrice.currency ?? 'TZS',
-                )
-              : '—'}
-        </Text>
-        {detailProduct.compareAtPrice != null &&
-        displayedPrice.source === 'base' ? (
-          <Text style={styles.compare}>
-            Compare at:{' '}
-            {formatCustomerMoney(detailProduct.compareAtPrice, 'TZS')}
-          </Text>
-        ) : null}
+
+        <View style={styles.priceBlock}>
+          {displayedPrice.source === 'pending' ? (
+            <Text style={styles.pricePending}>Checking price…</Text>
+          ) : (
+            <PriceText
+              value={displayedPrice.amount}
+              currency={displayedPrice.currency ?? 'TZS'}
+              size="large"
+            />
+          )}
+          {showSale ? (
+            <PriceText
+              value={detailProduct.compareAtPrice}
+              accessibilityLabelPrefix="Was"
+              style={styles.compare}
+            />
+          ) : null}
+        </View>
 
         <ProductAvailabilityBadge
           product={detailProduct}
@@ -233,27 +317,32 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
         />
 
         {detailProduct.description ? (
-          <Text style={styles.description}>
-            {normalizeCustomerPlainText(detailProduct.description)}
-          </Text>
+          <Card elevated={false} style={styles.descriptionCard}>
+            <Text style={styles.sectionTitle}>About this product</Text>
+            <Text style={styles.description}>
+              {normalizeCustomerPlainText(detailProduct.description)}
+            </Text>
+          </Card>
         ) : null}
 
         {detailProduct.shippingPrices &&
         (detailProduct.shippingPrices.air != null ||
           detailProduct.shippingPrices.sea != null) ? (
-          <View style={styles.shipping}>
+          <Card elevated={false} style={styles.shippingCard}>
             <Text style={styles.sectionTitle}>Shipping options</Text>
             {detailProduct.shippingPrices.air != null ? (
               <Text style={styles.meta}>
-                Air: {formatCustomerMoney(detailProduct.shippingPrices.air, 'TZS')}
+                Air:{' '}
+                {formatCustomerMoney(detailProduct.shippingPrices.air, 'TZS')}
               </Text>
             ) : null}
             {detailProduct.shippingPrices.sea != null ? (
               <Text style={styles.meta}>
-                Sea: {formatCustomerMoney(detailProduct.shippingPrices.sea, 'TZS')}
+                Sea:{' '}
+                {formatCustomerMoney(detailProduct.shippingPrices.sea, 'TZS')}
               </Text>
             ) : null}
-          </View>
+          </Card>
         ) : null}
 
         <ProductConfigurationSelector
@@ -290,71 +379,80 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
         {!hasConfigurations ? (
           <ProductVariantsList variants={product.variants} />
         ) : null}
+
+        <TrustStrip items={trustItems} />
       </View>
-    </ScrollView>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#fff' },
-  content: { paddingBottom: 40 },
-  body: { padding: 16 },
-  journey: {
-    fontSize: 11,
-    color: '#0a7ea4',
-    fontWeight: '700',
-    marginBottom: 6,
+  content: {
+    paddingBottom: spacing.huge,
+  },
+  body: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginBottom: spacing.md,
   },
   name: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#111',
+    ...typography.heading,
+    marginBottom: spacing.sm,
   },
-  source: {
-    marginTop: 4,
-    fontSize: 13,
-    color: '#666',
+  priceBlock: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
   },
-  price: {
-    marginTop: 12,
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#0a7ea4',
+  pricePending: {
+    ...typography.priceLarge,
+    color: colors.textMuted,
   },
   compare: {
-    marginTop: 4,
-    fontSize: 13,
-    color: '#888',
+    ...typography.caption,
     textDecorationLine: 'line-through',
+    color: colors.textSubtle,
+    fontWeight: '400',
   },
-  description: {
-    marginTop: 16,
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#333',
+  descriptionCard: {
+    marginTop: spacing.lg,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
   },
-  shipping: {
-    marginTop: 16,
+  shippingCard: {
+    marginTop: spacing.md,
+    backgroundColor: colors.backgroundMuted,
+    borderColor: colors.border,
   },
   sectionTitle: {
-    fontSize: 15,
+    ...typography.label,
+    color: colors.text,
     fontWeight: '700',
-    marginBottom: 6,
+    marginBottom: spacing.sm,
+  },
+  description: {
+    ...typography.body,
+    color: colors.text,
   },
   meta: {
-    fontSize: 13,
-    color: '#555',
-    marginTop: 2,
+    ...typography.caption,
+    marginTop: spacing.xxs,
   },
   successText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#1b7f3a',
-    fontWeight: '600',
+    marginTop: spacing.md,
+    ...typography.bodyStrong,
+    color: colors.success,
   },
   errorText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#b00020',
+    marginTop: spacing.md,
+    ...typography.body,
+    color: colors.error,
   },
 });

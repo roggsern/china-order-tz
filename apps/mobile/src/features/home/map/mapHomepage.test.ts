@@ -199,7 +199,127 @@ describe('buildRenderableSections', () => {
       baseMeta,
     );
 
-    expect(sections.map((s) => s.kind)).toEqual(['NEW_ARRIVALS', 'BEST_SELLERS']);
+    expect(sections.map((s) => s.kind)).toEqual([
+      'TRUST',
+      'NEW_ARRIVALS',
+      'BEST_SELLERS',
+    ]);
+  });
+
+  it('maps categories, stores, and trust items from CMS featured content', () => {
+    const sections = buildRenderableSections(
+      layoutWithSections([
+        {
+          id: 'sec_cats',
+          section_type: 'FEATURED_CATEGORIES',
+          title: 'Categories',
+          subtitle: null,
+          position: 0,
+          is_visible: true,
+          featured_contents: [
+            {
+              id: 'fc_cat',
+              title: null,
+              subtitle: null,
+              position: 0,
+              items: [
+                {
+                  item_type: 'CATEGORY',
+                  id: 'c1',
+                  data: {
+                    id: 'c1',
+                    name: 'Electronics',
+                    slug: 'electronics',
+                    image: { url: 'https://cdn.example/e.jpg' },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'sec_stores',
+          section_type: 'SHOP_BY_STORE',
+          title: 'Stores',
+          subtitle: null,
+          position: 1,
+          is_visible: true,
+          featured_contents: [
+            {
+              id: 'fc_store',
+              title: null,
+              subtitle: null,
+              position: 0,
+              items: [
+                {
+                  item_type: 'STORE',
+                  id: 's1',
+                  data: {
+                    id: 's1',
+                    name: 'Dar Mart',
+                    slug: 'dar-mart',
+                    logo_url: 'https://cdn.example/s.jpg',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'sec_why',
+          section_type: 'WHY_CHOOSE_US',
+          title: 'Why us',
+          subtitle: 'Trusted checkout',
+          position: 2,
+          is_visible: true,
+          configuration: {
+            items: [{ title: 'Secure payments', description: 'Card & mobile money' }],
+          },
+        },
+      ]),
+      baseMeta,
+    );
+
+    expect(sections.map((s) => s.kind)).toEqual([
+      'FEATURED_CATEGORIES',
+      'SHOP_BY_STORE',
+      'TRUST',
+    ]);
+    const cats = sections.find((s) => s.kind === 'FEATURED_CATEGORIES');
+    expect(cats?.kind === 'FEATURED_CATEGORIES' && cats.categories[0]?.name).toBe(
+      'Electronics',
+    );
+    const stores = sections.find((s) => s.kind === 'SHOP_BY_STORE');
+    expect(stores?.kind === 'SHOP_BY_STORE' && stores.stores[0]?.slug).toBe('dar-mart');
+    const trust = sections.find((s) => s.kind === 'TRUST');
+    expect(trust?.kind === 'TRUST' && trust.items[0]?.title).toBe('Secure payments');
+  });
+
+  it('skips empty category and store sections', () => {
+    const sections = buildRenderableSections(
+      layoutWithSections([
+        {
+          id: 'sec_empty_cats',
+          section_type: 'FEATURED_COLLECTIONS',
+          title: 'Collections',
+          subtitle: null,
+          position: 0,
+          is_visible: true,
+          featured_contents: [],
+        },
+        {
+          id: 'sec_empty_stores',
+          section_type: 'SHOP_BY_STORE',
+          title: 'Stores',
+          subtitle: null,
+          position: 1,
+          is_visible: true,
+          featured_contents: [],
+        },
+      ]),
+      baseMeta,
+    );
+    expect(sections).toEqual([]);
   });
 });
 

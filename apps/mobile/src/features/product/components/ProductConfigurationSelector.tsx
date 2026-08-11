@@ -1,9 +1,10 @@
 import { useEffect, useMemo } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { Badge } from '@/src/shared/ui/Badge';
+import { Card } from '@/src/shared/ui/Card';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import { useProductConfiguration } from '../hooks/useCatalogQueries';
-import {
-  pruneConfigurationSelections,
-} from '../map/mapProduct';
+import { pruneConfigurationSelections } from '../map/mapProduct';
 import type {
   ConfigurationSelections,
   ProductConfiguration,
@@ -86,7 +87,7 @@ export function ProductConfigurationSelector({
   if (query.isLoading && !configuration) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator color="#0a7ea4" />
+        <ActivityIndicator color={colors.primary} />
         <Text style={styles.muted}>Loading options…</Text>
       </View>
     );
@@ -103,7 +104,7 @@ export function ProductConfigurationSelector({
   }
 
   return (
-    <View style={styles.wrap}>
+    <Card elevated={false} style={styles.wrap}>
       <Text style={styles.title}>Select options</Text>
       {selectableAttributes.map((attribute) => (
         <ConfigurationAttributePicker
@@ -123,51 +124,52 @@ export function ProductConfigurationSelector({
       {!loading && !configuration.isComplete ? (
         <Text style={styles.hint}>Select all required options to continue.</Text>
       ) : null}
-      {!loading && !error && configuration.isComplete && configuration.matchedConfigurationId ? (
-        <Text style={styles.matched}>Configuration matched</Text>
+      {!loading &&
+      !error &&
+      configuration.isComplete &&
+      configuration.matchedConfigurationId ? (
+        <Badge label="Configuration matched" tone="success" style={styles.matched} />
       ) : null}
       {loading ? (
-        <Text style={styles.hint}>Checking availability...</Text>
+        <Text style={styles.hint}>Checking availability…</Text>
       ) : null}
       {error ? (
         <Text style={styles.error}>{getCatalogErrorMessage(query.error)}</Text>
       ) : null}
-    </View>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    marginTop: 16,
+    marginTop: spacing.lg,
+    backgroundColor: colors.backgroundMuted,
+    borderColor: colors.border,
   },
   title: {
+    ...typography.title,
     fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 10,
+    marginBottom: spacing.md,
   },
   centered: {
-    marginTop: 16,
+    marginTop: spacing.lg,
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
   },
   muted: {
-    color: '#666',
-    fontSize: 13,
+    ...typography.caption,
   },
   error: {
-    marginTop: 16,
-    color: '#b00020',
-    fontSize: 13,
+    marginTop: spacing.sm,
+    ...typography.caption,
+    color: colors.error,
   },
   hint: {
-    marginTop: 4,
-    fontSize: 13,
-    color: '#666',
+    marginTop: spacing.xs,
+    ...typography.caption,
   },
   matched: {
-    marginTop: 4,
-    fontSize: 13,
-    color: '#0a7ea4',
-    fontWeight: '600',
+    marginTop: spacing.sm,
+    alignSelf: 'flex-start',
   },
 });

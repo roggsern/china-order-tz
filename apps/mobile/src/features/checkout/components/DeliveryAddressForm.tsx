@@ -1,12 +1,8 @@
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Card } from '@/src/shared/ui/Card';
+import { PrimaryButton } from '@/src/shared/ui/PrimaryButton';
+import { colors, radius, spacing, typography } from '@/src/shared/theme';
 import { deliveryAddressInputSchema } from '../api/schemas';
 import type { CheckoutDeliveryAddress, DeliveryAddressInput } from '../models/types';
 
@@ -54,7 +50,7 @@ export function DeliveryAddressForm({ initial, submitting, onSubmit }: Props) {
   }
 
   return (
-    <View style={styles.wrap}>
+    <Card elevated={false} style={styles.wrap}>
       <Text style={styles.title}>Delivery address</Text>
       <Text style={styles.note}>
         Customer address is required for checkout. It is not used as a delivery engine.
@@ -70,18 +66,14 @@ export function DeliveryAddressForm({ initial, submitting, onSubmit }: Props) {
       <Field label="Landmark (optional)" value={landmark} onChangeText={setLandmark} />
       <Field label="Postal code (optional)" value={postalCode} onChangeText={setPostalCode} />
 
-      <Pressable
-        style={[styles.button, submitting ? styles.disabled : null]}
+      <PrimaryButton
+        label="Save address & continue"
+        loading={submitting}
         disabled={submitting}
         onPress={handleSubmit}
-      >
-        {submitting ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Save address & continue</Text>
-        )}
-      </Pressable>
-    </View>
+        style={styles.button}
+      />
+    </Card>
   );
 }
 
@@ -106,7 +98,7 @@ function Field({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="#999"
+        placeholderTextColor={colors.textSubtle}
         autoCapitalize="none"
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -115,30 +107,34 @@ function Field({
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginTop: 12 },
-  title: { fontSize: 16, fontWeight: '700', color: '#222' },
-  note: { marginTop: 4, marginBottom: 12, fontSize: 12, color: '#666', lineHeight: 17 },
-  field: { marginBottom: 10 },
-  label: { fontSize: 13, fontWeight: '600', color: '#444', marginBottom: 4 },
+  wrap: {
+    marginTop: spacing.md,
+    backgroundColor: colors.backgroundMuted,
+    borderColor: colors.border,
+  },
+  title: { ...typography.title, fontSize: 16 },
+  note: {
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
+    ...typography.caption,
+  },
+  field: { marginBottom: spacing.md },
+  label: {
+    ...typography.label,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
   input: {
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
-    color: '#222',
-    backgroundColor: '#fff',
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    ...typography.bodyStrong,
+    color: colors.text,
+    backgroundColor: colors.surface,
   },
-  inputError: { borderColor: '#b00020' },
-  error: { marginTop: 4, color: '#b00020', fontSize: 12 },
-  button: {
-    marginTop: 8,
-    backgroundColor: '#0a7ea4',
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  disabled: { opacity: 0.6 },
-  buttonText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  inputError: { borderColor: colors.error },
+  error: { marginTop: spacing.xs, ...typography.caption, color: colors.error },
+  button: { marginTop: spacing.sm, alignSelf: 'stretch' },
 });

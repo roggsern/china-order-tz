@@ -1,8 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import type { ColorValue } from 'react-native';
+import { StyleSheet, type ColorValue } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useCart } from '@/src/features/cart/hooks/useCart';
 import { resolveTabIconName } from '@/src/shared/navigation/tabIcons';
+import { useShellTabBadges } from '@/src/shared/navigation/useShellTabBadges';
+import { colors, spacing } from '@/src/shared/theme';
+import { AppHeader } from '@/src/shared/ui/AppHeader';
 
 function TabBarIcon({
   routeName,
@@ -24,13 +29,37 @@ function TabBarIcon({
   );
 }
 
+function BrandTabHeader({ title }: { title: string }) {
+  const cartQuery = useCart();
+  return (
+    <AppHeader
+      showBrand
+      title={title}
+      showSearch
+      showCart
+      cartCount={cartQuery.data?.itemCount ?? 0}
+    />
+  );
+}
+
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+  const { cartBadge, ordersBadge } = useShellTabBadges();
+
   return (
     <Tabs
       screenOptions={({ route }) => ({
-        headerShown: true,
-        tabBarActiveTintColor: '#0a7ea4',
-        tabBarInactiveTintColor: '#666',
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textMuted,
+        tabBarLabelStyle: styles.tabLabel,
+        tabBarStyle: [
+          styles.tabBar,
+          {
+            paddingBottom: Math.max(insets.bottom, spacing.sm),
+            height: 56 + Math.max(insets.bottom, spacing.sm),
+          },
+        ],
+        tabBarItemStyle: styles.tabItem,
         tabBarIcon: ({ color, size, focused }) => (
           <TabBarIcon
             routeName={route.name}
@@ -41,12 +70,75 @@ export default function TabsLayout() {
         ),
       })}
     >
-      <Tabs.Screen name="home" options={{ title: 'Home' }} />
-      <Tabs.Screen name="search" options={{ title: 'Search' }} />
-      <Tabs.Screen name="browse" options={{ title: 'Browse' }} />
-      <Tabs.Screen name="cart" options={{ title: 'Cart' }} />
-      <Tabs.Screen name="orders" options={{ title: 'Orders' }} />
-      <Tabs.Screen name="account" options={{ title: 'Account' }} />
+      <Tabs.Screen
+        name="home"
+        options={{
+          title: 'Home',
+          header: () => <BrandTabHeader title="Home" />,
+        }}
+      />
+      <Tabs.Screen
+        name="search"
+        options={{
+          title: 'Search',
+          header: () => <BrandTabHeader title="Search" />,
+        }}
+      />
+      <Tabs.Screen
+        name="browse"
+        options={{
+          title: 'Browse',
+          header: () => <BrandTabHeader title="Browse" />,
+        }}
+      />
+      <Tabs.Screen
+        name="cart"
+        options={{
+          title: 'Cart',
+          header: () => <BrandTabHeader title="Cart" />,
+          tabBarBadge: cartBadge,
+          tabBarBadgeStyle: styles.nativeBadge,
+        }}
+      />
+      <Tabs.Screen
+        name="orders"
+        options={{
+          title: 'Orders',
+          header: () => <BrandTabHeader title="Orders" />,
+          tabBarBadge: ordersBadge,
+          tabBarBadgeStyle: styles.nativeBadge,
+        }}
+      />
+      <Tabs.Screen
+        name="account"
+        options={{
+          title: 'Account',
+          header: () => <BrandTabHeader title="Account" />,
+        }}
+      />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    backgroundColor: colors.background,
+    borderTopColor: colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: spacing.xs,
+  },
+  tabItem: {
+    paddingTop: spacing.xxs,
+  },
+  tabLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.1,
+  },
+  nativeBadge: {
+    backgroundColor: colors.primary,
+    color: colors.onPrimary,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+});

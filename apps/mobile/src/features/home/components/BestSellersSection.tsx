@@ -13,6 +13,7 @@ export function BestSellersSection({ title, subtitle, products }: Props) {
       title={title || 'Best sellers'}
       subtitle={subtitle}
       products={products}
+      badgeLabel="Best"
     />
   );
 }

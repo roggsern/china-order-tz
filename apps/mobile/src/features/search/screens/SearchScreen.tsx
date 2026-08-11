@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { useJourneyStore } from '@/src/core/auth';
+import { EmptyState } from '@/src/shared/ui/EmptyState';
+import { PrimaryButton } from '@/src/shared/ui/PrimaryButton';
+import { SecondaryButton } from '@/src/shared/ui/SecondaryButton';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import { SearchInput } from '../components/SearchInput';
 import { SearchResultCard } from '../components/SearchResultCard';
 import { SuggestionList } from '../components/SuggestionList';
@@ -75,7 +78,11 @@ export function SearchScreen() {
 
   return (
     <View style={styles.screen}>
-      <Text style={styles.context}>{journeySearchLabel(journey)}</Text>
+      <View style={styles.header}>
+        <Text style={styles.eyebrow}>Search</Text>
+        <Text style={styles.heading}>Find products</Text>
+        <Text style={styles.context}>{journeySearchLabel(journey)}</Text>
+      </View>
 
       <SearchInput
         value={input}
@@ -91,22 +98,19 @@ export function SearchScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {!shouldFetchSearch(debouncedInput) ? (
-            <Text style={styles.hint}>
-              Type a product, brand, or store name to see suggestions.
-            </Text>
+            <EmptyState
+              title="Start typing"
+              message="Search products, brands, or stores in your current shopping journey."
+              style={styles.emptyPad}
+            />
           ) : suggestionsQuery.isError ? (
-            <View style={styles.messageBlock}>
-              <Text style={styles.errorTitle}>Suggestions unavailable</Text>
-              <Text style={styles.errorBody}>
-                {getSearchErrorMessage(suggestionsQuery.error)}
-              </Text>
-              <Pressable
-                style={styles.retry}
-                onPress={() => void suggestionsQuery.refetch()}
-              >
-                <Text style={styles.retryText}>Retry</Text>
-              </Pressable>
-            </View>
+            <EmptyState
+              title="Suggestions unavailable"
+              message={getSearchErrorMessage(suggestionsQuery.error)}
+              actionLabel="Retry"
+              onActionPress={() => void suggestionsQuery.refetch()}
+              style={styles.emptyPad}
+            />
           ) : (
             <SuggestionList
               suggestions={suggestionsQuery.data?.suggestions ?? []}
@@ -123,24 +127,30 @@ export function SearchScreen() {
         >
           {productsQuery.isLoading && hits.length === 0 ? (
             <View style={styles.centered}>
-              <ActivityIndicator size="large" color="#0a7ea4" />
+              <ActivityIndicator size="large" color={colors.primary} />
               <Text style={styles.muted}>Searching…</Text>
             </View>
           ) : productsQuery.isError && hits.length === 0 ? (
-            <View style={styles.messageBlock}>
-              <Text style={styles.errorTitle}>Search unavailable</Text>
-              <Text style={styles.errorBody}>
-                {getSearchErrorMessage(productsQuery.error)}
-              </Text>
-              <Pressable
-                style={styles.retry}
-                onPress={() => void productsQuery.refetch()}
-              >
-                <Text style={styles.retryText}>Retry</Text>
-              </Pressable>
-            </View>
+            <EmptyState
+              title="Search unavailable"
+              message={getSearchErrorMessage(productsQuery.error)}
+              actionLabel="Retry"
+              onActionPress={() => void productsQuery.refetch()}
+              style={styles.emptyPad}
+            />
           ) : hits.length === 0 ? (
-            <Text style={styles.hint}>No products found for “{submittedQuery}”.</Text>
+            <EmptyState
+              title="No results"
+              message={`No products found for “${submittedQuery}”. Try another keyword.`}
+              actionLabel="Clear search"
+              onActionPress={() => {
+                setInput('');
+                setDebouncedInput('');
+                setSubmittedQuery('');
+                setMode('suggest');
+              }}
+              style={styles.emptyPad}
+            />
           ) : (
             <>
               <Text style={styles.resultsMeta}>
@@ -156,26 +166,24 @@ export function SearchScreen() {
                   <Text style={styles.errorBody}>
                     Could not load more results. Your current results are still shown.
                   </Text>
-                  <Pressable
-                    style={styles.retry}
+                  <PrimaryButton
+                    label={
+                      productsQuery.isFetchingNextPage ? 'Retrying…' : 'Retry'
+                    }
                     onPress={() => void productsQuery.fetchNextPage()}
                     disabled={productsQuery.isFetchingNextPage}
-                  >
-                    <Text style={styles.retryText}>
-                      {productsQuery.isFetchingNextPage ? 'Retrying…' : 'Retry'}
-                    </Text>
-                  </Pressable>
+                    style={styles.loadMoreBtn}
+                  />
                 </View>
               ) : productsQuery.hasNextPage ? (
-                <Pressable
-                  style={styles.loadMore}
+                <SecondaryButton
+                  label={
+                    productsQuery.isFetchingNextPage ? 'Loading…' : 'Load more'
+                  }
                   onPress={() => void productsQuery.fetchNextPage()}
                   disabled={productsQuery.isFetchingNextPage}
-                >
-                  <Text style={styles.loadMoreText}>
-                    {productsQuery.isFetchingNextPage ? 'Loading…' : 'Load more'}
-                  </Text>
-                </Pressable>
+                  style={styles.loadMoreBtn}
+                />
               ) : null}
             </>
           )}
@@ -188,91 +196,69 @@ export function SearchScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#fff',
-    paddingTop: 16,
+    backgroundColor: colors.background,
+    paddingTop: spacing.lg,
+  },
+  header: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  eyebrow: {
+    ...typography.caption,
+    color: colors.primaryPressed,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: spacing.xs,
   },
   heading: {
-    fontSize: 22,
-    fontWeight: '700',
-    paddingHorizontal: 16,
+    ...typography.heading,
   },
   context: {
-    fontSize: 13,
-    color: '#666',
-    paddingHorizontal: 16,
-    marginBottom: 12,
+    ...typography.caption,
+    marginTop: spacing.xs,
   },
   body: {
     flex: 1,
   },
   bodyContent: {
-    paddingBottom: 40,
+    paddingBottom: spacing.huge,
   },
-  hint: {
-    paddingHorizontal: 16,
-    paddingVertical: 24,
-    color: '#666',
-    fontSize: 14,
+  emptyPad: {
+    paddingVertical: spacing.xxl,
   },
   resultsMeta: {
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    fontSize: 13,
-    color: '#555',
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    ...typography.caption,
   },
   grid: {
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.lg,
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
   centered: {
-    paddingVertical: 40,
+    paddingVertical: spacing.huge,
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
   },
   muted: {
-    color: '#666',
-    fontSize: 14,
+    ...typography.body,
   },
   messageBlock: {
-    paddingHorizontal: 16,
-    paddingVertical: 24,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xxl,
     alignItems: 'center',
-  },
-  errorTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#222',
-    marginBottom: 8,
   },
   errorBody: {
-    fontSize: 14,
-    color: '#666',
+    ...typography.body,
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
-  retry: {
-    backgroundColor: '#0a7ea4',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  retryText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  loadMore: {
-    marginHorizontal: 16,
-    marginTop: 8,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#0a7ea4',
-    alignItems: 'center',
-  },
-  loadMoreText: {
-    color: '#0a7ea4',
-    fontWeight: '600',
+  loadMoreBtn: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    alignSelf: 'stretch',
   },
 });

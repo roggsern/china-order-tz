@@ -1,6 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { Card } from '@/src/shared/ui/Card';
+import { PriceText } from '@/src/shared/ui/PriceText';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import type { CheckoutItem } from '../models/types';
-import { formatCheckoutMoney } from '../utils/mapCheckout';
 
 type Props = {
   items: CheckoutItem[];
@@ -16,7 +18,7 @@ export function CheckoutItemsList({ items, currency = 'TZS' }: Props) {
     <View style={styles.wrap}>
       <Text style={styles.title}>Items</Text>
       {items.map((item) => (
-        <View key={item.id} style={styles.row}>
+        <Card key={item.id} elevated={false} style={styles.row}>
           <View style={styles.copy}>
             <Text style={styles.name}>{item.productName}</Text>
             <Text style={styles.meta}>
@@ -24,47 +26,75 @@ export function CheckoutItemsList({ items, currency = 'TZS' }: Props) {
               {item.source ? ` · ${item.source}` : ''}
             </Text>
             {item.shippingMethod ? (
-              <Text style={styles.meta}>
-                Shipping: {item.shippingMethod}{' '}
-                {item.shippingSubtotal != null
-                  ? `(${formatCheckoutMoney(item.shippingSubtotal, currency)})`
-                  : ''}
-              </Text>
+              <View style={styles.shippingRow}>
+                <Text style={styles.meta}>Shipping: {item.shippingMethod}</Text>
+                {item.shippingSubtotal != null ? (
+                  <PriceText
+                    value={item.shippingSubtotal}
+                    currency={currency}
+                    style={styles.inlinePrice}
+                    accessibilityLabelPrefix="Shipping"
+                  />
+                ) : null}
+              </View>
             ) : null}
             {item.deliveryStatus ? (
               <Text style={styles.meta}>{item.deliveryStatus}</Text>
             ) : null}
           </View>
           <View style={styles.prices}>
-            <Text style={styles.unit}>
-              {formatCheckoutMoney(item.unitPrice, currency)}
-            </Text>
-            <Text style={styles.line}>
-              {formatCheckoutMoney(item.lineSubtotal, currency)}
-            </Text>
+            <PriceText
+              value={item.unitPrice}
+              currency={currency}
+              style={styles.unit}
+              accessibilityLabelPrefix="Unit"
+            />
+            <PriceText
+              value={item.lineSubtotal}
+              currency={currency}
+              accessibilityLabelPrefix="Line"
+            />
           </View>
-        </View>
+        </Card>
       ))}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginTop: 8 },
-  title: { fontSize: 16, fontWeight: '700', marginBottom: 8, color: '#222' },
-  empty: { color: '#666', fontSize: 14 },
+  wrap: { marginTop: spacing.sm, gap: spacing.sm },
+  title: {
+    ...typography.title,
+    fontSize: 16,
+    marginBottom: spacing.xs,
+  },
+  empty: { ...typography.body },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 12,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#ddd',
+    gap: spacing.md,
+    backgroundColor: colors.backgroundMuted,
+    borderColor: colors.border,
   },
   copy: { flex: 1 },
-  name: { fontSize: 14, fontWeight: '600', color: '#222' },
-  meta: { marginTop: 2, fontSize: 12, color: '#666' },
-  prices: { alignItems: 'flex-end' },
-  unit: { fontSize: 12, color: '#555' },
-  line: { marginTop: 2, fontSize: 14, fontWeight: '700', color: '#0a7ea4' },
+  name: { ...typography.bodyStrong },
+  meta: { marginTop: spacing.xxs, ...typography.caption },
+  shippingRow: {
+    marginTop: spacing.xxs,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  prices: { alignItems: 'flex-end', gap: spacing.xxs },
+  unit: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  inlinePrice: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
 });

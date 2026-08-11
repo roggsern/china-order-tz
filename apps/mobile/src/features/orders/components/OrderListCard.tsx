@@ -1,9 +1,12 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatCustomerDateTime } from '@/src/shared/utils/formatCustomerDateTime';
+import { Badge } from '@/src/shared/ui/Badge';
+import { Card } from '@/src/shared/ui/Card';
+import { PriceText } from '@/src/shared/ui/PriceText';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import { ContinuePaymentButton } from './ContinuePaymentButton';
 import type { OrderListItem } from '../models/types';
 import { isOrderPayableFromServer } from '../utils/isOrderPayable';
-import { formatOrderMoney } from '../utils/mapOrders';
 
 type Props = {
   order: OrderListItem;
@@ -16,14 +19,22 @@ export function OrderListCard({ order, onPress }: Props) {
   const offerContinuePayment = isOrderPayableFromServer(order);
 
   return (
-    <View style={styles.card}>
+    <Card elevated style={styles.card}>
       <Pressable onPress={onPress} accessibilityRole="button">
         <View style={styles.row}>
-          <Text style={styles.orderNumber}>
+          <Text style={styles.orderNumber} numberOfLines={1}>
             {order.orderNumber ?? order.id}
           </Text>
           {order.journeyLabel ? (
-            <Text style={styles.journey}>{order.journeyLabel}</Text>
+            <Badge
+              label={order.journeyLabel}
+              tone={
+                order.journeyLabel.toLowerCase().includes('tanzania') ||
+                order.journeyLabel.toLowerCase().includes('tz')
+                  ? 'success'
+                  : 'brand'
+              }
+            />
           ) : null}
         </View>
 
@@ -46,47 +57,44 @@ export function OrderListCard({ order, onPress }: Props) {
           </Text>
         ) : null}
 
-        <Text style={styles.total}>
-          {formatOrderMoney(order.grandTotal, order.currency)}
-        </Text>
+        <PriceText
+          value={order.grandTotal}
+          currency={order.currency ?? 'TZS'}
+          style={styles.total}
+          accessibilityLabelPrefix="Order total"
+        />
       </Pressable>
 
       <ContinuePaymentButton
         orderId={order.id}
         enabled={offerContinuePayment}
       />
-    </View>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
-    backgroundColor: '#fff',
+    marginBottom: spacing.md,
+    borderColor: colors.border,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
   },
-  orderNumber: { fontSize: 16, fontWeight: '700', color: '#111', flex: 1 },
-  journey: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#0a7ea4',
-    backgroundColor: '#e8f6fa',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    overflow: 'hidden',
+  orderNumber: {
+    ...typography.bodyStrong,
+    flex: 1,
+    color: colors.text,
   },
-  status: { marginTop: 6, fontSize: 14, fontWeight: '600', color: '#333' },
-  meta: { marginTop: 4, fontSize: 13, color: '#666' },
-  preview: { marginTop: 6, fontSize: 13, color: '#444' },
-  total: { marginTop: 8, fontSize: 15, fontWeight: '700', color: '#111' },
+  status: {
+    marginTop: spacing.sm,
+    ...typography.label,
+    color: colors.text,
+  },
+  meta: { marginTop: spacing.xs, ...typography.caption },
+  preview: { marginTop: spacing.sm, ...typography.caption, color: colors.textSecondary },
+  total: { marginTop: spacing.sm, fontSize: 15 },
 });

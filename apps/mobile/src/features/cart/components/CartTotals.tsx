@@ -1,6 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { Card } from '@/src/shared/ui/Card';
+import { PriceText } from '@/src/shared/ui/PriceText';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import type { Cart } from '../models/types';
-import { formatCartMoney } from '../utils/mapCart';
 
 type Props = {
   cart: Cart;
@@ -9,7 +11,7 @@ type Props = {
 /** Displays server-provided cart totals only. */
 export function CartTotals({ cart }: Props) {
   return (
-    <View style={styles.wrap}>
+    <Card elevated={false} style={styles.wrap}>
       <Text style={styles.title}>Cart totals</Text>
       <View style={styles.row}>
         <Text style={styles.label}>Items</Text>
@@ -17,55 +19,59 @@ export function CartTotals({ cart }: Props) {
       </View>
       <View style={styles.row}>
         <Text style={styles.label}>Subtotal</Text>
-        <Text style={styles.value}>
-          {formatCartMoney(cart.subtotal, cart.currency)}
-        </Text>
+        <PriceText value={cart.subtotal} currency={cart.currency} style={styles.valuePrice} />
       </View>
-      <View style={styles.row}>
+      <View style={[styles.row, styles.totalRow]}>
         <Text style={styles.totalLabel}>Total</Text>
-        <Text style={styles.totalValue}>
-          {formatCartMoney(cart.total, cart.currency)}
-        </Text>
+        <PriceText
+          value={cart.total}
+          currency={cart.currency}
+          size="large"
+          accessibilityLabelPrefix="Total"
+        />
       </View>
-    </View>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    marginTop: 16,
-    padding: 14,
-    borderRadius: 10,
-    backgroundColor: '#f5f7f8',
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+    backgroundColor: colors.backgroundMuted,
+    borderColor: colors.border,
   },
   title: {
-    fontSize: 15,
+    ...typography.label,
+    color: colors.text,
     fontWeight: '700',
-    marginBottom: 10,
-    color: '#222',
+    marginBottom: spacing.md,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  totalRow: {
+    marginTop: spacing.xs,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    marginBottom: 0,
   },
   label: {
-    fontSize: 14,
-    color: '#555',
+    ...typography.body,
   },
   value: {
+    ...typography.bodyStrong,
+  },
+  valuePrice: {
     fontSize: 14,
-    color: '#222',
-    fontWeight: '600',
+    color: colors.text,
   },
   totalLabel: {
+    ...typography.title,
     fontSize: 16,
-    fontWeight: '700',
-    color: '#222',
-  },
-  totalValue: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0a7ea4',
   },
 });

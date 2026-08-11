@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { PriceText } from '@/src/shared/ui/PriceText';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import type { OrderDetailItem } from '../models/types';
-import { formatOrderMoney } from '../utils/mapOrders';
 
 type Props = {
   item: OrderDetailItem;
@@ -25,13 +26,19 @@ export function OrderItemRow({ item, currency }: Props) {
         <Text style={styles.meta}>Qty {item.quantity}</Text>
       </View>
       <View style={styles.prices}>
-        <Text style={styles.lineTotal}>
-          {formatOrderMoney(item.lineTotal, lineCurrency)}
-        </Text>
+        <PriceText
+          value={item.lineTotal}
+          currency={lineCurrency}
+          style={styles.lineTotal}
+          accessibilityLabelPrefix="Line total"
+        />
         {item.unitPrice != null ? (
-          <Text style={styles.unit}>
-            {formatOrderMoney(item.unitPrice, lineCurrency)} each
-          </Text>
+          <PriceText
+            value={item.unitPrice}
+            currency={lineCurrency}
+            style={styles.unit}
+            accessibilityLabelPrefix="Unit price"
+          />
         ) : null}
       </View>
     </View>
@@ -42,15 +49,19 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 12,
-    paddingVertical: 12,
+    gap: spacing.md,
+    paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: colors.border,
   },
   main: { flex: 1 },
-  name: { fontSize: 15, fontWeight: '600', color: '#111' },
-  meta: { marginTop: 3, fontSize: 13, color: '#666' },
-  prices: { alignItems: 'flex-end' },
-  lineTotal: { fontSize: 14, fontWeight: '700', color: '#111' },
-  unit: { marginTop: 3, fontSize: 12, color: '#777' },
+  name: { ...typography.bodyStrong },
+  meta: { marginTop: spacing.xxs, ...typography.caption },
+  prices: { alignItems: 'flex-end', gap: spacing.xxs },
+  lineTotal: { fontSize: 14 },
+  unit: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textSubtle,
+  },
 });

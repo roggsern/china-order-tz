@@ -1,5 +1,7 @@
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { router } from 'expo-router';
+import { PrimaryButton } from '@/src/shared/ui/PrimaryButton';
+import { spacing } from '@/src/shared/theme';
 import { buildPaymentHref } from '@/src/features/payments/utils/paymentRoutes';
 
 type Props = {
@@ -14,25 +16,17 @@ export function ContinuePaymentButton({ orderId, enabled }: Props) {
   if (!enabled) return null;
 
   return (
-    <Pressable
+    <PrimaryButton
+      label="Continue payment"
+      onPress={() => router.push(buildPaymentHref({ orderId }) as never)}
       style={styles.button}
-      onPress={() =>
-        router.push(buildPaymentHref({ orderId }) as never)
-      }
-      accessibilityRole="button"
-    >
-      <Text style={styles.buttonText}>Continue payment</Text>
-    </Pressable>
+    />
   );
 }
 
 const styles = StyleSheet.create({
   button: {
-    marginTop: 16,
-    backgroundColor: '#0a7ea4',
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
+    marginTop: spacing.lg,
+    alignSelf: 'stretch',
   },
-  buttonText: { color: '#fff', fontWeight: '700', fontSize: 15 },
 });

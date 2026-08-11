@@ -1,11 +1,7 @@
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  StyleSheet,
-  Text,
-} from 'react-native';
+import { Alert, StyleSheet, Text } from 'react-native';
+import { SecondaryButton } from '@/src/shared/ui/SecondaryButton';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import { useCancelOrderMutation } from '../hooks/useOrders';
 import {
   getOrderErrorMessage,
@@ -63,17 +59,13 @@ export function CancelOrderButton({
 
   return (
     <>
-      <Pressable
-        style={[styles.button, cancelMutation.isPending ? styles.disabled : null]}
+      <SecondaryButton
+        label="Cancel order"
+        loading={cancelMutation.isPending}
         disabled={cancelMutation.isPending}
         onPress={confirmCancel}
-      >
-        {cancelMutation.isPending ? (
-          <ActivityIndicator color="#b00020" />
-        ) : (
-          <Text style={styles.buttonText}>Cancel order</Text>
-        )}
-      </Pressable>
+        style={styles.button}
+      />
       {localError ? <Text style={styles.error}>{localError}</Text> : null}
     </>
   );
@@ -81,14 +73,13 @@ export function CancelOrderButton({
 
 const styles = StyleSheet.create({
   button: {
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: '#b00020',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
+    marginTop: spacing.lg,
+    alignSelf: 'stretch',
+    borderColor: colors.error,
   },
-  buttonText: { color: '#b00020', fontWeight: '700', fontSize: 15 },
-  disabled: { opacity: 0.6 },
-  error: { marginTop: 8, color: '#b00020', fontSize: 13 },
+  error: {
+    marginTop: spacing.sm,
+    ...typography.caption,
+    color: colors.error,
+  },
 });

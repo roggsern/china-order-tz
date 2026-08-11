@@ -1,18 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { clearSessionOnAuthFailure, useAuthStore } from '@/src/core/auth';
 import { buildLoginHref } from '@/src/features/cart/utils/authReturn';
 import { invalidateAfterPaymentSuccess } from '@/src/features/orders/hooks/useOrders';
 import { buildPostPaymentOrdersHref } from '@/src/features/orders/utils/orderRoutes';
+import { Badge } from '@/src/shared/ui/Badge';
+import { Card } from '@/src/shared/ui/Card';
+import { EmptyState } from '@/src/shared/ui/EmptyState';
+import { PrimaryButton } from '@/src/shared/ui/PrimaryButton';
+import { ScreenContainer } from '@/src/shared/ui/ScreenContainer';
+import { SecondaryButton } from '@/src/shared/ui/SecondaryButton';
+import { TrustStrip } from '@/src/shared/ui/TrustStrip';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import {
   refreshPaymentTransaction,
   retryNmbCheckoutSession,
@@ -227,16 +228,13 @@ export function PaymentScreen() {
 
   if (authStatus !== 'authenticated') {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.title}>Payment</Text>
-        <Text style={styles.body}>Please sign in to continue payment.</Text>
-        <Pressable
-          style={styles.primaryButton}
-          onPress={() => router.push(buildLoginHref(paymentReturnHref))}
-        >
-          <Text style={styles.primaryButtonText}>Sign in</Text>
-        </Pressable>
-      </View>
+      <EmptyState
+        title="Payment"
+        message="Please sign in to continue payment."
+        actionLabel="Sign in"
+        onActionPress={() => router.push(buildLoginHref(paymentReturnHref))}
+        style={styles.fill}
+      />
     );
   }
 
@@ -247,18 +245,13 @@ export function PaymentScreen() {
     !transaction
   ) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.title}>Payment</Text>
-        <Text style={styles.body}>
-          Start checkout and select shipping before continuing to payment.
-        </Text>
-        <Pressable
-          style={styles.primaryButton}
-          onPress={() => router.replace('/(app)/checkout')}
-        >
-          <Text style={styles.primaryButtonText}>Go to checkout</Text>
-        </Pressable>
-      </View>
+      <EmptyState
+        title="Payment"
+        message="Start checkout and select shipping before continuing to payment."
+        actionLabel="Go to checkout"
+        onActionPress={() => router.replace('/(app)/checkout')}
+        style={styles.fill}
+      />
     );
   }
 
@@ -278,118 +271,156 @@ export function PaymentScreen() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.subheading}>
-        Pay securely with NMB Hosted Checkout. Status is confirmed by the server only.
-      </Text>
+    <ScreenContainer padded={false} style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.eyebrow}>Payment</Text>
+        <Text style={styles.heading}>NMB Hosted Checkout</Text>
+        <Text style={styles.subheading}>
+          Pay securely with NMB. Status is confirmed by the server only — never
+          guessed from the browser return.
+        </Text>
 
-      {methodsQuery.data ? (
-        <Text style={styles.meta}>Payment method: NMB</Text>
-      ) : null}
-
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-
-      {transaction ? <PaymentStatusCard transaction={transaction} /> : null}
-
-      {order?.orderNumber ? (
-        <Text style={styles.meta}>Order {order.orderNumber}</Text>
-      ) : null}
-
-      {paid ? (
-        <View style={styles.successBox}>
-          <Text style={styles.successTitle}>Payment confirmed</Text>
-          <Text style={styles.body}>
-            Server confirmed this payment. View your order for status and tracking.
+        <Card elevated={false} style={styles.methodCard}>
+          <Text style={styles.cardTitle}>Payment method</Text>
+          <Badge label="NMB" tone="brand" style={styles.methodBadge} />
+          <Text style={styles.meta}>
+            You will leave the app briefly to complete bank checkout, then return
+            here for confirmation.
           </Text>
-          <Pressable
-            style={styles.primaryButton}
-            onPress={() => void goToOrdersAfterPayment()}
-          >
-            <Text style={styles.primaryButtonText}>
-              {confirmedOrderId ? 'View order' : 'View my orders'}
+        </Card>
+
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+
+        {transaction ? <PaymentStatusCard transaction={transaction} /> : null}
+
+        {order?.orderNumber ? (
+          <Text style={styles.meta}>Order {order.orderNumber}</Text>
+        ) : null}
+
+        {paid ? (
+          <Card elevated style={styles.successBox}>
+            <Badge label="Confirmed" tone="success" />
+            <Text style={styles.successTitle}>Payment confirmed</Text>
+            <Text style={styles.body}>
+              Server confirmed this payment. View your order for status and tracking.
             </Text>
-          </Pressable>
-        </View>
-      ) : (
-        <View style={styles.actions}>
-          <Pressable
-            style={[styles.primaryButton, busy ? styles.disabled : null]}
-            disabled={busy || methodsQuery.isLoading}
-            onPress={() => void (transaction ? retryCheckout() : runPaymentFlow())}
-          >
-            {busy ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.primaryButtonText}>
-                {transaction ? 'Retry NMB checkout' : 'Pay with NMB'}
+            <PrimaryButton
+              label={confirmedOrderId ? 'View order' : 'View my orders'}
+              onPress={() => void goToOrdersAfterPayment()}
+              style={styles.inlineButton}
+            />
+          </Card>
+        ) : (
+          <View style={styles.actions}>
+            <PrimaryButton
+              label={transaction ? 'Retry NMB checkout' : 'Pay with NMB'}
+              loading={busy}
+              disabled={busy || methodsQuery.isLoading}
+              onPress={() => void (transaction ? retryCheckout() : runPaymentFlow())}
+              style={styles.inlineButton}
+            />
+
+            {transaction ? (
+              <SecondaryButton
+                label="Refresh status"
+                disabled={busy}
+                onPress={() => void refreshStatus()}
+                style={styles.inlineButton}
+              />
+            ) : null}
+
+            {terminal && !paid ? (
+              <Text style={styles.note}>
+                Payment was not completed. You can retry or return to checkout.
               </Text>
-            )}
-          </Pressable>
+            ) : null}
+          </View>
+        )}
 
-          {transaction ? (
-            <Pressable
-              style={[styles.secondaryButton, busy ? styles.disabled : null]}
-              disabled={busy}
-              onPress={() => void refreshStatus()}
-            >
-              <Text style={styles.secondaryButtonText}>Refresh status</Text>
-            </Pressable>
-          ) : null}
-
-          {terminal && !paid ? (
-            <Text style={styles.note}>
-              Payment was not completed. You can retry or return to checkout.
-            </Text>
-          ) : null}
-        </View>
-      )}
-    </ScrollView>
+        <TrustStrip
+          title="What happens next"
+          items={[
+            {
+              id: 'handoff',
+              title: 'Secure bank handoff',
+              description:
+                'NMB Hosted Checkout opens in your system browser for card or mobile money payment.',
+            },
+            {
+              id: 'return',
+              title: 'Return & confirm',
+              description:
+                'After payment, return to the app. Only a successful server refresh marks the order paid.',
+            },
+            {
+              id: 'retry',
+              title: 'Safe to retry',
+              description:
+                'If the browser closes early, use Retry or Refresh status — never assume unpaid means failed.',
+            },
+          ]}
+        />
+      </ScrollView>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#fff' },
-  content: { padding: 16, paddingBottom: 40 },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-    backgroundColor: '#fff',
-    gap: 10,
+  screen: { backgroundColor: colors.background },
+  content: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.huge,
   },
-  heading: { fontSize: 22, fontWeight: '700', color: '#111' },
-  title: { fontSize: 18, fontWeight: '700', color: '#222' },
+  fill: { flex: 1, backgroundColor: colors.background },
+  eyebrow: {
+    ...typography.caption,
+    color: colors.primaryPressed,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: spacing.xs,
+  },
+  heading: { ...typography.heading },
   subheading: {
-    marginTop: 6,
-    marginBottom: 12,
-    fontSize: 13,
-    color: '#666',
-    lineHeight: 18,
+    marginTop: spacing.sm,
+    marginBottom: spacing.lg,
+    ...typography.caption,
   },
-  body: { fontSize: 14, color: '#666', textAlign: 'center' },
-  meta: { fontSize: 13, color: '#555', marginBottom: 8 },
-  error: { color: '#b00020', marginBottom: 12, fontSize: 14 },
-  note: { marginTop: 10, fontSize: 13, color: '#666', textAlign: 'center' },
-  actions: { marginTop: 16 },
-  successBox: { marginTop: 20, alignItems: 'center', gap: 8 },
-  successTitle: { fontSize: 18, fontWeight: '700', color: '#1b7f3a' },
-  primaryButton: {
-    marginTop: 12,
-    backgroundColor: '#0a7ea4',
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
+  methodCard: {
+    backgroundColor: colors.surfaceCream,
+    borderColor: colors.primary,
+    marginBottom: spacing.md,
   },
-  primaryButtonText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  secondaryButton: {
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: '#0a7ea4',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
+  cardTitle: {
+    ...typography.label,
+    color: colors.text,
+    fontWeight: '700',
+    marginBottom: spacing.sm,
   },
-  secondaryButtonText: { color: '#0a7ea4', fontWeight: '700' },
-  disabled: { opacity: 0.6 },
+  methodBadge: { alignSelf: 'flex-start', marginBottom: spacing.sm },
+  body: { ...typography.body, textAlign: 'center' },
+  meta: { ...typography.caption, marginBottom: spacing.sm },
+  error: { ...typography.body, color: colors.error, marginBottom: spacing.md },
+  note: {
+    marginTop: spacing.md,
+    ...typography.caption,
+    textAlign: 'center',
+  },
+  actions: { marginTop: spacing.lg },
+  successBox: {
+    marginTop: spacing.xl,
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    backgroundColor: colors.successMuted,
+    borderColor: colors.success,
+  },
+  successTitle: {
+    ...typography.title,
+    color: colors.success,
+  },
+  inlineButton: {
+    marginTop: spacing.md,
+    alignSelf: 'stretch',
+  },
 });

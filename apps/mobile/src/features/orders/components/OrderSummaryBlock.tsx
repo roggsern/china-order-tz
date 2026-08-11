@@ -1,6 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { Card } from '@/src/shared/ui/Card';
+import { PriceText } from '@/src/shared/ui/PriceText';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import type { OrderSummary } from '../models/types';
-import { formatOrderMoney } from '../utils/mapOrders';
 
 type Props = {
   summary: OrderSummary;
@@ -9,43 +11,83 @@ type Props = {
 
 export function OrderSummaryBlock({ summary, currency }: Props) {
   return (
-    <View style={styles.block}>
+    <Card elevated={false} style={styles.block}>
       <Text style={styles.title}>Totals</Text>
       {summary.subtotal != null ? (
-        <Text style={styles.line}>
-          Subtotal: {formatOrderMoney(summary.subtotal, currency)}
-        </Text>
+        <Row label="Subtotal" value={summary.subtotal} currency={currency} />
       ) : null}
       {summary.shipping != null ? (
-        <Text style={styles.line}>
-          Shipping: {formatOrderMoney(summary.shipping, currency)}
-        </Text>
+        <Row label="Shipping" value={summary.shipping} currency={currency} />
       ) : null}
       {summary.discount != null ? (
-        <Text style={styles.line}>
-          Discount: {formatOrderMoney(summary.discount, currency)}
-        </Text>
+        <Row label="Discount" value={summary.discount} currency={currency} />
       ) : null}
       {summary.tax != null ? (
-        <Text style={styles.line}>
-          Tax: {formatOrderMoney(summary.tax, currency)}
-        </Text>
+        <Row label="Tax" value={summary.tax} currency={currency} />
       ) : null}
-      <Text style={styles.grand}>
-        Total: {formatOrderMoney(summary.grandTotal, currency)}
-      </Text>
+      <View style={styles.grandRow}>
+        <Text style={styles.grandLabel}>Total</Text>
+        <PriceText
+          value={summary.grandTotal}
+          currency={currency}
+          size="large"
+          accessibilityLabelPrefix="Order total"
+        />
+      </View>
+    </Card>
+  );
+}
+
+function Row({
+  label,
+  value,
+  currency,
+}: {
+  label: string;
+  value: string | number | null | undefined;
+  currency: string;
+}) {
+  return (
+    <View style={styles.row}>
+      <Text style={styles.line}>{label}</Text>
+      <PriceText
+        value={value}
+        currency={currency}
+        style={styles.value}
+        accessibilityLabelPrefix={label}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   block: {
-    marginTop: 16,
-    padding: 14,
-    borderRadius: 12,
-    backgroundColor: '#f8fafc',
+    marginTop: spacing.lg,
+    backgroundColor: colors.backgroundMuted,
+    borderColor: colors.border,
   },
-  title: { fontSize: 15, fontWeight: '700', color: '#111', marginBottom: 8 },
-  line: { fontSize: 14, color: '#444', marginBottom: 4 },
-  grand: { marginTop: 6, fontSize: 16, fontWeight: '700', color: '#111' },
+  title: {
+    ...typography.label,
+    color: colors.text,
+    fontWeight: '700',
+    marginBottom: spacing.md,
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  line: { ...typography.body },
+  value: { fontSize: 14, color: colors.text },
+  grandRow: {
+    marginTop: spacing.xs,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  grandLabel: { ...typography.title, fontSize: 16 },
 });

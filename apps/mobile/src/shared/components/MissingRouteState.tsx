@@ -1,5 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { colors, spacing, typography } from '../theme';
+import { PrimaryButton, SecondaryButton } from '../ui';
 
 type Props = {
   title: string;
@@ -25,14 +27,13 @@ export function MissingRouteState({
     <View style={styles.centered}>
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.body}>{message}</Text>
-      <Pressable
-        style={styles.primaryButton}
+      <PrimaryButton
+        label={primaryLabel}
         onPress={() => router.replace(primaryHref as never)}
-      >
-        <Text style={styles.primaryButtonText}>{primaryLabel}</Text>
-      </Pressable>
-      <Pressable
-        style={styles.secondaryButton}
+        style={styles.button}
+      />
+      <SecondaryButton
+        label={secondaryLabel}
         onPress={() => {
           if (onSecondaryPress) {
             onSecondaryPress();
@@ -44,9 +45,8 @@ export function MissingRouteState({
             router.replace(primaryHref as never);
           }
         }}
-      >
-        <Text style={styles.secondaryButtonText}>{secondaryLabel}</Text>
-      </Pressable>
+        style={styles.button}
+      />
     </View>
   );
 }
@@ -56,29 +56,20 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
-    backgroundColor: '#fff',
-    gap: 10,
+    padding: spacing.xxl,
+    backgroundColor: colors.background,
+    gap: spacing.sm,
   },
-  title: { fontSize: 18, fontWeight: '700', color: '#222', textAlign: 'center' },
-  body: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 8 },
-  primaryButton: {
-    backgroundColor: '#0a7ea4',
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
+  title: {
+    ...typography.title,
+    textAlign: 'center',
+  },
+  body: {
+    ...typography.body,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  button: {
     minWidth: 180,
-    alignItems: 'center',
   },
-  primaryButtonText: { color: '#fff', fontWeight: '700' },
-  secondaryButton: {
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    minWidth: 180,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#0a7ea4',
-  },
-  secondaryButtonText: { color: '#0a7ea4', fontWeight: '600' },
 });

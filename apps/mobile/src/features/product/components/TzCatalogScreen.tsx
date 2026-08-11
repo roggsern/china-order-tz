@@ -9,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { colors, radius, spacing, typography } from '@/src/shared/theme';
 import { CatalogProductCardView } from './CatalogProductCardView';
 import { CategoryChips } from './CategoryChips';
 import {
@@ -120,13 +121,17 @@ export function TzCatalogScreen() {
             void categoriesQuery.refetch();
             void productsQuery.refetch();
           }}
+          tintColor={colors.primary}
+          colors={[colors.primary]}
         />
       }
       ListHeaderComponent={
-        <View>
-          <Text style={styles.heading}>Buy from TZ</Text>
-          <Text style={styles.subheading}>Local TZ store catalog</Text>
+        <View style={styles.header}>
+          <Text style={styles.eyebrow}>Catalog</Text>
+          <Text style={styles.heading}>Buy from Tanzania</Text>
+          <Text style={styles.subheading}>Local trusted store products</Text>
 
+          <Text style={styles.chipLabel}>Stores</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -137,6 +142,8 @@ export function TzCatalogScreen() {
               return (
                 <Pressable
                   key={store.id}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
                   style={[styles.storeChip, active ? styles.storeChipActive : null]}
                   onPress={() => {
                     setSelectedTzStoreSlug(store.slug);
@@ -153,6 +160,7 @@ export function TzCatalogScreen() {
             })}
           </ScrollView>
 
+          <Text style={styles.chipLabel}>Categories</Text>
           <CategoryChips
             categories={categoriesQuery.data ?? []}
             selectedSlug={category}
@@ -183,7 +191,7 @@ export function TzCatalogScreen() {
       onEndReachedThreshold={0.4}
       ListFooterComponent={
         productsQuery.isFetchingNextPage ? (
-          <ActivityIndicator style={styles.footer} color="#0a7ea4" />
+          <ActivityIndicator style={styles.footer} color={colors.primary} />
         ) : !productsQuery.hasNextPage && products.length > 0 ? (
           <Text style={styles.end}>You have reached the end</Text>
         ) : productsQuery.isFetchNextPageError ? (
@@ -197,40 +205,61 @@ export function TzCatalogScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#fff' },
-  content: { paddingTop: 16, paddingBottom: 40, paddingHorizontal: 16 },
-  heading: {
-    fontSize: 22,
+  screen: { flex: 1, backgroundColor: colors.background },
+  content: {
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.huge,
+    paddingHorizontal: spacing.lg,
+  },
+  header: {
+    marginBottom: spacing.sm,
+  },
+  eyebrow: {
+    ...typography.caption,
+    color: colors.primaryPressed,
     fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: spacing.xs,
+  },
+  heading: {
+    ...typography.heading,
   },
   subheading: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 12,
+    ...typography.caption,
+    marginBottom: spacing.md,
+  },
+  chipLabel: {
+    ...typography.caption,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
   },
   storeRow: {
-    paddingBottom: 12,
-    gap: 8,
+    paddingBottom: spacing.md,
+    gap: spacing.sm,
   },
   storeChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: '#ccc',
-    backgroundColor: '#fff',
-    marginRight: 8,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    marginRight: spacing.sm,
   },
   storeChipActive: {
-    borderColor: '#0a7ea4',
-    backgroundColor: '#e7f5fa',
+    borderColor: colors.journeyTz,
+    backgroundColor: colors.successMuted,
   },
   storeText: {
-    fontSize: 13,
-    color: '#444',
+    ...typography.label,
+    color: colors.textSecondary,
   },
   storeTextActive: {
-    color: '#0a7ea4',
+    color: colors.journeyTz,
     fontWeight: '700',
   },
   row: {
@@ -239,17 +268,16 @@ const styles = StyleSheet.create({
   cardWrap: {
     width: '48%',
   },
-  footer: { marginVertical: 16 },
+  footer: { marginVertical: spacing.lg },
   end: {
+    ...typography.caption,
     textAlign: 'center',
-    color: '#888',
-    marginVertical: 16,
-    fontSize: 13,
+    marginVertical: spacing.lg,
   },
   footerError: {
+    ...typography.caption,
+    color: colors.error,
     textAlign: 'center',
-    color: '#b00020',
-    marginVertical: 16,
-    fontSize: 13,
+    marginVertical: spacing.lg,
   },
 });

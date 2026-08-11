@@ -1,4 +1,5 @@
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { colors, radius, spacing, typography } from '@/src/shared/theme';
 import type { CatalogCategory } from '../models/types';
 
 type Props = {
@@ -15,10 +16,17 @@ export function CategoryChips({ categories, selectedSlug, onSelect }: Props) {
       contentContainerStyle={styles.row}
     >
       <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ selected: selectedSlug == null }}
         style={[styles.chip, selectedSlug == null ? styles.chipActive : null]}
         onPress={() => onSelect(null)}
       >
-        <Text style={[styles.chipText, selectedSlug == null ? styles.chipTextActive : null]}>
+        <Text
+          style={[
+            styles.chipText,
+            selectedSlug == null ? styles.chipTextActive : null,
+          ]}
+        >
           All
         </Text>
       </Pressable>
@@ -27,6 +35,8 @@ export function CategoryChips({ categories, selectedSlug, onSelect }: Props) {
         return (
           <Pressable
             key={category.id}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
             style={[styles.chip, active ? styles.chipActive : null]}
             onPress={() => onSelect(category.slug)}
           >
@@ -42,28 +52,27 @@ export function CategoryChips({ categories, selectedSlug, onSelect }: Props) {
 
 const styles = StyleSheet.create({
   row: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    gap: 8,
+    paddingBottom: spacing.md,
+    gap: spacing.sm,
   },
   chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
     borderWidth: 1,
-    borderColor: '#ccc',
-    backgroundColor: '#fff',
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
   chipActive: {
-    borderColor: '#0a7ea4',
-    backgroundColor: '#e7f5fa',
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryMuted,
   },
   chipText: {
-    fontSize: 13,
-    color: '#444',
+    ...typography.label,
+    color: colors.textSecondary,
   },
   chipTextActive: {
-    color: '#0a7ea4',
+    color: colors.primaryPressed,
     fontWeight: '700',
   },
 });

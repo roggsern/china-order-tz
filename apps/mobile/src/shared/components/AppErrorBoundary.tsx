@@ -1,5 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { BrandMark, BRAND_NAME } from '../branding';
+import { colors, spacing, typography } from '../theme';
 
 type Props = {
   children: ReactNode;
@@ -24,6 +26,8 @@ export class AppErrorBoundary extends Component<Props, State> {
     if (this.state.error) {
       return (
         <View style={styles.container}>
+          <BrandMark size={40} style={styles.mark} />
+          <Text style={styles.brand}>{BRAND_NAME}</Text>
           <Text style={styles.title}>Something went wrong</Text>
           <Text style={styles.message}>{this.state.error.message}</Text>
         </View>
@@ -39,17 +43,26 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
-    backgroundColor: '#fff',
+    padding: spacing.xxl,
+    backgroundColor: colors.background,
+  },
+  mark: {
+    marginBottom: spacing.md,
+    backgroundColor: 'transparent',
+  },
+  brand: {
+    ...typography.caption,
+    color: colors.primaryPressed,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    marginBottom: spacing.md,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 8,
+    ...typography.title,
+    marginBottom: spacing.sm,
   },
   message: {
-    fontSize: 14,
-    color: '#555',
+    ...typography.body,
     textAlign: 'center',
   },
 });

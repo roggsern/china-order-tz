@@ -1,6 +1,9 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { Badge } from '@/src/shared/ui/Badge';
+import { Card } from '@/src/shared/ui/Card';
+import { SectionHeader } from '@/src/shared/ui/SectionHeader';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import type { HomepageCampaignMeta } from '../models/types';
-import { SectionHeader } from './SectionHeader';
 
 type Props = {
   campaign: HomepageCampaignMeta;
@@ -10,11 +13,12 @@ type Props = {
 export function CampaignSection({ campaign }: Props) {
   return (
     <View style={styles.section}>
-      <SectionHeader title="Campaign" subtitle="Active promotion from CMS" />
-      <View style={styles.card}>
-        <Text style={styles.name}>{campaign.name}</Text>
-        <Text style={styles.meta}>Slug: {campaign.slug}</Text>
-        <Text style={styles.meta}>Priority: {campaign.priority}</Text>
+      <SectionHeader title="Featured campaign" subtitle={null} />
+      <View style={styles.pad}>
+        <Card style={styles.card} elevated>
+          <Badge label="Campaign" tone="brand" />
+          <Text style={styles.name}>{campaign.name}</Text>
+        </Card>
       </View>
     </View>
   );
@@ -22,25 +26,18 @@ export function CampaignSection({ campaign }: Props) {
 
 const styles = StyleSheet.create({
   section: {
-    marginBottom: 24,
+    marginBottom: spacing.xxl,
+  },
+  pad: {
+    paddingHorizontal: spacing.lg,
   },
   card: {
-    marginHorizontal: 16,
-    padding: 16,
-    borderRadius: 10,
-    backgroundColor: '#fff6e8',
-    borderWidth: 1,
-    borderColor: '#f0d9a8',
+    backgroundColor: colors.surfaceCream,
+    borderColor: colors.primary,
+    gap: spacing.sm,
   },
   name: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 6,
-    color: '#333',
-  },
-  meta: {
-    fontSize: 13,
-    color: '#666',
-    marginTop: 2,
+    ...typography.title,
+    fontSize: 17,
   },
 });

@@ -1,14 +1,15 @@
 import {
-  ActivityIndicator,
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  View,
 } from 'react-native';
+import { router } from 'expo-router';
 import { useJourneyStore } from '@/src/core/auth';
 import { journeyLabelFromChannel } from '@/src/features/cart/utils/journeyLabel';
+import { EmptyState } from '@/src/shared/ui/EmptyState';
+import { ScreenLoadingState } from '@/src/shared/ui/ScreenLoadingState';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import { useHomepage } from '../hooks/useHomepage';
 import { getHomepageErrorMessage } from '../utils/homepageErrorMessage';
 import { HomepageSections } from './HomepageSections';
@@ -19,48 +20,52 @@ export function HomepageScreen() {
   const query = useHomepage();
 
   if (query.isLoading && !query.data) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#0a7ea4" />
-        <Text style={styles.muted}>Loading homepage…</Text>
-      </View>
-    );
+    return <ScreenLoadingState showBrand label="Loading homepage…" />;
   }
 
-  // Keep cached homepage when background refetch fails.
   if (query.isError && !query.data) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.errorTitle}>Homepage unavailable</Text>
-        <Text style={styles.errorBody}>{getHomepageErrorMessage(query.error)}</Text>
-        <Pressable style={styles.retry} onPress={() => void query.refetch()}>
-          <Text style={styles.retryText}>Retry</Text>
-        </Pressable>
-      </View>
+      <EmptyState
+        title="Homepage unavailable"
+        message={getHomepageErrorMessage(query.error)}
+        actionLabel="Retry"
+        onActionPress={() => void query.refetch()}
+        style={styles.centered}
+      />
     );
   }
 
   const view = query.data;
-  const empty =
-    !view?.layout && (view?.sections.length ?? 0) === 0;
+  const empty = !view?.layout && (view?.sections.length ?? 0) === 0;
 
   return (
     <ScrollView
       style={styles.screen}
       contentContainerStyle={styles.content}
       refreshControl={
-        <RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} />
+        <RefreshControl
+          refreshing={query.isRefetching}
+          onRefresh={() => void query.refetch()}
+          tintColor={colors.primary}
+          colors={[colors.primary]}
+        />
       }
     >
       <Text style={styles.context}>{journeyLabelFromChannel(journey)}</Text>
       <JourneySwitcher />
 
       {empty ? (
-        <Text style={styles.empty}>
-          {view?.meta.message
-            ? 'Homepage content is not published for this shopping journey yet. You can still Browse, Search, and shop.'
-            : 'No homepage layout for this commerce context.'}
-        </Text>
+        <EmptyState
+          title="Nothing published yet"
+          message={
+            view?.meta.message
+              ? 'Homepage content is not published for this shopping journey yet. You can still browse and shop.'
+              : 'No homepage layout for this commerce context.'
+          }
+          actionLabel="Browse products"
+          onActionPress={() => router.push('/(app)/(tabs)/browse')}
+          style={styles.empty}
+        />
       ) : (
         <HomepageSections sections={view?.sections ?? []} />
       )}
@@ -71,53 +76,22 @@ export function HomepageScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: colors.background,
   },
   content: {
-    paddingTop: 16,
-    paddingBottom: 40,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.huge,
   },
   context: {
-    fontSize: 12,
-    color: '#666',
-    paddingHorizontal: 16,
-    marginBottom: 12,
+    ...typography.caption,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
   },
   empty: {
-    paddingHorizontal: 16,
-    fontSize: 14,
-    color: '#666',
+    paddingVertical: spacing.xxl,
   },
   centered: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-    backgroundColor: '#fff',
-  },
-  muted: {
-    marginTop: 12,
-    color: '#666',
-  },
-  errorTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  errorBody: {
-    fontSize: 14,
-    color: '#555',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  retry: {
-    backgroundColor: '#0a7ea4',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryText: {
-    color: '#fff',
-    fontWeight: '600',
+    backgroundColor: colors.background,
   },
 });

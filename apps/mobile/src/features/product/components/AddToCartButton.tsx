@@ -1,4 +1,6 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { PrimaryButton } from '@/src/shared/ui/PrimaryButton';
+import { colors, spacing } from '@/src/shared/theme';
 
 type Props = {
   enabled: boolean;
@@ -7,47 +9,34 @@ type Props = {
   label?: string;
 };
 
+/** Premium purchase CTA — presentation only; callers own cart logic. */
 export function AddToCartButton({
   enabled,
   submitting,
   onPress,
   label = 'Add to cart',
 }: Props) {
-  const disabled = !enabled || submitting;
-
   return (
     <View style={styles.wrap}>
-      <Pressable
-        style={[styles.button, disabled ? styles.buttonDisabled : null]}
-        disabled={disabled}
+      <PrimaryButton
+        label={label}
+        loading={submitting}
+        disabled={!enabled}
         onPress={onPress}
-      >
-        {submitting ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>{label}</Text>
-        )}
-      </Pressable>
+        style={styles.button}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    marginTop: 20,
+    marginTop: spacing.xl,
+    paddingTop: spacing.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
   button: {
-    backgroundColor: '#0a7ea4',
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  buttonDisabled: {
-    backgroundColor: '#9bbdca',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
+    alignSelf: 'stretch',
   },
 });

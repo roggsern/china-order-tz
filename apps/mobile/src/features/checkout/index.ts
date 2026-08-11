@@ -17,6 +17,8 @@ export {
   checkoutSessionQueryKey,
 } from './hooks/useCheckout';
 export { CheckoutScreen } from './screens/CheckoutScreen';
+export { CheckoutProgress } from './components/CheckoutProgress';
+export type { CheckoutProgressStep } from './components/CheckoutProgress';
 export {
   mapCheckoutPrepare,
   mapCheckoutSession,

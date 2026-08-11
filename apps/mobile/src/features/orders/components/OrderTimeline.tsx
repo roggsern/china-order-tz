@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import type { OrderProgress, OrderTimelineEvent } from '../models/types';
 
 type Props = {
@@ -63,19 +64,28 @@ export function OrderTimeline({
 }
 
 const styles = StyleSheet.create({
-  block: { marginTop: 16 },
-  title: { fontSize: 15, fontWeight: '700', color: '#111', marginBottom: 8 },
-  current: { fontSize: 14, color: '#0a7ea4', marginBottom: 10, fontWeight: '600' },
-  event: { flexDirection: 'row', gap: 10, marginBottom: 10 },
+  block: { marginTop: spacing.lg },
+  title: {
+    ...typography.label,
+    color: colors.text,
+    fontWeight: '700',
+    marginBottom: spacing.sm,
+  },
+  current: {
+    ...typography.bodyStrong,
+    color: colors.primaryPressed,
+    marginBottom: spacing.md,
+  },
+  event: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
   dot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    marginTop: 4,
+    marginTop: spacing.xs,
   },
-  dotDone: { backgroundColor: '#1b7f3a' },
-  dotPending: { backgroundColor: '#cbd5e1' },
+  dotDone: { backgroundColor: colors.success },
+  dotPending: { backgroundColor: colors.borderStrong },
   eventBody: { flex: 1 },
-  eventLabel: { fontSize: 14, color: '#222', fontWeight: '600' },
-  eventMeta: { marginTop: 2, fontSize: 12, color: '#666' },
+  eventLabel: { ...typography.bodyStrong },
+  eventMeta: { marginTop: spacing.xxs, ...typography.caption },
 });

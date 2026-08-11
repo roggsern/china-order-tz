@@ -1,5 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { PrimaryButton } from '@/src/shared/ui/PrimaryButton';
+import { colors, spacing, typography } from '@/src/shared/theme';
 
 type Props = {
   enabled: boolean;
@@ -12,17 +14,16 @@ type Props = {
 export function ContinueToPaymentButton({ enabled, checkoutSessionId }: Props) {
   return (
     <View style={styles.wrap}>
-      <Pressable
-        style={[styles.button, !enabled || !checkoutSessionId ? styles.disabled : null]}
+      <PrimaryButton
+        label="Continue to Payment"
         disabled={!enabled || !checkoutSessionId}
         onPress={() =>
           router.push(
             `/(app)/payment?checkoutSessionId=${encodeURIComponent(checkoutSessionId!)}`,
           )
         }
-      >
-        <Text style={styles.buttonText}>Continue to Payment</Text>
-      </Pressable>
+        style={styles.button}
+      />
       <Text style={styles.note}>
         Opens NMB Hosted Checkout. Payment success is confirmed by the server only.
       </Text>
@@ -31,19 +32,16 @@ export function ContinueToPaymentButton({ enabled, checkoutSessionId }: Props) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginTop: 16 },
-  button: {
-    backgroundColor: '#0a7ea4',
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
+  wrap: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
-  disabled: { backgroundColor: '#9bbdca' },
-  buttonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  button: { alignSelf: 'stretch' },
   note: {
-    marginTop: 8,
-    fontSize: 12,
-    color: '#666',
+    marginTop: spacing.sm,
+    ...typography.caption,
     textAlign: 'center',
   },
 });

@@ -1,15 +1,12 @@
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/src/core/auth';
+import { EmptyState } from '@/src/shared/ui/EmptyState';
+import { ScreenContainer } from '@/src/shared/ui/ScreenContainer';
+import { ScreenLoadingState } from '@/src/shared/ui/ScreenLoadingState';
+import { TrustStrip } from '@/src/shared/ui/TrustStrip';
+import { colors, spacing, typography } from '@/src/shared/theme';
 import { CartLineItemCard } from '../components/CartLineItemCard';
 import { CartTotals } from '../components/CartTotals';
 import { ProceedToCheckoutButton } from '../components/ProceedToCheckoutButton';
@@ -31,37 +28,29 @@ export function CartScreen() {
 
   if (authStatus !== 'authenticated') {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.title}>Cart</Text>
-        <Text style={styles.body}>Please sign in to view your cart.</Text>
-        <Pressable
-          style={styles.primaryButton}
-          onPress={() => router.push(buildLoginHref('/(app)/(tabs)/cart'))}
-        >
-          <Text style={styles.primaryButtonText}>Sign in</Text>
-        </Pressable>
-      </View>
+      <EmptyState
+        title="Your cart"
+        message="Please sign in to view your cart."
+        actionLabel="Sign in"
+        onActionPress={() => router.push(buildLoginHref('/(app)/(tabs)/cart'))}
+        style={styles.fill}
+      />
     );
   }
 
   if (cartQuery.isLoading && !cartQuery.data) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#0a7ea4" />
-        <Text style={styles.muted}>Loading cart…</Text>
-      </View>
-    );
+    return <ScreenLoadingState label="Loading cart…" />;
   }
 
   if (cartQuery.isError && !cartQuery.data) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.title}>Cart unavailable</Text>
-        <Text style={styles.body}>{getCartErrorMessage(cartQuery.error)}</Text>
-        <Pressable style={styles.primaryButton} onPress={() => void cartQuery.refetch()}>
-          <Text style={styles.primaryButtonText}>Retry</Text>
-        </Pressable>
-      </View>
+      <EmptyState
+        title="Cart unavailable"
+        message={getCartErrorMessage(cartQuery.error)}
+        actionLabel="Retry"
+        onActionPress={() => void cartQuery.refetch()}
+        style={styles.fill}
+      />
     );
   }
 
@@ -95,115 +84,114 @@ export function CartScreen() {
   }
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.content}
-      refreshControl={
-        <RefreshControl
-          refreshing={cartQuery.isRefetching}
-          onRefresh={() => void cartQuery.refetch()}
-        />
-      }
-    >
-      <Text style={styles.subheading}>
-        Prices and availability come from the server. Journeys cannot be mixed in one cart.
-      </Text>
-
-      {actionError ? <Text style={styles.error}>{actionError}</Text> : null}
-
-      {isEmpty ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>Your cart is empty</Text>
-          <Text style={styles.body}>Add products from the catalog or search.</Text>
+    <ScreenContainer padded={false} style={styles.screen}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={cartQuery.isRefetching}
+            onRefresh={() => void cartQuery.refetch()}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
+      >
+        <View style={styles.header}>
+          <Text style={styles.eyebrow}>Bag</Text>
+          <Text style={styles.heading}>Your cart</Text>
+          <Text style={styles.subheading}>
+            Prices and availability come from the server. Journeys cannot be mixed
+            in one cart.
+          </Text>
         </View>
-      ) : (
-        <>
-          {items.map((item) => (
-            <CartLineItemCard
-              key={item.id}
-              item={item}
-              busy={busyItemId === item.id && mutating}
-              onIncrease={() => void changeQuantity(item.id, item.quantity + 1)}
-              onDecrease={() => void changeQuantity(item.id, item.quantity - 1)}
-              onRemove={() => void removeItem(item.id)}
-            />
-          ))}
 
-          {cart ? <CartTotals cart={cart} /> : null}
-          <ProceedToCheckoutButton disabled={isEmpty || mutating} />
-        </>
-      )}
-    </ScrollView>
+        {actionError ? <Text style={styles.error}>{actionError}</Text> : null}
+
+        {isEmpty ? (
+          <EmptyState
+            title="Your cart is empty"
+            message="Add products from Browse or Search to continue."
+            actionLabel="Browse products"
+            onActionPress={() => router.push('/(app)/(tabs)/browse')}
+            style={styles.empty}
+          />
+        ) : (
+          <>
+            {items.map((item) => (
+              <CartLineItemCard
+                key={item.id}
+                item={item}
+                busy={busyItemId === item.id && mutating}
+                onIncrease={() => void changeQuantity(item.id, item.quantity + 1)}
+                onDecrease={() => void changeQuantity(item.id, item.quantity - 1)}
+                onRemove={() => void removeItem(item.id)}
+              />
+            ))}
+
+            {cart ? <CartTotals cart={cart} /> : null}
+            <ProceedToCheckoutButton disabled={isEmpty || mutating} />
+            <TrustStrip
+              title="Before you checkout"
+              items={[
+                {
+                  id: 'server-totals',
+                  title: 'Server-confirmed totals',
+                  description:
+                    'Line prices and cart totals are never recalculated on device.',
+                },
+                {
+                  id: 'journey',
+                  title: 'One shopping journey',
+                  description:
+                    'China import and Tanzania store items stay in separate carts.',
+                },
+              ]}
+            />
+          </>
+        )}
+      </ScrollView>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
-    flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: colors.background,
   },
   content: {
-    padding: 16,
-    paddingBottom: 40,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.huge,
+  },
+  fill: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  header: {
+    marginBottom: spacing.sm,
+  },
+  eyebrow: {
+    ...typography.caption,
+    color: colors.primaryPressed,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: spacing.xs,
   },
   heading: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#111',
+    ...typography.heading,
   },
   subheading: {
-    marginTop: 6,
-    marginBottom: 12,
-    fontSize: 13,
-    color: '#666',
-    lineHeight: 18,
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-    backgroundColor: '#fff',
-    gap: 10,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#222',
-  },
-  body: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-  },
-  muted: {
-    fontSize: 14,
-    color: '#666',
+    ...typography.caption,
+    marginTop: spacing.xs,
+    marginBottom: spacing.lg,
   },
   empty: {
-    paddingVertical: 40,
-    alignItems: 'center',
-    gap: 8,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#222',
+    paddingVertical: spacing.xxxl,
   },
   error: {
-    marginBottom: 12,
-    color: '#b00020',
-    fontSize: 14,
-  },
-  primaryButton: {
-    marginTop: 8,
-    backgroundColor: '#0a7ea4',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  primaryButtonText: {
-    color: '#fff',
-    fontWeight: '700',
+    marginBottom: spacing.md,
+    ...typography.body,
+    color: colors.error,
   },
 });
