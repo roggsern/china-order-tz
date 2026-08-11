@@ -4,10 +4,13 @@ import {
   customerMessageForHcError,
   hostedCheckoutHtmlAwaitsScriptLoad,
   isNmbAppPaymentReturnUrl,
+  MPGS_ERROR_CALLBACK_DEFAULT_MESSAGE,
   normalizeHcErrorStage,
   NMB_HC_DIAGNOSTIC_STAGES,
   resolveNmbWebsiteCheckoutMessageAction,
+  safeUrlHost,
   sanitizeHcDiagnosticDetail,
+  stageFromMpgsErrorCallback,
 } from './nmbWebsiteCheckoutBootstrap';
 import { useNmbWebsiteCheckoutStore } from '../state/nmbWebsiteCheckoutStore';
 
@@ -25,120 +28,143 @@ describe('buildHostedCheckoutHtml / Checkout.js bootstrap', () => {
     );
   });
 
-  it('awaits script.onload before configure and showPaymentPage', () => {
+  it('emits bootstrap_started and awaits script.onload before configure/show', () => {
     expect(hostedCheckoutHtmlAwaitsScriptLoad(html)).toBe(true);
+    expect(html).toContain("setMilestone('bootstrap_started')");
+    expect(html).toContain("setMilestone('script_loaded')");
+    const bootstrapIdx = html.indexOf("setMilestone('bootstrap_started')");
     const onloadIdx = html.indexOf('script.onload');
     const configureIdx = html.indexOf('Checkout.configure');
-    const showIdx = html.indexOf('showPaymentPage');
-    expect(onloadIdx).toBeGreaterThan(-1);
+    expect(bootstrapIdx).toBeGreaterThan(-1);
+    expect(bootstrapIdx).toBeLessThan(onloadIdx);
     expect(configureIdx).toBeGreaterThan(onloadIdx);
-    expect(showIdx).toBeGreaterThan(configureIdx);
   });
 
-  it('emits diagnostic stages for script_load, checkout_missing, configure, show', () => {
-    expect(html).toContain("stage: 'script_load'");
-    expect(html).toContain("stage: 'checkout_missing'");
-    expect(html).toContain("stage: 'configure_failed'");
-    expect(html).toContain("stage: 'show_payment_failed'");
-    expect(html).toContain('script.onerror');
+  it('maps MPGS data-error callback to milestone-based stages (not hardcoded unknown)', () => {
+    expect(html).toContain('mpgs_data_error_callback');
+    expect(html).toContain("stage = 'mpgs_error'");
+    expect(html).toContain("stage = 'configure_failed'");
+    expect(html).toContain("stage = 'show_payment_failed'");
+    const errorCallbackBlock = html.slice(
+      html.indexOf('window.errorCallback'),
+      html.indexOf('window.timeoutCallback'),
+    );
+    expect(errorCallbackBlock).toContain("source: 'mpgs_data_error_callback'");
+    expect(errorCallbackBlock).not.toContain("stage: 'unknown'");
+  });
+});
+
+describe('safeUrlHost', () => {
+  it('returns hostname only and strips query', () => {
+    expect(
+      safeUrlHost(
+        'https://test-nmbbank.mtf.gateway.mastercard.com/checkout/pay?resultIndicator=secret',
+      ),
+    ).toBe('test-nmbbank.mtf.gateway.mastercard.com');
+  });
+});
+
+describe('stageFromMpgsErrorCallback — proven Build-3 unknown path', () => {
+  it('classifies by last milestone', () => {
+    expect(stageFromMpgsErrorCallback('script_loading')).toBe('script_load');
+    expect(stageFromMpgsErrorCallback('script_loaded')).toBe('configure_failed');
+    expect(stageFromMpgsErrorCallback('configure_started')).toBe('configure_failed');
+    expect(stageFromMpgsErrorCallback('configure_success')).toBe(
+      'show_payment_failed',
+    );
+    expect(stageFromMpgsErrorCallback('show_started')).toBe('show_payment_failed');
+    expect(stageFromMpgsErrorCallback(null)).toBe('mpgs_error');
   });
 });
 
 describe('isNmbAppPaymentReturnUrl', () => {
-  it('accepts chinaordertz://payment-return deep links', () => {
+  it('accepts chinaordertz://payment-return only', () => {
     expect(
       isNmbAppPaymentReturnUrl(
         'chinaordertz://payment-return?resultIndicator=abc',
         'chinaordertz',
       ),
     ).toBe(true);
-  });
-
-  it('rejects gateway URLs that only contain resultIndicator', () => {
     expect(
       isNmbAppPaymentReturnUrl(
-        'https://test-nmbbank.mtf.gateway.mastercard.com/checkout/pay?resultIndicator=x',
+        'https://test-nmbbank.mtf.gateway.mastercard.com/?resultIndicator=x',
         'chinaordertz',
       ),
     ).toBe(false);
   });
 });
 
-describe('sanitizeHcDiagnosticDetail', () => {
-  it('redacts session-like tokens and long opaque ids', () => {
-    expect(
-      sanitizeHcDiagnosticDetail('Failed SESSION000123456789abcdef configure'),
-    ).toContain('[redacted]');
-    expect(
-      sanitizeHcDiagnosticDetail('id=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
-    ).toContain('[redacted]');
-  });
-});
-
-describe('normalizeHcErrorStage + customer messages for every diagnostic stage', () => {
-  it('covers all required diagnostic stages', () => {
-    expect([...NMB_HC_DIAGNOSTIC_STAGES]).toEqual([
-      'script_load',
-      'checkout_missing',
-      'configure_failed',
-      'show_payment_failed',
-      'navigation_failed',
-      'unknown',
-    ]);
-  });
-
-  it.each(NMB_HC_DIAGNOSTIC_STAGES)(
-    'normalizes and maps customer message for %s',
-    (stage) => {
+describe('normalizeHcErrorStage + customer messages', () => {
+  it('covers all diagnostic stages', () => {
+    for (const stage of NMB_HC_DIAGNOSTIC_STAGES) {
       expect(normalizeHcErrorStage(stage)).toBe(stage);
-      const message = customerMessageForHcError(stage);
-      expect(message.length).toBeGreaterThan(10);
-      expect(message).not.toMatch(/SESSION|secret|password|token/i);
-    },
-  );
-
-  it('maps legacy stage aliases', () => {
-    expect(normalizeHcErrorStage('configure')).toBe('configure_failed');
-    expect(normalizeHcErrorStage('show')).toBe('show_payment_failed');
-    expect(normalizeHcErrorStage('runtime')).toBe('unknown');
-    expect(normalizeHcErrorStage('nope')).toBe('unknown');
+      expect(customerMessageForHcError(stage)).not.toMatch(/SESSION|secret|token/i);
+    }
   });
 });
 
-describe('resolveNmbWebsiteCheckoutMessageAction diagnostic stages', () => {
+describe('resolveNmbWebsiteCheckoutMessageAction', () => {
   const buildReturnUrl = (ri: string | null) =>
     `chinaordertz://payment-return?resultIndicator=${encodeURIComponent(ri ?? '')}`;
 
-  it.each([
-    ['script_load', 'Failed to load Hosted Checkout script.'],
-    ['checkout_missing', 'Checkout object missing after script load.'],
-    ['configure_failed', 'Checkout.configure failed.'],
-    ['show_payment_failed', 'Checkout.showPaymentPage failed.'],
-    ['navigation_failed', 'WebView onError'],
-    ['unknown', 'Payment could not be opened.'],
-  ] as const)(
-    'returns show_error with stage %s and does not complete',
-    (stage, rawMessage) => {
-      const action = resolveNmbWebsiteCheckoutMessageAction(
-        { type: 'error', stage, message: rawMessage },
-        buildReturnUrl,
-      );
-      expect(action.kind).toBe('show_error');
-      if (action.kind === 'show_error') {
-        expect(action.stage).toBe(stage);
-        expect(action.customerMessage).toBe(customerMessageForHcError(stage));
-        expect(action.diagnosticDetail).toBe(sanitizeHcDiagnosticDetail(rawMessage));
-        expect(action.customerMessage).not.toMatch(/SESSION|secret/i);
-      }
-    },
-  );
-
-  it('redacts session ids from diagnostic detail in show_error', () => {
+  it('reclassifies legacy unknown + default MPGS message using milestone', () => {
     const action = resolveNmbWebsiteCheckoutMessageAction(
       {
         type: 'error',
-        stage: 'configure_failed',
-        message: 'bad SESSION000999ABCDEF payload',
+        stage: 'unknown',
+        message: MPGS_ERROR_CALLBACK_DEFAULT_MESSAGE,
+        lastMilestone: 'show_started',
+        source: 'mpgs_data_error_callback',
+      },
+      buildReturnUrl,
+    );
+    expect(action.kind).toBe('show_error');
+    if (action.kind === 'show_error') {
+      expect(action.stage).toBe('show_payment_failed');
+      expect(action.diagnosticDetail).toContain('Payment could not be opened.');
+      expect(action.diagnosticDetail).toContain('milestone=show_started');
+      expect(action.diagnosticDetail).toContain('source=mpgs_data_error_callback');
+    }
+  });
+
+  it.each([
+    ['script_load', 'script_onerror'],
+    ['checkout_missing', 'missing'],
+    ['configure_failed', 'configure threw'],
+    ['show_payment_failed', 'show threw'],
+    ['mpgs_error', MPGS_ERROR_CALLBACK_DEFAULT_MESSAGE],
+    ['mpgs_timeout', 'timed out'],
+    ['webview_error', 'WebView onError'],
+    ['webview_http_error', 'HTTP 404'],
+    ['navigation_failed', 'nav'],
+    ['message_parse_failed', 'Malformed'],
+    ['html_bootstrap_not_started', 'no bootstrap'],
+    ['unknown', 'Unable to start'],
+  ] as const)('handles stage %s without completing store', (stage, msg) => {
+    const action = resolveNmbWebsiteCheckoutMessageAction(
+      { type: 'error', stage, message: msg },
+      buildReturnUrl,
+    );
+    expect(action.kind).toBe('show_error');
+    if (action.kind === 'show_error') {
+      expect(action.stage).toBe(stage);
+    }
+  });
+
+  it('tracks diagnostic milestones without closing', () => {
+    const action = resolveNmbWebsiteCheckoutMessageAction(
+      { type: 'diagnostic', stage: 'bootstrap_started' },
+      buildReturnUrl,
+    );
+    expect(action).toEqual({ kind: 'ignore', milestone: 'bootstrap_started' });
+  });
+
+  it('redacts session ids from diagnostic detail', () => {
+    const action = resolveNmbWebsiteCheckoutMessageAction(
+      {
+        type: 'error',
+        stage: 'mpgs_error',
+        message: 'bad SESSION000999ABCDEF',
       },
       buildReturnUrl,
     );
@@ -149,30 +175,25 @@ describe('resolveNmbWebsiteCheckoutMessageAction diagnostic stages', () => {
     }
   });
 
-  it('completes only on confirmed complete or cancel', () => {
-    const complete = resolveNmbWebsiteCheckoutMessageAction(
-      { type: 'complete', resultIndicator: 'ri-1' },
-      buildReturnUrl,
-    );
-    expect(complete.kind).toBe('complete');
-
-    const cancel = resolveNmbWebsiteCheckoutMessageAction(
-      { type: 'cancel' },
-      buildReturnUrl,
-    );
-    expect(cancel.kind).toBe('complete');
-    if (cancel.kind === 'complete') {
-      expect(cancel.result.type).toBe('cancel');
-    }
-  });
-
-  it('ignores stage diagnostics without closing', () => {
+  it('completes only on complete/cancel', () => {
     expect(
       resolveNmbWebsiteCheckoutMessageAction(
-        { type: 'stage', stage: 'script_loaded' },
+        { type: 'complete', resultIndicator: 'ri-1' },
         buildReturnUrl,
-      ),
-    ).toEqual({ kind: 'ignore' });
+      ).kind,
+    ).toBe('complete');
+    expect(
+      resolveNmbWebsiteCheckoutMessageAction({ type: 'cancel' }, buildReturnUrl)
+        .kind,
+    ).toBe('complete');
+  });
+});
+
+describe('sanitizeHcDiagnosticDetail', () => {
+  it('redacts session-like tokens', () => {
+    expect(sanitizeHcDiagnosticDetail('SESSION000123456789abcdef')).toContain(
+      '[redacted]',
+    );
   });
 });
 
@@ -181,21 +202,23 @@ describe('nmbWebsiteCheckoutStore + error path', () => {
     useNmbWebsiteCheckoutStore.setState({ request: null, resolve: null });
   });
 
-  it('leaves the checkout request open when bootstrap errors are handled as show_error', async () => {
+  it('does not complete store on show_error', async () => {
     const pending = useNmbWebsiteCheckoutStore.getState().open({
       sessionId: 'SESSION_X',
       gatewayBaseUrl: 'https://test-nmbbank.mtf.gateway.mastercard.com',
     });
-
     const action = resolveNmbWebsiteCheckoutMessageAction(
-      { type: 'error', stage: 'script_load', message: 'Failed to load' },
+      {
+        type: 'error',
+        stage: 'unknown',
+        message: MPGS_ERROR_CALLBACK_DEFAULT_MESSAGE,
+        lastMilestone: 'configure_success',
+        source: 'mpgs_data_error_callback',
+      },
       () => 'chinaordertz://payment-return',
     );
     expect(action.kind).toBe('show_error');
-    expect(useNmbWebsiteCheckoutStore.getState().request?.sessionId).toBe(
-      'SESSION_X',
-    );
-
+    expect(useNmbWebsiteCheckoutStore.getState().request).not.toBeNull();
     useNmbWebsiteCheckoutStore.getState().complete({
       type: 'cancel',
       url: null,

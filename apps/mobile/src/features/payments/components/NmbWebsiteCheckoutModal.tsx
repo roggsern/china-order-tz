@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { env } from '@/src/core/config';
@@ -9,6 +9,7 @@ import {
   isNmbAppPaymentReturnUrl,
   logNmbHcStage,
   resolveNmbWebsiteCheckoutMessageAction,
+  safeUrlHost,
   sanitizeHcDiagnosticDetail,
   type NmbWebsiteCheckoutErrorStage,
   type NmbWebsiteCheckoutPhase,
@@ -17,6 +18,8 @@ import type { NmbWebsiteCheckoutRequest } from '../state/nmbWebsiteCheckoutStore
 import { extractNmbReturnParams } from '../utils/mapPayment';
 import type { NmbBrowserSessionResult } from '../utils/nmbBrowser';
 import { buildPaymentReturnRedirectUrl } from '../utils/nmbBrowser';
+
+const BOOTSTRAP_WATCHDOG_MS = 4000;
 
 function finish(result: NmbBrowserSessionResult) {
   logNmbHcStage('close_reason', { type: result.type });
@@ -31,21 +34,13 @@ function cancelResult(): NmbBrowserSessionResult {
   };
 }
 
-function gatewayHost(gatewayBaseUrl: string): string | null {
-  try {
-    return new URL(gatewayBaseUrl).hostname;
-  } catch {
-    return null;
-  }
-}
-
 type BodyProps = {
   request: NmbWebsiteCheckoutRequest;
 };
 
 /**
  * Keyed body so phase/error reset when a new session request opens.
- * Temporary diagnostic stage is shown in the failed UI for device verification.
+ * Temporary diagnostics identify the exact HC failure boundary on-device.
  */
 function NmbWebsiteCheckoutModalBody({ request }: BodyProps) {
   const [phase, setPhase] = useState<NmbWebsiteCheckoutPhase>('loading');
@@ -53,29 +48,77 @@ function NmbWebsiteCheckoutModalBody({ request }: BodyProps) {
   const [diagnosticStage, setDiagnosticStage] =
     useState<NmbWebsiteCheckoutErrorStage | null>(null);
   const [diagnosticDetail, setDiagnosticDetail] = useState<string | null>(null);
+  const [diagnosticHost, setDiagnosticHost] = useState<string | null>(null);
+  const [diagnosticHttpStatus, setDiagnosticHttpStatus] = useState<number | null>(
+    null,
+  );
+  const [bootstrapStarted, setBootstrapStarted] = useState(false);
+  const [scriptLoaded, setScriptLoaded] = useState(false);
+  const [lastMilestone, setLastMilestone] = useState<string | null>(null);
   const [webviewKey, setWebviewKey] = useState(0);
+
+  const bootstrapStartedRef = useRef(false);
+  const failedRef = useRef(false);
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearWatchdog = useCallback(() => {
+    if (watchdogRef.current) {
+      clearTimeout(watchdogRef.current);
+      watchdogRef.current = null;
+    }
+  }, []);
 
   const showFailure = useCallback(
     (
       stage: NmbWebsiteCheckoutErrorStage,
       customerMessage: string,
       detail: string,
+      extras?: {
+        host?: string | null;
+        httpStatus?: number | null;
+        lastMilestone?: string | null;
+      },
     ) => {
+      if (failedRef.current) return;
+      failedRef.current = true;
+      clearWatchdog();
       logNmbHcStage('webview_error', { stage });
       setDiagnosticStage(stage);
       setDiagnosticDetail(detail);
+      setDiagnosticHost(extras?.host ?? null);
+      setDiagnosticHttpStatus(
+        typeof extras?.httpStatus === 'number' ? extras.httpStatus : null,
+      );
+      if (extras?.lastMilestone) {
+        setLastMilestone(extras.lastMilestone);
+      }
       setErrorMessage(customerMessage);
       setPhase('failed');
     },
-    [],
+    [clearWatchdog],
   );
+
+  const armBootstrapWatchdog = useCallback(() => {
+    clearWatchdog();
+    watchdogRef.current = setTimeout(() => {
+      if (!bootstrapStartedRef.current && !failedRef.current) {
+        showFailure(
+          'html_bootstrap_not_started',
+          'Secure payment page did not start. Please retry.',
+          'Injected HTML JS did not post bootstrap_started.',
+          { host: safeUrlHost(request.gatewayBaseUrl) },
+        );
+      }
+    }, BOOTSTRAP_WATCHDOG_MS);
+  }, [clearWatchdog, request.gatewayBaseUrl, showFailure]);
 
   const tryFinishFromUrl = useCallback(
     (url: string): boolean => {
       if (!isNmbAppPaymentReturnUrl(url, env.appScheme)) {
-        logNmbHcStage('navigation', { host: gatewayHost(url) });
+        logNmbHcStage('navigation', { host: safeUrlHost(url) });
         return false;
       }
+      clearWatchdog();
       logNmbHcStage('close_reason', { type: 'app_return' });
       finish({
         type: 'success',
@@ -84,8 +127,22 @@ function NmbWebsiteCheckoutModalBody({ request }: BodyProps) {
       });
       return true;
     },
-    [],
+    [clearWatchdog],
   );
+
+  const resetDiagnostics = useCallback(() => {
+    failedRef.current = false;
+    bootstrapStartedRef.current = false;
+    setErrorMessage(null);
+    setDiagnosticStage(null);
+    setDiagnosticDetail(null);
+    setDiagnosticHost(null);
+    setDiagnosticHttpStatus(null);
+    setBootstrapStarted(false);
+    setScriptLoaded(false);
+    setLastMilestone(null);
+    setPhase('loading');
+  }, []);
 
   const html = buildHostedCheckoutHtml(request.sessionId, request.gatewayBaseUrl);
   const showWebView = phase !== 'failed';
@@ -94,12 +151,20 @@ function NmbWebsiteCheckoutModalBody({ request }: BodyProps) {
     <Modal
       visible
       animationType="slide"
-      onRequestClose={() => finish(cancelResult())}
+      onRequestClose={() => {
+        clearWatchdog();
+        finish(cancelResult());
+      }}
     >
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Secure payment</Text>
-          <Pressable onPress={() => finish(cancelResult())}>
+          <Pressable
+            onPress={() => {
+              clearWatchdog();
+              finish(cancelResult());
+            }}
+          >
             <Text style={styles.close}>Close</Text>
           </Pressable>
         </View>
@@ -118,6 +183,22 @@ function NmbWebsiteCheckoutModalBody({ request }: BodyProps) {
               <Text style={styles.diagnosticDetail}>
                 {diagnosticDetail ?? 'No additional detail.'}
               </Text>
+              <Text style={styles.diagnosticMeta}>
+                bootstrap_started: {bootstrapStarted ? 'yes' : 'no'}
+              </Text>
+              <Text style={styles.diagnosticMeta}>
+                script_loaded: {scriptLoaded ? 'yes' : 'no'}
+              </Text>
+              <Text style={styles.diagnosticMeta}>
+                last_milestone: {lastMilestone ?? 'none'}
+              </Text>
+              <Text style={styles.diagnosticMeta}>
+                host: {diagnosticHost ?? safeUrlHost(request.gatewayBaseUrl) ?? 'n/a'}
+              </Text>
+              <Text style={styles.diagnosticMeta}>
+                http_status:{' '}
+                {diagnosticHttpStatus != null ? String(diagnosticHttpStatus) : 'n/a'}
+              </Text>
             </View>
             <Text style={styles.errorHint}>
               Your payment is still processing on the server. Nothing was marked paid
@@ -126,10 +207,7 @@ function NmbWebsiteCheckoutModalBody({ request }: BodyProps) {
             <Pressable
               style={styles.retryButton}
               onPress={() => {
-                setErrorMessage(null);
-                setDiagnosticStage(null);
-                setDiagnosticDetail(null);
-                setPhase('loading');
+                resetDiagnostics();
                 setWebviewKey((k) => k + 1);
                 logNmbHcStage('script_loading', { retry: true });
               }}
@@ -138,7 +216,10 @@ function NmbWebsiteCheckoutModalBody({ request }: BodyProps) {
             </Pressable>
             <Pressable
               style={styles.secondaryButton}
-              onPress={() => finish(cancelResult())}
+              onPress={() => {
+                clearWatchdog();
+                finish(cancelResult());
+              }}
             >
               <Text style={styles.secondaryButtonText}>Back to payment</Text>
             </Pressable>
@@ -165,7 +246,14 @@ function NmbWebsiteCheckoutModalBody({ request }: BodyProps) {
             setSupportMultipleWindows={false}
             onLoadStart={() => {
               logNmbHcStage('script_loading', {
-                host: gatewayHost(request.gatewayBaseUrl),
+                host: safeUrlHost(request.gatewayBaseUrl),
+              });
+              armBootstrapWatchdog();
+            }}
+            onLoadEnd={() => {
+              logNmbHcStage('webview_load_end', {
+                host: safeUrlHost(request.gatewayBaseUrl),
+                bootstrapStarted: bootstrapStartedRef.current,
               });
             }}
             onMessage={(event) => {
@@ -180,15 +268,20 @@ function NmbWebsiteCheckoutModalBody({ request }: BodyProps) {
                 );
 
                 if (action.kind === 'ignore') {
-                  const stage =
-                    payload &&
-                    typeof payload === 'object' &&
-                    typeof (payload as { stage?: unknown }).stage === 'string'
-                      ? (payload as { stage: string }).stage
-                      : null;
-                  if (stage) {
-                    logNmbHcStage(stage);
-                    if (stage === 'script_loaded' || stage === 'show_started') {
+                  const milestone = action.milestone;
+                  if (milestone) {
+                    setLastMilestone(milestone);
+                    logNmbHcStage(milestone);
+                    if (milestone === 'bootstrap_started') {
+                      bootstrapStartedRef.current = true;
+                      setBootstrapStarted(true);
+                      clearWatchdog();
+                    }
+                    if (milestone === 'script_loaded') {
+                      setScriptLoaded(true);
+                      setPhase('ready');
+                    }
+                    if (milestone === 'show_started') {
                       setPhase('ready');
                     }
                   }
@@ -196,20 +289,40 @@ function NmbWebsiteCheckoutModalBody({ request }: BodyProps) {
                 }
 
                 if (action.kind === 'show_error') {
+                  if (action.lastMilestone === 'bootstrap_started') {
+                    bootstrapStartedRef.current = true;
+                    setBootstrapStarted(true);
+                  }
+                  if (
+                    action.lastMilestone === 'script_loaded' ||
+                    action.stage === 'checkout_missing' ||
+                    action.stage === 'configure_failed' ||
+                    action.stage === 'show_payment_failed' ||
+                    action.stage === 'mpgs_error'
+                  ) {
+                    setScriptLoaded(true);
+                  }
                   showFailure(
                     action.stage,
                     action.customerMessage,
                     action.diagnosticDetail,
+                    {
+                      host: action.host ?? safeUrlHost(request.gatewayBaseUrl),
+                      httpStatus: action.httpStatus,
+                      lastMilestone: action.lastMilestone,
+                    },
                   );
                   return;
                 }
 
+                clearWatchdog();
                 finish(action.result);
               } catch {
                 showFailure(
-                  'unknown',
-                  'Secure payment could not start. Please retry.',
+                  'message_parse_failed',
+                  'Secure payment sent an invalid message. Please retry.',
                   'Malformed WebView message.',
+                  { host: safeUrlHost(request.gatewayBaseUrl) },
                 );
               }
             }}
@@ -223,27 +336,36 @@ function NmbWebsiteCheckoutModalBody({ request }: BodyProps) {
               tryFinishFromUrl(nav.url);
             }}
             onError={(syntheticEvent) => {
-              const desc = syntheticEvent?.nativeEvent?.description;
+              const nativeEvent = syntheticEvent?.nativeEvent;
+              const desc = nativeEvent?.description;
+              const url = typeof nativeEvent?.url === 'string' ? nativeEvent.url : null;
               showFailure(
-                'navigation_failed',
-                'Secure payment page navigation failed. Please retry.',
+                'webview_error',
+                'Secure payment browser failed to load. Please retry.',
                 sanitizeHcDiagnosticDetail(
                   typeof desc === 'string' && desc.trim()
                     ? desc.trim()
                     : 'WebView onError',
                 ),
+                { host: safeUrlHost(url) ?? safeUrlHost(request.gatewayBaseUrl) },
               );
             }}
             onHttpError={(syntheticEvent) => {
-              const status = syntheticEvent?.nativeEvent?.statusCode;
+              const nativeEvent = syntheticEvent?.nativeEvent;
+              const status = nativeEvent?.statusCode;
+              const url = typeof nativeEvent?.url === 'string' ? nativeEvent.url : null;
               showFailure(
-                'navigation_failed',
-                'Secure payment page navigation failed. Please retry.',
+                'webview_http_error',
+                'Secure payment browser returned an HTTP error. Please retry.',
                 sanitizeHcDiagnosticDetail(
                   typeof status === 'number'
                     ? `HTTP ${status}`
                     : 'WebView onHttpError',
                 ),
+                {
+                  host: safeUrlHost(url) ?? safeUrlHost(request.gatewayBaseUrl),
+                  httpStatus: typeof status === 'number' ? status : null,
+                },
               );
             }}
           />
@@ -255,7 +377,7 @@ function NmbWebsiteCheckoutModalBody({ request }: BodyProps) {
 
 /**
  * Website Hosted Checkout (MPGS Checkout.js) when API returns session id without checkout_url.
- * Bootstrap errors keep the modal open with customer + diagnostic stage copy.
+ * Bootstrap/SDK errors keep the modal open with precise diagnostic stage copy.
  */
 export function NmbWebsiteCheckoutModal() {
   const request = useNmbWebsiteCheckoutStore((s) => s.request);
@@ -329,6 +451,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#444',
     lineHeight: 18,
+    marginBottom: 8,
+  },
+  diagnosticMeta: {
+    fontSize: 12,
+    color: '#555',
+    fontFamily: 'monospace',
+    marginBottom: 2,
   },
   errorHint: {
     fontSize: 13,
