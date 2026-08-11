@@ -43,6 +43,11 @@ export {
   buildPaymentReturnRedirectUrl,
 } from './utils/nmbBrowser';
 export { NmbWebsiteCheckoutModal } from './components/NmbWebsiteCheckoutModal';
+export {
+  buildHostedCheckoutHtml,
+  isNmbAppPaymentReturnUrl,
+  resolveNmbWebsiteCheckoutMessageAction,
+} from './utils/nmbWebsiteCheckoutBootstrap';
 export { payOrderWithNmb } from './utils/payWithNmb';
 export { handleNmbPaymentReturn } from './utils/handlePaymentReturn';
 export { buildPaymentHref, parsePaymentHrefParams } from './utils/paymentRoutes';
