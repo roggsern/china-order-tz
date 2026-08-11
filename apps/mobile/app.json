@@ -1,0 +1,58 @@
+{
+  "expo": {
+    "name": "CHINA ORDER TZ",
+    "slug": "china-order-tz-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "chinaordertz",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.chinaordertz.mobile"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "package": "com.chinaordertz.mobile",
+      "versionCode": 2,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "apiBaseUrl": "https://api.chinaordertz.com/api/v1",
+      "nmbGatewayBaseUrl": "https://test-nmbbank.mtf.gateway.mastercard.com",
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "c6ec7c64-8518-4e96-8df5-ac5d5a88f545"
+      }
+    },
+    "owner": "roggy-tech"
+  }
+}

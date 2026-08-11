@@ -1,0 +1,30 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.chinaordertz.com/api/v1",
+        "EXPO_PUBLIC_NMB_GATEWAY_URL": "https://test-nmbbank.mtf.gateway.mastercard.com"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.chinaordertz.com/api/v1",
+        "EXPO_PUBLIC_NMB_GATEWAY_URL": "https://test-nmbbank.mtf.gateway.mastercard.com"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
