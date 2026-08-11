@@ -9,11 +9,23 @@ export type NmbWebsiteCheckoutPhase =
   | 'ready'
   | 'failed';
 
+/** Temporary diagnostic stages for Build verification (shown in UI). */
 export type NmbWebsiteCheckoutErrorStage =
   | 'script_load'
-  | 'configure'
-  | 'show'
-  | 'runtime';
+  | 'checkout_missing'
+  | 'configure_failed'
+  | 'show_payment_failed'
+  | 'navigation_failed'
+  | 'unknown';
+
+export const NMB_HC_DIAGNOSTIC_STAGES: readonly NmbWebsiteCheckoutErrorStage[] = [
+  'script_load',
+  'checkout_missing',
+  'configure_failed',
+  'show_payment_failed',
+  'navigation_failed',
+  'unknown',
+] as const;
 
 export type NmbWebsiteCheckoutWebMessage = {
   type?: string;
@@ -24,7 +36,12 @@ export type NmbWebsiteCheckoutWebMessage = {
 
 export type NmbWebsiteCheckoutMessageAction =
   | { kind: 'ignore' }
-  | { kind: 'show_error'; stage: NmbWebsiteCheckoutErrorStage; customerMessage: string }
+  | {
+      kind: 'show_error';
+      stage: NmbWebsiteCheckoutErrorStage;
+      customerMessage: string;
+      diagnosticDetail: string;
+    }
   | { kind: 'complete'; result: NmbBrowserSessionResult };
 
 const EMPTY_RETURN: NmbBrowserReturnParams = {
@@ -54,8 +71,24 @@ export function buildNmbCheckoutScriptUrl(gatewayBaseUrl: string): string {
 }
 
 /**
- * Injected HTML: load Checkout.js via onload (web parity), then configure + show.
- * Session id is JSON-stringified into the script (not logged).
+ * Strip session ids / long opaque tokens from diagnostic copy before UI display.
+ */
+export function sanitizeHcDiagnosticDetail(
+  message: string | null | undefined,
+): string {
+  if (typeof message !== 'string' || message.trim() === '') {
+    return 'No additional detail.';
+  }
+  let text = message.trim().slice(0, 180);
+  text = text.replace(/SESSION[0-9A-Za-z_-]{6,}/gi, '[redacted]');
+  text = text.replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, '[redacted]');
+  text = text.replace(/\b[A-Za-z0-9_-]{32,}\b/g, '[redacted]');
+  return text;
+}
+
+/**
+ * Injected HTML: load Checkout.js via onload, then configure + show.
+ * Posts diagnostic stages for temporary on-device verification UI.
  */
 export function buildHostedCheckoutHtml(
   sessionId: string,
@@ -107,14 +140,16 @@ export function buildHostedCheckoutHtml(
           try {
             if (error && typeof error === 'object') {
               message = error.explanation || error.message || error.cause || message;
+            } else if (typeof error === 'string' && error) {
+              message = error;
             }
           } catch (e) {}
-          post({ type: 'error', stage: 'runtime', message: String(message) });
+          post({ type: 'error', stage: 'unknown', message: String(message) });
         };
         window.timeoutCallback = function () {
           post({
             type: 'error',
-            stage: 'runtime',
+            stage: 'unknown',
             message: 'The payment session timed out. Please try again.',
           });
         };
@@ -140,22 +175,44 @@ export function buildHostedCheckoutHtml(
             if (!window.Checkout) {
               post({
                 type: 'error',
-                stage: 'script_load',
-                message: 'Payment SDK failed to load.',
+                stage: 'checkout_missing',
+                message: 'Checkout object missing after script load.',
               });
               return;
             }
             post({ type: 'stage', stage: 'configure_started' });
-            window.Checkout.configure({ session: { id: sessionId } });
+            try {
+              window.Checkout.configure({ session: { id: sessionId } });
+            } catch (configureError) {
+              post({
+                type: 'error',
+                stage: 'configure_failed',
+                message: configureError && configureError.message
+                  ? String(configureError.message)
+                  : 'Checkout.configure failed.',
+              });
+              return;
+            }
             post({ type: 'stage', stage: 'configure_success' });
             post({ type: 'stage', stage: 'show_started' });
             setStatus('Opening payment page…');
-            window.Checkout.showPaymentPage();
+            try {
+              window.Checkout.showPaymentPage();
+            } catch (showError) {
+              post({
+                type: 'error',
+                stage: 'show_payment_failed',
+                message: showError && showError.message
+                  ? String(showError.message)
+                  : 'Checkout.showPaymentPage failed.',
+              });
+            }
           } catch (e) {
-            var stage = 'configure';
-            var msg = e && e.message ? String(e.message) : 'Unable to start payment.';
-            if (/showPaymentPage/i.test(msg)) stage = 'show';
-            post({ type: 'error', stage: stage, message: msg });
+            post({
+              type: 'error',
+              stage: 'unknown',
+              message: e && e.message ? String(e.message) : 'Unable to start payment.',
+            });
           }
         };
 
@@ -163,7 +220,7 @@ export function buildHostedCheckoutHtml(
           post({
             type: 'error',
             stage: 'script_load',
-            message: 'Failed to load NMB Hosted Checkout SDK.',
+            message: 'Failed to load Hosted Checkout script.',
           });
         };
 
@@ -198,20 +255,43 @@ export function normalizeHcErrorStage(
 ): NmbWebsiteCheckoutErrorStage {
   switch (stage) {
     case 'script_load':
-    case 'configure':
-    case 'show':
-    case 'runtime':
+    case 'checkout_missing':
+    case 'configure_failed':
+    case 'show_payment_failed':
+    case 'navigation_failed':
+    case 'unknown':
       return stage;
+    // Legacy aliases from earlier Build 3 instrumentation
+    case 'configure':
+      return 'configure_failed';
+    case 'show':
+      return 'show_payment_failed';
+    case 'runtime':
+      return 'unknown';
     default:
-      return 'runtime';
+      return 'unknown';
   }
 }
 
 /** Customer-safe copy — never forwards raw gateway internals. */
 export function customerMessageForHcError(
-  _stage: NmbWebsiteCheckoutErrorStage,
+  stage: NmbWebsiteCheckoutErrorStage,
 ): string {
-  return NMB_WEBSITE_HC_CUSTOMER_ERROR_RETRY;
+  switch (stage) {
+    case 'script_load':
+      return 'Secure payment script could not load. Please retry.';
+    case 'checkout_missing':
+      return 'Secure payment SDK did not initialize. Please retry.';
+    case 'configure_failed':
+      return 'Secure payment could not be configured. Please retry.';
+    case 'show_payment_failed':
+      return 'Secure payment page could not open. Please retry.';
+    case 'navigation_failed':
+      return 'Secure payment page navigation failed. Please retry.';
+    case 'unknown':
+    default:
+      return NMB_WEBSITE_HC_CUSTOMER_ERROR_RETRY;
+  }
 }
 
 /**
@@ -259,10 +339,13 @@ export function resolveNmbWebsiteCheckoutMessageAction(
     const stage = normalizeHcErrorStage(
       typeof payload.stage === 'string' ? payload.stage : null,
     );
+    const rawMessage =
+      typeof payload.message === 'string' ? payload.message : null;
     return {
       kind: 'show_error',
       stage,
       customerMessage: customerMessageForHcError(stage),
+      diagnosticDetail: sanitizeHcDiagnosticDetail(rawMessage),
     };
   }
 
@@ -280,6 +363,9 @@ export function hostedCheckoutHtmlAwaitsScriptLoad(html: string): boolean {
     html.includes('Checkout.configure') &&
     html.includes('showPaymentPage') &&
     html.includes("stage: 'script_load'") &&
+    html.includes("stage: 'checkout_missing'") &&
+    html.includes("stage: 'configure_failed'") &&
+    html.includes("stage: 'show_payment_failed'") &&
     !html.includes('<script\n      src=')
   );
 }

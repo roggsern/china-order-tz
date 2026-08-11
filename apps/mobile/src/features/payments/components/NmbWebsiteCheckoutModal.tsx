@@ -9,6 +9,8 @@ import {
   isNmbAppPaymentReturnUrl,
   logNmbHcStage,
   resolveNmbWebsiteCheckoutMessageAction,
+  sanitizeHcDiagnosticDetail,
+  type NmbWebsiteCheckoutErrorStage,
   type NmbWebsiteCheckoutPhase,
 } from '../utils/nmbWebsiteCheckoutBootstrap';
 import type { NmbWebsiteCheckoutRequest } from '../state/nmbWebsiteCheckoutStore';
@@ -43,25 +45,47 @@ type BodyProps = {
 
 /**
  * Keyed body so phase/error reset when a new session request opens.
+ * Temporary diagnostic stage is shown in the failed UI for device verification.
  */
 function NmbWebsiteCheckoutModalBody({ request }: BodyProps) {
   const [phase, setPhase] = useState<NmbWebsiteCheckoutPhase>('loading');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [diagnosticStage, setDiagnosticStage] =
+    useState<NmbWebsiteCheckoutErrorStage | null>(null);
+  const [diagnosticDetail, setDiagnosticDetail] = useState<string | null>(null);
   const [webviewKey, setWebviewKey] = useState(0);
 
-  const tryFinishFromUrl = useCallback((url: string): boolean => {
-    if (!isNmbAppPaymentReturnUrl(url, env.appScheme)) {
-      logNmbHcStage('navigation', { host: gatewayHost(url) });
-      return false;
-    }
-    logNmbHcStage('close_reason', { type: 'app_return' });
-    finish({
-      type: 'success',
-      url,
-      returnParams: extractNmbReturnParams(url),
-    });
-    return true;
-  }, []);
+  const showFailure = useCallback(
+    (
+      stage: NmbWebsiteCheckoutErrorStage,
+      customerMessage: string,
+      detail: string,
+    ) => {
+      logNmbHcStage('webview_error', { stage });
+      setDiagnosticStage(stage);
+      setDiagnosticDetail(detail);
+      setErrorMessage(customerMessage);
+      setPhase('failed');
+    },
+    [],
+  );
+
+  const tryFinishFromUrl = useCallback(
+    (url: string): boolean => {
+      if (!isNmbAppPaymentReturnUrl(url, env.appScheme)) {
+        logNmbHcStage('navigation', { host: gatewayHost(url) });
+        return false;
+      }
+      logNmbHcStage('close_reason', { type: 'app_return' });
+      finish({
+        type: 'success',
+        url,
+        returnParams: extractNmbReturnParams(url),
+      });
+      return true;
+    },
+    [],
+  );
 
   const html = buildHostedCheckoutHtml(request.sessionId, request.gatewayBaseUrl);
   const showWebView = phase !== 'failed';
@@ -86,6 +110,15 @@ function NmbWebsiteCheckoutModalBody({ request }: BodyProps) {
             <Text style={styles.errorBody}>
               {errorMessage ?? 'Unable to open secure payment. Please retry.'}
             </Text>
+            <View style={styles.diagnosticBox}>
+              <Text style={styles.diagnosticLabel}>Diagnostic (temporary)</Text>
+              <Text style={styles.diagnosticStage}>
+                stage: {diagnosticStage ?? 'unknown'}
+              </Text>
+              <Text style={styles.diagnosticDetail}>
+                {diagnosticDetail ?? 'No additional detail.'}
+              </Text>
+            </View>
             <Text style={styles.errorHint}>
               Your payment is still processing on the server. Nothing was marked paid
               in the app.
@@ -94,6 +127,8 @@ function NmbWebsiteCheckoutModalBody({ request }: BodyProps) {
               style={styles.retryButton}
               onPress={() => {
                 setErrorMessage(null);
+                setDiagnosticStage(null);
+                setDiagnosticDetail(null);
                 setPhase('loading');
                 setWebviewKey((k) => k + 1);
                 logNmbHcStage('script_loading', { retry: true });
@@ -161,15 +196,21 @@ function NmbWebsiteCheckoutModalBody({ request }: BodyProps) {
                 }
 
                 if (action.kind === 'show_error') {
-                  logNmbHcStage('webview_error', { stage: action.stage });
-                  setPhase('failed');
-                  setErrorMessage(action.customerMessage);
+                  showFailure(
+                    action.stage,
+                    action.customerMessage,
+                    action.diagnosticDetail,
+                  );
                   return;
                 }
 
                 finish(action.result);
               } catch {
-                // ignore malformed messages
+                showFailure(
+                  'unknown',
+                  'Secure payment could not start. Please retry.',
+                  'Malformed WebView message.',
+                );
               }
             }}
             onShouldStartLoadWithRequest={(req) => {
@@ -181,15 +222,29 @@ function NmbWebsiteCheckoutModalBody({ request }: BodyProps) {
             onNavigationStateChange={(nav) => {
               tryFinishFromUrl(nav.url);
             }}
-            onError={() => {
-              logNmbHcStage('webview_error', { stage: 'runtime' });
-              setPhase('failed');
-              setErrorMessage('Unable to open secure payment. Please retry.');
+            onError={(syntheticEvent) => {
+              const desc = syntheticEvent?.nativeEvent?.description;
+              showFailure(
+                'navigation_failed',
+                'Secure payment page navigation failed. Please retry.',
+                sanitizeHcDiagnosticDetail(
+                  typeof desc === 'string' && desc.trim()
+                    ? desc.trim()
+                    : 'WebView onError',
+                ),
+              );
             }}
-            onHttpError={() => {
-              logNmbHcStage('webview_error', { stage: 'runtime' });
-              setPhase('failed');
-              setErrorMessage('Unable to open secure payment. Please retry.');
+            onHttpError={(syntheticEvent) => {
+              const status = syntheticEvent?.nativeEvent?.statusCode;
+              showFailure(
+                'navigation_failed',
+                'Secure payment page navigation failed. Please retry.',
+                sanitizeHcDiagnosticDetail(
+                  typeof status === 'number'
+                    ? `HTTP ${status}`
+                    : 'WebView onHttpError',
+                ),
+              );
             }}
           />
         ) : null}
@@ -200,7 +255,7 @@ function NmbWebsiteCheckoutModalBody({ request }: BodyProps) {
 
 /**
  * Website Hosted Checkout (MPGS Checkout.js) when API returns session id without checkout_url.
- * Bootstrap errors keep the modal open with customer copy — never silent dismiss.
+ * Bootstrap errors keep the modal open with customer + diagnostic stage copy.
  */
 export function NmbWebsiteCheckoutModal() {
   const request = useNmbWebsiteCheckoutStore((s) => s.request);
@@ -249,6 +304,31 @@ const styles = StyleSheet.create({
     color: '#333',
     lineHeight: 22,
     marginBottom: 12,
+  },
+  diagnosticBox: {
+    backgroundColor: '#f4f4f5',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  diagnosticLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#666',
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  diagnosticStage: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111',
+    fontFamily: 'monospace',
+    marginBottom: 6,
+  },
+  diagnosticDetail: {
+    fontSize: 13,
+    color: '#444',
+    lineHeight: 18,
   },
   errorHint: {
     fontSize: 13,

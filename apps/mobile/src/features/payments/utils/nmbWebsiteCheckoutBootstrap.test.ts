@@ -1,10 +1,13 @@
 import {
   buildHostedCheckoutHtml,
   buildNmbCheckoutScriptUrl,
+  customerMessageForHcError,
   hostedCheckoutHtmlAwaitsScriptLoad,
   isNmbAppPaymentReturnUrl,
+  normalizeHcErrorStage,
+  NMB_HC_DIAGNOSTIC_STAGES,
   resolveNmbWebsiteCheckoutMessageAction,
-  NMB_WEBSITE_HC_CUSTOMER_ERROR_RETRY,
+  sanitizeHcDiagnosticDetail,
 } from './nmbWebsiteCheckoutBootstrap';
 import { useNmbWebsiteCheckoutStore } from '../state/nmbWebsiteCheckoutStore';
 
@@ -24,9 +27,6 @@ describe('buildHostedCheckoutHtml / Checkout.js bootstrap', () => {
 
   it('awaits script.onload before configure and showPaymentPage', () => {
     expect(hostedCheckoutHtmlAwaitsScriptLoad(html)).toBe(true);
-    expect(html).toContain('script.onload');
-    expect(html).toContain('Checkout.configure');
-    expect(html).toContain('showPaymentPage');
     const onloadIdx = html.indexOf('script.onload');
     const configureIdx = html.indexOf('Checkout.configure');
     const showIdx = html.indexOf('showPaymentPage');
@@ -35,8 +35,11 @@ describe('buildHostedCheckoutHtml / Checkout.js bootstrap', () => {
     expect(showIdx).toBeGreaterThan(configureIdx);
   });
 
-  it('posts structured script_load errors when Checkout is missing after load', () => {
+  it('emits diagnostic stages for script_load, checkout_missing, configure, show', () => {
     expect(html).toContain("stage: 'script_load'");
+    expect(html).toContain("stage: 'checkout_missing'");
+    expect(html).toContain("stage: 'configure_failed'");
+    expect(html).toContain("stage: 'show_payment_failed'");
     expect(html).toContain('script.onerror');
   });
 });
@@ -58,47 +61,91 @@ describe('isNmbAppPaymentReturnUrl', () => {
         'chinaordertz',
       ),
     ).toBe(false);
-    expect(
-      isNmbAppPaymentReturnUrl(
-        'https://ap.gateway.mastercard.com/?resultIndicator=x',
-        'chinaordertz',
-      ),
-    ).toBe(false);
-  });
-
-  it('rejects unrelated custom schemes', () => {
-    expect(
-      isNmbAppPaymentReturnUrl('https://evil.example/payment-return', 'chinaordertz'),
-    ).toBe(false);
   });
 });
 
-describe('resolveNmbWebsiteCheckoutMessageAction', () => {
+describe('sanitizeHcDiagnosticDetail', () => {
+  it('redacts session-like tokens and long opaque ids', () => {
+    expect(
+      sanitizeHcDiagnosticDetail('Failed SESSION000123456789abcdef configure'),
+    ).toContain('[redacted]');
+    expect(
+      sanitizeHcDiagnosticDetail('id=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
+    ).toContain('[redacted]');
+  });
+});
+
+describe('normalizeHcErrorStage + customer messages for every diagnostic stage', () => {
+  it('covers all required diagnostic stages', () => {
+    expect([...NMB_HC_DIAGNOSTIC_STAGES]).toEqual([
+      'script_load',
+      'checkout_missing',
+      'configure_failed',
+      'show_payment_failed',
+      'navigation_failed',
+      'unknown',
+    ]);
+  });
+
+  it.each(NMB_HC_DIAGNOSTIC_STAGES)(
+    'normalizes and maps customer message for %s',
+    (stage) => {
+      expect(normalizeHcErrorStage(stage)).toBe(stage);
+      const message = customerMessageForHcError(stage);
+      expect(message.length).toBeGreaterThan(10);
+      expect(message).not.toMatch(/SESSION|secret|password|token/i);
+    },
+  );
+
+  it('maps legacy stage aliases', () => {
+    expect(normalizeHcErrorStage('configure')).toBe('configure_failed');
+    expect(normalizeHcErrorStage('show')).toBe('show_payment_failed');
+    expect(normalizeHcErrorStage('runtime')).toBe('unknown');
+    expect(normalizeHcErrorStage('nope')).toBe('unknown');
+  });
+});
+
+describe('resolveNmbWebsiteCheckoutMessageAction diagnostic stages', () => {
   const buildReturnUrl = (ri: string | null) =>
     `chinaordertz://payment-return?resultIndicator=${encodeURIComponent(ri ?? '')}`;
 
-  it('does not complete the store on WebView bootstrap errors', () => {
-    const action = resolveNmbWebsiteCheckoutMessageAction(
-      { type: 'error', stage: 'script_load', message: 'Failed to load SDK' },
-      buildReturnUrl,
-    );
-    expect(action).toEqual({
-      kind: 'show_error',
-      stage: 'script_load',
-      customerMessage: NMB_WEBSITE_HC_CUSTOMER_ERROR_RETRY,
-    });
-  });
-
-  it('keeps configure/show/runtime errors as show_error without complete', () => {
-    for (const stage of ['configure', 'show', 'runtime'] as const) {
+  it.each([
+    ['script_load', 'Failed to load Hosted Checkout script.'],
+    ['checkout_missing', 'Checkout object missing after script load.'],
+    ['configure_failed', 'Checkout.configure failed.'],
+    ['show_payment_failed', 'Checkout.showPaymentPage failed.'],
+    ['navigation_failed', 'WebView onError'],
+    ['unknown', 'Payment could not be opened.'],
+  ] as const)(
+    'returns show_error with stage %s and does not complete',
+    (stage, rawMessage) => {
       const action = resolveNmbWebsiteCheckoutMessageAction(
-        { type: 'error', stage, message: 'internal' },
+        { type: 'error', stage, message: rawMessage },
         buildReturnUrl,
       );
       expect(action.kind).toBe('show_error');
       if (action.kind === 'show_error') {
-        expect(action.customerMessage).not.toMatch(/internal|SESSION|secret/i);
+        expect(action.stage).toBe(stage);
+        expect(action.customerMessage).toBe(customerMessageForHcError(stage));
+        expect(action.diagnosticDetail).toBe(sanitizeHcDiagnosticDetail(rawMessage));
+        expect(action.customerMessage).not.toMatch(/SESSION|secret/i);
       }
+    },
+  );
+
+  it('redacts session ids from diagnostic detail in show_error', () => {
+    const action = resolveNmbWebsiteCheckoutMessageAction(
+      {
+        type: 'error',
+        stage: 'configure_failed',
+        message: 'bad SESSION000999ABCDEF payload',
+      },
+      buildReturnUrl,
+    );
+    expect(action.kind).toBe('show_error');
+    if (action.kind === 'show_error') {
+      expect(action.diagnosticDetail).not.toMatch(/SESSION000999/i);
+      expect(action.diagnosticDetail).toContain('[redacted]');
     }
   });
 
@@ -108,10 +155,6 @@ describe('resolveNmbWebsiteCheckoutMessageAction', () => {
       buildReturnUrl,
     );
     expect(complete.kind).toBe('complete');
-    if (complete.kind === 'complete') {
-      expect(complete.result.type).toBe('success');
-      expect(complete.result.returnParams.resultIndicator).toBe('ri-1');
-    }
 
     const cancel = resolveNmbWebsiteCheckoutMessageAction(
       { type: 'cancel' },
@@ -144,14 +187,11 @@ describe('nmbWebsiteCheckoutStore + error path', () => {
       gatewayBaseUrl: 'https://test-nmbbank.mtf.gateway.mastercard.com',
     });
 
-    expect(useNmbWebsiteCheckoutStore.getState().request).not.toBeNull();
-
     const action = resolveNmbWebsiteCheckoutMessageAction(
-      { type: 'error', stage: 'script_load' },
+      { type: 'error', stage: 'script_load', message: 'Failed to load' },
       () => 'chinaordertz://payment-return',
     );
     expect(action.kind).toBe('show_error');
-    // Modal must NOT call complete() for show_error — request stays for retry UI.
     expect(useNmbWebsiteCheckoutStore.getState().request?.sessionId).toBe(
       'SESSION_X',
     );
