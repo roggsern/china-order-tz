@@ -56,15 +56,18 @@ describe('mapSearchSuggestions', () => {
 });
 
 describe('mapSearchHit / mapSearchProductsResponse', () => {
-  it('maps product hits with marketplace and store', () => {
+  it('maps product hits with marketplace, store, sale, and availability fields', () => {
     const hit = mapSearchHit({
       id: 'p-tz',
       slug: 'dress',
       name: 'Local Dress',
       price: 45000,
+      compare_at_price: 60000,
       marketplace: 'tz',
       commerce_channel_code: 'TZ_LOCAL',
       availability_status: 'available',
+      is_purchasable: true,
+      in_stock: true,
       primary_image: { url: 'https://cdn.example/d.jpg' },
       brand: { id: 'b1', name: 'Local Brand', slug: 'local-brand' },
       store: { id: 's1', name: 'ZION MODE', slug: 'zion-mode' },
@@ -77,6 +80,7 @@ describe('mapSearchHit / mapSearchProductsResponse', () => {
       slug: 'dress',
       name: 'Local Dress',
       price: 45000,
+      compareAtPrice: 60000,
       marketplace: 'tz',
       commerceChannelCode: 'TZ_LOCAL',
       storeSlug: 'zion-mode',
@@ -84,7 +88,36 @@ describe('mapSearchHit / mapSearchProductsResponse', () => {
       brandName: 'Local Brand',
       imageUrl: 'https://cdn.example/d.jpg',
       relevanceScore: 12,
+      availabilityStatus: 'available',
+      isPurchasable: true,
+      inStock: true,
     });
+  });
+
+  it('preserves category/store suggestion slugs for Browse deep-links', () => {
+    const result = mapSearchSuggestions({
+      data: {
+        q: 'zion',
+        scope: 'tz',
+        products: [],
+        brands: [],
+        stores: [{ id: 's1', slug: 'zion-mode', name: 'ZION MODE', kind: 'store' }],
+        categories: [{ id: 'c1', slug: 'dresses', name: 'Dresses', kind: 'category' }],
+      },
+    });
+
+    expect(result.suggestions).toEqual([
+      expect.objectContaining({
+        kind: 'store',
+        slug: 'zion-mode',
+        label: 'ZION MODE',
+      }),
+      expect.objectContaining({
+        kind: 'category',
+        slug: 'dresses',
+        label: 'Dresses',
+      }),
+    ]);
   });
 
   it('maps paginated search products envelope', () => {

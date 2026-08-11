@@ -25,6 +25,7 @@ const simpleConfig: ProductConfiguration = {
   matchedConfigurationId: null,
   matchedUnitPrice: null,
   attributes: [],
+  configurations: [],
   allowedValueIds: {},
   capabilities: {},
   isPurchasable: true,
@@ -38,6 +39,7 @@ const incompleteConfig: ProductConfiguration = {
   matchedConfigurationId: null,
   matchedUnitPrice: null,
   attributes: [],
+  configurations: [],
   allowedValueIds: {},
   capabilities: {},
   isPurchasable: true,
@@ -165,6 +167,40 @@ describe('resolveAddToCartGate', () => {
     });
     expect(ready.canAdd).toBe(true);
     expect(ready.label).toBe('Add to cart');
+  });
+
+  it('valid configuration enables ATC even when aggregate availability_status is out_of_stock', () => {
+    const gate = resolveAddToCartGate({
+      product: {
+        ...product,
+        availabilityStatus: 'out_of_stock',
+        inStock: false,
+      },
+      configuration: {
+        ...matchedConfig,
+        availabilityStatus: 'out_of_stock',
+        isPurchasable: true,
+        isInStock: true,
+      },
+      quantity: 1,
+    });
+    expect(gate.canAdd).toBe(true);
+    expect(gate.label).toBe('Add to cart');
+  });
+
+  it('matched configuration out of stock disables ATC', () => {
+    const gate = resolveAddToCartGate({
+      product,
+      configuration: {
+        ...matchedConfig,
+        isPurchasable: true,
+        isInStock: false,
+        availabilityStatus: 'out_of_stock',
+      },
+      quantity: 1,
+    });
+    expect(gate.canAdd).toBe(false);
+    expect(gate.label).toBe('Unavailable');
   });
 
   it('simple product with server config enables ATC', () => {

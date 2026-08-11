@@ -2,6 +2,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useJourneyStore } from '@/src/core/auth';
+import { useCatalogUiStore } from '@/src/features/product';
 import { SectionHeader } from '@/src/shared/ui/SectionHeader';
 import { colors, radius, spacing, typography } from '@/src/shared/theme';
 import type { HomepageStoreCard } from '../models/types';
@@ -14,6 +15,7 @@ type Props = {
 
 export function StoresSection({ title, subtitle, stores }: Props) {
   const setJourney = useJourneyStore((s) => s.setJourney);
+  const setSelectedTzStoreSlug = useCatalogUiStore((s) => s.setSelectedTzStoreSlug);
 
   if (stores.length === 0) return null;
 
@@ -34,6 +36,7 @@ export function StoresSection({ title, subtitle, stores }: Props) {
             style={styles.tile}
             onPress={() => {
               setJourney('TZ_LOCAL');
+              setSelectedTzStoreSlug(store.slug);
               router.push('/(app)/(tabs)/browse');
             }}
           >

@@ -6,6 +6,12 @@ type CatalogUiState = {
   /** Explicitly user-selected TZ store slug for Browse (persisted). */
   selectedTzStoreSlug: string | null;
   setSelectedTzStoreSlug: (slug: string | null) => void;
+  /** China Browse category slug from Home / search deep-link (persisted). */
+  selectedChinaCategorySlug: string | null;
+  setSelectedChinaCategorySlug: (slug: string | null) => void;
+  /** TZ Browse category slug from search deep-link (persisted per store context). */
+  selectedTzCategorySlug: string | null;
+  setSelectedTzCategorySlug: (slug: string | null) => void;
 };
 
 const securePersistStorage = createJSONStorage(() => ({
@@ -22,12 +28,20 @@ export const useCatalogUiStore = create<CatalogUiState>()(
     (set) => ({
       selectedTzStoreSlug: null,
       setSelectedTzStoreSlug: (slug) => set({ selectedTzStoreSlug: slug }),
+      selectedChinaCategorySlug: null,
+      setSelectedChinaCategorySlug: (slug) =>
+        set({ selectedChinaCategorySlug: slug }),
+      selectedTzCategorySlug: null,
+      setSelectedTzCategorySlug: (slug) =>
+        set({ selectedTzCategorySlug: slug }),
     }),
     {
-      name: 'cotz.catalog_ui.v1',
+      name: 'cotz.catalog_ui.v3',
       storage: securePersistStorage,
       partialize: (state) => ({
         selectedTzStoreSlug: state.selectedTzStoreSlug,
+        selectedChinaCategorySlug: state.selectedChinaCategorySlug,
+        selectedTzCategorySlug: state.selectedTzCategorySlug,
       }),
     },
   ),

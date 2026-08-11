@@ -10,6 +10,7 @@ import type {
   ProductConfiguration,
   ProductConfigurationAttribute,
   ProductConfigurationAttributeValue,
+  ProductConfigurationRow,
   ProductListResult,
   ProductQuote,
 } from '../models/types';
@@ -149,6 +150,12 @@ function mapVariant(raw: unknown): CatalogProductVariant | null {
     })
     .filter((row): row is { attribute: string; value: string } => row !== null);
 
+  const imagesRaw = Array.isArray(data.images) ? data.images : [];
+  const images = imagesRaw
+    .map(mapImage)
+    .filter((image): image is CatalogImage => image !== null);
+  const primaryImageUrl = mediaUrl(data.primary_image);
+
   return {
     id,
     sku: stringField(data, 'sku'),
@@ -157,6 +164,8 @@ function mapVariant(raw: unknown): CatalogProductVariant | null {
     compareAtPrice: moneyField(data, 'compare_at_price'),
     inStock: boolField(data, 'in_stock'),
     displayAttributes,
+    images,
+    primaryImageUrl,
   };
 }
 
@@ -257,8 +266,8 @@ export function mapAllowedValueIds(raw: unknown): Record<string, string[]> {
 
 /**
  * Drop selections that are no longer allowed after a server configuration refresh.
- * Does not invent replacements — server remains source of truth.
- * Attributes omitted from allowedValueIds are left unchanged until the server answers.
+ * Kept for callers that need cascade pruning; PDP uses pruneUnassignedConfigurationSelections
+ * so selected-but-cascade-disabled values remain clearable (web parity).
  */
 export function pruneConfigurationSelections(
   selections: ConfigurationSelections,
@@ -278,6 +287,32 @@ export function pruneConfigurationSelections(
   return next;
 }
 
+export function mapConfigurationRow(raw: unknown): ProductConfigurationRow | null {
+  const data = asRecord(raw);
+  const id = stringField(data, 'id');
+  if (!id) return null;
+
+  const attributeValueIdsRaw = Array.isArray(data.attribute_value_ids)
+    ? data.attribute_value_ids
+    : [];
+  const attributeValueIds = attributeValueIdsRaw
+    .map((valueId) =>
+      typeof valueId === 'string' || typeof valueId === 'number'
+        ? String(valueId)
+        : '',
+    )
+    .filter((valueId) => valueId !== '');
+
+  return {
+    id,
+    attributeValueIds,
+    price: moneyField(data, 'price'),
+    inStock: boolField(data, 'in_stock'),
+    name: stringField(data, 'name'),
+    sku: stringField(data, 'sku'),
+  };
+}
+
 export function buildConfigurationQuery(
   selections: ConfigurationSelections,
 ): Record<string, string> {
@@ -293,16 +328,18 @@ export function mapProductConfiguration(raw: unknown): ProductConfiguration {
   const data = asRecord(raw);
   const attributesRaw = Array.isArray(data.attributes) ? data.attributes : [];
   const matchedConfigurationId = stringField(data, 'matched_configuration_id');
-  const configurations = Array.isArray(data.configurations)
+  const configurationsRaw = Array.isArray(data.configurations)
     ? data.configurations
     : [];
+  const configurations = configurationsRaw
+    .map(mapConfigurationRow)
+    .filter((row): row is ProductConfigurationRow => row !== null);
 
   let matchedUnitPrice: string | number | null = null;
   if (matchedConfigurationId) {
     for (const row of configurations) {
-      const config = asRecord(row);
-      if (stringField(config, 'id') === matchedConfigurationId) {
-        matchedUnitPrice = moneyField(config, 'price');
+      if (row.id === matchedConfigurationId) {
+        matchedUnitPrice = row.price ?? null;
         break;
       }
     }
@@ -321,6 +358,7 @@ export function mapProductConfiguration(raw: unknown): ProductConfiguration {
         (attribute): attribute is ProductConfigurationAttribute =>
           attribute !== null,
       ),
+    configurations,
     allowedValueIds: mapAllowedValueIds(data.allowed_value_ids),
     capabilities: asRecord(data.capabilities),
     availabilityStatus: stringField(data, 'availability_status'),

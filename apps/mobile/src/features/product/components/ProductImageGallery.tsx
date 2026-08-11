@@ -20,12 +20,20 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 const GALLERY_HEIGHT = 320;
 
 export function ProductImageGallery({ images }: Props) {
-  const [index, setIndex] = useState(0);
   const validImages = images.filter((image) => Boolean(image.url));
+  const galleryKey = validImages.map((image) => image.url).join('|');
+  const [scrollState, setScrollState] = useState({ galleryKey, index: 0 });
+  const index =
+    scrollState.galleryKey === galleryKey
+      ? Math.min(scrollState.index, Math.max(0, validImages.length - 1))
+      : 0;
 
   function onScrollEnd(event: NativeSyntheticEvent<NativeScrollEvent>) {
     const next = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
-    setIndex(Math.max(0, Math.min(next, validImages.length - 1)));
+    setScrollState({
+      galleryKey,
+      index: Math.max(0, Math.min(next, validImages.length - 1)),
+    });
   }
 
   if (validImages.length === 0) {
@@ -43,6 +51,7 @@ export function ProductImageGallery({ images }: Props) {
   return (
     <View style={styles.wrap}>
       <ScrollView
+        key={galleryKey}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}

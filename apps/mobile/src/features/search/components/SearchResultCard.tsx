@@ -5,6 +5,10 @@ import {
   buildSafeProductHref,
   TZ_JOURNEY_AMBIGUOUS_MESSAGE,
 } from '@/src/features/product';
+import {
+  isCatalogSalePrice,
+  resolvePlpAvailability,
+} from '@/src/features/product/utils/resolvePlpAvailability';
 import type { CommerceJourney } from '@/src/shared/types/commerce';
 import { Badge } from '@/src/shared/ui/Badge';
 import { Card } from '@/src/shared/ui/Card';
@@ -33,9 +37,13 @@ function hitOriginLabel(hit: SearchHit, resolved: CommerceJourney | null): strin
 
 export function SearchResultCard({ hit }: Props) {
   const resolvedJourney = resolveHitJourney(hit);
-  const outOfStock =
-    hit.availabilityStatus === 'out_of_stock' ||
-    hit.availabilityStatus === 'unavailable';
+  const showSale = isCatalogSalePrice(hit.price, hit.compareAtPrice);
+  const availability = resolvePlpAvailability({
+    isPurchasable: hit.isPurchasable,
+    availabilityStatus: hit.availabilityStatus,
+    inStock: hit.inStock,
+    commerceChannelCode: hit.commerceChannelCode ?? resolvedJourney,
+  });
 
   function openProduct() {
     if (!resolvedJourney) {
@@ -81,14 +89,29 @@ export function SearchResultCard({ hit }: Props) {
               label={hitOriginLabel(hit, resolvedJourney)}
               tone={resolvedJourney === 'TZ_LOCAL' ? 'success' : 'brand'}
             />
-            {outOfStock ? <Badge label="Out of stock" tone="neutral" /> : null}
+            {showSale ? <Badge label="Sale" tone="warning" /> : null}
+            {availability.badgeLabel ? (
+              <Badge
+                label={availability.badgeLabel}
+                tone={availability.kind === 'unavailable' ? 'error' : 'neutral'}
+              />
+            ) : null}
           </View>
         </View>
         <View style={styles.body}>
           <Text style={styles.name} numberOfLines={2}>
             {hit.name}
           </Text>
-          <PriceText value={hit.price} style={styles.price} />
+          <View style={styles.priceRow}>
+            <PriceText value={hit.price} style={styles.price} />
+            {showSale ? (
+              <PriceText
+                value={hit.compareAtPrice}
+                accessibilityLabelPrefix="Was"
+                style={styles.compare}
+              />
+            ) : null}
+          </View>
           {hit.brandName || hit.storeName ? (
             <Text style={styles.meta} numberOfLines={1}>
               {[hit.brandName, hit.storeName].filter(Boolean).join(' · ')}
@@ -141,8 +164,20 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
     minHeight: 34,
   },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
   price: {
     fontSize: 14,
+  },
+  compare: {
+    ...typography.caption,
+    textDecorationLine: 'line-through',
+    color: colors.textSubtle,
+    fontWeight: '400',
   },
   meta: {
     marginTop: spacing.xxs,

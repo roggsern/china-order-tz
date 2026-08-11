@@ -47,6 +47,7 @@ export function mapSearchHit(raw: unknown): SearchHit | null {
     slug: typeof data.slug === 'string' && data.slug.trim() !== '' ? data.slug : id,
     name: data.name,
     price: data.price ?? null,
+    compareAtPrice: data.compare_at_price ?? null,
     imageUrl: mediaUrl(data.primary_image),
     marketplace:
       typeof data.marketplace === 'string' && data.marketplace.trim() !== ''
@@ -60,6 +61,9 @@ export function mapSearchHit(raw: unknown): SearchHit | null {
     relevanceScore: typeof data.relevance_score === 'number' ? data.relevance_score : null,
     availabilityStatus:
       typeof data.availability_status === 'string' ? data.availability_status : null,
+    isPurchasable:
+      typeof data.is_purchasable === 'boolean' ? data.is_purchasable : null,
+    inStock: typeof data.in_stock === 'boolean' ? data.in_stock : null,
     matchedOn: Array.isArray(data.matched_on)
       ? data.matched_on.filter((item): item is string => typeof item === 'string')
       : undefined,

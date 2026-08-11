@@ -8,6 +8,10 @@ import { Card } from '@/src/shared/ui/Card';
 import { PriceText } from '@/src/shared/ui/PriceText';
 import { colors, radius, spacing, typography } from '@/src/shared/theme';
 import { buildSafeProductHref } from '../utils/buildSafeProductHref';
+import {
+  isCatalogSalePrice,
+  resolvePlpAvailability,
+} from '../utils/resolvePlpAvailability';
 import type { CatalogProductCard } from '../models/types';
 
 type Props = {
@@ -38,16 +42,13 @@ function originTone(
 }
 
 export function CatalogProductCardView({ product, journey, storeSlug }: Props) {
-  const showSale =
-    product.compareAtPrice != null &&
-    product.price != null &&
-    Number(product.compareAtPrice) > Number(product.price);
-
-  const availability = product.availabilityStatus?.trim();
-  const outOfStock =
-    availability === 'out_of_stock' ||
-    availability === 'unavailable' ||
-    product.inStock === false;
+  const showSale = isCatalogSalePrice(product.price, product.compareAtPrice);
+  const availability = resolvePlpAvailability({
+    isPurchasable: product.isPurchasable,
+    availabilityStatus: product.availabilityStatus,
+    inStock: product.inStock,
+    commerceChannelCode: product.commerceChannelCode ?? journey,
+  });
 
   function openProduct() {
     const result = buildSafeProductHref({
@@ -87,13 +88,23 @@ export function CatalogProductCardView({ product, journey, storeSlug }: Props) {
               tone={originTone(product, journey)}
             />
             {showSale ? <Badge label="Sale" tone="warning" /> : null}
-            {outOfStock ? <Badge label="Out of stock" tone="neutral" /> : null}
+            {availability.badgeLabel ? (
+              <Badge
+                label={availability.badgeLabel}
+                tone={availability.kind === 'unavailable' ? 'error' : 'neutral'}
+              />
+            ) : null}
           </View>
         </View>
         <View style={styles.body}>
           <Text style={styles.name} numberOfLines={2}>
             {product.name}
           </Text>
+          {product.brand?.name ? (
+            <Text style={styles.brand} numberOfLines={1}>
+              {product.brand.name}
+            </Text>
+          ) : null}
           <View style={styles.priceRow}>
             <PriceText value={product.price} style={styles.price} />
             {showSale ? (
@@ -104,11 +115,6 @@ export function CatalogProductCardView({ product, journey, storeSlug }: Props) {
               />
             ) : null}
           </View>
-          {availability && !outOfStock ? (
-            <Text style={styles.availability} numberOfLines={1}>
-              {availability.replace(/_/g, ' ')}
-            </Text>
-          ) : null}
         </View>
       </Card>
     </Pressable>
@@ -153,8 +159,12 @@ const styles = StyleSheet.create({
   name: {
     ...typography.label,
     color: colors.text,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.xxs,
     minHeight: 34,
+  },
+  brand: {
+    ...typography.caption,
+    marginBottom: spacing.xs,
   },
   priceRow: {
     flexDirection: 'row',
@@ -169,10 +179,5 @@ const styles = StyleSheet.create({
     textDecorationLine: 'line-through',
     color: colors.textSubtle,
     fontWeight: '400',
-  },
-  availability: {
-    marginTop: spacing.xxs,
-    ...typography.caption,
-    textTransform: 'capitalize',
   },
 });

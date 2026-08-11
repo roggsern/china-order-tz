@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -20,16 +20,41 @@ import {
   useChinaCategories,
   useChinaProductsInfinite,
 } from '../hooks/useCatalogQueries';
+import { useCatalogUiStore } from '../state/catalogUiStore';
 
 export function ChinaCatalogScreen() {
-  const [category, setCategory] = useState<string | null>(null);
+  const selectedChinaCategorySlug = useCatalogUiStore(
+    (s) => s.selectedChinaCategorySlug,
+  );
+  const setSelectedChinaCategorySlug = useCatalogUiStore(
+    (s) => s.setSelectedChinaCategorySlug,
+  );
   const categoriesQuery = useChinaCategories();
-  const productsQuery = useChinaProductsInfinite({ category, perPage: 24 });
+  const productsQuery = useChinaProductsInfinite({
+    category: selectedChinaCategorySlug,
+    perPage: 24,
+  });
 
   const products = useMemo(
     () => flattenCatalogProductPages(productsQuery.data?.pages),
     [productsQuery.data?.pages],
   );
+
+  // Drop stale Home/search deep-link when category is no longer in the live list.
+  useEffect(() => {
+    const categories = categoriesQuery.data;
+    if (!categories || !selectedChinaCategorySlug) return;
+    const stillValid = categories.some(
+      (category) => category.slug === selectedChinaCategorySlug,
+    );
+    if (!stillValid) {
+      setSelectedChinaCategorySlug(null);
+    }
+  }, [
+    categoriesQuery.data,
+    selectedChinaCategorySlug,
+    setSelectedChinaCategorySlug,
+  ]);
 
   if (productsQuery.isLoading && !productsQuery.data) {
     return <CatalogLoadingState label="Loading China products…" />;
@@ -74,8 +99,8 @@ export function ChinaCatalogScreen() {
           </Text>
           <CategoryChips
             categories={categoriesQuery.data ?? []}
-            selectedSlug={category}
-            onSelect={setCategory}
+            selectedSlug={selectedChinaCategorySlug}
+            onSelect={setSelectedChinaCategorySlug}
           />
         </View>
       }

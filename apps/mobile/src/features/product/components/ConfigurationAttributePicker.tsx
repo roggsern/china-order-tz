@@ -1,32 +1,40 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing, typography } from '@/src/shared/theme';
-import type { ProductConfigurationAttribute } from '../models/types';
+import type { ProductConfigurationAttributeValue } from '../models/types';
 
 type Props = {
-  attribute: ProductConfigurationAttribute;
+  attributeName: string;
+  values: ProductConfigurationAttributeValue[];
   selectedValueId?: string | null;
   allowedValueIds: string[];
-  onSelect: (valueId: string) => void;
+  /** Toggle: select, replace, or clear when already selected. */
+  onToggle: (valueId: string) => void;
   disabled?: boolean;
 };
 
+/**
+ * Attribute chips — only product-assigned values (caller filters).
+ * Cascade: allowed_value_ids enable/disable. Selected-but-disallowed stays pressable to clear.
+ */
 export function ConfigurationAttributePicker({
-  attribute,
+  attributeName,
+  values,
   selectedValueId,
   allowedValueIds,
-  onSelect,
+  onToggle,
   disabled,
 }: Props) {
   const allowed = new Set(allowedValueIds);
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.label}>{attribute.name}</Text>
+      <Text style={styles.label}>{attributeName}</Text>
       <View style={styles.row}>
-        {attribute.values.map((value) => {
+        {values.map((value) => {
           const isAllowed = allowed.has(value.id);
           const isSelected = selectedValueId === value.id;
-          const isDisabled = disabled || !isAllowed;
+          // Web: disabled = !enabled && !isSelected — selected stays tappable to deselect.
+          const isDisabled = Boolean(disabled) || (!isAllowed && !isSelected);
           return (
             <Pressable
               key={value.id}
@@ -35,16 +43,16 @@ export function ConfigurationAttributePicker({
               style={[
                 styles.chip,
                 isSelected ? styles.chipSelected : null,
-                isDisabled ? styles.chipDisabled : null,
+                !isAllowed && !isSelected ? styles.chipDisabled : null,
               ]}
               disabled={isDisabled}
-              onPress={() => onSelect(value.id)}
+              onPress={() => onToggle(value.id)}
             >
               <Text
                 style={[
                   styles.chipText,
                   isSelected ? styles.chipTextSelected : null,
-                  isDisabled ? styles.chipTextDisabled : null,
+                  !isAllowed && !isSelected ? styles.chipTextDisabled : null,
                 ]}
               >
                 {value.value}

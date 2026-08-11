@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -28,12 +28,15 @@ import { useCatalogUiStore } from '../state/catalogUiStore';
 export function TzCatalogScreen() {
   const selectedTzStoreSlug = useCatalogUiStore((s) => s.selectedTzStoreSlug);
   const setSelectedTzStoreSlug = useCatalogUiStore((s) => s.setSelectedTzStoreSlug);
-  const [category, setCategory] = useState<string | null>(null);
+  const selectedTzCategorySlug = useCatalogUiStore((s) => s.selectedTzCategorySlug);
+  const setSelectedTzCategorySlug = useCatalogUiStore(
+    (s) => s.setSelectedTzCategorySlug,
+  );
   const storesQuery = useTzStores();
   const categoriesQuery = useTzCategories(selectedTzStoreSlug);
   const productsQuery = useTzProductsInfinite({
     storeSlug: selectedTzStoreSlug,
-    category,
+    category: selectedTzCategorySlug,
     perPage: 24,
   });
 
@@ -51,6 +54,7 @@ export function TzCatalogScreen() {
       const stillValid = stores.some((store) => store.slug === selectedTzStoreSlug);
       if (!stillValid) {
         setSelectedTzStoreSlug(null);
+        setSelectedTzCategorySlug(null);
       }
       return;
     }
@@ -59,7 +63,28 @@ export function TzCatalogScreen() {
     if (first) {
       setSelectedTzStoreSlug(first);
     }
-  }, [selectedTzStoreSlug, setSelectedTzStoreSlug, storesQuery.data]);
+  }, [
+    selectedTzStoreSlug,
+    setSelectedTzStoreSlug,
+    setSelectedTzCategorySlug,
+    storesQuery.data,
+  ]);
+
+  // Drop stale category deep-link when not in the active store's list.
+  useEffect(() => {
+    const categories = categoriesQuery.data;
+    if (!categories || !selectedTzCategorySlug) return;
+    const stillValid = categories.some(
+      (category) => category.slug === selectedTzCategorySlug,
+    );
+    if (!stillValid) {
+      setSelectedTzCategorySlug(null);
+    }
+  }, [
+    categoriesQuery.data,
+    selectedTzCategorySlug,
+    setSelectedTzCategorySlug,
+  ]);
 
   if (storesQuery.isLoading && !storesQuery.data) {
     return <CatalogLoadingState label="Loading TZ stores…" />;
@@ -147,7 +172,7 @@ export function TzCatalogScreen() {
                   style={[styles.storeChip, active ? styles.storeChipActive : null]}
                   onPress={() => {
                     setSelectedTzStoreSlug(store.slug);
-                    setCategory(null);
+                    setSelectedTzCategorySlug(null);
                   }}
                 >
                   <Text
@@ -163,8 +188,8 @@ export function TzCatalogScreen() {
           <Text style={styles.chipLabel}>Categories</Text>
           <CategoryChips
             categories={categoriesQuery.data ?? []}
-            selectedSlug={category}
-            onSelect={setCategory}
+            selectedSlug={selectedTzCategorySlug}
+            onSelect={setSelectedTzCategorySlug}
           />
         </View>
       }

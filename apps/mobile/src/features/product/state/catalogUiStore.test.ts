@@ -2,7 +2,11 @@ import { useCatalogUiStore } from './catalogUiStore';
 
 describe('useCatalogUiStore', () => {
   beforeEach(() => {
-    useCatalogUiStore.setState({ selectedTzStoreSlug: null });
+    useCatalogUiStore.setState({
+      selectedTzStoreSlug: null,
+      selectedChinaCategorySlug: null,
+      selectedTzCategorySlug: null,
+    });
   });
 
   it('stores explicit TZ store selection', () => {
@@ -14,5 +18,21 @@ describe('useCatalogUiStore', () => {
     useCatalogUiStore.getState().setSelectedTzStoreSlug('gone');
     useCatalogUiStore.getState().setSelectedTzStoreSlug(null);
     expect(useCatalogUiStore.getState().selectedTzStoreSlug).toBeNull();
+  });
+
+  it('stores China category deep-link selection', () => {
+    useCatalogUiStore.getState().setSelectedChinaCategorySlug('phones');
+    expect(useCatalogUiStore.getState().selectedChinaCategorySlug).toBe('phones');
+    useCatalogUiStore.getState().setSelectedChinaCategorySlug(null);
+    expect(useCatalogUiStore.getState().selectedChinaCategorySlug).toBeNull();
+  });
+
+  it('stores TZ category deep-link selection independently of store', () => {
+    useCatalogUiStore.getState().setSelectedTzStoreSlug('zion-mode');
+    useCatalogUiStore.getState().setSelectedTzCategorySlug('dresses');
+    expect(useCatalogUiStore.getState().selectedTzCategorySlug).toBe('dresses');
+    useCatalogUiStore.getState().setSelectedTzCategorySlug(null);
+    expect(useCatalogUiStore.getState().selectedTzStoreSlug).toBe('zion-mode');
+    expect(useCatalogUiStore.getState().selectedTzCategorySlug).toBeNull();
   });
 });

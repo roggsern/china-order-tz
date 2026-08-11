@@ -59,6 +59,10 @@ export type CatalogProductVariant = {
   compareAtPrice?: string | number | null;
   inStock?: boolean | null;
   displayAttributes?: { attribute: string; value: string }[];
+  /** Variant gallery from detail API — may be empty. */
+  images: CatalogImage[];
+  /** Detail `primary_image` URL when present. */
+  primaryImageUrl?: string | null;
 };
 
 export type CatalogProductDetail = CatalogProductCard & {
@@ -91,6 +95,16 @@ export type ProductConfigurationAttribute = {
   values: ProductConfigurationAttributeValue[];
 };
 
+/** One sellable configuration/variant row from GET …/configuration. */
+export type ProductConfigurationRow = {
+  id: string;
+  attributeValueIds: string[];
+  price?: string | number | null;
+  inStock?: boolean | null;
+  name?: string | null;
+  sku?: string | null;
+};
+
 /**
  * Configuration experience from GET /products/{slug}/configuration.
  * Matching / availability / sellable variant are server-owned.
@@ -104,6 +118,8 @@ export type ProductConfiguration = {
   /** Server list price for matched configuration when present on configurations[]. */
   matchedUnitPrice: string | number | null;
   attributes: ProductConfigurationAttribute[];
+  /** Product-assigned configuration rows — membership authority for visible option values. */
+  configurations: ProductConfigurationRow[];
   allowedValueIds: Record<string, string[]>;
   capabilities: Record<string, unknown>;
   availabilityStatus?: ProductAvailabilityStatus | null;

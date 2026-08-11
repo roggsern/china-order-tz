@@ -4,6 +4,7 @@ import { Card } from '@/src/shared/ui/Card';
 import { colors, spacing, typography } from '@/src/shared/theme';
 import type { CatalogProductDetail, ProductConfiguration } from '../models/types';
 import { resolveCustomerAvailabilityLabel } from '../utils/resolveCustomerAvailabilityLabel';
+import { resolvePdpAvailabilityKind } from '../utils/resolvePdpAvailability';
 
 type Props = {
   product: CatalogProductDetail;
@@ -19,12 +20,17 @@ function toneForLabel(label: string): BadgeTone {
 
 /** Customer availability from server fields — no conflicting technical flags. */
 export function ProductAvailabilityBadge({ product, configuration }: Props) {
+  const kind = resolvePdpAvailabilityKind({ product, configuration });
   const label = resolveCustomerAvailabilityLabel({ product, configuration });
+  // Only surface server reason when the current sell unit is not purchasable.
+  const showReason =
+    (kind === 'out_of_stock' || kind === 'unavailable') &&
+    Boolean(product.unavailabilityReason);
 
   return (
     <Card elevated={false} style={styles.wrap}>
       <Badge label={label} tone={toneForLabel(label)} />
-      {product.unavailabilityReason ? (
+      {showReason ? (
         <Text style={styles.reason}>{product.unavailabilityReason}</Text>
       ) : null}
     </Card>

@@ -31,8 +31,31 @@ export {
   pruneConfigurationSelections,
   buildConfigurationQuery,
 } from './map/mapProduct';
+export {
+  filterVisibleConfigurationValues,
+  toggleConfigurationSelection,
+  pruneUnassignedConfigurationSelections,
+  resolvePdpGalleryImages,
+} from './utils/configurationOptions';
 export { canAddToCart, resolveAddToCartGate } from './utils/canAddToCart';
 export type { AddToCartGate, AddToCartButtonLabel } from './utils/canAddToCart';
+export {
+  resolveCustomerAvailabilityLabel,
+} from './utils/resolveCustomerAvailabilityLabel';
+export {
+  resolvePdpAvailabilityKind,
+  customerLabelForAvailabilityKind,
+} from './utils/resolvePdpAvailability';
+export type { PdpAvailabilityKind } from './utils/resolvePdpAvailability';
+export {
+  resolvePlpAvailability,
+  isCatalogSalePrice,
+} from './utils/resolvePlpAvailability';
+export type {
+  PlpAvailability,
+  PlpAvailabilityKind,
+  PlpAvailabilityInput,
+} from './utils/resolvePlpAvailability';
 export {
   buildSafeProductHref,
   browseCatalogKind,
@@ -50,6 +73,8 @@ export {
 export type {
   CatalogProductCard,
   CatalogProductDetail,
+  CatalogCategory,
+  CatalogStore,
   ProductConfiguration,
   ProductDetailParams,
   ConfigurationSelections,

@@ -4,12 +4,16 @@ import { Badge } from '@/src/shared/ui/Badge';
 import { Card } from '@/src/shared/ui/Card';
 import { colors, spacing, typography } from '@/src/shared/theme';
 import { useProductConfiguration } from '../hooks/useCatalogQueries';
-import { pruneConfigurationSelections } from '../map/mapProduct';
 import type {
   ConfigurationSelections,
   ProductConfiguration,
 } from '../models/types';
 import { getCatalogErrorMessage } from '../utils/catalogErrorMessage';
+import {
+  filterVisibleConfigurationValues,
+  pruneUnassignedConfigurationSelections,
+  toggleConfigurationSelection,
+} from '../utils/configurationOptions';
 import { ConfigurationAttributePicker } from './ConfigurationAttributePicker';
 
 type Props = {
@@ -62,11 +66,13 @@ export function ProductConfigurationSelector({
     onStatusChange?.({ loading, error });
   }, [loading, error, onStatusChange]);
 
+  // Only drop values that are not product-assigned — keep cascade-disabled selections
+  // so the customer can deselect (web parity).
   useEffect(() => {
     if (!configuration) return;
-    const pruned = pruneConfigurationSelections(
+    const pruned = pruneUnassignedConfigurationSelections(
       selections,
-      configuration.allowedValueIds,
+      configuration,
     );
     const same =
       Object.keys(pruned).length === Object.keys(selections).length &&
@@ -106,21 +112,30 @@ export function ProductConfigurationSelector({
   return (
     <Card elevated={false} style={styles.wrap}>
       <Text style={styles.title}>Select options</Text>
-      {selectableAttributes.map((attribute) => (
-        <ConfigurationAttributePicker
-          key={attribute.id}
-          attribute={attribute}
-          selectedValueId={selections[attribute.id] ?? null}
-          allowedValueIds={configuration.allowedValueIds[attribute.id] ?? []}
-          disabled={query.isFetching}
-          onSelect={(valueId) => {
-            onSelectionsChange({
-              ...selections,
-              [attribute.id]: valueId,
-            });
-          }}
-        />
-      ))}
+      {selectableAttributes.map((attribute) => {
+        const visibleValues = filterVisibleConfigurationValues(
+          attribute,
+          configuration.configurations,
+        );
+        if (visibleValues.length === 0) {
+          return null;
+        }
+        return (
+          <ConfigurationAttributePicker
+            key={attribute.id}
+            attributeName={attribute.name}
+            values={visibleValues}
+            selectedValueId={selections[attribute.id] ?? null}
+            allowedValueIds={configuration.allowedValueIds[attribute.id] ?? []}
+            disabled={query.isFetching}
+            onToggle={(valueId) => {
+              onSelectionsChange(
+                toggleConfigurationSelection(selections, attribute.id, valueId),
+              );
+            }}
+          />
+        );
+      })}
       {!loading && !configuration.isComplete ? (
         <Text style={styles.hint}>Select all required options to continue.</Text>
       ) : null}

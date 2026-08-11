@@ -21,14 +21,15 @@ type Props = {
 };
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const HERO_HEIGHT = 220;
+const HERO_HEIGHT = 260;
 
 function slideImageUrl(slide: HomepageHeroSlide): string | null {
   return slide.mobile_media?.url ?? slide.desktop_media?.url ?? null;
 }
 
 /**
- * CMS-driven hero carousel — no placeholder marketing copy beyond slide fields.
+ * CMS-driven hero carousel with presentation fallback slides when needed.
+ * CTA opens Browse for the currently selected journey.
  */
 export function HeroSection({ title, subtitle, slides }: Props) {
   const [index, setIndex] = useState(0);
@@ -92,6 +93,8 @@ export function HeroSection({ title, subtitle, slides }: Props) {
                   <Pressable
                     style={styles.cta}
                     onPress={() => router.push('/(app)/(tabs)/browse')}
+                    accessibilityRole="button"
+                    accessibilityLabel={ctaLabel}
                   >
                     <Text style={styles.ctaText}>{ctaLabel}</Text>
                   </Pressable>

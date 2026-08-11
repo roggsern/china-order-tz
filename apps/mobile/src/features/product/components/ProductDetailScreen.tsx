@@ -30,6 +30,7 @@ import type {
   ProductDetailParams,
 } from '../models/types';
 import { canAddToCart, resolveAddToCartGate } from '../utils/canAddToCart';
+import { resolvePdpGalleryImages } from '../utils/configurationOptions';
 import { resolveDisplayedProductPrice } from '../utils/resolveDisplayedProductPrice';
 import { AddToCartButton } from './AddToCartButton';
 import { ProductAvailabilityBadge } from './ProductAvailabilityBadge';
@@ -202,6 +203,15 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
     quoteLoading: Boolean(matchedForQuote) && quoteQuery.isFetching,
   });
 
+  const galleryImages = resolvePdpGalleryImages({
+    productImages: detailProduct.images,
+    variants: detailProduct.variants,
+    matchedConfigurationId:
+      !configStatus.loading && configuration?.isComplete
+        ? configuration.matchedConfigurationId
+        : null,
+  });
+
   const productId = detailProduct.id;
   const productSlug = detailProduct.slug;
   const matchedConfigurationId = configuration?.matchedConfigurationId ?? null;
@@ -268,7 +278,7 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
 
   return (
     <ScreenContainer padded={false} scroll contentStyle={styles.content}>
-      <ProductImageGallery images={product.images} />
+      <ProductImageGallery images={galleryImages} />
 
       <View style={styles.body}>
         <View style={styles.badgeRow}>
@@ -377,7 +387,10 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
         ) : null}
 
         {!hasConfigurations ? (
-          <ProductVariantsList variants={product.variants} />
+          <ProductVariantsList
+            variants={product.variants}
+            selectedVariantId={matchedConfigurationId}
+          />
         ) : null}
 
         <TrustStrip items={trustItems} />

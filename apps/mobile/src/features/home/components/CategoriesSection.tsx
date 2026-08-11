@@ -2,6 +2,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useJourneyStore } from '@/src/core/auth';
+import { useCatalogUiStore } from '@/src/features/product';
 import { SectionHeader } from '@/src/shared/ui/SectionHeader';
 import { colors, radius, spacing, typography } from '@/src/shared/theme';
 import type { HomepageCategoryCard } from '../models/types';
@@ -12,8 +13,15 @@ type Props = {
   categories: HomepageCategoryCard[];
 };
 
+/**
+ * Category / collection discovery.
+ * Deep-links China Browse with the selected category slug via catalogUiStore.
+ */
 export function CategoriesSection({ title, subtitle, categories }: Props) {
   const setJourney = useJourneyStore((s) => s.setJourney);
+  const setSelectedChinaCategorySlug = useCatalogUiStore(
+    (s) => s.setSelectedChinaCategorySlug,
+  );
 
   if (categories.length === 0) return null;
 
@@ -34,6 +42,7 @@ export function CategoriesSection({ title, subtitle, categories }: Props) {
             style={styles.tile}
             onPress={() => {
               setJourney('CHINA_IMPORT');
+              setSelectedChinaCategorySlug(category.slug);
               router.push('/(app)/(tabs)/browse');
             }}
           >

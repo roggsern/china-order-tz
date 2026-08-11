@@ -26,7 +26,7 @@ export function HomepageScreen() {
   if (query.isError && !query.data) {
     return (
       <EmptyState
-        title="Homepage unavailable"
+        title="Unable to load home"
         message={getHomepageErrorMessage(query.error)}
         actionLabel="Retry"
         onActionPress={() => void query.refetch()}
@@ -36,7 +36,8 @@ export function HomepageScreen() {
   }
 
   const view = query.data;
-  const empty = !view?.layout && (view?.sections.length ?? 0) === 0;
+  const sections = view?.sections ?? [];
+  const empty = sections.length === 0;
 
   return (
     <ScrollView
@@ -56,18 +57,14 @@ export function HomepageScreen() {
 
       {empty ? (
         <EmptyState
-          title="Nothing published yet"
-          message={
-            view?.meta.message
-              ? 'Homepage content is not published for this shopping journey yet. You can still browse and shop.'
-              : 'No homepage layout for this commerce context.'
-          }
+          title="Start shopping"
+          message="Browse products for this shopping journey, or switch journey above."
           actionLabel="Browse products"
           onActionPress={() => router.push('/(app)/(tabs)/browse')}
           style={styles.empty}
         />
       ) : (
-        <HomepageSections sections={view?.sections ?? []} />
+        <HomepageSections sections={sections} />
       )}
     </ScrollView>
   );
@@ -79,13 +76,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   content: {
-    paddingTop: spacing.lg,
+    paddingTop: spacing.md,
     paddingBottom: spacing.huge,
   },
   context: {
     ...typography.caption,
     paddingHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   empty: {
     paddingVertical: spacing.xxl,

@@ -62,6 +62,8 @@ describe('mapProductDetail', () => {
           price: 110,
           in_stock: true,
           display_attributes: [{ attribute: 'Color', value: 'Red' }],
+          primary_image: { id: 'vp', url: 'https://cdn.example/v-primary.jpg' },
+          images: [{ id: 'vi', url: 'https://cdn.example/v1.jpg', alt_text: 'Var' }],
         },
       ],
       shipping_prices: { air: 20, sea: 10 },
@@ -72,7 +74,11 @@ describe('mapProductDetail', () => {
       id: 'v1',
       price: 110,
       inStock: true,
+      primaryImageUrl: 'https://cdn.example/v-primary.jpg',
     });
+    expect(detail?.variants[0]?.images).toEqual([
+      { id: 'vi', url: 'https://cdn.example/v1.jpg', altText: 'Var' },
+    ]);
     expect(detail?.shippingPrices).toEqual({ air: 20, sea: 10 });
   });
 });
@@ -96,6 +102,8 @@ describe('mapProductConfiguration', () => {
         {
           id: 'cfg-1',
           price: '12000',
+          attribute_value_ids: ['val-black', 'val-128'],
+          in_stock: true,
         },
       ],
       attributes: [
@@ -132,6 +140,16 @@ describe('mapProductConfiguration', () => {
       matchedUnitPrice: '12000',
       isPurchasable: true,
     });
+    expect(config.configurations).toEqual([
+      {
+        id: 'cfg-1',
+        attributeValueIds: ['val-black', 'val-128'],
+        price: '12000',
+        inStock: true,
+        name: null,
+        sku: null,
+      },
+    ]);
     expect(config.attributes).toHaveLength(2);
     expect(config.attributes[0]?.values.map((value) => value.value)).toEqual([
       'Black',

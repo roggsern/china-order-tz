@@ -260,12 +260,14 @@ export function buildRenderableSections(
       insertCampaign();
 
       if (PRODUCT_SECTION_TYPES.has(type)) {
+        const products = productsFromFeatured(section.featured_contents);
+        if (products.length === 0) continue;
         out.push({
           kind: type as 'FEATURED_PRODUCTS' | 'NEW_ARRIVALS' | 'BEST_SELLERS',
           key: section.id,
           title: section.title,
           subtitle: section.subtitle,
-          products: productsFromFeatured(section.featured_contents),
+          products,
         });
         continue;
       }

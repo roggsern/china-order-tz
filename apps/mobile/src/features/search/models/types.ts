@@ -16,6 +16,7 @@ export type SearchHit = {
   slug: string;
   name: string;
   price: string | number | null;
+  compareAtPrice?: string | number | null;
   imageUrl: string | null;
   /** Server marketplace; null when missing/unknown — never invent China. */
   marketplace: string | null;
@@ -25,6 +26,8 @@ export type SearchHit = {
   brandName?: string | null;
   relevanceScore?: number | null;
   availabilityStatus?: string | null;
+  isPurchasable?: boolean | null;
+  inStock?: boolean | null;
   matchedOn?: string[];
 };
 

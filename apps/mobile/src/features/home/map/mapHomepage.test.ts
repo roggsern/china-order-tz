@@ -202,8 +202,25 @@ describe('buildRenderableSections', () => {
     expect(sections.map((s) => s.kind)).toEqual([
       'TRUST',
       'NEW_ARRIVALS',
-      'BEST_SELLERS',
     ]);
+  });
+
+  it('skips empty product rails', () => {
+    const sections = buildRenderableSections(
+      layoutWithSections([
+        {
+          id: 'sec_best',
+          section_type: 'BEST_SELLERS',
+          title: 'Best',
+          subtitle: null,
+          position: 0,
+          is_visible: true,
+          featured_contents: [],
+        },
+      ]),
+      baseMeta,
+    );
+    expect(sections.map((s) => s.kind)).toEqual([]);
   });
 
   it('maps categories, stores, and trust items from CMS featured content', () => {

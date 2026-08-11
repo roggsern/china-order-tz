@@ -2,6 +2,11 @@ import type {
   CatalogProductDetail,
   ProductConfiguration,
 } from '../models/types';
+import {
+  isPurchasableAvailabilityKind,
+  resolvePdpAvailabilityKind,
+  type PdpAvailabilityKind,
+} from './resolvePdpAvailability';
 
 export type AddToCartButtonLabel =
   | 'Checking availability...'
@@ -14,10 +19,23 @@ export type AddToCartGate = {
   label: AddToCartButtonLabel;
 };
 
+function gateLabelForKind(kind: PdpAvailabilityKind): AddToCartButtonLabel {
+  switch (kind) {
+    case 'select_options':
+      return 'Select options';
+    case 'available':
+      return 'Add to cart';
+    case 'out_of_stock':
+    case 'unavailable':
+      return 'Unavailable';
+  }
+}
+
 /**
- * Client gate for Add to Cart — uses API purchasability / match flags only.
+ * Client gate for Add to Cart — uses the same sell-unit availability as the PDP badge.
  * Does not compute variants or stock locally.
  * Disables while configuration is loading or failed (race-safe).
+ * Backend ResolveCartPurchasable remains the stock authority at submit.
  */
 export function resolveAddToCartGate(params: {
   product: CatalogProductDetail;
@@ -48,30 +66,15 @@ export function resolveAddToCartGate(params: {
     return { canAdd: false, label: 'Checking availability...' };
   }
 
-  if (config.hasConfigurations) {
-    if (!config.isComplete || !config.matchedConfigurationId) {
-      return { canAdd: false, label: 'Select options' };
-    }
-    if (config.isPurchasable === false || config.isInStock === false) {
-      return { canAdd: false, label: 'Unavailable' };
-    }
-    return { canAdd: true, label: 'Add to cart' };
-  }
+  const kind = resolvePdpAvailabilityKind({
+    product: params.product,
+    configuration: config,
+  });
 
-  if (params.product.isPurchasable === false) {
-    return { canAdd: false, label: 'Unavailable' };
-  }
-  if (params.product.availabilityStatus === 'unavailable') {
-    return { canAdd: false, label: 'Unavailable' };
-  }
-  if (params.product.availabilityStatus === 'out_of_stock') {
-    return { canAdd: false, label: 'Unavailable' };
-  }
-  if (params.product.inStock === false) {
-    return { canAdd: false, label: 'Unavailable' };
-  }
-
-  return { canAdd: true, label: 'Add to cart' };
+  return {
+    canAdd: isPurchasableAvailabilityKind(kind),
+    label: gateLabelForKind(kind),
+  };
 }
 
 /** @deprecated Prefer resolveAddToCartGate — kept for call-site migration. */
