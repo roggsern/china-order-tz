@@ -25,6 +25,7 @@ import {
 } from './pushHandlers';
 
 const ORDER_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+const QA_ORDER_ID = '019fee4a-f110-7072-9f86-9fb15923793a';
 
 function makeResponse(id: string, data: Record<string, unknown>) {
   return {
@@ -59,6 +60,45 @@ describe('pushHandlers', () => {
     );
     expect(href).toBe(`/(app)/orders/${ORDER_ID}`);
     expect(mockPush).toHaveBeenCalledWith(`/(app)/orders/${ORDER_ID}`);
+  });
+
+  it('cold-start OrderCreated with UUID v7 routes to order detail', async () => {
+    mockGetLastNotificationResponseAsync.mockResolvedValue(
+      makeResponse('cold-qa', {
+        notification_id: 'n-qa',
+        event_type: 'order_created',
+        customer_name: 'QA Customer',
+        order_number: 'COTZ-20260811-000001',
+        order_id: QA_ORDER_ID,
+      }),
+    );
+
+    const href = await consumeLastNotificationResponseOnLaunch();
+    expect(href).toBe(`/(app)/orders/${QA_ORDER_ID}`);
+    expect(mockPush).toHaveBeenCalledWith(`/(app)/orders/${QA_ORDER_ID}`);
+    expect(mockClearLastNotificationResponseAsync).toHaveBeenCalled();
+  });
+
+  it('background tap OrderCreated with UUID v7 routes to order detail', () => {
+    const href = handleNotificationResponseNavigation(
+      makeResponse('bg-qa', {
+        event_type: 'order_created',
+        order_id: QA_ORDER_ID,
+        order_number: 'COTZ-20260811-000001',
+      }),
+    );
+    expect(href).toBe(`/(app)/orders/${QA_ORDER_ID}`);
+    expect(mockPush).toHaveBeenCalledWith(`/(app)/orders/${QA_ORDER_ID}`);
+  });
+
+  it('missing event_type with non-uuid payload falls back safely', () => {
+    const href = handleNotificationResponseNavigation(
+      makeResponse('missing-type', {
+        order_number: 'COTZ-ONLY',
+        url: 'https://evil.example',
+      }),
+    );
+    expect(href).toBe('/(app)/account/notifications');
   });
 
   it('does not navigate merely from consume without handle (arrival path)', () => {

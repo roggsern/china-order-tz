@@ -69,14 +69,7 @@ class ExpoPushMessageBuilder
      */
     public function dataPayload(Notification $notification): array
     {
-        $payload = [
-            'notification_id' => (string) $notification->id,
-            'event_type' => (string) ($notification->event_type
-                ?? (is_object($notification->type) && $notification->type instanceof \BackedEnum
-                    ? $notification->type->value
-                    : $notification->type)
-                ?? ''),
-        ];
+        $payload = [];
 
         $raw = is_array($notification->data) ? $notification->data : [];
         foreach ($raw as $key => $value) {
@@ -91,6 +84,14 @@ class ExpoPushMessageBuilder
             }
             $payload[$key] = $value;
         }
+
+        // Model fields are semantic authority for routing — always win over data[].
+        $payload['notification_id'] = (string) $notification->id;
+        $payload['event_type'] = (string) ($notification->event_type
+            ?? (is_object($notification->type) && $notification->type instanceof \BackedEnum
+                ? $notification->type->value
+                : $notification->type)
+            ?? '');
 
         return $payload;
     }

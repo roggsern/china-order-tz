@@ -8,6 +8,8 @@ import { parseNotificationSemanticData } from '../utils/notificationData';
 
 const ORDER_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 const TICKET_ID = 'ffffffff-1111-4222-8333-444444444444';
+/** Exact owner-QA order_id (Laravel UUID v7). */
+const QA_ORDER_ID = '019fee4a-f110-7072-9f86-9fb15923793a';
 
 describe('resolveNotificationDestination', () => {
   it('maps known order events to order detail', () => {
@@ -20,6 +22,18 @@ describe('resolveNotificationDestination', () => {
         }),
       ).toBe(`/(app)/orders/${ORDER_ID}`);
     }
+  });
+
+  it('maps owner-QA OrderCreated UUID v7 payload to order detail', () => {
+    expect(
+      resolveNotificationDestination({
+        notification_id: 'n-qa',
+        event_type: 'order_created',
+        customer_name: 'QA Customer',
+        order_number: 'COTZ-20260811-000001',
+        order_id: QA_ORDER_ID,
+      }),
+    ).toBe(`/(app)/orders/${QA_ORDER_ID}`);
   });
 
   it('maps shipment events to tracking route', () => {
@@ -96,5 +110,30 @@ describe('resolveNotificationDestination', () => {
         order_number: 'COT-ONLY',
       }),
     ).toBe(NOTIFICATIONS_INBOX_HREF);
+  });
+
+  it('maps owner-QA OrderCreated UUID v7 order_id to order detail', () => {
+    const qaOrderId = '019fee4a-f110-7072-9f86-9fb15923793a';
+    expect(
+      resolveNotificationDestination({
+        event_type: 'order_created',
+        notification_id: 'notif-1',
+        order_id: qaOrderId,
+        order_number: 'COTZ-20260811-000001',
+        customer_name: 'QA Customer',
+      }),
+    ).toBe(`/(app)/orders/${qaOrderId}`);
+  });
+
+  it('still ignores arbitrary url even with UUID v7 order_id when event unknown', () => {
+    const qaOrderId = '019fee4a-f110-7072-9f86-9fb15923793a';
+    // Soft order_id fallback remains for known semantic ids; url must not win.
+    expect(
+      resolveNotificationDestination({
+        event_type: 'order_created',
+        order_id: qaOrderId,
+        url: 'https://evil.example/orders/hack',
+      }),
+    ).toBe(`/(app)/orders/${qaOrderId}`);
   });
 });

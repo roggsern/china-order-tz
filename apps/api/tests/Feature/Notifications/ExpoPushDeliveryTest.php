@@ -124,6 +124,84 @@ class ExpoPushDeliveryTest extends TestCase
         });
     }
 
+    public function test_expo_data_includes_model_event_type_for_owner_qa_order_created_shape(): void
+    {
+        Http::fake([
+            self::EXPO_URL => Http::response([
+                'data' => [['status' => 'ok', 'id' => 'ticket-qa']],
+            ], 200),
+        ]);
+
+        $user = User::factory()->create();
+        $this->registerDevice($user, [
+            'push_token' => 'ExponentPushToken[abcdefghijklmnopqrstuv]',
+        ]);
+
+        // Exact owner-QA shape: data[] has order fields only; event_type lives on the row.
+        $orderId = '019fee4a-f110-7072-9f86-9fb15923793a';
+        $notification = Notification::query()->create([
+            'user_id' => $user->id,
+            'customer_id' => $user->id,
+            'type' => NotificationEventType::OrderCreated->value,
+            'event_type' => NotificationEventType::OrderCreated->value,
+            'title' => 'Order placed',
+            'message' => 'Your order COTZ-20260811-000001 was created.',
+            'channel' => NotificationChannel::Push->value,
+            'status' => NotificationDeliveryStatus::Processing->value,
+            'provider' => 'expo',
+            'data' => [
+                'customer_name' => 'QA Customer',
+                'order_number' => 'COTZ-20260811-000001',
+                'order_id' => $orderId,
+                'password' => 'should-not-leak',
+            ],
+        ]);
+
+        $result = app(PushNotificationProvider::class)->send($notification);
+
+        $this->assertTrue($result['success']);
+
+        Http::assertSent(function ($request) use ($notification, $orderId) {
+            $payload = $request->data();
+            $data = $payload[0]['data'];
+
+            $this->assertSame('order_created', $data['event_type']);
+            $this->assertSame((string) $notification->id, $data['notification_id']);
+            $this->assertSame($orderId, $data['order_id']);
+            $this->assertSame('COTZ-20260811-000001', $data['order_number']);
+            $this->assertSame('QA Customer', $data['customer_name']);
+            $this->assertArrayNotHasKey('password', $data);
+
+            return true;
+        });
+    }
+
+    public function test_expo_data_model_event_type_wins_over_stale_data_event_type(): void
+    {
+        Http::fake([
+            self::EXPO_URL => Http::response([
+                'data' => [['status' => 'ok', 'id' => 'ticket-authority']],
+            ], 200),
+        ]);
+
+        $user = User::factory()->create();
+        $this->registerDevice($user);
+        $notification = $this->makeNotification($user, [
+            'event_type' => 'stale_wrong_type',
+            'notification_id' => 'forged-id',
+        ]);
+
+        app(PushNotificationProvider::class)->send($notification);
+
+        Http::assertSent(function ($request) use ($notification) {
+            $data = $request->data()[0]['data'];
+            $this->assertSame('order_created', $data['event_type']);
+            $this->assertSame((string) $notification->id, $data['notification_id']);
+
+            return true;
+        });
+    }
+
     public function test_authorization_header_sent_when_access_token_configured(): void
     {
         config(['notifications.push.expo.access_token' => 'expo-secret-token']);
@@ -438,14 +516,14 @@ class ExpoPushDeliveryTest extends TestCase
         Http::assertSentCount(1);
     }
 
-    public function test_default_event_channels_still_exclude_push(): void
+    public function test_non_launch_events_still_exclude_push_by_default(): void
     {
         Http::fake();
 
         NotificationTemplate::factory()->create([
-            'key' => 'order_created.in_app',
+            'key' => 'tracking_updated.in_app',
             'channel' => NotificationChannel::InApp,
-            'subject' => 'Order {{order_number}}',
+            'subject' => 'Tracking {{order_number}}',
             'body' => 'Hello {{customer_name}}',
             'is_active' => true,
         ]);
@@ -454,13 +532,14 @@ class ExpoPushDeliveryTest extends TestCase
         $this->registerDevice($user);
 
         $created = app(NotificationPlatform::class)->notifyCustomer(
-            NotificationEventType::OrderCreated,
+            NotificationEventType::TrackingUpdated,
             $user,
             [
                 'customer_name' => 'Asha',
                 'order_number' => 'ORD-10',
+                'order_id' => (string) \Illuminate\Support\Str::uuid(),
             ],
-            idempotencyKey: 'inapp-only:'.$user->id,
+            idempotencyKey: 'tracking-only:'.$user->id,
         );
 
         $this->assertTrue($created->every(

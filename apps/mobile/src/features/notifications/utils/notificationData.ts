@@ -51,8 +51,20 @@ export function parseNotificationSemanticData(
 }
 
 export function extractNotificationContentData(raw: unknown): unknown {
-  if (!raw || typeof raw !== 'object') return null;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const record = raw as Record<string, unknown>;
-  if ('data' in record) return record.data;
+  // Expo delivers semantic fields on content.data directly. Only unwrap a nested
+  // `data` object when the outer payload lacks routing keys (avoid dropping event_type).
+  if (
+    'data' in record &&
+    record.data &&
+    typeof record.data === 'object' &&
+    !Array.isArray(record.data) &&
+    !('event_type' in record) &&
+    !('order_id' in record) &&
+    !('ticket_id' in record)
+  ) {
+    return record.data;
+  }
   return raw;
 }
