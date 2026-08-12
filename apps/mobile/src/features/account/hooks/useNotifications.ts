@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AUTHENTICATED_QUERY_META, useAuthStore } from '@/src/core/auth';
+import { unreadNotificationsQueryKey } from '@/src/features/notifications';
 import {
   fetchNotifications,
   markAllNotificationsRead,
@@ -20,20 +21,25 @@ export function useNotifications(enabled = true) {
   });
 }
 
+function invalidateNotificationCaches(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({ queryKey: notificationsQueryKey() });
+  void queryClient.invalidateQueries({ queryKey: unreadNotificationsQueryKey() });
+}
+
 export function useNotificationMutations() {
   const queryClient = useQueryClient();
 
   const markRead = useMutation({
     mutationFn: (id: string) => markNotificationRead(id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: notificationsQueryKey() });
+      invalidateNotificationCaches(queryClient);
     },
   });
 
   const markAll = useMutation({
     mutationFn: () => markAllNotificationsRead(),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: notificationsQueryKey() });
+      invalidateNotificationCaches(queryClient);
     },
   });
 

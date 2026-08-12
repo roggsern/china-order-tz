@@ -5,12 +5,14 @@ import {
   Text,
   View,
 } from 'react-native';
+import { router } from 'expo-router';
 import { formatCustomerDateTime } from '@/src/shared/utils/formatCustomerDateTime';
 import { EmptyState } from '@/src/shared/ui/EmptyState';
 import { PrimaryButton } from '@/src/shared/ui/PrimaryButton';
 import { ScreenContainer } from '@/src/shared/ui/ScreenContainer';
 import { ScreenLoadingState } from '@/src/shared/ui/ScreenLoadingState';
 import { colors, spacing, typography } from '@/src/shared/theme';
+import { resolveNotificationDestinationFromSemantic } from '@/src/features/notifications';
 import {
   useNotificationMutations,
   useNotifications,
@@ -101,6 +103,8 @@ export function NotificationsScreen() {
               if (!item.isRead) {
                 void markRead.mutateAsync(item.id);
               }
+              const href = resolveNotificationDestinationFromSemantic(item.data);
+              router.push(href as never);
             }}
           />
         )}

@@ -53,6 +53,16 @@ jest.mock('@/src/features/checkout/storage/pendingCheckoutContextStorage', () =>
   },
 }));
 
+jest.mock('@/src/features/devices', () => ({
+  getOrCreateInstallationId: jest
+    .fn()
+    .mockResolvedValue('11111111-1111-4111-8111-111111111111'),
+}));
+
+jest.mock('@/src/features/notifications', () => ({
+  resetPushRegistrationState: jest.fn(),
+}));
+
 const mockSaveToken = secureTokenStorage.saveToken as jest.Mock;
 const mockClearToken = secureTokenStorage.clearToken as jest.Mock;
 const mockApiPost = apiClient.post as jest.Mock;
@@ -177,5 +187,15 @@ describe('logout', () => {
     expect(mockClearToken).toHaveBeenCalled();
     expect(useAuthStore.getState().status).toBe('unauthenticated');
     expect(useAuthStore.getState().user).toBeNull();
+  });
+
+  it('sends installation_id on logout to deactivate current installation only', async () => {
+    mockApiPost.mockResolvedValue({ success: true });
+
+    await logout();
+
+    expect(mockApiPost).toHaveBeenCalledWith('/logout', {
+      installation_id: '11111111-1111-4111-8111-111111111111',
+    });
   });
 });

@@ -44,7 +44,7 @@ function BrandTabHeader({ title }: { title: string }) {
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
-  const { cartBadge, ordersBadge } = useShellTabBadges();
+  const { cartBadge, ordersBadge, accountBadge } = useShellTabBadges();
 
   return (
     <Tabs
@@ -115,6 +115,8 @@ export default function TabsLayout() {
         options={{
           title: 'Account',
           header: () => <BrandTabHeader title="Account" />,
+          tabBarBadge: accountBadge,
+          tabBarBadgeStyle: styles.nativeBadge,
         }}
       />
     </Tabs>

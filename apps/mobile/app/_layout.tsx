@@ -8,6 +8,7 @@ import 'react-native-reanimated';
 import { createAppQueryClient } from '@/src/core/api/queryClient';
 import { registerAppQueryClient } from '@/src/core/api/queryClientRegistry';
 import { SplashView } from '@/src/features/auth';
+import { usePushNotificationsBootstrap } from '@/src/features/notifications';
 import { AppErrorBoundary } from '@/src/shared/components/AppErrorBoundary';
 import { useAuthBootstrap } from '@/src/shared/hooks/useAuthBootstrap';
 
@@ -19,6 +20,11 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 
 function isPaymentReturnUrl(url: string): boolean {
   return /payment-return/i.test(url);
+}
+
+function AuthenticatedPushBootstrap() {
+  usePushNotificationsBootstrap();
+  return null;
 }
 
 export default function RootLayout() {
@@ -74,6 +80,7 @@ export default function RootLayout() {
   return (
     <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
+        <AuthenticatedPushBootstrap />
         <Stack screenOptions={{ headerShown: true }}>
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="(auth)" options={{ headerShown: false }} />

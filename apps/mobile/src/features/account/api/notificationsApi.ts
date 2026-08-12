@@ -1,4 +1,8 @@
 import { apiClient } from '@/src/core/api';
+import {
+  parseNotificationSemanticData,
+  type NotificationSemanticData,
+} from '@/src/features/notifications/utils/notificationData';
 
 export type CustomerNotification = {
   id: string;
@@ -8,6 +12,9 @@ export type CustomerNotification = {
   isRead: boolean;
   readAt: string | null;
   createdAt: string | null;
+  /** Semantic backend `data` for deep-link routing (Wave 6D). */
+  data: NotificationSemanticData;
+  rawData: Record<string, unknown>;
 };
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -26,6 +33,14 @@ export function mapCustomerNotification(raw: unknown): CustomerNotification | nu
       ? String(data.id)
       : '';
   if (!id) return null;
+
+  const rawData = asRecord(data.data);
+  const semantic = parseNotificationSemanticData({
+    ...rawData,
+    event_type: rawData.event_type ?? data.event_type ?? data.type,
+    notification_id: rawData.notification_id ?? id,
+  });
+
   return {
     id,
     type: stringField(data, 'type') ?? stringField(data, 'event_type'),
@@ -34,6 +49,8 @@ export function mapCustomerNotification(raw: unknown): CustomerNotification | nu
     isRead: data.is_read === true || Boolean(data.read_at),
     readAt: stringField(data, 'read_at'),
     createdAt: stringField(data, 'created_at'),
+    data: semantic,
+    rawData,
   };
 }
 

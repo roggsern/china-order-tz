@@ -5,6 +5,7 @@ import { ApiError } from '@/src/core/errors';
 import { secureTokenStorage } from '@/src/core/storage';
 import { pendingCheckoutContextStorage } from '@/src/features/checkout/storage/pendingCheckoutContextStorage';
 import { getOrCreateInstallationId } from '@/src/features/devices';
+import { resetPushRegistrationState } from '@/src/features/notifications';
 import { pendingPaymentContextStorage } from '@/src/features/payments/storage/pendingPaymentContextStorage';
 import type { User } from '@/src/shared/types/user';
 import {
@@ -85,6 +86,8 @@ export async function logout(): Promise<void> {
   } catch {
     // Still clear local session (already unauthenticated / offline).
   } finally {
+    // Clear in-memory push registration cache; installation_id stays for next account.
+    resetPushRegistrationState();
     await clearSessionOnLogout();
   }
 }

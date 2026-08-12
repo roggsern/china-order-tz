@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "385436312983",
+    "project_id": "china-order-tz",
+    "storage_bucket": "china-order-tz.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:385436312983:android:5807d81f9666964c2090d2",
+        "android_client_info": {
+          "package_name": "com.chinaordertz.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCJaRHLHuS-Wd8kW2cGbwW7JtT69CUMDkU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

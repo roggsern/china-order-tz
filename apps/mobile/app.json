@@ -18,6 +18,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "package": "com.chinaordertz.mobile",
+      "googleServicesFile": "./google-services.json",
       "versionCode": 2,
       "predictiveBackGestureEnabled": false
     },
@@ -36,6 +37,14 @@
           "imageWidth": 220,
           "resizeMode": "contain",
           "backgroundColor": "#fff8ea"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/android-icon-monochrome.png",
+          "color": "#c9a227",
+          "defaultChannel": "order_updates"
         }
       ]
     ],
