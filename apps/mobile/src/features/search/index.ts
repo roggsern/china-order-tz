@@ -1,6 +1,10 @@
 export { fetchSearchSuggestions, fetchSearchProducts } from './api/searchApi';
 export { useSearchSuggestions } from './hooks/useSearchSuggestions';
-export { useSearchProducts } from './hooks/useSearchProducts';
+export {
+  useSearchProducts,
+  searchProductsQueryKey,
+  buildSearchProductsRequestParams,
+} from './hooks/useSearchProducts';
 export { SearchScreen } from './screens/SearchScreen';
 export { SearchInput } from './components/SearchInput';
 export { SuggestionList } from './components/SuggestionList';
@@ -10,11 +14,17 @@ export {
   journeyToSearchScope,
   journeySearchLabel,
   shouldFetchSearch,
+  resolveSearchScope,
+  DEFAULT_SEARCH_SCOPE,
+  nameMatchesSearchQuery,
+  searchScopeLabel,
 } from './utils/journeyScope';
+export type { SearchScope } from './utils/journeyScope';
 export {
   mapSearchHit,
   mapSearchSuggestions,
   mapSearchProductsResponse,
+  isSearchMappingFailure,
 } from './utils/mapSearch';
 export { getSearchErrorMessage } from './utils/searchErrorMessage';
 export type {

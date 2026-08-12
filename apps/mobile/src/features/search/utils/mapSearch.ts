@@ -31,6 +31,11 @@ function mediaUrl(media: unknown): string | null {
   return null;
 }
 
+function asBoolean(value: unknown): boolean | null {
+  if (typeof value === 'boolean') return value;
+  return null;
+}
+
 export function mapSearchHit(raw: unknown): SearchHit | null {
   const parsed = searchHitSchema.safeParse(raw);
   if (!parsed.success) return null;
@@ -61,9 +66,8 @@ export function mapSearchHit(raw: unknown): SearchHit | null {
     relevanceScore: typeof data.relevance_score === 'number' ? data.relevance_score : null,
     availabilityStatus:
       typeof data.availability_status === 'string' ? data.availability_status : null,
-    isPurchasable:
-      typeof data.is_purchasable === 'boolean' ? data.is_purchasable : null,
-    inStock: typeof data.in_stock === 'boolean' ? data.in_stock : null,
+    isPurchasable: asBoolean(data.is_purchasable),
+    inStock: asBoolean(data.in_stock),
     matchedOn: Array.isArray(data.matched_on)
       ? data.matched_on.filter((item): item is string => typeof item === 'string')
       : undefined,
@@ -152,16 +156,28 @@ export function mapSearchProductsResponse(envelope: {
       };
 
   const rows = Array.isArray(envelope.data) ? envelope.data : [];
+  const hits = rows
+    .map(mapSearchHit)
+    .filter((hit): hit is SearchHit => hit !== null);
 
   return {
-    hits: rows
-      .map(mapSearchHit)
-      .filter((hit): hit is SearchHit => hit !== null),
+    hits,
     page: meta.current_page,
     lastPage: Math.max(1, meta.last_page),
     perPage: meta.per_page,
+    // Prefer mapped length when the server total is larger but rows were dropped —
+    // UI empty-state must not claim "no results" while rows existed but failed parse.
+    // After schema hardening, mapped count should match; keep server total as authority.
     total: meta.total,
     q: meta.q,
     scope: meta.scope,
   };
+}
+
+/**
+ * True when the API reported hits but the client could not map any.
+ * Used to avoid false "No results" empty states.
+ */
+export function isSearchMappingFailure(response: SearchResponse): boolean {
+  return response.total > 0 && response.hits.length === 0;
 }

@@ -20,7 +20,13 @@ import { SuggestionList } from '../components/SuggestionList';
 import { useSearchProducts } from '../hooks/useSearchProducts';
 import { useSearchSuggestions } from '../hooks/useSearchSuggestions';
 import type { SearchSort, SearchSuggestion } from '../models/types';
-import { journeySearchLabel, shouldFetchSearch } from '../utils/journeyScope';
+import type { SearchScope } from '../utils/journeyScope';
+import {
+  DEFAULT_SEARCH_SCOPE,
+  journeySearchLabel,
+  searchScopeLabel,
+  shouldFetchSearch,
+} from '../utils/journeyScope';
 import { getSearchErrorMessage } from '../utils/searchErrorMessage';
 
 type Mode = 'suggest' | 'results';
@@ -31,6 +37,8 @@ const SORT_OPTIONS: { value: SearchSort; label: string }[] = [
   { value: 'relevance', label: 'Relevance' },
   { value: 'newest', label: 'Newest' },
 ];
+
+const SCOPE_OPTIONS: SearchScope[] = ['all', 'china', 'tz'];
 
 export function SearchScreen() {
   const journey = useJourneyStore((s) => s.journey);
@@ -48,6 +56,7 @@ export function SearchScreen() {
   const [submittedQuery, setSubmittedQuery] = useState('');
   const [mode, setMode] = useState<Mode>('suggest');
   const [sort, setSort] = useState<SearchSort>('relevance');
+  const [scope, setScope] = useState<SearchScope>(DEFAULT_SEARCH_SCOPE);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedInput(input.trim()), DEBOUNCE_MS);
@@ -56,9 +65,11 @@ export function SearchScreen() {
 
   const suggestionsQuery = useSearchSuggestions(
     mode === 'suggest' ? debouncedInput : '',
+    scope,
   );
   const productsQuery = useSearchProducts({
     q: submittedQuery,
+    scope,
     sort,
     enabled: mode === 'results',
   });
@@ -69,6 +80,13 @@ export function SearchScreen() {
   );
 
   const total = productsQuery.data?.pages[0]?.total ?? 0;
+  const mappingFailure =
+    !productsQuery.isError &&
+    !productsQuery.isFetching &&
+    total > 0 &&
+    hits.length === 0;
+  const showResultsLoading =
+    (productsQuery.isLoading || productsQuery.isFetching) && hits.length === 0;
 
   function runSearch(query: string) {
     const trimmed = query.trim();
@@ -122,7 +140,30 @@ export function SearchScreen() {
       <View style={styles.header}>
         <Text style={styles.eyebrow}>Search</Text>
         <Text style={styles.heading}>Find products</Text>
-        <Text style={styles.context}>{journeySearchLabel(journey)}</Text>
+        <Text style={styles.context}>
+          {searchScopeLabel(scope)} · shopping as {journeySearchLabel(journey)}
+        </Text>
+      </View>
+
+      <View style={styles.scopeRow}>
+        {SCOPE_OPTIONS.map((option) => {
+          const active = scope === option;
+          return (
+            <Pressable
+              key={option}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              style={[styles.scopeChip, active ? styles.scopeChipActive : null]}
+              onPress={() => setScope(option)}
+            >
+              <Text
+                style={[styles.scopeText, active ? styles.scopeTextActive : null]}
+              >
+                {searchScopeLabel(option)}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       <SearchInput
@@ -166,7 +207,7 @@ export function SearchScreen() {
           contentContainerStyle={styles.bodyContent}
           keyboardShouldPersistTaps="handled"
         >
-          {productsQuery.isLoading && hits.length === 0 ? (
+          {showResultsLoading ? (
             <View style={styles.centered}>
               <ActivityIndicator size="large" color={colors.primary} />
               <Text style={styles.muted}>Searching…</Text>
@@ -175,6 +216,14 @@ export function SearchScreen() {
             <EmptyState
               title="Search unavailable"
               message={getSearchErrorMessage(productsQuery.error)}
+              actionLabel="Retry"
+              onActionPress={() => void productsQuery.refetch()}
+              style={styles.emptyPad}
+            />
+          ) : mappingFailure ? (
+            <EmptyState
+              title="Results unavailable"
+              message="Search returned products but they could not be displayed. Please retry."
               actionLabel="Retry"
               onActionPress={() => void productsQuery.refetch()}
               style={styles.emptyPad}
@@ -283,6 +332,32 @@ const styles = StyleSheet.create({
   context: {
     ...typography.caption,
     marginTop: spacing.xs,
+  },
+  scopeRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  scopeChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  scopeChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryMuted,
+  },
+  scopeText: {
+    ...typography.label,
+    color: colors.textSecondary,
+  },
+  scopeTextActive: {
+    color: colors.primaryPressed,
+    fontWeight: '700',
   },
   body: {
     flex: 1,

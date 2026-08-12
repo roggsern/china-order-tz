@@ -432,6 +432,86 @@ class UnifiedMarketplaceSearchProductsTest extends TestCase
         );
     }
 
+    public function test_partial_name_dress_matches_collared_shirt_dress(): void
+    {
+        $dress = $this->makeChinaListableProduct('collared-shirt-dress', [
+            'name' => 'COLLARED SHIRT DRESS',
+        ]);
+
+        foreach (['Dress', 'dress', 'DRESS'] as $q) {
+            $slugs = collect(
+                $this->getJson('/api/v1/search/products?q='.rawurlencode($q).'&scope=all')
+                    ->assertOk()
+                    ->json('data'),
+            )->pluck('slug')->all();
+
+            $this->assertContains($dress->slug, $slugs, "Expected {$q} to match COLLARED SHIRT DRESS");
+        }
+    }
+
+    public function test_kimoni_does_not_return_unrelated_or_all_catalog(): void
+    {
+        $this->makeChinaListableProduct('rich-aunties-silky-kimono', [
+            'name' => 'RICH AUNTIES SILKY KIMONO',
+        ]);
+        $this->makeChinaListableProduct('perfume-unrelated', [
+            'name' => 'Luxury Perfume Mist',
+            'short_description' => 'Fragrance mist for daily wear',
+            'description' => 'A soft perfume mist with floral notes',
+        ]);
+
+        $response = $this->getJson('/api/v1/search/products?q=Kimoni&scope=all')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 0);
+
+        $this->assertSame([], $response->json('data'));
+    }
+
+    public function test_search_hit_in_stock_is_boolean_or_omitted_never_object(): void
+    {
+        $this->makeChinaListableProduct('dc-mini-ups-stock-shape', [
+            'name' => 'DC MINI UPS',
+        ]);
+
+        $hit = collect(
+            $this->getJson('/api/v1/search/products?q=UPS&scope=china')
+                ->assertOk()
+                ->json('data'),
+        )->firstWhere('slug', 'dc-mini-ups-stock-shape');
+
+        $this->assertNotNull($hit);
+        if (array_key_exists('in_stock', $hit)) {
+            $this->assertIsBool($hit['in_stock']);
+        }
+        if (array_key_exists('stock', $hit)) {
+            $this->assertTrue(is_int($hit['stock']) || is_numeric($hit['stock']));
+        }
+    }
+
+    public function test_scope_chips_change_corpus_for_china_vs_tz(): void
+    {
+        $chinaOnly = $this->makeChinaListableProduct('china-only-dress-scope', [
+            'name' => 'China Scope Dress',
+        ]);
+        $tzOnly = $this->makeTzListableProduct('tz-only-dress-scope', [
+            'name' => 'TZ Scope Dress',
+        ]);
+
+        $all = collect($this->getJson('/api/v1/search/products?q=Dress&scope=all')->json('data'))
+            ->pluck('slug')->all();
+        $china = collect($this->getJson('/api/v1/search/products?q=Dress&scope=china')->json('data'))
+            ->pluck('slug')->all();
+        $tz = collect($this->getJson('/api/v1/search/products?q=Dress&scope=tz')->json('data'))
+            ->pluck('slug')->all();
+
+        $this->assertContains($chinaOnly->slug, $all);
+        $this->assertContains($tzOnly->slug, $all);
+        $this->assertContains($chinaOnly->slug, $china);
+        $this->assertNotContains($tzOnly->slug, $china);
+        $this->assertContains($tzOnly->slug, $tz);
+        $this->assertNotContains($chinaOnly->slug, $tz);
+    }
+
     /**
      * @param  array<string, mixed>  $overrides
      */

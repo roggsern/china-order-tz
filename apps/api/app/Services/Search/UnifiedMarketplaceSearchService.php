@@ -235,7 +235,9 @@ class UnifiedMarketplaceSearchService
         $channelCode = $product->commerceChannel?->code;
         $marketplace = $channelCode === CommerceChannelCode::TzLocal->value ? 'tz' : 'china';
 
-        $card = (new CustomerProductCardResource($product))->toArray(Request::create('/'));
+        // resolve() strips MissingValue from $this->when(...) so optional stock fields
+        // are omitted — toArray() alone leaves MissingValue instances that JSON-encode as {}.
+        $card = (new CustomerProductCardResource($product))->resolve(Request::create('/'));
 
         return [
             ...$card,

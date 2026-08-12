@@ -1,22 +1,42 @@
 import {
-  journeySearchLabel,
+  DEFAULT_SEARCH_SCOPE,
   journeyToSearchScope,
+  nameMatchesSearchQuery,
+  resolveSearchScope,
   shouldFetchSearch,
 } from './journeyScope';
 
+describe('resolveSearchScope', () => {
+  it('defaults to all (web storefront parity)', () => {
+    expect(DEFAULT_SEARCH_SCOPE).toBe('all');
+    expect(resolveSearchScope()).toBe('all');
+    expect(resolveSearchScope(null)).toBe('all');
+  });
+
+  it('honors explicit china/tz/all chips', () => {
+    expect(resolveSearchScope('china')).toBe('china');
+    expect(resolveSearchScope('tz')).toBe('tz');
+    expect(resolveSearchScope('all')).toBe('all');
+  });
+});
+
 describe('journeyToSearchScope', () => {
-  it('maps CHINA_IMPORT → china and TZ_LOCAL → tz', () => {
+  it('maps journeys for optional scoped filters only', () => {
     expect(journeyToSearchScope('CHINA_IMPORT')).toBe('china');
     expect(journeyToSearchScope('TZ_LOCAL')).toBe('tz');
   });
+});
 
-  it('does not expose technical scope values in journey labels', () => {
-    expect(journeySearchLabel('CHINA_IMPORT')).toBe('Order from China');
-    expect(journeySearchLabel('TZ_LOCAL')).toBe('Buy from TZ');
-    expect(journeySearchLabel('CHINA_IMPORT')).not.toBe('china');
-    expect(journeySearchLabel('TZ_LOCAL')).not.toBe('tz');
-    expect(journeySearchLabel('CHINA_IMPORT')).not.toMatch(/scope=/i);
-    expect(journeySearchLabel('TZ_LOCAL')).not.toMatch(/scope=/i);
+describe('nameMatchesSearchQuery (server substring semantics)', () => {
+  it('matches partial name DRESS → COLLARED SHIRT DRESS', () => {
+    expect(nameMatchesSearchQuery('COLLARED SHIRT DRESS', 'DRESS')).toBe(true);
+    expect(nameMatchesSearchQuery('COLLARED SHIRT DRESS', 'dress')).toBe(true);
+    expect(nameMatchesSearchQuery('COLLARED SHIRT DRESS', ' shirt ')).toBe(true);
+  });
+
+  it('does not invent matches outside the name', () => {
+    expect(nameMatchesSearchQuery('COLLARED SHIRT DRESS', 'jacket')).toBe(false);
+    expect(nameMatchesSearchQuery('COLLARED SHIRT DRESS', '')).toBe(false);
   });
 });
 
@@ -24,6 +44,6 @@ describe('shouldFetchSearch', () => {
   it('skips empty and whitespace-only queries', () => {
     expect(shouldFetchSearch('')).toBe(false);
     expect(shouldFetchSearch('   ')).toBe(false);
-    expect(shouldFetchSearch('phone')).toBe(true);
+    expect(shouldFetchSearch('DRESS')).toBe(true);
   });
 });

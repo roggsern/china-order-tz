@@ -33,8 +33,9 @@ export const searchHitSchema = z
     marketplace: z.string().optional(),
     commerce_channel_code: z.string().nullable().optional(),
     availability_status: z.string().nullable().optional(),
-    is_purchasable: z.boolean().nullable().optional(),
-    in_stock: z.boolean().nullable().optional(),
+    is_purchasable: z.unknown().optional().nullable(),
+    // Configurable cards may omit stock or (bug) serialize empty objects — never fail the hit.
+    in_stock: z.unknown().optional().nullable(),
     brand: entityRefSchema,
     store: entityRefSchema,
     relevance_score: z.number().nullable().optional(),

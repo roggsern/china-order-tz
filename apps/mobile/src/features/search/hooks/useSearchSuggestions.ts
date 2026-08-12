@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { useJourneyStore } from '@/src/core/auth';
 import { fetchSearchSuggestions } from '../api/searchApi';
-import { journeyToSearchScope, shouldFetchSearch } from '../utils/journeyScope';
+import type { SearchScope } from '../utils/journeyScope';
+import { resolveSearchScope, shouldFetchSearch } from '../utils/journeyScope';
 
 export function searchSuggestionsQueryKey(params: {
   q: string;
@@ -10,14 +10,17 @@ export function searchSuggestionsQueryKey(params: {
   return ['search', 'suggest', params.scope, params.q] as const;
 }
 
-export function useSearchSuggestions(q: string) {
-  const journey = useJourneyStore((s) => s.journey);
-  const scope = journeyToSearchScope(journey);
+export function useSearchSuggestions(
+  q: string,
+  scope?: SearchScope | null,
+) {
+  const resolvedScope = resolveSearchScope(scope);
   const trimmed = q.trim();
 
   return useQuery({
-    queryKey: searchSuggestionsQueryKey({ q: trimmed, scope }),
-    queryFn: () => fetchSearchSuggestions({ q: trimmed, scope }),
+    queryKey: searchSuggestionsQueryKey({ q: trimmed, scope: resolvedScope }),
+    queryFn: () =>
+      fetchSearchSuggestions({ q: trimmed, scope: resolvedScope }),
     enabled: shouldFetchSearch(trimmed),
   });
 }

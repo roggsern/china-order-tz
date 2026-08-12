@@ -51,7 +51,7 @@ export async function fetchSearchProducts(
   const response = await apiClient.get<unknown>(
     '/search/products',
     {
-      q: params.q,
+      q: params.q.trim(),
       scope: params.scope,
       page: params.page ?? 1,
       per_page: params.perPage ?? 24,
