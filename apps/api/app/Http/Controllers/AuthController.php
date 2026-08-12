@@ -7,6 +7,7 @@ use App\Actions\UserAuth\LoginUserAction;
 use App\Actions\UserAuth\LogoutUserAction;
 use App\Actions\UserAuth\RegisterUserAction;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Http\Requests\Auth\LogoutRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Resources\UserResource;
 use Illuminate\Http\JsonResponse;
@@ -47,9 +48,9 @@ class AuthController extends Controller
         ]);
     }
 
-    public function logout(LogoutUserAction $action): JsonResponse
+    public function logout(LogoutRequest $request, LogoutUserAction $action): JsonResponse
     {
-        $action->handle();
+        $action->handle($request->validated());
 
         return response()->json([
             'success' => true,

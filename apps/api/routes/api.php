@@ -111,6 +111,7 @@ use App\Http\Controllers\Admin\AdminReturnController;
 use App\Http\Controllers\Admin\AdminSupportTicketController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DeliveryOptionController;
+use App\Http\Controllers\DevicePushTokenController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\NmbPaymentCallbackController;
 use App\Http\Controllers\CheckoutPaymentMethodsController;
@@ -308,6 +309,10 @@ Route::middleware(['auth:sanctum', 'ensure.user', 'user.active'])->group(functio
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+    Route::post('/devices/push-tokens', [DevicePushTokenController::class, 'store'])
+        ->middleware('throttle:customer-profile');
+    Route::delete('/devices/push-tokens', [DevicePushTokenController::class, 'destroy'])
+        ->middleware('throttle:customer-profile');
     Route::get('/profile/address', [ProfileController::class, 'showAddress']);
     Route::patch('/profile/address', [ProfileController::class, 'updateAddress'])
         ->middleware('throttle:customer-profile');

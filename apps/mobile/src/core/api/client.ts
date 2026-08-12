@@ -146,6 +146,9 @@ export const apiClient = {
     apiRequest<T>({ method: 'PUT', path, body, token }),
   patch: <T = unknown>(path: string, body?: unknown, token?: string | null) =>
     apiRequest<T>({ method: 'PATCH', path, body, token }),
-  delete: <T = unknown>(path: string, token?: string | null) =>
-    apiRequest<T>({ method: 'DELETE', path, token }),
+  delete: <T = unknown>(
+    path: string,
+    body?: unknown,
+    token?: string | null,
+  ) => apiRequest<T>({ method: 'DELETE', path, body, token }),
 };

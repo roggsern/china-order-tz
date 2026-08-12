@@ -4,6 +4,7 @@ import { useAuthStore } from '@/src/core/auth/authStore';
 import { ApiError } from '@/src/core/errors';
 import { secureTokenStorage } from '@/src/core/storage';
 import { pendingCheckoutContextStorage } from '@/src/features/checkout/storage/pendingCheckoutContextStorage';
+import { getOrCreateInstallationId } from '@/src/features/devices';
 import { pendingPaymentContextStorage } from '@/src/features/payments/storage/pendingPaymentContextStorage';
 import type { User } from '@/src/shared/types/user';
 import {
@@ -11,7 +12,6 @@ import {
   type LoginRequest,
   type RegisterRequest,
 } from '../api/schemas';
-
 async function establishSession(raw: unknown): Promise<User> {
   const parsed = authSessionResponseSchema.safeParse(raw);
   if (!parsed.success) {
@@ -67,10 +67,21 @@ export async function registerAccount(input: RegisterRequest): Promise<User> {
 /**
  * POST /logout then destructive clearSessionOnLogout
  * (token + auth + user caches + journey + payment/checkout recovery).
+ * Sends installation_id when available so only this device's push ownership detaches.
  */
 export async function logout(): Promise<void> {
   try {
-    await apiClient.post('/logout', {});
+    let installationId: string | undefined;
+    try {
+      installationId = await getOrCreateInstallationId();
+    } catch {
+      installationId = undefined;
+    }
+
+    await apiClient.post(
+      '/logout',
+      installationId ? { installation_id: installationId } : {},
+    );
   } catch {
     // Still clear local session (already unauthenticated / offline).
   } finally {

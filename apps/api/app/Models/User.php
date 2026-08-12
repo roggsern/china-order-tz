@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\HasUuidPrimaryKey;
 use App\Services\Auth\CustomerEmailVerificationService;
+use App\Services\Devices\DevicePushTokenService;
 use Database\Factories\UserFactory;
 use Illuminate\Auth\MustVerifyEmail;
 use Illuminate\Contracts\Auth\MustVerifyEmail as MustVerifyEmailContract;
@@ -51,14 +52,25 @@ class User extends Authenticatable implements MustVerifyEmailContract
         static::updated(function (User $user): void {
             if ($user->wasChanged('password')) {
                 $user->tokens()->delete();
+                $user->revokeActivePushTokens();
 
                 return;
             }
 
             if ($user->wasChanged('is_active') && ! $user->is_active) {
                 $user->tokens()->delete();
+                $user->revokeActivePushTokens();
             }
         });
+
+        static::deleting(function (User $user): void {
+            $user->revokeActivePushTokens();
+        });
+    }
+
+    public function revokeActivePushTokens(): void
+    {
+        app(DevicePushTokenService::class)->deactivateAllForUser($this);
     }
 
     /**
@@ -150,6 +162,11 @@ class User extends Authenticatable implements MustVerifyEmailContract
     public function notificationPreferences(): HasMany
     {
         return $this->hasMany(NotificationPreference::class);
+    }
+
+    public function devicePushTokens(): HasMany
+    {
+        return $this->hasMany(DevicePushToken::class);
     }
 
     public function couponUsages(): HasMany
