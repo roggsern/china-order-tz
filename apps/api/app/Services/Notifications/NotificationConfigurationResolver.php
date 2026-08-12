@@ -258,7 +258,7 @@ final class NotificationConfigurationResolver
                 ],
                 'push' => [
                     'configured' => (bool) config('notifications.push.configured', false),
-                    'driver' => (string) config('notifications.push.driver', 'firebase'),
+                    'driver' => (string) config('notifications.push.driver', 'expo'),
                 ],
             ],
             'managed_events' => array_keys(self::MANAGED_EVENTS),
@@ -305,9 +305,10 @@ final class NotificationConfigurationResolver
     public function defaultEventChannelMap(): array
     {
         return [
-            'order.created' => ['in_app', 'whatsapp', 'email'],
-            'order.paid' => ['in_app', 'whatsapp', 'email'],
-            'shipment.delivered' => ['in_app', 'whatsapp', 'email'],
+            // Managed admin map — Wave 6C appends push (provider still gated by configured+enabled).
+            'order.created' => ['in_app', 'whatsapp', 'email', 'push'],
+            'order.paid' => ['in_app', 'whatsapp', 'email', 'push'],
+            'shipment.delivered' => ['in_app', 'whatsapp', 'email', 'push'],
         ];
     }
 

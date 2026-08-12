@@ -103,7 +103,7 @@ class ExpoPushMessageBuilder
     private function isSensitiveKey(string $key): bool
     {
         return (bool) preg_match(
-            '/(password|secret|token|authorization|bearer|card|cvv|pan|otp_code|access_token)/i',
+            '/(password|secret|token|authorization|bearer|card|cvv|pan|otp_code|access_token|reset_url|reset_code|confirm_url)/i',
             $key,
         );
     }

@@ -11,9 +11,10 @@ return [
     | also apply enablement + provider availability filtering.
     */
     'event_channels' => [
-        'order_created' => ['in_app', 'whatsapp', 'email'],
-        'order_cancelled' => ['in_app'],
-        'payment_confirmed' => ['in_app', 'whatsapp', 'email'],
+        // Wave 6C — Tier A launch push set (append-only; preserve email/whatsapp).
+        'order_created' => ['in_app', 'whatsapp', 'email', 'push'],
+        'order_cancelled' => ['in_app', 'push'],
+        'payment_confirmed' => ['in_app', 'whatsapp', 'email', 'push'],
         'warehouse_picking_started' => ['in_app'],
         'warehouse_pick_assigned' => ['in_app'],
         'warehouse_pick_completed' => ['in_app'],
@@ -21,21 +22,21 @@ return [
         'warehouse_ready_to_ship' => ['in_app'],
         'warehouse_ready_for_pickup' => ['in_app'],
         'warehouse_ready_for_delivery_arrangement' => ['in_app'],
-        'shipment_created' => ['in_app'],
-        'shipment_arrived_tanzania' => ['in_app', 'whatsapp', 'email'],
+        'shipment_created' => ['in_app', 'push'],
+        'shipment_arrived_tanzania' => ['in_app', 'whatsapp', 'email', 'push'],
         'company_handover_pickup_requested' => ['in_app'],
         'company_handover_delivery_requested' => ['in_app'],
         'company_handover_completed_pickup' => ['in_app'],
         'company_handover_completed_delivery' => ['in_app'],
         'tracking_updated' => ['in_app'],
         'shipment_status_updated' => ['in_app'],
-        'order_delivered' => ['in_app', 'whatsapp', 'email'],
+        'order_delivered' => ['in_app', 'whatsapp', 'email', 'push'],
         'local_order_completed_pickup' => ['in_app'],
         'local_order_completed_delivery_arrangement' => ['in_app'],
         'password_reset' => ['in_app', 'email'],
-        'password_changed' => ['in_app', 'email'],
+        'password_changed' => ['in_app', 'email', 'push'],
         'email_change_requested' => ['in_app', 'email'],
-        'email_changed' => ['in_app', 'email'],
+        'email_changed' => ['in_app', 'email', 'push'],
         'email_verification_requested' => ['in_app', 'email'],
         'email_verified' => ['in_app', 'email'],
         'otp_requested' => ['in_app', 'sms'],
@@ -62,6 +63,11 @@ return [
         'agent_handover_completed' => ['in_app'],
         'review_approved' => ['in_app'],
         'review_rejected' => ['in_app'],
+        // Support events previously relied on config fallback ['in_app'] only.
+        'support_ticket_created' => ['in_app'],
+        'support_ticket_assigned' => ['in_app'],
+        'support_reply_received' => ['in_app', 'push'],
+        'support_ticket_resolved' => ['in_app'],
     ],
 
     'email' => [

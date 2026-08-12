@@ -321,5 +321,80 @@ class NotificationTemplateSeeder extends Seeder
                 );
             }
         }
+
+        // Wave 6C — short lock-screen push copy (no amounts, links, or OTP).
+        $pushTemplates = [
+            [
+                'event' => NotificationEventType::OrderCreated,
+                'name' => 'Order Created Push',
+                'subject' => 'Order confirmed',
+                'body' => 'Your order {{order_number}} has been placed.',
+            ],
+            [
+                'event' => NotificationEventType::OrderCancelled,
+                'name' => 'Order Cancelled Push',
+                'subject' => 'Order cancelled',
+                'body' => 'Your order {{order_number}} was cancelled.',
+            ],
+            [
+                'event' => NotificationEventType::PaymentConfirmed,
+                'name' => 'Payment Confirmed Push',
+                'subject' => 'Payment received',
+                'body' => 'Payment for order {{order_number}} was confirmed.',
+            ],
+            [
+                'event' => NotificationEventType::ShipmentCreated,
+                'name' => 'Shipment Created Push',
+                'subject' => 'Shipment update',
+                'body' => 'A shipment for order {{order_number}} is on the way.',
+            ],
+            [
+                'event' => NotificationEventType::ShipmentArrivedTanzania,
+                'name' => 'Shipment Arrived Tanzania Push',
+                'subject' => 'Arrived in Tanzania',
+                'body' => 'Order {{order_number}} has arrived in Tanzania.',
+            ],
+            [
+                'event' => NotificationEventType::OrderDelivered,
+                'name' => 'Order Delivered Push',
+                'subject' => 'Order delivered',
+                'body' => 'Order {{order_number}} has been delivered.',
+            ],
+            [
+                'event' => NotificationEventType::SupportReplyReceived,
+                'name' => 'Support Reply Push',
+                'subject' => 'Support reply',
+                'body' => 'You have a new reply on ticket {{ticket_number}}.',
+            ],
+            [
+                'event' => NotificationEventType::PasswordChanged,
+                'name' => 'Password Changed Push',
+                'subject' => 'Password changed',
+                'body' => 'Your account password was changed. If this was not you, contact support.',
+            ],
+            [
+                'event' => NotificationEventType::EmailChanged,
+                'name' => 'Email Changed Push',
+                'subject' => 'Email updated',
+                'body' => 'Your account email was updated successfully.',
+            ],
+        ];
+
+        foreach ($pushTemplates as $definition) {
+            /** @var NotificationEventType $event */
+            $event = $definition['event'];
+            $key = $event->defaultTemplateKey(NotificationChannel::Push);
+
+            NotificationTemplate::query()->updateOrCreate(
+                ['key' => $key],
+                [
+                    'name' => $definition['name'],
+                    'channel' => NotificationChannel::Push,
+                    'subject' => $definition['subject'],
+                    'body' => $definition['body'],
+                    'is_active' => true,
+                ],
+            );
+        }
     }
 }

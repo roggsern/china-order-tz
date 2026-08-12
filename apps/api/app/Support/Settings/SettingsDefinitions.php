@@ -87,7 +87,8 @@ final class SettingsDefinitions
                 'group' => 'notifications',
                 'short_key' => 'push_enabled',
                 'type' => SettingType::Boolean,
-                'default' => false,
+                // Wave 6C: allow push channel when provider is configured (kill-switch remains admin-togglable).
+                'default' => true,
                 'rules' => ['required', 'boolean'],
             ],
             'notifications.in_app_enabled' => [
@@ -102,9 +103,9 @@ final class SettingsDefinitions
                 'short_key' => 'event_channel_map',
                 'type' => SettingType::Json,
                 'default' => [
-                    'order.created' => ['in_app', 'whatsapp', 'email'],
-                    'order.paid' => ['in_app', 'whatsapp', 'email'],
-                    'shipment.delivered' => ['in_app', 'whatsapp', 'email'],
+                    'order.created' => ['in_app', 'whatsapp', 'email', 'push'],
+                    'order.paid' => ['in_app', 'whatsapp', 'email', 'push'],
+                    'shipment.delivered' => ['in_app', 'whatsapp', 'email', 'push'],
                 ],
                 'rules' => ['required', 'array'],
             ],
