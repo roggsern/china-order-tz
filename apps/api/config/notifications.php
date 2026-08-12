@@ -117,9 +117,24 @@ return [
     ],
 
     'push' => [
+        // Wave 6B implements Expo only. Other drivers remain unsupported.
         // firebase | onesignal | expo
-        'driver' => env('NOTIFICATION_PUSH_DRIVER', 'firebase'),
+        'driver' => env('NOTIFICATION_PUSH_DRIVER', 'expo'),
         'configured' => (bool) env('NOTIFICATION_PUSH_CONFIGURED', false),
+
+        /*
+        | Expo Push API — https://exp.host/--/api/v2/push/send
+        | Access token is optional unless enhanced push security is enabled
+        | in the Expo/EAS dashboard (Bearer required after that).
+        */
+        'expo' => [
+            'url' => env('EXPO_PUSH_URL', 'https://exp.host/--/api/v2/push/send'),
+            'access_token' => env('EXPO_ACCESS_TOKEN'),
+            'timeout' => (int) env('EXPO_PUSH_TIMEOUT', 10),
+            'connect_timeout' => (int) env('EXPO_PUSH_CONNECT_TIMEOUT', 5),
+            // Official Expo batch ceiling is 100 messages per request.
+            'batch_size' => (int) env('EXPO_PUSH_BATCH_SIZE', 100),
+        ],
     ],
 
 ];

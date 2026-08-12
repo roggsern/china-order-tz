@@ -4,8 +4,11 @@ namespace App\Providers;
 
 use App\Events\Audit\NotificationConfigurationUpdatedAudit;
 use App\Listeners\Audit\RecordActivityLog;
+use App\Services\Devices\ResolveActiveExpoPushTokens;
 use App\Services\Notifications\ChannelProviderRegistry;
 use App\Services\Notifications\Contracts\NotificationChannelInterface;
+use App\Services\Notifications\Expo\ExpoPushClient;
+use App\Services\Notifications\Expo\ExpoPushMessageBuilder;
 use App\Services\Notifications\NotificationConfigurationResolver;
 use App\Services\Notifications\NotificationConfigurationService;
 use App\Services\Notifications\NotificationDispatcher;
@@ -37,6 +40,9 @@ class NotificationServiceProvider extends ServiceProvider
         $this->app->singleton(EmailNotificationProvider::class);
         $this->app->singleton(WhatsAppNotificationProvider::class);
         $this->app->singleton(SMSNotificationProvider::class);
+        $this->app->singleton(ResolveActiveExpoPushTokens::class);
+        $this->app->singleton(ExpoPushMessageBuilder::class);
+        $this->app->singleton(ExpoPushClient::class);
         $this->app->singleton(PushNotificationProvider::class);
 
         $this->app->singleton(ChannelProviderRegistry::class, function ($app): ChannelProviderRegistry {
