@@ -64,8 +64,34 @@ describe('mapOrderListItem', () => {
       currency: 'TZS',
     });
     expect(order?.preview?.primaryItem?.name).toBe('Gown');
+    expect(order?.preview?.primaryItem?.imageUrl).toBe(
+      'https://cdn.example/gown.jpg',
+    );
     expect(order?.progress?.currentLabel).toBe('Order confirmed');
     expect(order?.canCancel).toBeNull();
+  });
+
+  it('absolutizes production-shaped relative storage image_url for list cards', () => {
+    const order = mapOrderListItem({
+      id: 'ord-rel',
+      order_number: 'COTZ-REL',
+      status: 'paid',
+      preview: {
+        item_count: 1,
+        total_quantity: 1,
+        primary_item: {
+          name: 'Tie-Front Blouse',
+          image_url: '/storage/products/blouse.jpg',
+          quantity: 1,
+        },
+        extra_items: 0,
+      },
+    });
+
+    expect(order?.preview?.primaryItem?.imageUrl).toMatch(
+      /\/storage\/products\/blouse\.jpg$/,
+    );
+    expect(order?.preview?.primaryItem?.imageUrl?.startsWith('http')).toBe(true);
   });
 
   it('reads can_cancel only when the server provides it', () => {
@@ -144,6 +170,7 @@ describe('mapOrderDetail', () => {
           unit_price: '80000.00',
           line_total: '80000.00',
           currency: 'TZS',
+          product_image_snapshot: 'https://cdn.example/sneakers.jpg',
         },
       ],
       summary: {
@@ -179,6 +206,7 @@ describe('mapOrderDetail', () => {
       variantName: 'Red / 42',
       quantity: 1,
       lineTotal: '80000.00',
+      imageUrl: 'https://cdn.example/sneakers.jpg',
     });
     expect(detail.items[0]?.attributes).toEqual([
       { attribute: 'Color', value: 'Red' },
@@ -188,6 +216,26 @@ describe('mapOrderDetail', () => {
     expect(detail.payment?.paymentStatus).toBe('paid');
     expect(detail.payment?.reference).toBe('COTZ-PAY-9');
     expect(detail.shipment?.status).toBe('Being prepared');
+  });
+
+  it('absolutizes detail product_image_snapshot relative storage paths', () => {
+    const detail = mapOrderDetail({
+      id: 'ord-rel',
+      order_number: 'COTZ-REL',
+      status: 'paid',
+      items: [
+        {
+          id: 'line-rel',
+          product_name: 'Blouse',
+          quantity: 1,
+          product_image_snapshot: '/storage/products/blouse.jpg',
+        },
+      ],
+      summary: { grand_total: '1000' },
+    });
+
+    expect(detail.items[0]?.imageUrl).toMatch(/\/storage\/products\/blouse\.jpg$/);
+    expect(detail.items[0]?.imageUrl?.startsWith('http')).toBe(true);
   });
 });
 

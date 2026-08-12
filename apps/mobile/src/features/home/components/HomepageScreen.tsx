@@ -58,8 +58,8 @@ export function HomepageScreen() {
       {empty ? (
         <EmptyState
           title="Start shopping"
-          message="Browse products for this shopping journey, or switch journey above."
-          actionLabel="Browse products"
+          message="Shop products for this shopping journey, or switch journey above."
+          actionLabel="Shop products"
           onActionPress={() => router.push('/(app)/(tabs)/browse')}
           style={styles.empty}
         />

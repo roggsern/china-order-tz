@@ -8,6 +8,16 @@ export type CatalogImage = {
   altText?: string | null;
 };
 
+/** Product-level catalog video from CustomerProductDetailResource `videos[]`. */
+export type CatalogProductVideo = {
+  id: string;
+  url: string;
+  thumbnailUrl: string | null;
+  title: string | null;
+  altText: string | null;
+  sortOrder: number;
+};
+
 export type CatalogCategory = {
   id: string;
   name: string;
@@ -65,19 +75,6 @@ export type CatalogProductVariant = {
   primaryImageUrl?: string | null;
 };
 
-export type CatalogProductDetail = CatalogProductCard & {
-  description?: string | null;
-  images: CatalogImage[];
-  variants: CatalogProductVariant[];
-  requiresChinaShipping?: boolean | null;
-  shippingPrices?: {
-    air: string | number | null;
-    sea: string | number | null;
-  } | null;
-  averageRating?: number | null;
-  reviewCount?: number | null;
-};
-
 export type ProductConfigurationAttributeValue = {
   id: string;
   value: string;
@@ -90,6 +87,10 @@ export type ProductConfigurationAttribute = {
   id: string;
   name: string;
   slug: string;
+  /** Server attribute type (e.g. color) — used for visual media preview only. */
+  type?: string | null;
+  /** Server is_visual flag — used for visual media preview only. */
+  isVisual?: boolean;
   isRequired: boolean;
   participatesInConfiguration: boolean;
   values: ProductConfigurationAttributeValue[];
@@ -101,8 +102,34 @@ export type ProductConfigurationRow = {
   attributeValueIds: string[];
   price?: string | number | null;
   inStock?: boolean | null;
+  /** Server stock quantity when present — media preview sort only. */
+  stock?: number | null;
   name?: string | null;
   sku?: string | null;
+};
+
+/** Specification row from product detail `specifications[]`. */
+export type ProductSpecification = {
+  label: string;
+  value: string;
+};
+
+export type CatalogProductDetail = CatalogProductCard & {
+  description?: string | null;
+  images: CatalogImage[];
+  /** Active catalog videos from detail API — never invented client-side. */
+  videos: CatalogProductVideo[];
+  variants: CatalogProductVariant[];
+  requiresChinaShipping?: boolean | null;
+  shippingPrices?: {
+    air: string | number | null;
+    sea: string | number | null;
+  } | null;
+  averageRating?: number | null;
+  reviewCount?: number | null;
+  specifications?: ProductSpecification[];
+  weight?: string | number | null;
+  dimensions?: string | null;
 };
 
 /**

@@ -100,6 +100,7 @@ export function mapCategoryCard(data: unknown, itemId?: string): HomepageCategor
   const image =
     mediaUrl(record.image) ??
     mediaUrl(record.primary_image) ??
+    stringField(record, 'image') ??
     stringField(record, 'image_url') ??
     stringField(record, 'logo_url');
   return {

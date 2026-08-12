@@ -73,30 +73,47 @@ export function pruneUnassignedConfigurationSelections(
   return next;
 }
 
+function galleryForConfigurationId(
+  variants: CatalogProductVariant[],
+  configurationId: string | null,
+): CatalogImage[] {
+  const id = configurationId?.trim() || null;
+  if (!id) return [];
+  const variant = variants.find((row) => row.id === id);
+  if (!variant) return [];
+  const variantImages = (variant.images ?? []).filter((image) =>
+    Boolean(image.url),
+  );
+  if (variantImages.length > 0) return variantImages;
+  if (variant.primaryImageUrl) return [{ url: variant.primaryImageUrl }];
+  return [];
+}
+
 /**
- * PDP gallery images for the current matched sell unit.
- * Precedence: variant images → variant primary → product gallery.
+ * PDP gallery images — web `resolveStorefrontGalleryImages` precedence:
+ * 1) commercial matched configuration media (when complete)
+ * 2) partial media-preview configuration media (gallery only)
+ * 3) product-level gallery
+ *
+ * Partial preview never becomes sell-unit authority.
  */
 export function resolvePdpGalleryImages(params: {
   productImages: CatalogImage[];
   variants: CatalogProductVariant[];
   matchedConfigurationId?: string | null;
+  mediaPreviewConfigurationId?: string | null;
 }): CatalogImage[] {
-  const matchedId = params.matchedConfigurationId?.trim() || null;
-  if (matchedId) {
-    const variant = params.variants.find((row) => row.id === matchedId);
-    if (variant) {
-      const variantImages = (variant.images ?? []).filter((image) =>
-        Boolean(image.url),
-      );
-      if (variantImages.length > 0) {
-        return variantImages;
-      }
-      if (variant.primaryImageUrl) {
-        return [{ url: variant.primaryImageUrl }];
-      }
-    }
-  }
+  const matchedImages = galleryForConfigurationId(
+    params.variants,
+    params.matchedConfigurationId ?? null,
+  );
+  if (matchedImages.length > 0) return matchedImages;
+
+  const previewImages = galleryForConfigurationId(
+    params.variants,
+    params.mediaPreviewConfigurationId ?? null,
+  );
+  if (previewImages.length > 0) return previewImages;
 
   return (params.productImages ?? []).filter((image) => Boolean(image.url));
 }

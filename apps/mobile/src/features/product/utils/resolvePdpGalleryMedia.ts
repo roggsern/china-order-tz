@@ -1,0 +1,57 @@
+import type { CatalogImage, CatalogProductVideo } from '../models/types';
+import { isSupportedProductVideoUrl } from './productVideo';
+import { resolvePdpGalleryImages } from './configurationOptions';
+
+export type ProductGalleryImageSlide = {
+  kind: 'image';
+  key: string;
+  image: CatalogImage;
+};
+
+export type ProductGalleryVideoSlide = {
+  kind: 'video';
+  key: string;
+  video: CatalogProductVideo;
+};
+
+export type ProductGalleryMediaSlide =
+  | ProductGalleryImageSlide
+  | ProductGalleryVideoSlide;
+
+/**
+ * PDP gallery slides: variant/preview-aware images first, supported videos last.
+ * Matches web `getProductGalleryMedia` ordering.
+ */
+export function resolvePdpGalleryMedia(params: {
+  productImages: CatalogImage[];
+  variants: Parameters<typeof resolvePdpGalleryImages>[0]['variants'];
+  matchedConfigurationId?: string | null;
+  mediaPreviewConfigurationId?: string | null;
+  videos?: CatalogProductVideo[] | null;
+}): ProductGalleryMediaSlide[] {
+  const images = resolvePdpGalleryImages({
+    productImages: params.productImages,
+    variants: params.variants,
+    matchedConfigurationId: params.matchedConfigurationId,
+    mediaPreviewConfigurationId: params.mediaPreviewConfigurationId,
+  });
+
+  const imageSlides: ProductGalleryImageSlide[] = images.map((image, index) => ({
+    kind: 'image',
+    key: `image-${image.id ?? image.url ?? index}`,
+    image,
+  }));
+
+  const videos = (params.videos ?? [])
+    .filter((video) => isSupportedProductVideoUrl(video.url))
+    .slice()
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+
+  const videoSlides: ProductGalleryVideoSlide[] = videos.map((video) => ({
+    kind: 'video',
+    key: `video-${video.id}`,
+    video,
+  }));
+
+  return [...imageSlides, ...videoSlides];
+}

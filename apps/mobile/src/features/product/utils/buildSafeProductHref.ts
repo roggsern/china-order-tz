@@ -2,7 +2,7 @@ import type { CommerceJourney } from '@/src/shared/types/commerce';
 import { buildProductHref } from '../map/journeyRoutes';
 
 export const TZ_STORE_REQUIRED_MESSAGE =
-  'This TZ product is missing store information. Open Browse, choose a store, and pick the product from that store.';
+  'This TZ product is missing store information. Open Shop, choose a store, and pick the product from that store.';
 
 export const TZ_JOURNEY_AMBIGUOUS_MESSAGE =
   'This product could not be opened because its marketplace is unclear.';

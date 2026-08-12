@@ -81,14 +81,15 @@ export default function TabsLayout() {
         name="search"
         options={{
           title: 'Search',
+          href: null,
           header: () => <BrandTabHeader title="Search" />,
         }}
       />
       <Tabs.Screen
         name="browse"
         options={{
-          title: 'Browse',
-          header: () => <BrandTabHeader title="Browse" />,
+          title: 'Shop',
+          header: () => <BrandTabHeader title="Shop" />,
         }}
       />
       <Tabs.Screen

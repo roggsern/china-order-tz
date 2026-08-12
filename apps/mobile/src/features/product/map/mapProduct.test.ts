@@ -70,6 +70,7 @@ describe('mapProductDetail', () => {
     });
 
     expect(detail?.images).toHaveLength(1);
+    expect(detail?.videos).toEqual([]);
     expect(detail?.variants[0]).toMatchObject({
       id: 'v1',
       price: 110,
@@ -80,6 +81,44 @@ describe('mapProductDetail', () => {
       { id: 'vi', url: 'https://cdn.example/v1.jpg', altText: 'Var' },
     ]);
     expect(detail?.shippingPrices).toEqual({ air: 20, sea: 10 });
+  });
+
+  it('maps supported product videos and drops unsupported urls', () => {
+    const detail = mapProductDetail({
+      id: 'p2',
+      slug: 'with-video',
+      name: 'With video',
+      price: 100,
+      images: [],
+      videos: [
+        {
+          id: 'vid-1',
+          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          thumbnail_url: 'https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
+          title: 'Walkthrough',
+          alt_text: 'See it',
+          sort_order: 2,
+        },
+        {
+          id: 'vid-bad',
+          url: 'https://example.com/file.mp4',
+          sort_order: 1,
+        },
+        {
+          id: 'vid-0',
+          url: 'https://vimeo.com/123456789',
+          title: 'Vimeo clip',
+          sort_order: 0,
+        },
+      ],
+    });
+
+    expect(detail?.videos.map((video) => video.id)).toEqual(['vid-0', 'vid-1']);
+    expect(detail?.videos[1]).toMatchObject({
+      id: 'vid-1',
+      title: 'Walkthrough',
+      thumbnailUrl: 'https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
+    });
   });
 });
 
@@ -146,6 +185,7 @@ describe('mapProductConfiguration', () => {
         attributeValueIds: ['val-black', 'val-128'],
         price: '12000',
         inStock: true,
+        stock: null,
         name: null,
         sku: null,
       },

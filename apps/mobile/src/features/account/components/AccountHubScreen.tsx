@@ -17,16 +17,16 @@ import { CustomerIdentityCard } from './CustomerIdentityCard';
 import {
   buildAccountWebUrl,
   openAccountWebPage,
-  type AccountWebPath,
 } from '../utils/accountWebLinks';
+import { resolveAccountCapability } from '../utils/accountCapabilities';
 
-async function openWebOrAlert(path: AccountWebPath) {
+async function openSettingsWebOrAlert() {
   try {
-    await openAccountWebPage(path);
+    await openAccountWebPage('/account');
   } catch {
     Alert.alert(
       'Unable to open',
-      `Visit ${buildAccountWebUrl(path)} in your browser to continue.`,
+      `Visit ${buildAccountWebUrl('/account')} in your browser to continue.`,
     );
   }
 }
@@ -43,6 +43,13 @@ export function AccountHubScreen() {
       router.replace('/(auth)/login');
     } finally {
       setBusy(false);
+    }
+  }
+
+  function openNative(capabilityId: Parameters<typeof resolveAccountCapability>[0]) {
+    const capability = resolveAccountCapability(capabilityId);
+    if (capability.decision === 'native' && capability.nativeHref) {
+      router.push(capability.nativeHref as never);
     }
   }
 
@@ -77,36 +84,43 @@ export function AccountHubScreen() {
 
         <Text style={styles.sectionLabel}>Account</Text>
         <AccountMenuCard
-          title="Addresses"
-          description="Delivery addresses are managed securely on the storefront."
-          badge="Web"
-          onPress={() => void openWebOrAlert('/account/addresses')}
+          title="Edit profile"
+          description="Update your name and phone in the app."
+          onPress={() => openNative('profile')}
         />
         <AccountMenuCard
-          title="Security"
-          description="Password and account security settings on the website."
-          badge="Web"
-          onPress={() => void openWebOrAlert('/account/security')}
+          title="Addresses"
+          description="Manage delivery addresses in the app."
+          onPress={() => openNative('addresses')}
+        />
+        <AccountMenuCard
+          title="Wishlist"
+          description="Products you saved while shopping."
+          onPress={() => openNative('wishlist')}
+        />
+        <AccountMenuCard
+          title="Change password"
+          description="Update your password. You will sign in again after a successful change."
+          onPress={() => openNative('security_password')}
         />
         <AccountMenuCard
           title="Notifications"
-          description="Review notification preferences on the storefront."
-          badge="Web"
-          onPress={() => void openWebOrAlert('/account/notifications')}
+          description="Read your account and order notifications."
+          onPress={() => openNative('notifications')}
         />
 
         <Text style={styles.sectionLabel}>Help</Text>
         <AccountMenuCard
           title="Support"
-          description="Open storefront support — contact details come from the website."
-          badge="Web"
-          onPress={() => void openWebOrAlert('/account/support')}
+          description="Create and follow support tickets in the app."
+          onPress={() => openNative('support')}
         />
         <AccountMenuCard
-          title="Settings"
-          description="Browse the storefront account page for additional preferences."
-          badge="Web"
-          onPress={() => void openWebOrAlert('/account')}
+          title="More on website"
+          description="Additional account preferences on chinaordertz.com."
+          badge="Website"
+          secondary
+          onPress={() => void openSettingsWebOrAlert()}
         />
 
         <TrustStrip
@@ -120,9 +134,9 @@ export function AccountHubScreen() {
             },
             {
               id: 'support',
-              title: 'Official storefront support',
+              title: 'Native where APIs exist',
               description:
-                'Support entry points open the configured CHINA ORDER TZ website only.',
+                'Website handoffs remain only for capabilities without a mobile API.',
             },
           ]}
         />

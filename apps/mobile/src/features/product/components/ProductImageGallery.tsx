@@ -1,45 +1,236 @@
 import { useState } from 'react';
 import {
+  ActivityIndicator,
   Dimensions,
+  Linking,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
+import { WebView } from 'react-native-webview';
+import { env } from '@/src/core/config/env';
 import { colors, radius, spacing, typography } from '@/src/shared/theme';
-import type { CatalogImage } from '../models/types';
+import type { CatalogProductVideo } from '../models/types';
+import {
+  PRODUCT_GALLERY_ASPECT_RATIO,
+  resolveProductGalleryImageFit,
+} from '../utils/productGalleryFit';
+import {
+  buildProductVideoEmbedHtml,
+  resolveProductVideoEmbedUrl,
+  resolveProductVideoExternalUrl,
+  resolveProductVideoLabel,
+  resolveProductVideoThumbnailUrl,
+} from '../utils/productVideo';
+import type { ProductGalleryMediaSlide } from '../utils/resolvePdpGalleryMedia';
 
 type Props = {
-  images: CatalogImage[];
+  slides: ProductGalleryMediaSlide[];
 };
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const GALLERY_HEIGHT = 320;
+const imageFit = resolveProductGalleryImageFit();
 
-export function ProductImageGallery({ images }: Props) {
-  const validImages = images.filter((image) => Boolean(image.url));
-  const galleryKey = validImages.map((image) => image.url).join('|');
+/** Valid HTTPS origin for YouTube Error 153 Referer / baseUrl identity. */
+function videoEmbedOrigin(): string {
+  return env.webAppBaseUrl.replace(/\/$/, '') || 'https://chinaordertz.com';
+}
+
+function VideoSlide({ video }: { video: CatalogProductVideo }) {
+  const [playing, setPlaying] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const origin = videoEmbedOrigin();
+  const embedUrl = resolveProductVideoEmbedUrl(video.url, { origin });
+  const externalUrl = resolveProductVideoExternalUrl(video.url);
+  const thumbnailUrl = resolveProductVideoThumbnailUrl({
+    url: video.url,
+    thumbnailUrl: video.thumbnailUrl,
+  });
+  const label = resolveProductVideoLabel({
+    title: video.title,
+    altText: video.altText,
+  });
+
+  async function openExternal() {
+    if (!externalUrl) return;
+    try {
+      await Linking.openURL(externalUrl);
+    } catch {
+      // Secondary only — keep inline surface.
+    }
+  }
+
+  if (!embedUrl) {
+    return (
+      <View style={[styles.slide, styles.videoUnavailable]}>
+        <Text style={styles.unavailableText}>Video unavailable</Text>
+        {externalUrl ? (
+          <Pressable
+            onPress={() => void openExternal()}
+            style={styles.retryButton}
+            accessibilityRole="button"
+          >
+            <Text style={styles.retryText}>Watch on provider</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    );
+  }
+
+  if (failed) {
+    return (
+      <View style={[styles.slide, styles.videoUnavailable]}>
+        <Text style={styles.unavailableText}>
+          Inline playback is unavailable for this video.
+        </Text>
+        {externalUrl ? (
+          <Pressable
+            onPress={() => void openExternal()}
+            style={styles.retryButton}
+            accessibilityRole="button"
+          >
+            <Text style={styles.retryText}>Watch on YouTube</Text>
+          </Pressable>
+        ) : null}
+        <Pressable
+          onPress={() => {
+            setFailed(false);
+            setPlaying(true);
+            setLoading(true);
+          }}
+          style={styles.retryButton}
+          accessibilityRole="button"
+        >
+          <Text style={styles.retryText}>Retry inline</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (playing) {
+    const html = buildProductVideoEmbedHtml({
+      embedUrl: `${embedUrl}${embedUrl.includes('?') ? '&' : '?'}autoplay=1`,
+      title: label,
+    });
+    return (
+      <View style={styles.slide}>
+        <WebView
+          source={{
+            html,
+            baseUrl: `${origin}/`,
+          }}
+          style={styles.webview}
+          allowsInlineMediaPlayback
+          mediaPlaybackRequiresUserAction={false}
+          onLoadStart={() => setLoading(true)}
+          onLoadEnd={() => setLoading(false)}
+          onError={() => {
+            setFailed(true);
+            setPlaying(false);
+            setLoading(false);
+          }}
+          onHttpError={() => {
+            setFailed(true);
+            setPlaying(false);
+            setLoading(false);
+          }}
+          originWhitelist={['https://*', 'http://*']}
+          setSupportMultipleWindows={false}
+          javaScriptEnabled
+          domStorageEnabled
+          allowsFullscreenVideo
+          accessibilityLabel={label}
+        />
+        {loading ? (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator color={colors.primary} />
+          </View>
+        ) : null}
+        <View style={styles.playerChrome}>
+          <Pressable
+            style={styles.pauseChip}
+            onPress={() => setPlaying(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Pause video"
+          >
+            <Ionicons name="pause" size={16} color={colors.onPrimary} />
+          </Pressable>
+          {externalUrl ? (
+            <Pressable
+              style={styles.externalChip}
+              onPress={() => void openExternal()}
+              accessibilityRole="button"
+              accessibilityLabel="Watch on YouTube"
+            >
+              <Text style={styles.externalChipText}>Open externally</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      style={styles.slide}
+      onPress={() => {
+        setPlaying(true);
+        setLoading(true);
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={`Play ${label}`}
+    >
+      {thumbnailUrl ? (
+        <Image
+          source={{ uri: thumbnailUrl }}
+          style={styles.poster}
+          contentFit="cover"
+        />
+      ) : (
+        <View style={[styles.poster, styles.posterFallback]}>
+          <Text style={styles.posterFallbackText}>Video</Text>
+        </View>
+      )}
+      <View style={styles.playOverlay}>
+        <View style={styles.playButton}>
+          <Ionicons name="play" size={28} color={colors.text} />
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+/**
+ * Premium 1:1 PDP media gallery — images contain (full product), videos inline.
+ * Does not autoplay with sound; swipe remains horizontal paging.
+ */
+export function ProductImageGallery({ slides }: Props) {
+  const galleryKey = slides.map((slide) => slide.key).join('|');
   const [scrollState, setScrollState] = useState({ galleryKey, index: 0 });
   const index =
     scrollState.galleryKey === galleryKey
-      ? Math.min(scrollState.index, Math.max(0, validImages.length - 1))
+      ? Math.min(scrollState.index, Math.max(0, slides.length - 1))
       : 0;
 
   function onScrollEnd(event: NativeSyntheticEvent<NativeScrollEvent>) {
     const next = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
     setScrollState({
       galleryKey,
-      index: Math.max(0, Math.min(next, validImages.length - 1)),
+      index: Math.max(0, Math.min(next, slides.length - 1)),
     });
   }
 
-  if (validImages.length === 0) {
+  if (slides.length === 0) {
     return (
       <View
-        style={[styles.slide, styles.placeholder]}
+        style={[styles.frame, styles.placeholder]}
         accessibilityLabel="No product image"
       >
         <Text style={styles.placeholderEyebrow}>CHINA ORDER TZ</Text>
@@ -49,7 +240,7 @@ export function ProductImageGallery({ images }: Props) {
   }
 
   return (
-    <View style={styles.wrap}>
+    <View style={styles.frame}>
       <ScrollView
         key={galleryKey}
         horizontal
@@ -58,22 +249,35 @@ export function ProductImageGallery({ images }: Props) {
         onMomentumScrollEnd={onScrollEnd}
         decelerationRate="fast"
       >
-        {validImages.map((image, imageIndex) => (
-          <Image
-            key={image.id ?? `${image.url}-${imageIndex}`}
-            source={{ uri: image.url ?? undefined }}
-            style={styles.image}
-            contentFit="cover"
-            transition={200}
-            accessibilityLabel={image.altText ?? 'Product image'}
-          />
-        ))}
+        {slides.map((slide, slideIndex) => {
+          if (slide.kind === 'video') {
+            return (
+              <VideoSlide
+                // Remount when leaving the slide so playback cannot continue off-screen.
+                key={`${slide.key}-${slideIndex === index ? 'active' : 'idle'}`}
+                video={slide.video}
+              />
+            );
+          }
+
+          return (
+            <View key={slide.key} style={styles.slide}>
+              <Image
+                source={{ uri: slide.image.url ?? undefined }}
+                style={styles.image}
+                contentFit={imageFit}
+                transition={200}
+                accessibilityLabel={slide.image.altText ?? 'Product image'}
+              />
+            </View>
+          );
+        })}
       </ScrollView>
-      {validImages.length > 1 ? (
+      {slides.length > 1 ? (
         <View style={styles.dots}>
-          {validImages.map((image, i) => (
+          {slides.map((slide, i) => (
             <View
-              key={image.id ?? `dot-${i}`}
+              key={`dot-${slide.key}`}
               style={[styles.dot, i === index ? styles.dotActive : null]}
             />
           ))}
@@ -84,17 +288,111 @@ export function ProductImageGallery({ images }: Props) {
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    backgroundColor: colors.backgroundMuted,
+  frame: {
+    width: SCREEN_WIDTH,
+    aspectRatio: PRODUCT_GALLERY_ASPECT_RATIO,
+    backgroundColor: colors.surfaceCream,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
   slide: {
     width: SCREEN_WIDTH,
-    height: GALLERY_HEIGHT,
+    aspectRatio: PRODUCT_GALLERY_ASPECT_RATIO,
+    backgroundColor: colors.surfaceCream,
   },
   image: {
-    width: SCREEN_WIDTH,
-    height: GALLERY_HEIGHT,
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.surfaceCream,
+  },
+  poster: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.text,
+  },
+  posterFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.backgroundMuted,
+  },
+  posterFallbackText: {
+    ...typography.label,
+    color: colors.textMuted,
+  },
+  playOverlay: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.28)',
+  },
+  playButton: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingLeft: 3,
+  },
+  webview: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  playerChrome: {
+    position: 'absolute',
+    top: spacing.md,
+    left: spacing.md,
+    right: spacing.md,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  pauseChip: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  externalChip: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  externalChipText: {
+    ...typography.caption,
+    color: colors.onPrimary,
+    fontWeight: '600',
+  },
+  videoUnavailable: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.backgroundMuted,
+    paddingHorizontal: spacing.lg,
+  },
+  unavailableText: {
+    ...typography.body,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+  retryButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.md,
+    backgroundColor: colors.primaryMuted,
+  },
+  retryText: {
+    ...typography.label,
+    color: colors.primaryPressed,
   },
   placeholder: {
     alignItems: 'center',
@@ -125,7 +423,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: radius.full,
-    backgroundColor: 'rgba(255,255,255,0.55)',
+    backgroundColor: 'rgba(0,0,0,0.25)',
   },
   dotActive: {
     width: 16,

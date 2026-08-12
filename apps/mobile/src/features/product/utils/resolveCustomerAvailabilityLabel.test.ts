@@ -10,6 +10,7 @@ const product: CatalogProductDetail = {
   price: '25000',
   imageUrl: null,
   images: [],
+  videos: [],
   variants: [],
   availabilityStatus: 'available',
   inStock: true,

@@ -2,6 +2,8 @@
 
 Canonical admin catalog product/variant image upload policy.
 
+**Presentation / aspect guidance:** see [`product-media-presentation-spec.md`](./product-media-presentation-spec.md) (Wave 5B).
+
 ## Supported formats
 
 - JPG / JPEG

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { clearSessionOnAuthFailure, useAuthStore } from '@/src/core/auth';
@@ -9,19 +9,19 @@ import {
   useAddToCartMutation,
 } from '@/src/features/cart';
 import { journeyLabelFromChannel } from '@/src/features/cart/utils/journeyLabel';
-import { formatCustomerMoney } from '@/src/shared/utils/formatCustomerMoney';
-import { normalizeCustomerPlainText } from '@/src/shared/utils/normalizeCustomerPlainText';
+import { useWishlistToggle } from '@/src/features/wishlist';
 import type { CommerceJourney } from '@/src/shared/types/commerce';
 import { Badge } from '@/src/shared/ui/Badge';
-import { Card } from '@/src/shared/ui/Card';
 import { PriceText } from '@/src/shared/ui/PriceText';
 import { ScreenContainer } from '@/src/shared/ui/ScreenContainer';
+import { SecondaryButton } from '@/src/shared/ui/SecondaryButton';
 import { TrustStrip, type TrustStripItem } from '@/src/shared/ui/TrustStrip';
 import { colors, spacing, typography } from '@/src/shared/theme';
 import {
   useProductDetail,
   useProductQuote,
 } from '../hooks/useCatalogQueries';
+import { useProductReviews } from '../hooks/useProductReviews';
 import { buildProductHref } from '../map/journeyRoutes';
 import type {
   CatalogProductDetail,
@@ -30,12 +30,17 @@ import type {
   ProductDetailParams,
 } from '../models/types';
 import { canAddToCart, resolveAddToCartGate } from '../utils/canAddToCart';
-import { resolvePdpGalleryImages } from '../utils/configurationOptions';
 import { resolveDisplayedProductPrice } from '../utils/resolveDisplayedProductPrice';
+import {
+  buildVariantGalleries,
+  resolveMediaPreviewConfigurationId,
+} from '../utils/resolveMediaPreview';
+import { resolvePdpGalleryMedia } from '../utils/resolvePdpGalleryMedia';
 import { AddToCartButton } from './AddToCartButton';
 import { ProductAvailabilityBadge } from './ProductAvailabilityBadge';
 import { ProductConfigurationSelector } from './ProductConfigurationSelector';
 import { ProductImageGallery } from './ProductImageGallery';
+import { ProductInfoSections } from './ProductInfoSections';
 import { ProductVariantsList } from './ProductVariantsList';
 import { QuantitySelector } from './QuantitySelector';
 import {
@@ -126,6 +131,10 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
 
   const detailQuery = useProductDetail(detailParams);
   const addToCartMutation = useAddToCartMutation();
+  const productId = detailQuery.data?.id ?? null;
+  const productSlug = detailQuery.data?.slug ?? null;
+  const reviewsQuery = useProductReviews(productSlug);
+  const wishlist = useWishlistToggle(productId);
 
   const matchedForQuote =
     configStatus.loading || configStatus.error
@@ -153,7 +162,15 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
     [],
   );
 
-  if (journey === 'TZ_LOCAL' && !storeSlug) {
+  const variantGalleries = useMemo(
+    () => buildVariantGalleries(detailQuery.data?.variants ?? []),
+    [detailQuery.data?.variants],
+  );
+
+  const storeRequired = journey === 'TZ_LOCAL' && !storeSlug;
+  const product = detailQuery.data;
+
+  if (storeRequired) {
     return (
       <CatalogEmptyState
         title="Store required"
@@ -175,7 +192,6 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
     );
   }
 
-  const product = detailQuery.data;
   if (!product) {
     return (
       <CatalogEmptyState title="Product not found" message="No product data returned." />
@@ -203,17 +219,30 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
     quoteLoading: Boolean(matchedForQuote) && quoteQuery.isFetching,
   });
 
-  const galleryImages = resolvePdpGalleryImages({
+  const exactConfigurationId =
+    !configStatus.loading && configuration?.isComplete
+      ? configuration.matchedConfigurationId
+      : null;
+
+  const mediaPreviewConfigurationId =
+    !configStatus.loading && configuration
+      ? resolveMediaPreviewConfigurationId({
+          configurations: configuration.configurations,
+          selections,
+          attributes: configuration.attributes,
+          variantGalleries,
+          exactConfigurationId,
+        })
+      : null;
+
+  const gallerySlides = resolvePdpGalleryMedia({
     productImages: detailProduct.images,
     variants: detailProduct.variants,
-    matchedConfigurationId:
-      !configStatus.loading && configuration?.isComplete
-        ? configuration.matchedConfigurationId
-        : null,
+    matchedConfigurationId: exactConfigurationId,
+    mediaPreviewConfigurationId,
+    videos: detailProduct.videos,
   });
 
-  const productId = detailProduct.id;
-  const productSlug = detailProduct.slug;
   const matchedConfigurationId = configuration?.matchedConfigurationId ?? null;
   const showSale =
     detailProduct.compareAtPrice != null &&
@@ -242,7 +271,7 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
     setFeedback(null);
 
     const returnHref = buildProductHref({
-      slug: productSlug,
+      slug: detailProduct.slug,
       journey,
       storeSlug,
     });
@@ -254,7 +283,7 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
 
     try {
       await addToCartMutation.mutateAsync({
-        productId,
+        productId: detailProduct.id,
         productVariantId: hasConfigurations ? matchedConfigurationId : null,
         quantity,
         journey,
@@ -278,7 +307,7 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
 
   return (
     <ScreenContainer padded={false} scroll contentStyle={styles.content}>
-      <ProductImageGallery images={galleryImages} />
+      <ProductImageGallery slides={gallerySlides} />
 
       <View style={styles.body}>
         <View style={styles.badgeRow}>
@@ -326,35 +355,6 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
           configuration={configuration}
         />
 
-        {detailProduct.description ? (
-          <Card elevated={false} style={styles.descriptionCard}>
-            <Text style={styles.sectionTitle}>About this product</Text>
-            <Text style={styles.description}>
-              {normalizeCustomerPlainText(detailProduct.description)}
-            </Text>
-          </Card>
-        ) : null}
-
-        {detailProduct.shippingPrices &&
-        (detailProduct.shippingPrices.air != null ||
-          detailProduct.shippingPrices.sea != null) ? (
-          <Card elevated={false} style={styles.shippingCard}>
-            <Text style={styles.sectionTitle}>Shipping options</Text>
-            {detailProduct.shippingPrices.air != null ? (
-              <Text style={styles.meta}>
-                Air:{' '}
-                {formatCustomerMoney(detailProduct.shippingPrices.air, 'TZS')}
-              </Text>
-            ) : null}
-            {detailProduct.shippingPrices.sea != null ? (
-              <Text style={styles.meta}>
-                Sea:{' '}
-                {formatCustomerMoney(detailProduct.shippingPrices.sea, 'TZS')}
-              </Text>
-            ) : null}
-          </Card>
-        ) : null}
-
         <ProductConfigurationSelector
           productKey={product.slug}
           selections={selections}
@@ -376,6 +376,21 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
           onPress={() => void handleAddToCart()}
         />
 
+        {wishlist.enabled ? (
+          <SecondaryButton
+            label={
+              wishlist.pending
+                ? 'Updating…'
+                : wishlist.inWishlist
+                  ? 'Saved to wishlist'
+                  : 'Add to wishlist'
+            }
+            onPress={() => void wishlist.toggle()}
+            disabled={wishlist.pending}
+            style={styles.wishlistBtn}
+          />
+        ) : null}
+
         {feedback ? (
           <Text
             style={
@@ -394,6 +409,14 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
         ) : null}
 
         <TrustStrip items={trustItems} />
+
+        <ProductInfoSections
+          product={detailProduct}
+          reviews={reviewsQuery.data ?? []}
+          reviewsLoading={reviewsQuery.isLoading}
+          reviewsError={reviewsQuery.isError}
+          onRetryReviews={() => void reviewsQuery.refetch()}
+        />
       </View>
     </ScreenContainer>
   );
@@ -434,29 +457,9 @@ const styles = StyleSheet.create({
     color: colors.textSubtle,
     fontWeight: '400',
   },
-  descriptionCard: {
-    marginTop: spacing.lg,
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-  },
-  shippingCard: {
-    marginTop: spacing.md,
-    backgroundColor: colors.backgroundMuted,
-    borderColor: colors.border,
-  },
-  sectionTitle: {
-    ...typography.label,
-    color: colors.text,
-    fontWeight: '700',
-    marginBottom: spacing.sm,
-  },
-  description: {
-    ...typography.body,
-    color: colors.text,
-  },
-  meta: {
-    ...typography.caption,
-    marginTop: spacing.xxs,
+  wishlistBtn: {
+    marginTop: spacing.sm,
+    alignSelf: 'stretch',
   },
   successText: {
     marginTop: spacing.md,

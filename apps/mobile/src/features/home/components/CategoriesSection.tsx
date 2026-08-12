@@ -6,6 +6,7 @@ import { useCatalogUiStore } from '@/src/features/product';
 import { SectionHeader } from '@/src/shared/ui/SectionHeader';
 import { colors, radius, spacing, typography } from '@/src/shared/theme';
 import type { HomepageCategoryCard } from '../models/types';
+import { resolveCategoryPresentation } from '../utils/categoryPresentation';
 
 type Props = {
   title?: string | null;
@@ -15,7 +16,8 @@ type Props = {
 
 /**
  * Category / collection discovery.
- * Deep-links China Browse with the selected category slug via catalogUiStore.
+ * Deep-links China Shop (browse route) with the selected category slug via catalogUiStore.
+ * Visual priority: server image when present → owned presentation artwork → generic artwork.
  */
 export function CategoriesSection({ title, subtitle, categories }: Props) {
   const setJourney = useJourneyStore((s) => s.setJourney);
@@ -36,34 +38,44 @@ export function CategoriesSection({ title, subtitle, categories }: Props) {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.rail}
       >
-        {categories.map((category) => (
-          <Pressable
-            key={category.id}
-            style={styles.tile}
-            onPress={() => {
-              setJourney('CHINA_IMPORT');
-              setSelectedChinaCategorySlug(category.slug);
-              router.push('/(app)/(tabs)/browse');
-            }}
-          >
-            {category.imageUrl ? (
-              <Image
-                source={{ uri: category.imageUrl }}
-                style={styles.image}
-                contentFit="cover"
-              />
-            ) : (
-              <View style={[styles.image, styles.fallback]}>
-                <Text style={styles.fallbackText}>
-                  {category.name.slice(0, 1).toUpperCase()}
-                </Text>
+        {categories.map((category) => {
+          const presentation = resolveCategoryPresentation({
+            slug: category.slug,
+            name: category.name,
+          });
+          return (
+            <Pressable
+              key={category.id}
+              style={styles.tile}
+              onPress={() => {
+                setJourney('CHINA_IMPORT');
+                setSelectedChinaCategorySlug(category.slug);
+                router.push('/(app)/(tabs)/browse');
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={category.name}
+            >
+              <View style={styles.imageFrame}>
+                {category.imageUrl ? (
+                  <Image
+                    source={{ uri: category.imageUrl }}
+                    style={styles.image}
+                    contentFit="cover"
+                  />
+                ) : (
+                  <Image
+                    source={presentation.artwork}
+                    style={styles.image}
+                    contentFit="cover"
+                  />
+                )}
               </View>
-            )}
-            <Text style={styles.name} numberOfLines={2}>
-              {category.name}
-            </Text>
-          </Pressable>
-        ))}
+              <Text style={styles.name} numberOfLines={2}>
+                {category.name}
+              </Text>
+            </Pressable>
+          );
+        })}
       </ScrollView>
     </View>
   );
@@ -72,22 +84,20 @@ export function CategoriesSection({ title, subtitle, categories }: Props) {
 const styles = StyleSheet.create({
   section: { marginBottom: spacing.xxl },
   rail: { paddingHorizontal: spacing.lg },
-  tile: { width: 104, marginRight: spacing.md },
-  image: {
-    width: 104,
-    height: 104,
+  tile: { width: 112, marginRight: spacing.md },
+  imageFrame: {
+    width: 112,
+    height: 112,
     borderRadius: radius.xl,
-    backgroundColor: colors.backgroundMuted,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceCream,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
     marginBottom: spacing.sm,
   },
-  fallback: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primaryMuted,
-  },
-  fallbackText: {
-    ...typography.heading,
-    color: colors.primaryPressed,
+  image: {
+    width: '100%',
+    height: '100%',
   },
   name: {
     ...typography.label,

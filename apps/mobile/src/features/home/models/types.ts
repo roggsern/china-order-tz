@@ -47,6 +47,8 @@ export type HomepageHeroSlide = {
   description?: string | null;
   desktop_media?: HomepageMedia | null;
   mobile_media?: HomepageMedia | null;
+  /** Bundled owned asset (require) — presentation fallback only. */
+  localImageSource?: number;
   primary_cta?: HomepageCta | null;
   secondary_cta?: HomepageCta | null;
   position: number;

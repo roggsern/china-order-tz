@@ -11,6 +11,7 @@ const product: CatalogProductDetail = {
   price: 1000,
   imageUrl: null,
   images: [],
+  videos: [],
   variants: [],
   isPurchasable: true,
   availabilityStatus: 'available',

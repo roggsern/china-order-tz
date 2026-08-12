@@ -101,7 +101,7 @@ export function OrdersListScreen() {
           <EmptyState
             title="No orders yet"
             message="When you complete a purchase, your orders will appear here."
-            actionLabel="Browse products"
+            actionLabel="Shop products"
             onActionPress={() => router.push('/(app)/(tabs)/browse')}
             style={styles.empty}
           />

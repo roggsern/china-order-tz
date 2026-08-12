@@ -37,6 +37,20 @@ export {
   pruneUnassignedConfigurationSelections,
   resolvePdpGalleryImages,
 } from './utils/configurationOptions';
+export { resolvePdpGalleryMedia } from './utils/resolvePdpGalleryMedia';
+export {
+  isSupportedProductVideoUrl,
+  resolveProductVideoEmbedUrl,
+} from './utils/productVideo';
+export {
+  resolveProductGalleryImageFit,
+  PRODUCT_GALLERY_ASPECT_RATIO,
+} from './utils/productGalleryFit';
+export {
+  resolveMediaPreviewConfigurationId,
+  buildVariantGalleries,
+  findVisualConfigurationAttribute,
+} from './utils/resolveMediaPreview';
 export { canAddToCart, resolveAddToCartGate } from './utils/canAddToCart';
 export type { AddToCartGate, AddToCartButtonLabel } from './utils/canAddToCart';
 export {

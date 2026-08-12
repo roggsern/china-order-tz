@@ -5,8 +5,13 @@ import { Card } from '@/src/shared/ui/Card';
 import { PriceText } from '@/src/shared/ui/PriceText';
 import { colors, spacing, typography } from '@/src/shared/theme';
 import { ContinuePaymentButton } from './ContinuePaymentButton';
+import { OrderThumbnail } from './OrderThumbnail';
 import type { OrderListItem } from '../models/types';
 import { isOrderPayableFromServer } from '../utils/isOrderPayable';
+import {
+  buildOrderListCardPresentation,
+  formatOrderListProductTitle,
+} from '../utils/orderCardPresentation';
 
 type Props = {
   order: OrderListItem;
@@ -14,55 +19,71 @@ type Props = {
 };
 
 export function OrderListCard({ order, onPress }: Props) {
-  const previewName = order.preview?.primaryItem?.name;
-  const extra = order.preview?.extraItems ?? 0;
+  const presentation = buildOrderListCardPresentation(order);
+  const productTitle = formatOrderListProductTitle(presentation);
   const offerContinuePayment = isOrderPayableFromServer(order);
 
   return (
     <Card elevated style={styles.card}>
       <Pressable onPress={onPress} accessibilityRole="button">
-        <View style={styles.row}>
-          <Text style={styles.orderNumber} numberOfLines={1}>
-            {order.orderNumber ?? order.id}
-          </Text>
-          {order.journeyLabel ? (
-            <Badge
-              label={order.journeyLabel}
-              tone={
-                order.journeyLabel.toLowerCase().includes('tanzania') ||
-                order.journeyLabel.toLowerCase().includes('tz')
-                  ? 'success'
-                  : 'brand'
-              }
+        <View style={styles.mainRow}>
+          <OrderThumbnail
+            imageUrl={presentation.imageUrl}
+            extraBadge={
+              presentation.isMultiItem ? presentation.extraItems : null
+            }
+            size={76}
+          />
+          <View style={styles.copy}>
+            {productTitle ? (
+              <Text style={styles.productName} numberOfLines={2}>
+                {productTitle}
+              </Text>
+            ) : (
+              <Text style={styles.productName} numberOfLines={2}>
+                Order items
+              </Text>
+            )}
+
+            <Text style={styles.orderNumber} numberOfLines={1}>
+              {presentation.orderNumber}
+            </Text>
+
+            <View style={styles.badgeRow}>
+              <Badge label={presentation.statusLabel} tone="neutral" />
+              {presentation.journeyLabel ? (
+                <Badge
+                  label={presentation.journeyLabel}
+                  tone={
+                    presentation.journeyLabel.toLowerCase().includes('tanzania') ||
+                    presentation.journeyLabel.toLowerCase().includes('tz')
+                      ? 'success'
+                      : 'brand'
+                  }
+                />
+              ) : null}
+            </View>
+
+            {presentation.createdAt ? (
+              <Text style={styles.meta}>
+                {formatCustomerDateTime(presentation.createdAt)}
+              </Text>
+            ) : null}
+
+            {presentation.paymentStatus ? (
+              <Text style={styles.meta}>
+                Payment: {presentation.paymentStatus}
+              </Text>
+            ) : null}
+
+            <PriceText
+              value={presentation.grandTotal}
+              currency={presentation.currency}
+              style={styles.total}
+              accessibilityLabelPrefix="Order total"
             />
-          ) : null}
+          </View>
         </View>
-
-        <Text style={styles.status}>
-          {order.statusLabel ?? order.status ?? 'Status unavailable'}
-        </Text>
-
-        {order.paymentStatus ? (
-          <Text style={styles.meta}>Payment: {order.paymentStatus}</Text>
-        ) : null}
-
-        {order.createdAt ? (
-          <Text style={styles.meta}>{formatCustomerDateTime(order.createdAt)}</Text>
-        ) : null}
-
-        {previewName ? (
-          <Text style={styles.preview} numberOfLines={1}>
-            {previewName}
-            {extra > 0 ? ` +${extra} more` : ''}
-          </Text>
-        ) : null}
-
-        <PriceText
-          value={order.grandTotal}
-          currency={order.currency ?? 'TZS'}
-          style={styles.total}
-          accessibilityLabelPrefix="Order total"
-        />
       </Pressable>
 
       <ContinuePaymentButton
@@ -78,23 +99,27 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     borderColor: colors.border,
   },
-  row: {
+  mainRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.md,
+    alignItems: 'flex-start',
+  },
+  copy: { flex: 1, minWidth: 0 },
+  productName: {
+    ...typography.bodyStrong,
+    color: colors.text,
   },
   orderNumber: {
-    ...typography.bodyStrong,
-    flex: 1,
-    color: colors.text,
+    marginTop: spacing.xxs,
+    ...typography.caption,
+    color: colors.textSecondary,
   },
-  status: {
+  badgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
     marginTop: spacing.sm,
-    ...typography.label,
-    color: colors.text,
   },
   meta: { marginTop: spacing.xs, ...typography.caption },
-  preview: { marginTop: spacing.sm, ...typography.caption, color: colors.textSecondary },
   total: { marginTop: spacing.sm, fontSize: 15 },
 });

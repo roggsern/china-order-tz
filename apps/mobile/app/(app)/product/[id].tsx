@@ -33,8 +33,8 @@ export default function ProductRoute() {
     return (
       <MissingRouteState
         title="Product unavailable"
-        message="This product link is missing. Browse the catalog to find products."
-        primaryLabel="Go to Browse"
+        message="This product link is missing. Open Shop to find products."
+        primaryLabel="Go to Shop"
         primaryHref="/(app)/(tabs)/browse"
       />
     );
@@ -45,10 +45,10 @@ export default function ProductRoute() {
       <View style={{ flex: 1, backgroundColor: '#fff' }}>
         <CatalogEmptyState
           title="Store context unavailable"
-          message="This TZ product could not be opened because its store is missing. Choose a store in Browse and open the product from that store. We never guess the store."
+          message="This TZ product could not be opened because its store is missing. Choose a store in Shop and open the product from that store. We never guess the store."
           actions={[
             {
-              label: 'Go to Browse',
+              label: 'Go to Shop',
               primary: true,
               onPress: () => router.replace('/(app)/(tabs)/browse'),
             },

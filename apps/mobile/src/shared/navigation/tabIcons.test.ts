@@ -1,4 +1,4 @@
-import { resolveTabIconName, TAB_ICON_NAMES } from './tabIcons';
+import { resolveTabIconName, TAB_ICON_NAMES, BOTTOM_TAB_ROUTES } from './tabIcons';
 
 describe('resolveTabIconName', () => {
   it('maps each primary tab to a release-safe Ionicons glyph', () => {
@@ -11,10 +11,17 @@ describe('resolveTabIconName', () => {
     expect(resolveTabIconName('account', false)).toBe('person-outline');
   });
 
-  it('covers all configured tab routes', () => {
+  it('covers configured tab routes including hidden Search', () => {
     expect(Object.keys(TAB_ICON_NAMES).sort()).toEqual(
       ['account', 'browse', 'cart', 'home', 'orders', 'search'].sort(),
     );
+    expect([...BOTTOM_TAB_ROUTES]).toEqual([
+      'home',
+      'browse',
+      'cart',
+      'orders',
+      'account',
+    ]);
   });
 
   it('falls back for unknown routes without leaving the icon undefined', () => {

@@ -12,6 +12,7 @@ const product = {
   price: '10000',
   imageUrl: null,
   images: [],
+  videos: [],
   variants: [],
   isPurchasable: true,
   availabilityStatus: 'available',

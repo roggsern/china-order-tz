@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { PriceText } from '@/src/shared/ui/PriceText';
 import { colors, spacing, typography } from '@/src/shared/theme';
 import type { OrderDetailItem } from '../models/types';
+import { OrderThumbnail } from './OrderThumbnail';
 
 type Props = {
   item: OrderDetailItem;
@@ -13,17 +14,29 @@ export function OrderItemRow({ item, currency }: Props) {
 
   return (
     <View style={styles.row}>
+      <OrderThumbnail imageUrl={item.imageUrl} size={64} />
       <View style={styles.main}>
-        <Text style={styles.name}>{item.productName}</Text>
+        <Text style={styles.name} numberOfLines={3}>
+          {item.productName}
+        </Text>
         {item.variantName ? (
-          <Text style={styles.meta}>{item.variantName}</Text>
+          <Text style={styles.meta} numberOfLines={2}>
+            {item.variantName}
+          </Text>
         ) : null}
         {item.attributes.map((attr) => (
-          <Text key={`${attr.attribute}:${attr.value}`} style={styles.meta}>
+          <Text
+            key={`${attr.attribute}:${attr.value}`}
+            style={styles.meta}
+            numberOfLines={1}
+          >
             {attr.attribute}: {attr.value}
           </Text>
         ))}
         <Text style={styles.meta}>Qty {item.quantity}</Text>
+        {item.deliveryStatus ? (
+          <Text style={styles.meta}>Status: {item.deliveryStatus}</Text>
+        ) : null}
       </View>
       <View style={styles.prices}>
         <PriceText
@@ -54,7 +67,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  main: { flex: 1 },
+  main: { flex: 1, minWidth: 0 },
   name: { ...typography.bodyStrong },
   meta: { marginTop: spacing.xxs, ...typography.caption },
   prices: { alignItems: 'flex-end', gap: spacing.xxs },

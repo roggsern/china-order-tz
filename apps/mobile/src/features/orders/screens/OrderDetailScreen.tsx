@@ -143,10 +143,26 @@ export function OrderDetailScreen({ orderId }: Props) {
 
       <OrderTimeline progress={order.progress} />
 
-      {order.shipment?.status ? (
+      {order.shipment &&
+      (order.shipment.status ||
+        order.shipment.statusLabel ||
+        order.shipment.trackingReference ||
+        order.shipment.carrierName) ? (
         <Card elevated={false} style={styles.shipmentBox}>
           <Text style={styles.section}>Shipment</Text>
-          <Text style={styles.meta}>{order.shipment.status}</Text>
+          {order.shipment.statusLabel || order.shipment.status ? (
+            <Text style={styles.meta}>
+              {order.shipment.statusLabel ?? order.shipment.status}
+            </Text>
+          ) : null}
+          {order.shipment.trackingReference ? (
+            <Text style={styles.meta}>
+              Tracking #: {order.shipment.trackingReference}
+            </Text>
+          ) : null}
+          {order.shipment.carrierName ? (
+            <Text style={styles.meta}>Carrier: {order.shipment.carrierName}</Text>
+          ) : null}
         </Card>
       ) : null}
 

@@ -3,14 +3,9 @@ import { env } from '@/src/core/config/env';
 
 /**
  * Customer account deep links on the merchant web storefront.
- * Built only from configured `webAppBaseUrl` — no invented contact details.
+ * Used only for capabilities without a safe authenticated mobile API.
  */
-export type AccountWebPath =
-  | '/account'
-  | '/account/addresses'
-  | '/account/security'
-  | '/account/support'
-  | '/account/notifications';
+export type AccountWebPath = '/account';
 
 export function buildAccountWebUrl(path: AccountWebPath): string {
   const base = env.webAppBaseUrl.replace(/\/$/, '');

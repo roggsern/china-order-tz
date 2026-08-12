@@ -27,6 +27,13 @@ function slideImageUrl(slide: HomepageHeroSlide): string | null {
   return slide.mobile_media?.url ?? slide.desktop_media?.url ?? null;
 }
 
+function journeyFallbackStyle(slideId: string) {
+  if (slideId.includes('tz')) {
+    return styles.imageFallbackTz;
+  }
+  return styles.imageFallbackChina;
+}
+
 /**
  * CMS-driven hero carousel with presentation fallback slides when needed.
  * CTA opens Browse for the currently selected journey.
@@ -67,7 +74,14 @@ export function HeroSection({ title, subtitle, slides }: Props) {
           const ctaLabel = slide.primary_cta?.label?.trim();
           return (
             <View key={slide.id} style={styles.slide}>
-              {imageUrl ? (
+              {slide.localImageSource ? (
+                <Image
+                  source={slide.localImageSource}
+                  style={styles.image}
+                  contentFit="cover"
+                  accessibilityLabel={slide.headline ?? 'Hero'}
+                />
+              ) : imageUrl ? (
                 <Image
                   source={{ uri: imageUrl }}
                   style={styles.image}
@@ -75,7 +89,12 @@ export function HeroSection({ title, subtitle, slides }: Props) {
                   accessibilityLabel={slide.headline ?? 'Hero'}
                 />
               ) : (
-                <View style={[styles.image, styles.imageFallback]} />
+                <View
+                  style={[
+                    styles.image,
+                    journeyFallbackStyle(slide.id),
+                  ]}
+                />
               )}
               <View style={styles.overlay}>
                 {slide.eyebrow_text ? (
@@ -154,6 +173,12 @@ const styles = StyleSheet.create({
   },
   imageFallback: {
     backgroundColor: colors.primaryMuted,
+  },
+  imageFallbackChina: {
+    backgroundColor: '#1c1917',
+  },
+  imageFallbackTz: {
+    backgroundColor: '#14532d',
   },
   overlay: {
     ...StyleSheet.absoluteFill,

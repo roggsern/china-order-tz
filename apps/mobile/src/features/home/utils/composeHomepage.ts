@@ -168,7 +168,7 @@ export function composeHomepageViewModel(params: {
       kind: 'FEATURED_CATEGORIES',
       key: 'live:categories',
       title: 'Shop by category',
-      subtitle: 'Browse China import departments',
+      subtitle: 'Shop China import departments',
       categories: live.categories,
     });
   }

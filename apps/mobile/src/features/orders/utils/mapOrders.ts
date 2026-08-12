@@ -16,6 +16,7 @@ import type {
   OrdersListPage,
 } from '../models/types';
 import { formatCustomerMoney } from '@/src/shared/utils/formatCustomerMoney';
+import { resolveOrderMediaUrl } from './resolveOrderMediaUrl';
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
@@ -96,7 +97,7 @@ function mapListPreview(raw: unknown): OrderListPreview | null {
     primaryItem: primaryRaw
       ? {
           name: stringField(primaryRaw, 'name') ?? 'Item',
-          imageUrl: stringField(primaryRaw, 'image_url'),
+          imageUrl: resolveOrderMediaUrl(stringField(primaryRaw, 'image_url')),
           quantity: numberField(primaryRaw, 'quantity') ?? 0,
         }
       : null,
@@ -233,9 +234,10 @@ export function mapOrderDetailItem(raw: unknown): OrderDetailItem | null {
       moneyField(data, 'line_total') ?? moneyField(data, 'subtotal'),
     currency:
       stringField(data, 'currency') ?? stringField(data, 'currency_snapshot'),
-    imageUrl:
+    imageUrl: resolveOrderMediaUrl(
       stringField(data, 'product_image_snapshot') ??
-      stringField(data, 'image_snapshot'),
+        stringField(data, 'image_snapshot'),
+    ),
     shippingMethod:
       stringField(data, 'shipping_method') ??
       stringField(data, 'shipping_mode_snapshot'),

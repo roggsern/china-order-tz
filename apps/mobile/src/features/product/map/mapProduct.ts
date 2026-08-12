@@ -5,6 +5,7 @@ import type {
   CatalogProductCard,
   CatalogProductDetail,
   CatalogProductVariant,
+  CatalogProductVideo,
   CatalogStore,
   ConfigurationSelections,
   ProductConfiguration,
@@ -14,6 +15,7 @@ import type {
   ProductListResult,
   ProductQuote,
 } from '../models/types';
+import { isSupportedProductVideoUrl } from '../utils/productVideo';
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
@@ -103,6 +105,26 @@ export function mapImage(raw: unknown): CatalogImage | null {
   };
 }
 
+export function mapProductVideo(raw: unknown): CatalogProductVideo | null {
+  const data = asRecord(raw);
+  const id = stringField(data, 'id');
+  const url = stringField(data, 'url');
+  if (!id || !url) return null;
+  if (!isSupportedProductVideoUrl(url)) return null;
+
+  return {
+    id,
+    url,
+    thumbnailUrl: stringField(data, 'thumbnail_url'),
+    title: stringField(data, 'title'),
+    altText: stringField(data, 'alt_text'),
+    sortOrder:
+      typeof data.sort_order === 'number' && Number.isFinite(data.sort_order)
+        ? data.sort_order
+        : 0,
+  };
+}
+
 /** Map CustomerProductCardResource — no client-side price/inventory math. */
 export function mapProductCard(raw: unknown): CatalogProductCard | null {
   const data = asRecord(raw);
@@ -184,6 +206,12 @@ export function mapProductDetail(raw: unknown): CatalogProductDetail | null {
     images.push({ url: card.imageUrl });
   }
 
+  const videosRaw = Array.isArray(data.videos) ? data.videos : [];
+  const videos = videosRaw
+    .map(mapProductVideo)
+    .filter((video): video is CatalogProductVideo => video !== null)
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+
   const variantsRaw = Array.isArray(data.variants)
     ? data.variants
     : Array.isArray(data.configurations)
@@ -192,10 +220,29 @@ export function mapProductDetail(raw: unknown): CatalogProductDetail | null {
 
   const shipping = asRecord(data.shipping_prices);
 
+  const specificationsRaw = Array.isArray(data.specifications)
+    ? data.specifications
+    : [];
+  const specifications = specificationsRaw
+    .map((row) => {
+      const item = asRecord(row);
+      const label =
+        stringField(item, 'label') ??
+        stringField(item, 'name') ??
+        stringField(item, 'key');
+      const value =
+        stringField(item, 'value') ??
+        (typeof item.value === 'number' ? String(item.value) : null);
+      if (!label || !value) return null;
+      return { label, value };
+    })
+    .filter((row): row is { label: string; value: string } => row !== null);
+
   return {
     ...card,
     description: stringField(data, 'description') ?? card.shortDescription,
     images,
+    videos,
     variants: variantsRaw
       .map(mapVariant)
       .filter((variant): variant is CatalogProductVariant => variant !== null),
@@ -207,6 +254,12 @@ export function mapProductDetail(raw: unknown): CatalogProductDetail | null {
     averageRating:
       typeof data.average_rating === 'number' ? data.average_rating : null,
     reviewCount: typeof data.review_count === 'number' ? data.review_count : null,
+    specifications,
+    weight:
+      typeof data.weight === 'number' || typeof data.weight === 'string'
+        ? data.weight
+        : null,
+    dimensions: stringField(data, 'dimensions'),
   };
 }
 
@@ -241,6 +294,8 @@ export function mapConfigurationAttribute(
     id,
     name,
     slug,
+    type: stringField(data, 'type'),
+    isVisual: boolField(data, 'is_visual') ?? undefined,
     isRequired: boolField(data, 'is_required') ?? false,
     participatesInConfiguration:
       boolField(data, 'participates_in_configuration') ?? true,
@@ -308,6 +363,7 @@ export function mapConfigurationRow(raw: unknown): ProductConfigurationRow | nul
     attributeValueIds,
     price: moneyField(data, 'price'),
     inStock: boolField(data, 'in_stock'),
+    stock: typeof data.stock === 'number' ? data.stock : null,
     name: stringField(data, 'name'),
     sku: stringField(data, 'sku'),
   };

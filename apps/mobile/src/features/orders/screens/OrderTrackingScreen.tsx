@@ -3,6 +3,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  View,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/src/core/auth';
@@ -11,8 +12,10 @@ import { Card } from '@/src/shared/ui/Card';
 import { EmptyState } from '@/src/shared/ui/EmptyState';
 import { ScreenLoadingState } from '@/src/shared/ui/ScreenLoadingState';
 import { colors, spacing, typography } from '@/src/shared/theme';
+import { OrderThumbnail } from '../components/OrderThumbnail';
 import { OrderTimeline } from '../components/OrderTimeline';
-import { useOrderTracking } from '../hooks/useOrders';
+import { useOrderDetail, useOrderTracking } from '../hooks/useOrders';
+import { collectOrderItemImageUrls } from '../utils/orderCardPresentation';
 import { getOrderErrorMessage } from '../utils/orderErrorMessage';
 import { buildOrderTrackingHref } from '../utils/orderRoutes';
 
@@ -23,6 +26,7 @@ type Props = {
 export function OrderTrackingScreen({ orderId }: Props) {
   const authStatus = useAuthStore((s) => s.status);
   const trackingQuery = useOrderTracking(orderId);
+  const detailQuery = useOrderDetail(orderId);
 
   if (authStatus !== 'authenticated') {
     return (
@@ -70,14 +74,23 @@ export function OrderTrackingScreen({ orderId }: Props) {
       ? tracking.unifiedTimeline
       : tracking.timeline;
 
+  const hasTimeline = events.length > 0 || Boolean(tracking.progress?.steps?.length);
+  const itemImages = collectOrderItemImageUrls(detailQuery.data?.items);
+  const detailItems = detailQuery.data?.items ?? [];
+
   return (
     <ScrollView
       style={styles.screen}
       contentContainerStyle={styles.content}
       refreshControl={
         <RefreshControl
-          refreshing={trackingQuery.isRefetching}
-          onRefresh={() => void trackingQuery.refetch()}
+          refreshing={
+            trackingQuery.isRefetching || detailQuery.isRefetching
+          }
+          onRefresh={() => {
+            void trackingQuery.refetch();
+            void detailQuery.refetch();
+          }}
           tintColor={colors.primary}
           colors={[colors.primary]}
         />
@@ -95,6 +108,32 @@ export function OrderTrackingScreen({ orderId }: Props) {
           tracking.currentStatus ??
           'Status unavailable'}
       </Text>
+
+      {detailItems.length > 0 ? (
+        <Card elevated={false} style={styles.box}>
+          <Text style={styles.section}>Items in this order</Text>
+          <View style={styles.itemRow}>
+            {detailItems.slice(0, 4).map((item) => (
+              <View key={item.id} style={styles.itemChip}>
+                <OrderThumbnail imageUrl={item.imageUrl} size={56} />
+                <Text style={styles.itemName} numberOfLines={2}>
+                  {item.productName}
+                </Text>
+              </View>
+            ))}
+            {detailItems.length > 4 ? (
+              <Text style={styles.moreItems}>
+                +{detailItems.length - 4} more
+              </Text>
+            ) : null}
+          </View>
+          {itemImages.length === 0 ? (
+            <Text style={styles.line}>
+              Product images are not available for these line items yet.
+            </Text>
+          ) : null}
+        </Card>
+      ) : null}
 
       {tracking.shipment ? (
         <Card elevated={false} style={styles.box}>
@@ -121,13 +160,29 @@ export function OrderTrackingScreen({ orderId }: Props) {
             </Text>
           ) : null}
         </Card>
-      ) : null}
+      ) : (
+        <Card elevated={false} style={styles.box}>
+          <Text style={styles.section}>Shipment</Text>
+          <Text style={styles.line}>
+            No shipment tracking has been published for this order yet.
+          </Text>
+        </Card>
+      )}
 
-      <OrderTimeline
-        title="Timeline"
-        progress={tracking.progress}
-        events={events}
-      />
+      {hasTimeline ? (
+        <OrderTimeline
+          title="Timeline"
+          progress={tracking.progress}
+          events={events}
+        />
+      ) : (
+        <Card elevated={false} style={styles.box}>
+          <Text style={styles.section}>Timeline</Text>
+          <Text style={styles.line}>
+            Tracking events will appear here when the server publishes them.
+          </Text>
+        </Card>
+      )}
     </ScrollView>
   );
 }
@@ -165,4 +220,24 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   line: { ...typography.body, marginBottom: spacing.xs },
+  itemRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  itemChip: {
+    width: 72,
+    gap: spacing.xxs,
+  },
+  itemName: {
+    ...typography.caption,
+    fontSize: 11,
+    color: colors.textSecondary,
+  },
+  moreItems: {
+    ...typography.caption,
+    alignSelf: 'center',
+    color: colors.textMuted,
+  },
 });

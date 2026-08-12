@@ -89,6 +89,60 @@ export default function AppLayout() {
           header: () => <StackAppHeader title="Tracking" />,
         }}
       />
+      <Stack.Screen
+        name="account/addresses"
+        options={{
+          header: () => <StackAppHeader title="Addresses" />,
+        }}
+      />
+      <Stack.Screen
+        name="account/address-form"
+        options={{
+          header: () => <StackAppHeader title="Address" />,
+        }}
+      />
+      <Stack.Screen
+        name="account/wishlist"
+        options={{
+          header: () => <StackAppHeader title="Wishlist" />,
+        }}
+      />
+      <Stack.Screen
+        name="account/profile"
+        options={{
+          header: () => <StackAppHeader title="Profile" />,
+        }}
+      />
+      <Stack.Screen
+        name="account/change-password"
+        options={{
+          header: () => <StackAppHeader title="Password" />,
+        }}
+      />
+      <Stack.Screen
+        name="account/notifications"
+        options={{
+          header: () => <StackAppHeader title="Notifications" />,
+        }}
+      />
+      <Stack.Screen
+        name="account/support/index"
+        options={{
+          header: () => <StackAppHeader title="Support" />,
+        }}
+      />
+      <Stack.Screen
+        name="account/support/[id]"
+        options={{
+          header: () => <StackAppHeader title="Ticket" />,
+        }}
+      />
+      <Stack.Screen
+        name="account/support-new"
+        options={{
+          header: () => <StackAppHeader title="New ticket" />,
+        }}
+      />
     </Stack>
   );
 }

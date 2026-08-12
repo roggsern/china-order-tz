@@ -4,8 +4,12 @@ import type {
   HomepageTrustItem,
 } from '../models/types';
 
+const chinaHero = require('../../../../assets/images/hero/order-from-china-mobile.webp');
+const tzHero = require('../../../../assets/images/hero/buy-from-tz-mobile.webp');
+
 /**
  * Presentation-only hero slides (aligned with web seed commercial copy).
+ * Uses owned CHINA ORDER TZ hero WebPs copied from apps/web/public/images/hero.
  * No product IDs, prices, or inventory — CTA targets Browse for the active journey.
  */
 export function buildPresentationHeroSlides(
@@ -25,6 +29,7 @@ export function buildPresentationHeroSlides(
           label: 'Explore TZ Stores',
           value: 'browse',
         },
+        localImageSource: tzHero,
         position: 0,
       },
     ];
@@ -43,6 +48,7 @@ export function buildPresentationHeroSlides(
         label: 'Explore China Catalog',
         value: 'browse',
       },
+      localImageSource: chinaHero,
       position: 0,
     },
   ];
