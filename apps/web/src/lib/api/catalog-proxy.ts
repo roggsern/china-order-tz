@@ -9,6 +9,10 @@ export function catalogProductShowUpstreamUrl(apiUrl: string, slug: string): str
   return `${apiUrl}/api/v1/products/${encodeURIComponent(slug.trim())}`;
 }
 
+export function catalogProductCheckoutSummaryUpstreamUrl(apiUrl: string, slug: string): string {
+  return `${apiUrl}/api/v1/products/${encodeURIComponent(slug.trim())}/checkout-summary`;
+}
+
 export function catalogProductConfigurationUpstreamUrl(
   apiUrl: string,
   slug: string,
@@ -51,6 +55,34 @@ export async function proxyCatalogProductShow(slug: string): Promise<NextRespons
   }
 
   const upstream = await fetch(catalogProductShowUpstreamUrl(apiUrl, trimmedSlug), {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  });
+
+  return proxyCatalogJsonResponse(upstream);
+}
+
+export async function proxyCatalogProductCheckoutSummary(slug: string): Promise<NextResponse> {
+  const trimmedSlug = slug.trim();
+
+  if (!trimmedSlug) {
+    return NextResponse.json(
+      { success: false, message: "Product slug is required." },
+      { status: 422 },
+    );
+  }
+
+  const apiUrl = resolveCatalogProxyApiUrl();
+
+  if (!apiUrl) {
+    return NextResponse.json(
+      { success: false, message: "API URL is not configured." },
+      { status: 500 },
+    );
+  }
+
+  const upstream = await fetch(catalogProductCheckoutSummaryUpstreamUrl(apiUrl, trimmedSlug), {
     method: "GET",
     headers: { Accept: "application/json" },
     cache: "no-store",
@@ -146,6 +178,13 @@ export function buildCatalogProductShowBffPath(slug: string): string {
   const trimmedSlug = slug.trim();
   const params = new URLSearchParams({ slug: trimmedSlug });
   return `/api/catalog/products?${params.toString()}`;
+}
+
+/** Client-side BFF path for checkout validation summary (listing-grade, not PDP). */
+export function buildCatalogProductCheckoutSummaryBffPath(slug: string): string {
+  const trimmedSlug = slug.trim();
+  const params = new URLSearchParams({ slug: trimmedSlug });
+  return `/api/catalog/products/checkout-summary?${params.toString()}`;
 }
 
 /** Client-side BFF path for product configuration schema. */

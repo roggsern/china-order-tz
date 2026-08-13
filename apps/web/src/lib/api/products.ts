@@ -1,4 +1,4 @@
-import { buildCatalogProductShowBffPath } from "@/lib/api/catalog-proxy";
+import { buildCatalogProductShowBffPath, buildCatalogProductCheckoutSummaryBffPath } from "@/lib/api/catalog-proxy";
 import { getApiUrl } from "@/lib/config/env";
 
 export type ApiCatalogCategory = {
@@ -330,6 +330,34 @@ export async function getProduct(slug: string): Promise<ApiCatalogProductDetail>
   const payload = await fetchCatalogJson<CatalogItemResponse<ApiCatalogProductDetail>>(
     `/products/${encodeURIComponent(trimmedSlug)}`,
   );
+
+  if (!payload.data) {
+    throw new CatalogApiError("Product not found.", 404);
+  }
+
+  return payload.data;
+}
+
+/** Listing-grade product card for checkout validation — not PDP. */
+export async function getProductCheckoutSummary(slug: string): Promise<ApiCatalogProductCard> {
+  const trimmedSlug = slug.trim();
+
+  if (!trimmedSlug) {
+    throw new CatalogApiError("Product slug is required.", 422);
+  }
+
+  const response = await fetch(buildCatalogProductCheckoutSummaryBffPath(trimmedSlug), {
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  });
+
+  const payload = (await response.json()) as CatalogItemResponse<ApiCatalogProductCard> & {
+    message?: string;
+  };
+
+  if (!response.ok) {
+    throw new CatalogApiError(payload.message ?? "Unable to load catalog data.", response.status);
+  }
 
   if (!payload.data) {
     throw new CatalogApiError("Product not found.", 404);

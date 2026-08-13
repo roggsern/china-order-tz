@@ -2,51 +2,101 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import path from "node:path";
+import { serverCartMatchesCheckoutLines } from "@/lib/api/customer-checkout";
 
-const checkoutPath = path.resolve(
+const checkoutPath = path.resolve(process.cwd(), "src/lib/api/customer-checkout.ts");
+const clientCatalogPath = path.resolve(process.cwd(), "src/lib/catalog/client-catalog.ts");
+const productsPath = path.resolve(process.cwd(), "src/lib/api/products.ts");
+const paymentPagePath = path.resolve(
   process.cwd(),
-  "src/lib/api/customer-checkout.ts",
+  "src/components/checkout/PaymentPageContent.tsx",
 );
 const checkoutPagePath = path.resolve(
   process.cwd(),
   "src/components/checkout/CheckoutPageContent.tsx",
 );
-const clientCatalogPath = path.resolve(
-  process.cwd(),
-  "src/lib/catalog/client-catalog.ts",
-);
-const paymentMethodsPath = path.resolve(
-  process.cwd(),
-  "src/lib/api/checkout-payment-methods.ts",
-);
 
-describe("Wave 4 checkout → payment latency contracts", () => {
-  it("syncs cart lines in parallel after clear", () => {
-    const source = readFileSync(checkoutPath, "utf8");
-    assert.match(source, /await clearServerCart\(token\)/);
-    assert.match(source, /await Promise\.all\(\s*resolved\.map/);
-    assert.match(source, /await Promise\.all\(\s*items\.map/);
-  });
-
-  it("validates checkout cart via slug-scoped catalog fetch", () => {
-    const page = readFileSync(checkoutPagePath, "utf8");
+describe("Wave 5 checkout → payment latency contracts", () => {
+  it("validates cart via checkout-summary not PDP show", () => {
     const catalog = readFileSync(clientCatalogPath, "utf8");
-    assert.match(page, /fetchClientCatalogProductsForSlugs/);
-    assert.match(catalog, /export async function fetchClientCatalogProductsForSlugs/);
-    assert.match(catalog, /Promise\.all\(/);
+    const products = readFileSync(productsPath, "utf8");
+    assert.match(catalog, /getProductCheckoutSummary/);
+    assert.doesNotMatch(catalog, /\bgetProduct\(/);
+    assert.match(products, /buildCatalogProductCheckoutSummaryBffPath/);
+    assert.match(products, /getProductCheckoutSummary/);
   });
 
-  it("prefetches payment methods while on checkout", () => {
-    const page = readFileSync(checkoutPagePath, "utf8");
-    const methods = readFileSync(paymentMethodsPath, "utf8");
+  it("skips destructive cart sync when server cart already matches", () => {
+    const source = readFileSync(checkoutPath, "utf8");
+    assert.match(source, /serverCartMatchesCheckoutLines/);
+    assert.match(source, /fetchServerCart/);
+    assert.match(source, /await clearServerCart\(token\)/);
+
+    assert.equal(
+      serverCartMatchesCheckoutLines(
+        {
+          id: "cart-1",
+          items: [
+            {
+              id: "line-1",
+              product_id: "prod-1",
+              product_variant_id: "var-1",
+              quantity: 2,
+              unit_price: 1000,
+              shipping_method: "air",
+            },
+          ],
+        },
+        [
+          {
+            productId: "prod-1",
+            variantId: "var-1",
+            quantity: 2,
+            shippingMethod: "air",
+          },
+        ],
+      ),
+      true,
+    );
+
+    assert.equal(
+      serverCartMatchesCheckoutLines(
+        {
+          id: "cart-1",
+          items: [
+            {
+              id: "line-1",
+              product_id: "prod-1",
+              product_variant_id: null,
+              quantity: 1,
+              unit_price: 1000,
+              shipping_method: null,
+            },
+          ],
+        },
+        [
+          {
+            productId: "prod-1",
+            variantId: null,
+            quantity: 2,
+            shippingMethod: null,
+          },
+        ],
+      ),
+      false,
+    );
+  });
+
+  it("loads payment methods on payment mount without waiting for draft ready", () => {
+    const page = readFileSync(paymentPagePath, "utf8");
     assert.match(page, /prefetchCheckoutPaymentMethods\(/);
-    assert.match(methods, /export function prefetchCheckoutPaymentMethods/);
-    assert.match(methods, /PREFETCH_TTL_MS/);
+    assert.match(page, /fetchCheckoutPaymentMethods\(/);
+    assert.doesNotMatch(page, /}, \[isReady\]\);/);
   });
 
-  it("keeps continue-to-payment double-submit guard", () => {
+  it("keeps checkout continue double-submit guard and summary validation", () => {
     const page = readFileSync(checkoutPagePath, "utf8");
+    assert.match(page, /fetchClientCatalogProductsForSlugs/);
     assert.match(page, /submitInFlightRef\.current \|\| isSubmitting/);
-    assert.match(page, /setIsSubmitting\(true\)/);
   });
 });

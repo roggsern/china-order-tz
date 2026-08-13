@@ -121,6 +121,23 @@ function evaluateCartItem(
     return { product, failureReason: reason };
   }
 
+  if (
+    product.isPurchasable === false ||
+    product.availabilityStatus === "unavailable"
+  ) {
+    const reason =
+      product.unavailabilityReason?.trim() ||
+      "Product is not purchasable right now";
+    logCartValidationCheck({
+      ...baseLog,
+      productName: product.name,
+      stockQuantity: product.stock ?? null,
+      validationFailureReason: reason,
+      passed: false,
+    });
+    return { product, failureReason: reason };
+  }
+
   const configurationId = item.configurationId ?? null;
   const lineStock = configurationId ? item.stock : product.stock;
 
@@ -192,6 +209,7 @@ export function validateCartAgainstCatalog(state: CartState, products: Product[]
       return [
         applyCartItemShipping({
           ...item,
+          catalogProductId: product.catalogProductId ?? item.catalogProductId,
           quantity: clampQuantity(item.quantity, item.stock),
           shippingMethod: item.shippingMethod,
         }),

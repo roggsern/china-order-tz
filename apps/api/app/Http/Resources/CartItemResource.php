@@ -26,10 +26,24 @@ class CartItemResource extends JsonResource
             : null;
 
         if (is_array($productPayload) && $this->product !== null) {
-            $mediaResolver = app(CustomerProductMediaResolver::class);
-            $variant = $this->relationLoaded('variant') ? $this->variant : null;
-            $productPayload['primary_image'] = $mediaResolver->resolvePrimary($this->product, $variant);
-            $productPayload['images'] = $mediaResolver->resolveGallery($this->product, $variant);
+            $hasProductMedia = $this->product->relationLoaded('media')
+                || $this->product->relationLoaded('images');
+            if ($hasProductMedia) {
+                $mediaResolver = app(CustomerProductMediaResolver::class);
+                $variant = $this->relationLoaded('variant') ? $this->variant : null;
+                $productPayload['primary_image'] = $mediaResolver->resolvePrimary($this->product, $variant);
+                $productPayload['images'] = $mediaResolver->resolveGallery($this->product, $variant);
+            }
+        }
+
+        $variantResource = null;
+        if ($this->relationLoaded('variant') && $this->variant !== null) {
+            $hasVariantPresentation = $this->variant->relationLoaded('catalogAttributeValues')
+                || $this->variant->relationLoaded('attributeValues')
+                || $this->variant->relationLoaded('media');
+            $variantResource = $hasVariantPresentation
+                ? new CustomerProductVariantResource($this->variant)
+                : new CustomerProductListingVariantResource($this->variant);
         }
 
         return [
@@ -48,7 +62,7 @@ class CartItemResource extends JsonResource
             'estimated_min_days' => $this->estimated_min_days,
             'estimated_max_days' => $this->estimated_max_days,
             'product' => $productPayload,
-            'variant' => new CustomerProductVariantResource($this->whenLoaded('variant')),
+            'variant' => $variantResource,
         ];
     }
 }

@@ -154,6 +154,14 @@ export function CheckoutPageContent() {
   }, [sessionReady, isLoggedIn]);
 
   useEffect(() => {
+    if (!sessionReady || !isLoggedIn || !shippingChoice) {
+      return;
+    }
+    // Warm again after shipping is chosen — still on checkout, before Continue.
+    prefetchCheckoutPaymentMethods();
+  }, [sessionReady, isLoggedIn, shippingChoice]);
+
+  useEffect(() => {
     if (checkoutTrackedRef.current) {
       return;
     }

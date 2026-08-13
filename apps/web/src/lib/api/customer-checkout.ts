@@ -1,5 +1,6 @@
 import { buildCatalogProductShowBffPath } from "@/lib/api/catalog-proxy";
 import { getCustomerApiToken } from "@/lib/api/customer-auth";
+import { fetchServerCart, type ServerCart } from "@/lib/api/customer-cart";
 import { normalizePhoneToE164 } from "@/lib/phone";
 import type { CartLineItem, CartState, CartTotals } from "@/lib/types/cart";
 import type { CustomerInformation, ShippingAddress } from "@/lib/types/checkout";
@@ -292,13 +293,54 @@ export async function clearServerCart(token?: string | null): Promise<void> {
   }
 }
 
+type DesiredCartLine = {
+  productId: string;
+  variantId: string | null;
+  quantity: number;
+  shippingMethod: "air" | "sea" | null;
+};
+
+function desiredCartLineKey(line: DesiredCartLine): string {
+  return [
+    line.productId,
+    line.variantId ?? "",
+    String(line.quantity),
+    line.shippingMethod ?? "",
+  ].join("|");
+}
+
+function serverCartLineKey(item: ServerCart["items"][number]): string {
+  const method =
+    item.shipping_method === "air" || item.shipping_method === "sea"
+      ? item.shipping_method
+      : null;
+  return [
+    item.product_id,
+    item.product_variant_id ?? "",
+    String(item.quantity),
+    method ?? "",
+  ].join("|");
+}
+
+/** True when the server cart already matches the checkout lines (skip clear + re-add). */
+export function serverCartMatchesCheckoutLines(
+  server: ServerCart,
+  desired: DesiredCartLine[],
+): boolean {
+  if ((server.items?.length ?? 0) !== desired.length) {
+    return false;
+  }
+
+  const desiredKeys = desired.map(desiredCartLineKey).sort();
+  const serverKeys = server.items.map(serverCartLineKey).sort();
+  return desiredKeys.every((key, index) => key === serverKeys[index]);
+}
+
 export async function syncCartToServer(
   items: CartLineItem[],
   token?: string | null,
 ): Promise<void> {
-  await clearServerCart(token);
-
-  // Resolve product IDs first (may hit catalog show), then POST cart lines in parallel.
+  // Resolve product IDs first (may hit catalog show), then compare / POST.
   const resolved = await Promise.all(
     items.map(async (item) => {
       const { productId, requiresChinaShipping } = await resolveCatalogProductForSync(item);
@@ -313,9 +355,35 @@ export async function syncCartToServer(
         );
       }
 
-      return { item, productId, shippingMethod };
+      return {
+        item,
+        productId,
+        shippingMethod: shippingMethod ?? null,
+        desired: {
+          productId,
+          variantId: item.configurationId?.trim() || null,
+          quantity: item.quantity,
+          shippingMethod: shippingMethod ?? null,
+        } satisfies DesiredCartLine,
+      };
     }),
   );
+
+  try {
+    const serverCart = await fetchServerCart(token);
+    if (
+      serverCartMatchesCheckoutLines(
+        serverCart,
+        resolved.map((row) => row.desired),
+      )
+    ) {
+      return;
+    }
+  } catch {
+    // Fall through to clear + re-add when cart GET fails.
+  }
+
+  await clearServerCart(token);
 
   await Promise.all(
     resolved.map(async ({ item, productId, shippingMethod }) => {

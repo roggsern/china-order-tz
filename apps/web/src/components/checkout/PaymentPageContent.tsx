@@ -29,6 +29,7 @@ import {
 import {
   CheckoutPaymentMethodsApiError,
   fetchCheckoutPaymentMethods,
+  prefetchCheckoutPaymentMethods,
 } from "@/lib/api/checkout-payment-methods";
 import {
   buildCheckoutPaymentOptions,
@@ -107,6 +108,40 @@ export function PaymentPageContent() {
   }, [trackPaymentStarted]);
 
   useEffect(() => {
+    prefetchCheckoutPaymentMethods();
+
+    let cancelled = false;
+    void (async () => {
+      setMethodsLoading(true);
+      setMethodsError(undefined);
+      try {
+        const availability = await fetchCheckoutPaymentMethods();
+        if (cancelled) return;
+        const options = buildCheckoutPaymentOptions(availability);
+        setPaymentOptions(options);
+        setPaymentMethod(resolveDefaultCheckoutPaymentCode(availability, options));
+      } catch (error) {
+        if (cancelled) return;
+        setPaymentOptions([]);
+        setPaymentMethod(null);
+        setMethodsError(
+          error instanceof CheckoutPaymentMethodsApiError
+            ? error.message
+            : "Unable to load payment methods.",
+        );
+      } finally {
+        if (!cancelled) {
+          setMethodsLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (mountedRef.current) {
       return;
     }
@@ -154,43 +189,6 @@ export function PaymentPageContent() {
     setDraft(savedDraft);
     setIsReady(true);
   }, [clearPurchasedItems, router]);
-
-  useEffect(() => {
-    if (!isReady) {
-      return;
-    }
-
-    let cancelled = false;
-
-    void (async () => {
-      setMethodsLoading(true);
-      setMethodsError(undefined);
-      try {
-        const availability = await fetchCheckoutPaymentMethods();
-        if (cancelled) return;
-        const options = buildCheckoutPaymentOptions(availability);
-        setPaymentOptions(options);
-        setPaymentMethod(resolveDefaultCheckoutPaymentCode(availability, options));
-      } catch (error) {
-        if (cancelled) return;
-        setPaymentOptions([]);
-        setPaymentMethod(null);
-        setMethodsError(
-          error instanceof CheckoutPaymentMethodsApiError
-            ? error.message
-            : "Unable to load payment methods.",
-        );
-      } finally {
-        if (!cancelled) {
-          setMethodsLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isReady]);
 
   const selectorOptions = useMemo(
     () =>

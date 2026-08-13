@@ -162,7 +162,7 @@ class CartService
             ]);
         }
 
-        return $this->loadCart($cart);
+        return $this->loadCart($cart, includeVariantPresentation: false);
     }
 
     public function updateItemQuantity(User $user, CartItem $item, int $quantity): Cart
@@ -185,7 +185,7 @@ class CartService
             'currency' => $resolved['currency'],
         ]);
 
-        return $this->loadCart($item->cart);
+        return $this->loadCart($item->cart, includeVariantPresentation: false);
     }
 
     public function removeItem(User $user, CartItem $item): Cart
@@ -196,7 +196,7 @@ class CartService
         $cart = $item->cart;
         $item->forceDelete();
 
-        return $this->loadCart($cart);
+        return $this->loadCart($cart, includeVariantPresentation: false);
     }
 
     public function clearCart(User $user): Cart
@@ -204,7 +204,7 @@ class CartService
         $cart = $this->resolveActiveCart($user);
         $cart->clear();
 
-        return $this->loadCart($cart);
+        return $this->loadCart($cart, includeVariantPresentation: false);
     }
 
     public function finalizeAfterOrder(User $user): void
@@ -224,8 +224,26 @@ class CartService
         return $cart->subtotal();
     }
 
-    public function loadCart(Cart $cart): Cart
+    /**
+     * @param  bool  $includeVariantPresentation  Full variant attrs/media for cart UI GET;
+     *                                            false for mutation responses used by checkout sync.
+     */
+    public function loadCart(Cart $cart, bool $includeVariantPresentation = true): Cart
     {
+        if (! $includeVariantPresentation) {
+            return $cart->load([
+                'items.product.commerceChannel',
+                'items.product.brand',
+                'items.product.category',
+                'items.product.shippingOptions',
+                'items.variant.product',
+                'items.variant.prices',
+                'items.variant.inventories',
+                'items.variant.inventory',
+                'items.variant.chinaCommercialStock',
+            ]);
+        }
+
         return $cart->load([
             'items.product.commerceChannel',
             'items.product.brand',

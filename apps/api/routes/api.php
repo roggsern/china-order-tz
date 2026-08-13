@@ -195,6 +195,7 @@ Route::get('/search/products', [MarketplaceSearchController::class, 'products'])
 
 Route::get('/products', [CustomerProductController::class, 'index']);
 Route::get('/products/{product:slug}', [CustomerProductController::class, 'show']);
+Route::get('/products/{product:slug}/checkout-summary', [CustomerProductController::class, 'checkoutSummary']);
 Route::get('/products/{product:slug}/reviews', [CustomerProductReviewController::class, 'index']);
 Route::get('/products/{product:slug}/configuration', [CustomerProductController::class, 'configuration']);
 Route::post('/products/{product:slug}/quote', [CustomerProductController::class, 'quote'])

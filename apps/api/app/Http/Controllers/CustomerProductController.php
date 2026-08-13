@@ -8,6 +8,7 @@ use App\Actions\CustomerCatalog\ListProductsAction;
 use App\Actions\CustomerCatalog\QuoteCustomerProductPriceAction;
 use App\Actions\CustomerCatalog\ShowCategoryAction;
 use App\Actions\CustomerCatalog\ShowProductAction;
+use App\Actions\CustomerCatalog\ShowProductCheckoutSummaryAction;
 use App\Actions\CustomerCatalog\ShowProductConfigurationAction;
 use App\Http\Requests\Customer\QuoteProductRequest;
 use App\Http\Requests\Customer\ShowProductConfigurationRequest;
@@ -63,6 +64,20 @@ class CustomerProductController extends Controller
         return response()->json([
             'success' => true,
             'data' => new CustomerProductDetailResource($action->handle($product)),
+        ]);
+    }
+
+    /**
+     * Slim card-shaped product for Continue-to-Payment client validation.
+     * Does not replace PDP show — keeps pricing/stock/purchasability authority.
+     */
+    public function checkoutSummary(
+        Product $product,
+        ShowProductCheckoutSummaryAction $action,
+    ): JsonResponse {
+        return response()->json([
+            'success' => true,
+            'data' => new CustomerProductCardResource($action->handle($product)),
         ]);
     }
 

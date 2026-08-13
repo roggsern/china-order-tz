@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   buildCatalogProductConfigurationBffPath,
+  buildCatalogProductCheckoutSummaryBffPath,
   buildCatalogProductQuoteBffPath,
   buildCatalogProductShowBffPath,
   buildStorefrontProductDetailPath,
+  catalogProductCheckoutSummaryUpstreamUrl,
   catalogProductConfigurationUpstreamUrl,
   catalogProductShowUpstreamUrl,
   parseCatalogProductConfigurationSlug,
@@ -19,6 +21,10 @@ describe("catalog product slug proxy helpers", () => {
     assert.equal(
       buildCatalogProductShowBffPath("tie-front-blouse"),
       "/api/catalog/products?slug=tie-front-blouse",
+    );
+    assert.equal(
+      buildCatalogProductCheckoutSummaryBffPath("tie-front-blouse"),
+      "/api/catalog/products/checkout-summary?slug=tie-front-blouse",
     );
     assert.equal(
       buildCatalogProductConfigurationBffPath("tie-front-blouse"),
@@ -38,6 +44,10 @@ describe("catalog product slug proxy helpers", () => {
     assert.equal(
       catalogProductShowUpstreamUrl("http://nginx", "tie-front-blouse"),
       "http://nginx/api/v1/products/tie-front-blouse",
+    );
+    assert.equal(
+      catalogProductCheckoutSummaryUpstreamUrl("http://nginx", "tie-front-blouse"),
+      "http://nginx/api/v1/products/tie-front-blouse/checkout-summary",
     );
     assert.equal(
       catalogProductConfigurationUpstreamUrl("http://nginx", "tie-front-blouse", "foo=bar"),
