@@ -12,6 +12,8 @@ use App\Models\PaymentTransaction;
 use App\Models\User;
 use App\Services\Payments\Orchestration\Contracts\PaymentProviderInterface;
 use App\Services\Payments\Orchestration\DTOs\PaymentInitiationRequest;
+use App\Services\Payments\Orchestration\DTOs\PaymentProviderResult;
+use App\Support\Http\ApiResponse;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -74,7 +76,7 @@ class PaymentOrchestrator
                     : strtolower((string) $existing->provider);
 
                 if ($existingProvider !== $providerKey) {
-                    throw ValidationException::withMessages([
+                    ApiResponse::throwCodedValidation([
                         'provider' => ['An active payment is already in progress for this order.'],
                     ]);
                 }
@@ -93,7 +95,7 @@ class PaymentOrchestrator
                 'status' => PaymentTransactionStatus::Pending,
             ]);
 
-            $result = $provider->initiate(new PaymentInitiationRequest(
+            $result = $this->initiateWithProvider($provider, new PaymentInitiationRequest(
                 order: $lockedOrder,
                 merchantReference: $merchantReference,
                 amount: $amount,
@@ -178,7 +180,16 @@ class PaymentOrchestrator
             : (string) $transaction->provider;
 
         $provider = $this->resolveProvider($providerKey);
-        $result = $provider->refresh($transaction);
+
+        try {
+            $result = $provider->refresh($transaction);
+        } catch (ValidationException $exception) {
+            if ($exception->response !== null) {
+                throw $exception;
+            }
+
+            ApiResponse::throwCodedValidation($exception->errors(), 'payment_failed');
+        }
 
         return $this->completionService->applyResult($transaction, $result);
     }
@@ -273,7 +284,7 @@ class PaymentOrchestrator
 
                 $order = $locked->order;
                 if ($order === null) {
-                    throw ValidationException::withMessages([
+                    ApiResponse::throwCodedValidation([
                         'payment' => ['Payment transaction has no order.'],
                     ]);
                 }
@@ -294,7 +305,7 @@ class PaymentOrchestrator
             });
 
             $provider = $this->resolveProvider(PaymentProvider::Nmb->value);
-            $result = $provider->initiate(new PaymentInitiationRequest(
+            $result = $this->initiateWithProvider($provider, new PaymentInitiationRequest(
                 order: $context['order'],
                 merchantReference: $context['merchant_reference'],
                 amount: $context['amount'],
@@ -304,11 +315,11 @@ class PaymentOrchestrator
             ));
 
             if (! $result->ok || ! filled($result->providerReference)) {
-                throw ValidationException::withMessages([
+                ApiResponse::throwCodedValidation([
                     'payment' => [
                         $result->message ?: 'Unable to create a fresh NMB Hosted Checkout session.',
                     ],
-                ]);
+                ], 'payment_failed');
             }
 
             return DB::transaction(function () use ($user, $context, $result): PaymentTransaction {
@@ -355,9 +366,9 @@ class PaymentOrchestrator
         $key = strtolower($key);
 
         if (! isset($this->providers[$key])) {
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'provider' => ["Payment provider [{$key}] is not registered."],
-            ]);
+            ], 'payment_failed');
         }
 
         return $this->providers[$key];
@@ -392,7 +403,7 @@ class PaymentOrchestrator
             : PaymentProvider::tryFrom(strtolower((string) $transaction->provider));
 
         if ($provider !== PaymentProvider::Nmb) {
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'provider' => ['Only NMB payment transactions can refresh a Hosted Checkout session.'],
             ]);
         }
@@ -408,7 +419,7 @@ class PaymentOrchestrator
         ], true);
 
         if (! $retryable) {
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'payment' => ['This payment can no longer refresh its Hosted Checkout session.'],
             ]);
         }
@@ -424,7 +435,7 @@ class PaymentOrchestrator
         ], true);
 
         if (! $payable) {
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'order' => ['Only pending payment orders can start a payment transaction.'],
             ]);
         }
@@ -433,7 +444,7 @@ class PaymentOrchestrator
 
         $option = $order->deliveryOption;
         if ($option === null || $option->delivery_type === null) {
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'shipping_choice' => ['Select a shipping option before payment.'],
             ]);
         }
@@ -447,12 +458,12 @@ class PaymentOrchestrator
 
         if ($choice === DeliveryType::CompanyShipping) {
             if ($option->shipping_method === null) {
-                throw ValidationException::withMessages([
+                ApiResponse::throwCodedValidation([
                     'shipping_method' => ['Company shipping requires air or sea before payment.'],
                 ]);
             }
             if (bccomp($shippingAmount, '0.00', 2) <= 0) {
-                throw ValidationException::withMessages([
+                ApiResponse::throwCodedValidation([
                     'shipping' => ['Company shipping total must be included before payment.'],
                 ]);
             }
@@ -463,15 +474,34 @@ class PaymentOrchestrator
             DeliveryType::SelfPickup,
             DeliveryType::NegotiatedDelivery,
         ], true) && bccomp($shippingAmount, '0.00', 2) !== 0) {
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'shipping' => ['This shipping choice must have zero company shipping charges.'],
             ]);
         }
 
         if (bccomp($grandTotal, '0.00', 2) <= 0) {
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'order' => ['Order amount must be greater than zero.'],
             ]);
+        }
+    }
+
+    /**
+     * Provider initiate with Contract v1 payment_failed on gateway ValidationException.
+     * Does not alter request/response payloads sent to the gateway.
+     */
+    private function initiateWithProvider(
+        PaymentProviderInterface $provider,
+        PaymentInitiationRequest $request,
+    ): PaymentProviderResult {
+        try {
+            return $provider->initiate($request);
+        } catch (ValidationException $exception) {
+            if ($exception->response !== null) {
+                throw $exception;
+            }
+
+            ApiResponse::throwCodedValidation($exception->errors(), 'payment_failed');
         }
     }
 }

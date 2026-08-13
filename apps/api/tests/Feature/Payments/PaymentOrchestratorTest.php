@@ -110,6 +110,8 @@ class PaymentOrchestratorTest extends TestCase
 
         $this->postJson("/api/v1/payments/start/{$order->id}")
             ->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'business_rule_violated')
             ->assertJsonValidationErrors(['order']);
     }
 
@@ -270,8 +272,12 @@ class PaymentOrchestratorTest extends TestCase
         $transactionId = $this->postJson("/api/v1/payments/start/{$order->id}")->json('data.id');
 
         Sanctum::actingAs($other);
-        $this->getJson("/api/v1/payments/{$transactionId}")->assertNotFound();
-        $this->postJson("/api/v1/payments/start/{$order->id}")->assertNotFound();
+        $this->getJson("/api/v1/payments/{$transactionId}")
+            ->assertNotFound()
+            ->assertJsonPath('code', 'not_found');
+        $this->postJson("/api/v1/payments/start/{$order->id}")
+            ->assertNotFound()
+            ->assertJsonPath('code', 'not_found');
     }
 
     public function test_guest_and_admin_rejected(): void
@@ -281,7 +287,9 @@ class PaymentOrchestratorTest extends TestCase
             'total' => 10000,
         ]);
 
-        $this->postJson("/api/v1/payments/start/{$order->id}")->assertUnauthorized();
+        $this->postJson("/api/v1/payments/start/{$order->id}")
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'unauthenticated');
 
         Sanctum::actingAs(Admin::factory()->create());
         $this->postJson("/api/v1/payments/start/{$order->id}")->assertUnauthorized();

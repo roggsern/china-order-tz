@@ -98,6 +98,7 @@ class PaymentRuntimeEnforcementTest extends TestCase
             'provider' => PaymentMethod::Nmb->value,
         ])
             ->assertUnprocessable()
+            ->assertJsonPath('code', 'payment_failed')
             ->assertJsonValidationErrors(['provider']);
     }
 
@@ -109,9 +110,18 @@ class PaymentRuntimeEnforcementTest extends TestCase
         Sanctum::actingAs($user);
 
         $this->postJson("/api/v1/payments/start/{$order->id}", [
+            'provider' => 'not_a_real_provider',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'validation_failed')
+            ->assertJsonValidationErrors(['provider']);
+
+        // Enum-known but unavailable provider is a payment domain rejection.
+        $this->postJson("/api/v1/payments/start/{$order->id}", [
             'provider' => 'selcom',
         ])
             ->assertUnprocessable()
+            ->assertJsonPath('code', 'payment_failed')
             ->assertJsonValidationErrors(['provider']);
     }
 
@@ -143,6 +153,7 @@ class PaymentRuntimeEnforcementTest extends TestCase
 
         $this->postJson("/api/v1/payments/start/{$order->id}")
             ->assertUnprocessable()
+            ->assertJsonPath('code', 'payment_failed')
             ->assertJsonValidationErrors(['provider']);
     }
 
@@ -178,7 +189,9 @@ class PaymentRuntimeEnforcementTest extends TestCase
 
     public function test_guest_cannot_list_checkout_methods(): void
     {
-        $this->getJson('/api/v1/payments/methods')->assertUnauthorized();
+        $this->getJson('/api/v1/payments/methods')
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'unauthenticated');
     }
 
     public function test_disabled_prepare_method_rejected(): void
@@ -192,6 +205,7 @@ class PaymentRuntimeEnforcementTest extends TestCase
             'payment_method' => PaymentMethod::BankTransfer->value,
         ])
             ->assertUnprocessable()
+            ->assertJsonPath('code', 'payment_failed')
             ->assertJsonValidationErrors(['payment_method']);
     }
 

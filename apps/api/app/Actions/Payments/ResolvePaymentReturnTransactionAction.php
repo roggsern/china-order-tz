@@ -5,8 +5,8 @@ namespace App\Actions\Payments;
 use App\Enums\PaymentTransactionStatus;
 use App\Models\PaymentTransaction;
 use App\Models\User;
+use App\Support\Http\ApiResponse;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Validation\ValidationException;
 
 /**
  * Resolves the authoritative payment transaction for the NMB browser return page.
@@ -19,9 +19,9 @@ class ResolvePaymentReturnTransactionAction
         $merchantReference = filled($merchantReference) ? trim((string) $merchantReference) : null;
 
         if ($orderId === null && $merchantReference === null) {
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'order_id' => ['An order id or merchant reference is required to resolve the payment return.'],
-            ]);
+            ], 'validation_failed');
         }
 
         if ($merchantReference === null && $this->looksLikeMerchantReference($orderId)) {

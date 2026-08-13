@@ -143,6 +143,7 @@ class NmbCheckoutSessionRetryTest extends TestCase
 
         $this->postJson("/api/v1/payments/{$transaction->id}/nmb/checkout-session")
             ->assertStatus(422)
+            ->assertJsonPath('code', 'business_rule_violated')
             ->assertJsonValidationErrors(['payment']);
     }
 
@@ -164,6 +165,7 @@ class NmbCheckoutSessionRetryTest extends TestCase
 
         $this->postJson("/api/v1/payments/{$transaction->id}/nmb/checkout-session")
             ->assertStatus(422)
+            ->assertJsonPath('code', 'business_rule_violated')
             ->assertJsonValidationErrors(['provider']);
     }
 
@@ -187,7 +189,8 @@ class NmbCheckoutSessionRetryTest extends TestCase
 
         Sanctum::actingAs($other);
         $this->postJson("/api/v1/payments/{$transactionId}/nmb/checkout-session")
-            ->assertNotFound();
+            ->assertNotFound()
+            ->assertJsonPath('code', 'not_found');
     }
 
     public function test_double_click_retry_serializes_to_one_fresh_session_call_chain(): void

@@ -15,6 +15,7 @@ use App\Http\Resources\PaymentTransactionResource;
 use App\Models\Order;
 use App\Models\PaymentTransaction;
 use App\Models\User;
+use App\Support\Http\ApiResponse;
 use Illuminate\Http\JsonResponse;
 
 class PaymentOrchestratorController extends Controller
@@ -33,11 +34,11 @@ class PaymentOrchestratorController extends Controller
             $request->validated('provider'),
         );
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Payment transaction started.',
-            'data' => new PaymentTransactionResource($transaction->load('order')),
-        ], 201);
+        return ApiResponse::success(
+            data: new PaymentTransactionResource($transaction->load('order')),
+            message: 'Payment transaction started.',
+            status: 201,
+        );
     }
 
     public function show(
@@ -47,12 +48,11 @@ class PaymentOrchestratorController extends Controller
         /** @var User $user */
         $user = auth()->user();
 
-        return response()->json([
-            'success' => true,
-            'data' => new PaymentTransactionResource(
+        return ApiResponse::success(
+            data: new PaymentTransactionResource(
                 $action->handle($user, $paymentTransaction)->load('order'),
             ),
-        ]);
+        );
     }
 
     public function refresh(
@@ -62,13 +62,12 @@ class PaymentOrchestratorController extends Controller
         /** @var User $user */
         $user = auth()->user();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Payment transaction refreshed.',
-            'data' => new PaymentTransactionResource(
+        return ApiResponse::success(
+            data: new PaymentTransactionResource(
                 $action->handle($user, $paymentTransaction)->load('order'),
             ),
-        ]);
+            message: 'Payment transaction refreshed.',
+        );
     }
 
     public function retryNmbCheckoutSession(
@@ -80,11 +79,10 @@ class PaymentOrchestratorController extends Controller
 
         $transaction = $action->handle($user, $paymentTransaction);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'NMB Hosted Checkout session refreshed.',
-            'data' => new PaymentTransactionResource($transaction->load('order')),
-        ]);
+        return ApiResponse::success(
+            data: new PaymentTransactionResource($transaction->load('order')),
+            message: 'NMB Hosted Checkout session refreshed.',
+        );
     }
 
     public function resolveReturn(
@@ -100,16 +98,16 @@ class PaymentOrchestratorController extends Controller
             $request->validated('merchant_reference'),
         );
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Payment return transaction resolved.',
-            'data' => new PaymentTransactionResource($transaction),
-        ]);
+        return ApiResponse::success(
+            data: new PaymentTransactionResource($transaction),
+            message: 'Payment return transaction resolved.',
+        );
     }
 
     /**
      * Unauthenticated NMB Hosted Checkout return reconciliation.
      * Proof-based; does not replace authenticated customer refresh.
+     * Response envelope only — reconciliation / gateway verification unchanged.
      */
     public function reconcileNmbBrowserReturn(
         ReconcileNmbBrowserReturnRequest $request,
@@ -123,10 +121,9 @@ class PaymentOrchestratorController extends Controller
             $request->validated('order_id'),
         );
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Payment return reconciled.',
-            'data' => new PaymentTransactionResource($transaction->load('order')),
-        ]);
+        return ApiResponse::success(
+            data: new PaymentTransactionResource($transaction->load('order')),
+            message: 'Payment return reconciled.',
+        );
     }
 }

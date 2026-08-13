@@ -4,6 +4,7 @@ namespace App\Services\Payments;
 
 use App\Enums\PaymentMethod;
 use App\Services\Settings\SettingsService;
+use App\Support\Http\ApiResponse;
 use Throwable;
 
 /**
@@ -165,9 +166,9 @@ final class PaymentConfigurationResolver
         $method = strtolower(trim($method));
 
         if (! $this->isKnownMethod($method)) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 $field => ["Unknown payment provider [{$method}]."],
-            ]);
+            ], 'payment_failed');
         }
 
         if (! $this->isMethodEnabled($method)) {
@@ -175,9 +176,9 @@ final class PaymentConfigurationResolver
                 ? 'Default provider must be enabled in enabled_methods.'
                 : "Payment provider [{$method}] is disabled.";
 
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 $field => [$message],
-            ]);
+            ], 'payment_failed');
         }
     }
 

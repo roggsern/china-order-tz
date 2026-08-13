@@ -60,6 +60,7 @@ class CustomerOrderPaymentPreparationTest extends TestCase
         $this->postJson("/api/v1/orders/{$order->id}/payments", [
             'payment_method' => PaymentMethod::Nmb->value,
         ])->assertUnprocessable()
+            ->assertJsonPath('code', 'business_rule_violated')
             ->assertJsonValidationErrors(['payment_method']);
     }
 

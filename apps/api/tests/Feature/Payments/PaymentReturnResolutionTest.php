@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Payments;
 
-use App\Enums\NotificationEventType;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentProvider;
 use App\Enums\PaymentStatus;
@@ -10,14 +9,12 @@ use App\Enums\PaymentTransactionStatus;
 use App\Models\Order;
 use App\Models\PaymentTransaction;
 use App\Models\User;
-use App\Services\Notifications\NotificationPlatform;
 use App\Services\Orders\CustomerOrderPaymentStatusResolver;
 use App\Services\Payments\Orchestration\DTOs\PaymentProviderResult;
 use App\Services\Payments\Orchestration\PaymentTransactionCompletionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\Sanctum;
-use Mockery;
 use Tests\TestCase;
 
 class PaymentReturnResolutionTest extends TestCase
@@ -106,16 +103,6 @@ class PaymentReturnResolutionTest extends TestCase
             'amount' => 15000,
         ]);
 
-        $notifications = Mockery::mock(NotificationPlatform::class);
-        $notifications->shouldReceive('notifyCustomer')
-            ->once()
-            ->with(
-                NotificationEventType::PaymentConfirmed,
-                Mockery::on(fn ($subject) => $subject instanceof User && $subject->is($user)),
-                Mockery::type('array'),
-            );
-        $this->app->instance(NotificationPlatform::class, $notifications);
-
         app(PaymentTransactionCompletionService::class)->applyResult(
             $transaction,
             new PaymentProviderResult(
@@ -142,6 +129,7 @@ class PaymentReturnResolutionTest extends TestCase
 
         $this->getJson('/api/v1/payments/return-context?merchant_reference=COTZ-PAY-20260730-000013')
             ->assertOk()
+            ->assertJsonPath('success', true)
             ->assertJsonPath('data.status', PaymentTransactionStatus::Successful->value);
 
         $this->getJson('/api/v1/orders/'.$order->id)

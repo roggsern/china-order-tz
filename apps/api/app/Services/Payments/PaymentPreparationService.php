@@ -9,8 +9,8 @@ use App\Enums\PaymentStatus;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\User;
+use App\Support\Http\ApiResponse;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 class PaymentPreparationService
 {
@@ -178,7 +178,7 @@ class PaymentPreparationService
 
     private function throwValidationError(string $field, string $message): never
     {
-        throw ValidationException::withMessages([
+        ApiResponse::throwCodedValidation([
             $field => [$message],
         ]);
     }
