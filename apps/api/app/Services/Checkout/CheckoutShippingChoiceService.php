@@ -14,8 +14,8 @@ use App\Models\User;
 use App\Services\Cart\CartService;
 use App\Services\Commerce\CommerceChannelResolver;
 use App\Services\Shipping\ShippingDurationResolver;
+use App\Support\Http\ApiResponse;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 /**
  * Explicit pre-payment shipping choice for checkout sessions.
@@ -48,7 +48,7 @@ class CheckoutShippingChoiceService
 
         $choice = DeliveryType::tryFrom((string) ($input['shipping_choice'] ?? ''));
         if ($choice === null) {
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'shipping_choice' => ['Select a shipping option before payment.'],
             ]);
         }
@@ -72,7 +72,7 @@ class CheckoutShippingChoiceService
             if ($choice === DeliveryType::CompanyShipping) {
                 $method = DeliveryShippingMethod::tryFrom((string) ($input['shipping_method'] ?? ''));
                 if ($method === null) {
-                    throw ValidationException::withMessages([
+                    ApiResponse::throwCodedValidation([
                         'shipping_method' => ['Company shipping requires air or sea.'],
                     ]);
                 }
@@ -100,7 +100,7 @@ class CheckoutShippingChoiceService
             if ($choice === DeliveryType::CompanyShipping
                 && bccomp((string) $totals['shipping_total'], '0.00', 2) <= 0
             ) {
-                throw ValidationException::withMessages([
+                ApiResponse::throwCodedValidation([
                     'shipping' => ['Company shipping requires a valid shipping price on cart items.'],
                 ]);
             }
@@ -133,14 +133,14 @@ class CheckoutShippingChoiceService
     public function assertReadyForOrder(CheckoutSession $session): void
     {
         if (! filled($session->shipping_choice)) {
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'shipping_choice' => ['Select a shipping option before creating the order.'],
             ]);
         }
 
         $choice = DeliveryType::tryFrom((string) $session->shipping_choice);
         if ($choice === null) {
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'shipping_choice' => ['Invalid shipping choice on checkout session.'],
             ]);
         }
@@ -149,19 +149,19 @@ class CheckoutShippingChoiceService
         $current = $this->fingerprint($cart, $choice, $session->shipping_method);
 
         if ($session->cart_fingerprint !== null && ! hash_equals((string) $session->cart_fingerprint, $current)) {
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'session' => ['Checkout totals are stale. Refresh checkout and confirm shipping again.'],
             ]);
         }
 
         if ($choice === DeliveryType::CompanyShipping) {
             if (! filled($session->shipping_method)) {
-                throw ValidationException::withMessages([
+                ApiResponse::throwCodedValidation([
                     'shipping_method' => ['Company shipping requires air or sea.'],
                 ]);
             }
             if (bccomp((string) $session->shipping_total, '0.00', 2) <= 0) {
-                throw ValidationException::withMessages([
+                ApiResponse::throwCodedValidation([
                     'shipping' => ['Company shipping total must be greater than zero.'],
                 ]);
             }
@@ -170,7 +170,7 @@ class CheckoutShippingChoiceService
         if (in_array($choice, [DeliveryType::CustomerAgent, DeliveryType::SelfPickup, DeliveryType::NegotiatedDelivery], true)
             && bccomp((string) $session->shipping_total, '0.00', 2) !== 0
         ) {
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'shipping' => ['This shipping choice must have zero company shipping charges.'],
             ]);
         }
@@ -205,7 +205,7 @@ class CheckoutShippingChoiceService
         };
 
         if (! in_array($choice, $allowed, true)) {
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'shipping_choice' => [
                     "Shipping choice [{$choice->value}] is not allowed for this cart's commerce channel.",
                 ],
@@ -229,7 +229,7 @@ class CheckoutShippingChoiceService
 
             $price = $product->shippingPriceForMethod($method->value);
             if ($price === null) {
-                throw ValidationException::withMessages([
+                ApiResponse::throwCodedValidation([
                     'shipping' => ["No {$method->value} shipping price for {$product->name}."],
                 ]);
             }

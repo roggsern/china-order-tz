@@ -10,7 +10,7 @@ use App\Models\User;
 use App\Services\Cart\ResolveCartPurchasable;
 use App\Services\Commerce\CommerceChannelResolver;
 use App\Services\Profile\CustomerAddressService;
-use Illuminate\Validation\ValidationException;
+use App\Support\Http\ApiResponse;
 
 /**
  * Legacy prepare / preview surface.
@@ -91,7 +91,7 @@ class CheckoutService
 
         foreach ($cart->items as $item) {
             if ($item->quantity < 1) {
-                throw ValidationException::withMessages([
+                ApiResponse::throwCodedValidation([
                     'quantity' => ['Quantity must be at least 1.'],
                 ]);
             }
@@ -242,7 +242,7 @@ class CheckoutService
 
     private function throwValidationError(string $field, string $message): never
     {
-        throw ValidationException::withMessages([
+        ApiResponse::throwCodedValidation([
             $field => [$message],
         ]);
     }

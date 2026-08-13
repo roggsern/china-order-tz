@@ -238,6 +238,8 @@ class CheckoutOrchestratorTest extends TestCase
 
         $this->getJson("/api/v1/checkout/{$session->id}")
             ->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'business_rule_violated')
             ->assertJsonValidationErrors(['session']);
 
         $this->assertDatabaseHas('checkout_sessions', [
@@ -297,7 +299,10 @@ class CheckoutOrchestratorTest extends TestCase
 
     public function test_guest_rejected(): void
     {
-        $this->postJson('/api/v1/checkout/start')->assertUnauthorized();
+        $this->postJson('/api/v1/checkout/start')
+            ->assertUnauthorized()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'unauthenticated');
     }
 
     public function test_admin_rejected(): void
@@ -333,6 +338,9 @@ class CheckoutOrchestratorTest extends TestCase
         $sessionId = $this->postJson('/api/v1/checkout/start')->json('data.id');
 
         Sanctum::actingAs($other);
-        $this->getJson("/api/v1/checkout/{$sessionId}")->assertNotFound();
+        $this->getJson("/api/v1/checkout/{$sessionId}")
+            ->assertNotFound()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'not_found');
     }
 }

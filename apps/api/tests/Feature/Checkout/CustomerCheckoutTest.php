@@ -131,6 +131,8 @@ class CustomerCheckoutTest extends TestCase
 
         $this->postJson('/api/v1/checkout/prepare')
             ->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'business_rule_violated')
             ->assertJsonValidationErrors(['cart']);
     }
 
@@ -144,6 +146,8 @@ class CustomerCheckoutTest extends TestCase
 
         $this->postJson('/api/v1/checkout/prepare')
             ->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'business_rule_violated')
             ->assertJsonValidationErrors(['delivery_address']);
     }
 
@@ -267,10 +271,12 @@ class CustomerCheckoutTest extends TestCase
 
         $this->postJson('/api/v1/checkout/prepare')
             ->assertUnprocessable()
+            ->assertJsonPath('code', 'business_rule_violated')
             ->assertJsonValidationErrors(['cart']);
 
         $this->getJson('/api/v1/checkout')
             ->assertUnprocessable()
+            ->assertJsonPath('code', 'business_rule_violated')
             ->assertJsonValidationErrors(['cart']);
     }
 
@@ -298,8 +304,12 @@ class CustomerCheckoutTest extends TestCase
 
     public function test_guest_rejected(): void
     {
-        $this->getJson('/api/v1/checkout')->assertUnauthorized();
-        $this->postJson('/api/v1/checkout/prepare')->assertUnauthorized();
+        $this->getJson('/api/v1/checkout')
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'unauthenticated');
+        $this->postJson('/api/v1/checkout/prepare')
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'unauthenticated');
     }
 
     public function test_admin_rejected(): void

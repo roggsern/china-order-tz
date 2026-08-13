@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Services\Commerce\Contracts\CommerceStrategyInterface;
 use App\Services\Commerce\Strategies\ChinaCommerceStrategy;
 use App\Services\Commerce\Strategies\TanzaniaCommerceStrategy;
+use App\Support\Http\ApiResponse;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -98,7 +99,7 @@ class CommerceChannelResolver
         $codes = array_values(array_unique($codes));
 
         if (count($codes) > 1) {
-            throw ValidationException::withMessages([
+            $this->rejectCartRule([
                 'cart' => [
                     'A cart cannot mix Buy From China and Buy From Tanzania products. Please checkout separately.',
                 ],
@@ -106,12 +107,33 @@ class CommerceChannelResolver
         }
 
         if ($codes === []) {
-            throw ValidationException::withMessages([
+            $this->rejectCartRule([
                 'cart' => ['Unable to resolve commerce channel for this cart.'],
             ]);
         }
 
         return $this->channelByCode($codes[0]);
+    }
+
+    /**
+     * Cart/checkout channel rule failure — preserves field errors; adds Contract v1 code.
+     *
+     * @param  array<string, list<string>|string>  $messages
+     */
+    private function rejectCartRule(array $messages): never
+    {
+        $exception = ValidationException::withMessages($messages);
+        $errors = $exception->errors();
+        $first = collect($errors)->flatten()->first();
+
+        $exception->response = ApiResponse::error(
+            message: is_string($first) && $first !== '' ? $first : $exception->getMessage(),
+            code: 'business_rule_violated',
+            status: 422,
+            extra: ['errors' => $errors],
+        );
+
+        throw $exception;
     }
 
     public function resolveOrderChannel(Order $order): CommerceChannel

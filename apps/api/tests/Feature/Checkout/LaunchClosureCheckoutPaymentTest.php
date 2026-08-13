@@ -280,6 +280,7 @@ class LaunchClosureCheckoutPaymentTest extends TestCase
 
         $this->postJson("/api/v1/orders/from-checkout/{$sessionId}")
             ->assertStatus(422)
+            ->assertJsonPath('code', 'business_rule_violated')
             ->assertJsonValidationErrors(['shipping_choice']);
     }
 
@@ -316,7 +317,8 @@ class LaunchClosureCheckoutPaymentTest extends TestCase
         $this->postJson("/api/v1/checkout/{$sessionId}/shipping-choice", [
             'shipping_choice' => DeliveryType::CompanyShipping->value,
             'shipping_method' => 'air',
-        ])->assertStatus(422);
+        ])->assertStatus(422)
+            ->assertJsonPath('code', 'business_rule_violated');
     }
 
     public function test_stale_checkout_after_cart_mutation_is_rejected(): void
@@ -333,6 +335,7 @@ class LaunchClosureCheckoutPaymentTest extends TestCase
 
         $this->postJson("/api/v1/orders/from-checkout/{$sessionId}")
             ->assertStatus(422)
+            ->assertJsonPath('code', 'business_rule_violated')
             ->assertJsonValidationErrors(['session']);
     }
 

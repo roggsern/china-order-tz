@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\Payments\PaymentConfigurationResolver;
+use App\Support\Http\ApiResponse;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -16,9 +17,8 @@ class CheckoutPaymentMethodsController extends Controller
 
     public function index(): JsonResponse
     {
-        return response()->json([
-            'success' => true,
-            'data' => $this->resolver->presentCheckoutAvailability(),
-        ]);
+        return ApiResponse::success(
+            data: $this->resolver->presentCheckoutAvailability(),
+        );
     }
 }

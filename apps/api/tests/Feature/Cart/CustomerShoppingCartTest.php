@@ -45,6 +45,7 @@ class CustomerShoppingCartTest extends TestCase
         $this->getJson('/api/v1/cart')
             ->assertOk()
             ->assertJsonPath('success', true)
+            ->assertJsonMissingPath('code')
             ->assertJsonCount(1, 'data.items')
             ->assertJsonPath('data.currency', 'TZS')
             ->assertJsonPath('data.item_count', 2)
@@ -65,6 +66,7 @@ class CustomerShoppingCartTest extends TestCase
             'quantity' => 1,
         ])->assertCreated()
             ->assertJsonPath('success', true)
+            ->assertJsonMissingPath('code')
             ->assertJsonCount(1, 'data.items')
             ->assertJsonPath('data.items.0.quantity', 1)
             ->assertJsonPath('data.items.0.unit_price', '15000.00')
@@ -78,6 +80,61 @@ class CustomerShoppingCartTest extends TestCase
             'quantity' => 1,
             'price_snapshot' => 15000,
         ]);
+    }
+
+    public function test_invalid_quantity_returns_validation_failed(): void
+    {
+        $user = User::factory()->create();
+        ['variant' => $variant] = CatalogCartFixture::purchasable(10000, 20);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/v1/cart/items', [
+            'product_variant_id' => $variant->id,
+            'quantity' => 0,
+        ])->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'validation_failed')
+            ->assertJsonValidationErrors(['quantity']);
+    }
+
+    public function test_unavailable_product_returns_business_rule_violated(): void
+    {
+        $user = User::factory()->create();
+        ['variant' => $variant] = CatalogCartFixture::purchasable();
+        $variant->update(['is_active' => false]);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/v1/cart/items', [
+            'product_variant_id' => $variant->id,
+            'quantity' => 1,
+        ])->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'business_rule_violated')
+            ->assertJsonValidationErrors(['product_variant_id']);
+    }
+
+    public function test_mixed_commerce_channel_cart_returns_business_rule_violated(): void
+    {
+        $user = User::factory()->create();
+        ['variant' => $chinaVariant] = CatalogCartFixture::chinaPurchasable(10000, 20);
+        ['variant' => $tzVariant] = CatalogCartFixture::purchasable(12000, 20);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/v1/cart/items', [
+            'product_variant_id' => $chinaVariant->id,
+            'quantity' => 1,
+        ])->assertCreated();
+
+        $this->postJson('/api/v1/cart/items', [
+            'product_variant_id' => $tzVariant->id,
+            'quantity' => 1,
+        ])->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'business_rule_violated')
+            ->assertJsonValidationErrors(['cart']);
     }
 
     public function test_duplicate_variant_increments_quantity(): void
@@ -256,7 +313,7 @@ class CustomerShoppingCartTest extends TestCase
             'subcategory_id' => $leaf->id,
             'is_active' => true,
         ]);
-        $product = Product::factory()->create([
+        $product = Product::factory()->tzLocal()->create([
             'category_id' => $leaf->id,
             'catalog_product_type_id' => $cpt->id,
             'price' => 12500,
@@ -306,7 +363,9 @@ class CustomerShoppingCartTest extends TestCase
         $this->postJson('/api/v1/cart/items', [
             'product_variant_id' => $variant->id,
             'quantity' => 1,
-        ])->assertUnprocessable();
+        ])->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'business_rule_violated');
     }
 
     public function test_cannot_add_more_than_available_inventory(): void
@@ -320,6 +379,8 @@ class CustomerShoppingCartTest extends TestCase
             'product_variant_id' => $variant->id,
             'quantity' => 5,
         ])->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'business_rule_violated')
             ->assertJsonValidationErrors(['quantity']);
     }
 
@@ -334,22 +395,28 @@ class CustomerShoppingCartTest extends TestCase
         $this->postJson('/api/v1/cart/items', [
             'product_variant_id' => $variant->id,
             'quantity' => 1,
-        ])->assertUnprocessable();
+        ])->assertUnprocessable()
+            ->assertJsonPath('code', 'business_rule_violated');
     }
 
     public function test_guest_rejected(): void
     {
         ['variant' => $variant] = CatalogCartFixture::purchasable();
 
-        $this->getJson('/api/v1/cart')->assertUnauthorized();
+        $this->getJson('/api/v1/cart')
+            ->assertUnauthorized()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'unauthenticated');
         $this->postJson('/api/v1/cart/items', [
             'product_variant_id' => $variant->id,
             'quantity' => 1,
-        ])->assertUnauthorized();
+        ])->assertUnauthorized()
+            ->assertJsonPath('code', 'unauthenticated');
         $this->postJson('/api/v1/cart/buy-now', [
             'product_variant_id' => $variant->id,
             'quantity' => 1,
-        ])->assertUnauthorized();
+        ])->assertUnauthorized()
+            ->assertJsonPath('code', 'unauthenticated');
     }
 
     public function test_admin_rejected(): void
@@ -385,9 +452,14 @@ class CustomerShoppingCartTest extends TestCase
 
         $this->putJson("/api/v1/cart/items/{$item->id}", [
             'quantity' => 5,
-        ])->assertNotFound();
+        ])->assertNotFound()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'not_found')
+            ->assertJsonPath('message', 'Cart item not found.');
 
-        $this->deleteJson("/api/v1/cart/items/{$item->id}")->assertNotFound();
+        $this->deleteJson("/api/v1/cart/items/{$item->id}")
+            ->assertNotFound()
+            ->assertJsonPath('code', 'not_found');
     }
 
     public function test_user_has_active_cart_relationship(): void

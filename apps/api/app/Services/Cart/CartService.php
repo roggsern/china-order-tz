@@ -246,7 +246,7 @@ class CartService
     public function authorizeCartItem(User $user, CartItem $item): void
     {
         if ($item->cart->user_id !== $user->id || $item->cart->status !== CartStatus::Active) {
-            abort(404);
+            abort(404, 'Cart item not found.');
         }
     }
 

@@ -16,8 +16,8 @@ use App\Services\Inventory\ReservationService;
 use App\Services\Promotions\DiscountResolver;
 use App\Services\Promotions\DTOs\DiscountResolution;
 use App\Services\Storefront\VisitorIdentityService;
+use App\Support\Http\ApiResponse;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 /**
  * Checkout Orchestrator — validates Cart + Pricing + Inventory,
@@ -80,7 +80,7 @@ class CheckoutOrchestrator
         $session = $this->markExpiredIfNeeded($session);
 
         if ($session->isExpired()) {
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'session' => ['Checkout session has expired. Start a new checkout.'],
             ]);
         }
@@ -94,13 +94,13 @@ class CheckoutOrchestrator
         $session = $this->markExpiredIfNeeded($session);
 
         if ($session->status === CheckoutSessionStatus::Completed) {
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'session' => ['Checkout session is already completed.'],
             ]);
         }
 
         if ($session->isExpired()) {
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'session' => ['Checkout session has expired. Start a new checkout.'],
             ]);
         }
@@ -140,7 +140,7 @@ class CheckoutOrchestrator
         $session = $this->markExpiredIfNeeded($session);
 
         if ($session->isExpired() || $session->status === CheckoutSessionStatus::Completed) {
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'session' => ['Checkout session cannot accept a promotion.'],
             ]);
         }
@@ -180,7 +180,7 @@ class CheckoutOrchestrator
         $this->authorizeSession($user, $session);
 
         if ($session->status === CheckoutSessionStatus::Completed) {
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'session' => ['Completed checkout sessions cannot be cancelled.'],
             ]);
         }
@@ -276,7 +276,7 @@ class CheckoutOrchestrator
         $cart = $this->cartService->loadCart($cart);
 
         if ($cart->isEmpty()) {
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'cart' => ['Cart is empty.'],
             ]);
         }
@@ -289,14 +289,14 @@ class CheckoutOrchestrator
         /** @var CartItem $item */
         foreach ($cart->items as $item) {
             if ($item->quantity < 1) {
-                throw ValidationException::withMessages([
+                ApiResponse::throwCodedValidation([
                     'quantity' => ['Quantity must be at least 1.'],
                 ]);
             }
 
             $itemCurrency = strtoupper((string) ($item->currency ?: $currency));
             if ($itemCurrency !== $currency) {
-                throw ValidationException::withMessages([
+                ApiResponse::throwCodedValidation([
                     'currency' => ['Cart currency is inconsistent across items.'],
                 ]);
             }
@@ -420,7 +420,7 @@ class CheckoutOrchestrator
             ->first();
 
         if ($cart === null) {
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'cart' => ['Active cart not found.'],
             ]);
         }

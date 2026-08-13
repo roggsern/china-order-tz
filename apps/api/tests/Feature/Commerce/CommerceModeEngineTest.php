@@ -9,6 +9,7 @@ use App\Enums\OrderStatus;
 use App\Models\Admin;
 use App\Models\Category;
 use App\Models\CommerceChannel;
+use App\Models\InventoryLocation;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
@@ -38,27 +39,35 @@ class CommerceModeEngineTest extends TestCase
         Sanctum::actingAs(Admin::factory()->create());
 
         $tz = CommerceChannel::query()->where('code', 'TZ_LOCAL')->firstOrFail();
-        $category = Category::factory()->create();
-        $cpt = \App\Models\CatalogProductType::factory()->create([
-            'subcategory_id' => $category->id,
-            'is_active' => true,
-        ]);
         $store = \App\Models\Store::query()->create([
             'code' => 'TZUR',
             'name' => 'Tzur Local',
             'slug' => 'tzur-local',
             'is_active' => true,
         ]);
+        InventoryLocation::query()->create([
+            'store_id' => $store->id,
+            'code' => 'MAIN',
+            'name' => 'Main',
+            'is_default' => true,
+            'is_active' => true,
+        ]);
+        $rootCategory = Category::factory()->forStore($store)->create(['parent_id' => null]);
+        $subcategory = Category::factory()->forStore($store)->child($rootCategory)->create();
+        $cpt = \App\Models\CatalogProductType::factory()->create([
+            'subcategory_id' => $subcategory->id,
+            'is_active' => true,
+        ]);
 
         $response = $this->postJson('/api/v1/admin/products', [
             'name' => 'Local Kettle',
-            'category_id' => $category->id,
+            'category_id' => $subcategory->id,
             'catalog_product_type_id' => $cpt->id,
             'commerce_channel_id' => $tz->id,
             'store_id' => $store->id,
             'price' => 15000,
-            'stock_quantity' => 5,
-            'lifecycle_status' => 'active',
+            // Draft avoids active-publish gates (media/stock) unrelated to channel sync.
+            'lifecycle_status' => 'draft',
         ])->assertCreated()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.commerce_channel_id', $tz->id)
@@ -76,17 +85,8 @@ class CommerceModeEngineTest extends TestCase
     public function test_mixed_cart_is_rejected(): void
     {
         $user = User::factory()->create();
-        ['variant' => $chinaVariant] = CatalogCartFixture::purchasable(10000);
-        Product::query()->whereKey($chinaVariant->product_id)->update([
-            'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
-            'fulfillment_source' => 'imported_from_china',
-        ]);
-
-        ['variant' => $tzVariant] = CatalogCartFixture::purchasable(12000);
-        Product::query()->whereKey($tzVariant->product_id)->update([
-            'commerce_channel_id' => CommerceChannel::query()->where('code', 'TZ_LOCAL')->value('id'),
-            'fulfillment_source' => 'buy_from_tz',
-        ]);
+        ['variant' => $chinaVariant] = CatalogCartFixture::chinaPurchasable(10000, 20);
+        ['variant' => $tzVariant] = CatalogCartFixture::purchasable(12000, 20);
 
         Sanctum::actingAs($user);
 
@@ -99,21 +99,20 @@ class CommerceModeEngineTest extends TestCase
             'product_variant_id' => $tzVariant->id,
             'quantity' => 1,
         ])->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'business_rule_violated')
             ->assertJsonValidationErrors(['cart']);
     }
 
     public function test_checkout_resolves_channel_and_order_snapshot_is_immutable(): void
     {
         $user = User::factory()->create();
-        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::purchasable(25000);
+        // China sellable variant (commercial stock). Do not retarget a TZ MAIN-stock
+        // fixture to CHINA — sellable path flips to Simple and cart rejects the variant.
+        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::chinaPurchasable(25000);
 
         $china = CommerceChannel::query()->where('code', 'CHINA_IMPORT')->firstOrFail();
         $tz = CommerceChannel::query()->where('code', 'TZ_LOCAL')->firstOrFail();
-
-        $product->update([
-            'commerce_channel_id' => $china->id,
-            'fulfillment_source' => 'imported_from_china',
-        ]);
 
         Sanctum::actingAs($user);
 

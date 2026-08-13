@@ -10,6 +10,7 @@ use App\Services\Inventory\StockResolver;
 use App\Services\Pricing\CommercePricingResolver;
 use App\Services\Pricing\DTOs\CommercePricingContext;
 use App\Services\ProductPurchasability\ProductPurchasabilityPolicy;
+use App\Support\Http\ApiResponse;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -45,7 +46,7 @@ class ResolveCartPurchasable
         ?string $shippingMethod = null,
     ): array {
         if ($quantity < 1) {
-            throw ValidationException::withMessages([
+            $this->reject([
                 'quantity' => ['Quantity must be at least 1.'],
             ]);
         }
@@ -60,7 +61,7 @@ class ResolveCartPurchasable
             return $this->resolveSimpleLine((string) $productId, $quantity, $currency, $shippingMethod);
         }
 
-        throw ValidationException::withMessages([
+        $this->reject([
             'product_id' => ['A product or product variant is required.'],
         ]);
     }
@@ -87,13 +88,13 @@ class ResolveCartPurchasable
             ->find($variantId);
 
         if ($variant === null) {
-            throw ValidationException::withMessages([
+            $this->reject([
                 'product_variant_id' => ['Product variant not found.'],
-            ]);
+            ], 'not_found');
         }
 
         if (! $variant->is_active) {
-            throw ValidationException::withMessages([
+            $this->reject([
                 'product_variant_id' => ['Product variant is not available.'],
             ]);
         }
@@ -101,13 +102,13 @@ class ResolveCartPurchasable
         $product = $variant->product;
 
         if ($product === null) {
-            throw ValidationException::withMessages([
+            $this->reject([
                 'product_variant_id' => ['Product variant has no parent product.'],
-            ]);
+            ], 'not_found');
         }
 
         if (filled($productId) && $product->id !== $productId) {
-            throw ValidationException::withMessages([
+            $this->reject([
                 'product_id' => ['Product does not match the selected variant.'],
             ]);
         }
@@ -119,7 +120,7 @@ class ResolveCartPurchasable
             $this->purchasabilityPolicy->resolvePath($product) === PurchasabilityPath::Simple
             && $this->purchasabilityPolicy->isPurchasable($product)
         ) {
-            throw ValidationException::withMessages([
+            $this->reject([
                 'product_variant_id' => ['This product is sold as a simple product and does not accept a variant selection.'],
             ]);
         }
@@ -135,7 +136,7 @@ class ResolveCartPurchasable
         );
 
         if (! $priced->resolved || (float) $priced->unitPrice <= 0) {
-            throw ValidationException::withMessages([
+            $this->reject([
                 'product_variant_id' => ['No active retail price found for this variant.'],
             ]);
         }
@@ -144,7 +145,7 @@ class ResolveCartPurchasable
         $available = $stock->quantityAvailable;
 
         if (! $stock->resolved || $available < $quantity) {
-            throw ValidationException::withMessages([
+            $this->reject([
                 'quantity' => [
                     $available < 1
                         ? 'Selected variant is out of stock.'
@@ -189,15 +190,15 @@ class ResolveCartPurchasable
             ->find($productId);
 
         if ($product === null) {
-            throw ValidationException::withMessages([
+            $this->reject([
                 'product_id' => ['Product not found.'],
-            ]);
+            ], 'not_found');
         }
 
         $this->assertProductPurchasable($product);
 
         if ($this->purchasabilityPolicy->resolvePath($product) !== PurchasabilityPath::Simple) {
-            throw ValidationException::withMessages([
+            $this->reject([
                 'product_variant_id' => ['A product variant is required for this product.'],
             ]);
         }
@@ -213,7 +214,7 @@ class ResolveCartPurchasable
         );
 
         if (! $priced->resolved || (float) $priced->unitPrice <= 0) {
-            throw ValidationException::withMessages([
+            $this->reject([
                 'product_id' => ['No valid base price found for this product.'],
             ]);
         }
@@ -222,7 +223,7 @@ class ResolveCartPurchasable
         $available = $stock->quantityAvailable;
 
         if (! $stock->resolved || $available < $quantity) {
-            throw ValidationException::withMessages([
+            $this->reject([
                 'quantity' => [
                     $available < 1
                         ? 'Selected product is out of stock.'
@@ -249,7 +250,7 @@ class ResolveCartPurchasable
     private function assertProductPurchasable(Product $product): void
     {
         if (! $this->purchasabilityPolicy->isPurchasable($product)) {
-            throw ValidationException::withMessages([
+            $this->reject([
                 'product_id' => ['Product is not available.'],
             ]);
         }
@@ -258,7 +259,7 @@ class ResolveCartPurchasable
     private function assertProductLifecycleEligible(Product $product): void
     {
         if (! $this->purchasabilityPolicy->isLifecycleEligible($product)) {
-            throw ValidationException::withMessages([
+            $this->reject([
                 'product_id' => ['Product is not available.'],
             ]);
         }
@@ -276,7 +277,7 @@ class ResolveCartPurchasable
         }
 
         if (! $product->requiresChinaShipping()) {
-            throw ValidationException::withMessages([
+            $this->reject([
                 'shipping_method' => ['Shipping method is not required for this product.'],
             ]);
         }
@@ -284,7 +285,7 @@ class ResolveCartPurchasable
         $method = ShippingMethod::tryFrom($shippingMethod);
 
         if ($method === null) {
-            throw ValidationException::withMessages([
+            $this->reject([
                 'shipping_method' => ['Invalid shipping method selected.'],
             ]);
         }
@@ -292,11 +293,32 @@ class ResolveCartPurchasable
         $shippingPrice = $product->shippingPriceForMethod($method->value);
 
         if ($shippingPrice === null) {
-            throw ValidationException::withMessages([
+            $this->reject([
                 'shipping_method' => ['Selected shipping method is not available for this product.'],
             ]);
         }
 
         return [$method, $shippingPrice];
+    }
+
+    /**
+     * Domain failure — same field errors + HTTP 422 as before; Contract v1 code is additive.
+     *
+     * @param  array<string, list<string>|string>  $messages
+     */
+    private function reject(array $messages, string $code = 'business_rule_violated'): never
+    {
+        $exception = ValidationException::withMessages($messages);
+        $errors = $exception->errors();
+        $first = collect($errors)->flatten()->first();
+
+        $exception->response = ApiResponse::error(
+            message: is_string($first) && $first !== '' ? $first : $exception->getMessage(),
+            code: $code,
+            status: 422,
+            extra: ['errors' => $errors],
+        );
+
+        throw $exception;
     }
 }

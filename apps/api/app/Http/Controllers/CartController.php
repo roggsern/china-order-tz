@@ -15,6 +15,7 @@ use App\Http\Resources\CartResource;
 use App\Http\Resources\CheckoutPreparationResource;
 use App\Models\CartItem;
 use App\Models\User;
+use App\Support\Http\ApiResponse;
 use Illuminate\Http\JsonResponse;
 
 class CartController extends Controller
@@ -24,10 +25,9 @@ class CartController extends Controller
         /** @var User $user */
         $user = auth()->user();
 
-        return response()->json([
-            'success' => true,
-            'data' => new CartResource($action->handle($user)),
-        ]);
+        return ApiResponse::success(
+            data: new CartResource($action->handle($user)),
+        );
     }
 
     public function store(StoreCartItemRequest $request, AddToCartAction $action): JsonResponse
@@ -35,10 +35,10 @@ class CartController extends Controller
         /** @var User $user */
         $user = auth()->user();
 
-        return response()->json([
-            'success' => true,
-            'data' => new CartResource($action->handle($request, $user)),
-        ], 201);
+        return ApiResponse::success(
+            data: new CartResource($action->handle($request, $user)),
+            status: 201,
+        );
     }
 
     public function update(
@@ -49,10 +49,9 @@ class CartController extends Controller
         /** @var User $user */
         $user = auth()->user();
 
-        return response()->json([
-            'success' => true,
-            'data' => new CartResource($action->handle($request, $user, $item)),
-        ]);
+        return ApiResponse::success(
+            data: new CartResource($action->handle($request, $user, $item)),
+        );
     }
 
     public function destroyItem(CartItem $item, RemoveCartItemAction $action): JsonResponse
@@ -60,10 +59,9 @@ class CartController extends Controller
         /** @var User $user */
         $user = auth()->user();
 
-        return response()->json([
-            'success' => true,
-            'data' => new CartResource($action->handle($user, $item)),
-        ]);
+        return ApiResponse::success(
+            data: new CartResource($action->handle($user, $item)),
+        );
     }
 
     public function destroy(ClearCartAction $action): JsonResponse
@@ -71,10 +69,9 @@ class CartController extends Controller
         /** @var User $user */
         $user = auth()->user();
 
-        return response()->json([
-            'success' => true,
-            'data' => new CartResource($action->handle($user)),
-        ]);
+        return ApiResponse::success(
+            data: new CartResource($action->handle($user)),
+        );
     }
 
     public function buyNow(BuyNowRequest $request, BuyNowAction $action): JsonResponse
@@ -82,9 +79,9 @@ class CartController extends Controller
         /** @var User $user */
         $user = auth()->user();
 
-        return response()->json([
-            'success' => true,
-            'data' => new CheckoutPreparationResource($action->handle($request, $user)),
-        ], 201);
+        return ApiResponse::success(
+            data: new CheckoutPreparationResource($action->handle($request, $user)),
+            status: 201,
+        );
     }
 }

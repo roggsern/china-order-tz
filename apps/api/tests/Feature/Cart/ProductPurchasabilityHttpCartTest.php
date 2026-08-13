@@ -12,8 +12,8 @@ use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\CatalogProductType;
 use App\Models\Category;
+use App\Models\ChinaCommercialStock;
 use App\Models\Department;
-use App\Models\Inventory;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\User;
@@ -235,6 +235,7 @@ class ProductPurchasabilityHttpCartTest extends TestCase
             'quantity' => 1,
         ])
             ->assertUnprocessable()
+            ->assertJsonPath('code', 'business_rule_violated')
             ->assertJsonValidationErrors(['product_variant_id']);
     }
 
@@ -257,6 +258,7 @@ class ProductPurchasabilityHttpCartTest extends TestCase
             'quantity' => 1,
         ])
             ->assertUnprocessable()
+            ->assertJsonPath('code', 'business_rule_violated')
             ->assertJsonValidationErrors(['product_variant_id']);
 
         $this->assertTrue($keep->is_active);
@@ -276,6 +278,7 @@ class ProductPurchasabilityHttpCartTest extends TestCase
             'quantity' => 1,
         ])
             ->assertUnprocessable()
+            ->assertJsonPath('code', 'business_rule_violated')
             ->assertJsonValidationErrors(['product_variant_id']);
     }
 
@@ -295,6 +298,7 @@ class ProductPurchasabilityHttpCartTest extends TestCase
             'quantity' => 1,
         ])
             ->assertUnprocessable()
+            ->assertJsonPath('code', 'business_rule_violated')
             ->assertJsonValidationErrors(['product_id']);
     }
 
@@ -311,7 +315,7 @@ class ProductPurchasabilityHttpCartTest extends TestCase
             'is_active' => true,
         ]);
 
-        $product = Product::factory()->create([
+        $product = Product::factory()->fromChina()->create([
             'category_id' => $leaf->id,
             'catalog_product_type_id' => $cpt->id,
             'price' => $price,
@@ -319,20 +323,22 @@ class ProductPurchasabilityHttpCartTest extends TestCase
             'lifecycle_status' => ProductLifecycleStatus::Active,
             'visibility' => ProductVisibility::Public,
             'is_demo' => false,
+            'air_shipping_price' => 2000,
         ]);
 
-        Inventory::query()->updateOrCreate(
+        // CHINA_IMPORT simple stock SSoT is commercial availability (not inventory table).
+        ChinaCommercialStock::query()->updateOrCreate(
             [
                 'product_id' => $product->id,
                 'product_variant_id' => null,
             ],
             [
-                'quantity' => $stock,
+                'available_quantity' => $stock,
                 'reserved_quantity' => 0,
-                'low_stock_threshold' => 1,
+                'ordered_quantity' => 0,
             ],
         );
 
-        return $product->fresh(['inventory', 'catalogProductType']) ?? $product;
+        return $product->fresh(['inventory', 'catalogProductType', 'commerceChannel']) ?? $product;
     }
 }
