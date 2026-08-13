@@ -4,8 +4,8 @@ import * as Notifications from 'expo-notifications';
 import { useAuthStore } from '@/src/core/auth';
 import {
   configureForegroundNotificationHandler,
+  handleExpoPushTokenRotation,
   registerPushForCurrentUser,
-  resetPushRegistrationState,
 } from '../services/pushRegistration';
 import {
   consumeLastNotificationResponseOnLaunch,
@@ -24,6 +24,11 @@ let foregroundHandlerConfigured = false;
 export function usePushNotificationsBootstrap(): void {
   const authStatus = useAuthStore((s) => s.status);
   const invalidateNotifications = useInvalidateNotificationQueries();
+  const invalidateRef = useRef(invalidateNotifications);
+  useEffect(() => {
+    invalidateRef.current = invalidateNotifications;
+  }, [invalidateNotifications]);
+
   const registeredForUser = useRef<string | null>(null);
   const coldStartConsumed = useRef(false);
 
@@ -59,30 +64,31 @@ export function usePushNotificationsBootstrap(): void {
     const userId = useAuthStore.getState().user?.id ?? 'authenticated';
     if (registeredForUser.current !== userId) {
       registeredForUser.current = userId;
-      // Force re-register after account switch (in-memory cache cleared on logout).
-      void registerPushForCurrentUser();
+      void registerPushForCurrentUser({ userId });
     }
 
     const receivedSub = Notifications.addNotificationReceivedListener(() => {
       // Arrival only — refresh inbox/unread; do not navigate.
-      invalidateNotifications();
+      invalidateRef.current();
     });
 
     const responseSub = Notifications.addNotificationResponseReceivedListener(
       (response) => {
         handleNotificationResponseNavigation(response);
-        invalidateNotifications();
+        invalidateRef.current();
       },
     );
 
     const tokenSub = Notifications.addPushTokenListener(() => {
-      resetPushRegistrationState();
-      void registerPushForCurrentUser();
+      // Native FCM/APNs token rotation — coalesce via registerPushForCurrentUser.
+      // Must NOT resetPushRegistrationState() (clears in-flight → parallel storms).
+      void handleExpoPushTokenRotation(undefined, userId);
     });
 
     const onAppState = (next: AppStateStatus) => {
       if (next === 'active') {
-        invalidateNotifications();
+        // Resume: refresh unread only. Do NOT re-register (avoids storms).
+        invalidateRef.current();
       }
     };
     const appStateSub = AppState.addEventListener('change', onAppState);
@@ -93,5 +99,6 @@ export function usePushNotificationsBootstrap(): void {
       tokenSub.remove();
       appStateSub.remove();
     };
-  }, [authStatus, invalidateNotifications]);
+    // Intentionally depend only on authStatus — invalidateNotifications is read via ref.
+  }, [authStatus]);
 }

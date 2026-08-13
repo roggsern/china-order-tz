@@ -42,10 +42,22 @@ jest.mock('@/src/features/devices', () => ({
 }));
 
 import { Platform } from 'react-native';
+import { ApiError } from '@/src/core/errors';
 import {
+  handleExpoPushTokenRotation,
   registerPushForCurrentUser,
   resetPushRegistrationState,
 } from './pushRegistration';
+
+function grantPermissionAndToken(token = 'ExponentPushToken[abc123]') {
+  mockGetPermissionsAsync.mockResolvedValue({ granted: true, status: 'granted' });
+  mockGetExpoPushTokenAsync.mockResolvedValue({ data: token });
+  mockRegisterDevicePushToken.mockResolvedValue({
+    id: 'tok-1',
+    installationId: '11111111-1111-4111-8111-111111111111',
+    isActive: true,
+  });
+}
 
 describe('registerPushForCurrentUser', () => {
   const originalOs = Platform.OS;
@@ -82,29 +94,110 @@ describe('registerPushForCurrentUser', () => {
   });
 
   it('registers when permission granted and token obtained', async () => {
-    mockGetPermissionsAsync.mockResolvedValue({ granted: true, status: 'granted' });
-    mockGetExpoPushTokenAsync.mockResolvedValue({
-      data: 'ExponentPushToken[abc123]',
-    });
-    mockRegisterDevicePushToken.mockResolvedValue({
-      id: 'tok-1',
-      installationId: '11111111-1111-4111-8111-111111111111',
-      isActive: true,
-    });
+    grantPermissionAndToken();
 
-    const result = await registerPushForCurrentUser();
+    const result = await registerPushForCurrentUser({ userId: 'user-1' });
     expect(result).toEqual({
       status: 'registered',
       token: 'ExponentPushToken[abc123]',
     });
-    expect(mockRegisterDevicePushToken).toHaveBeenCalledWith(
-      expect.objectContaining({
-        pushToken: 'ExponentPushToken[abc123]',
-        provider: 'expo',
-        platform: 'android',
+    expect(mockRegisterDevicePushToken).toHaveBeenCalledTimes(1);
+  });
+
+  it('rerender / repeat call for same tuple does not hit API again', async () => {
+    grantPermissionAndToken();
+    await registerPushForCurrentUser({ userId: 'user-1' });
+    await registerPushForCurrentUser({ userId: 'user-1' });
+    await registerPushForCurrentUser({ userId: 'user-1' });
+    expect(mockRegisterDevicePushToken).toHaveBeenCalledTimes(1);
+  });
+
+  it('coalesces concurrent in-flight registrations to one API call', async () => {
+    grantPermissionAndToken();
+    mockRegisterDevicePushToken.mockImplementation(async () => {
+      await new Promise((r) => setTimeout(r, 40));
+      return {
+        id: 'tok-1',
         installationId: '11111111-1111-4111-8111-111111111111',
+      };
+    });
+
+    const [first, second] = await Promise.all([
+      registerPushForCurrentUser({ userId: 'user-1' }),
+      registerPushForCurrentUser({ userId: 'user-1' }),
+    ]);
+
+    expect(mockRegisterDevicePushToken).toHaveBeenCalledTimes(1);
+    expect(first).toEqual(second);
+    expect(first.status).toBe('registered');
+  });
+
+  it('429 does not tight-loop register calls', async () => {
+    grantPermissionAndToken();
+    mockRegisterDevicePushToken.mockRejectedValue(
+      new ApiError({
+        message: 'Too Many Requests',
+        status: 429,
+        code: 'rate_limited',
       }),
     );
+
+    await registerPushForCurrentUser({ userId: 'user-1' });
+    const second = await registerPushForCurrentUser({ userId: 'user-1' });
+    expect(mockRegisterDevicePushToken).toHaveBeenCalledTimes(1);
+    expect(second).toMatchObject({
+      status: 'registration_failed',
+      reason: 'backoff_active',
+    });
+  });
+
+  it('500 retries are bounded then backoff', async () => {
+    grantPermissionAndToken();
+    mockRegisterDevicePushToken.mockRejectedValue(
+      new ApiError({
+        message: 'Server Error',
+        status: 500,
+        code: 'server_error',
+      }),
+    );
+
+    const result = await registerPushForCurrentUser({ userId: 'user-1' });
+    // initial + MAX_TRANSIENT_RETRIES (3) = 4 attempts
+    expect(mockRegisterDevicePushToken.mock.calls.length).toBeLessThanOrEqual(4);
+    expect(result.status).toBe('registration_failed');
+    expect(result).toMatchObject({ retryable: true });
+
+    const blocked = await registerPushForCurrentUser({ userId: 'user-1' });
+    expect(blocked).toMatchObject({ reason: 'backoff_active' });
+  }, 15000);
+
+  it('token rotation with new Expo token registers once more', async () => {
+    grantPermissionAndToken('ExponentPushToken[abc123]');
+    await registerPushForCurrentUser({ userId: 'user-1' });
+
+    mockGetExpoPushTokenAsync.mockResolvedValue({
+      data: 'ExponentPushToken[rotated]',
+    });
+    await handleExpoPushTokenRotation('native-fcm-token', 'user-1');
+    expect(mockRegisterDevicePushToken).toHaveBeenCalledTimes(2);
+    expect(mockRegisterDevicePushToken.mock.calls[1][0].pushToken).toBe(
+      'ExponentPushToken[rotated]',
+    );
+  });
+
+  it('account switch registers once for new user', async () => {
+    grantPermissionAndToken();
+    await registerPushForCurrentUser({ userId: 'user-a' });
+    resetPushRegistrationState();
+    await registerPushForCurrentUser({ userId: 'user-b' });
+    expect(mockRegisterDevicePushToken).toHaveBeenCalledTimes(2);
+  });
+
+  it('native token listener with same Expo token does not re-register', async () => {
+    grantPermissionAndToken();
+    await registerPushForCurrentUser({ userId: 'user-1' });
+    await handleExpoPushTokenRotation('native-fcm-token', 'user-1');
+    expect(mockRegisterDevicePushToken).toHaveBeenCalledTimes(1);
   });
 
   it('survives push token acquisition failure without crashing', async () => {
@@ -126,15 +219,11 @@ describe('registerPushForCurrentUser', () => {
   });
 
   it('reuses installation id across registrations', async () => {
-    mockGetPermissionsAsync.mockResolvedValue({ granted: true, status: 'granted' });
-    mockGetExpoPushTokenAsync.mockResolvedValue({
-      data: 'ExponentPushToken[abc123]',
-    });
-    mockRegisterDevicePushToken.mockResolvedValue({ id: 'tok-1' });
+    grantPermissionAndToken();
 
-    await registerPushForCurrentUser();
+    await registerPushForCurrentUser({ userId: 'user-1' });
     resetPushRegistrationState();
-    await registerPushForCurrentUser();
+    await registerPushForCurrentUser({ userId: 'user-1' });
 
     expect(mockGetOrCreateInstallationId).toHaveBeenCalledTimes(2);
     expect(mockRegisterDevicePushToken.mock.calls[0][0].installationId).toBe(

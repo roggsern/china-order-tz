@@ -338,4 +338,60 @@ class DevicePushTokenRegistrationTest extends TestCase
             'push_token' => $payload['push_token'],
         ]);
     }
+
+    public function test_existing_active_row_app_reopen_refresh_succeeds_repeatedly(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $pushToken = 'ExponentPushToken['.Str::random(22).']';
+        $installationId = (string) Str::uuid();
+
+        DevicePushToken::factory()->create([
+            'user_id' => $user->id,
+            'push_token' => $pushToken,
+            'provider' => 'expo',
+            'platform' => 'android',
+            'installation_id' => strtolower($installationId),
+            'is_active' => true,
+            'revoked_at' => null,
+        ]);
+
+        $payload = $this->registrationPayload([
+            'push_token' => $pushToken,
+            'installation_id' => $installationId,
+        ]);
+
+        for ($i = 0; $i < 10; $i++) {
+            $this->postJson('/api/v1/devices/push-tokens', $payload)
+                ->assertCreated()
+                ->assertJsonPath('success', true)
+                ->assertJsonPath('data.installation_id', strtolower($installationId));
+        }
+
+        $this->assertSame(1, DevicePushToken::query()->where('push_token', $pushToken)->count());
+        $this->assertSame(1, DevicePushToken::query()->where('installation_id', strtolower($installationId))->count());
+    }
+
+    public function test_controller_does_not_depend_on_api_response_helper_class_name_in_body(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $response = $this->postJson('/api/v1/devices/push-tokens', $this->registrationPayload())
+            ->assertCreated();
+
+        $response->assertJsonStructure([
+            'success',
+            'message',
+            'data' => [
+                'id',
+                'provider',
+                'platform',
+                'installation_id',
+                'is_active',
+            ],
+        ]);
+        $this->assertTrue($response->json('success'));
+    }
 }

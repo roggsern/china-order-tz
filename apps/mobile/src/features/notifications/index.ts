@@ -18,11 +18,13 @@ export {
   configureForegroundNotificationHandler,
   ensureAndroidOrderUpdatesChannel,
   registerPushForCurrentUser,
+  handleExpoPushTokenRotation,
   requestNotificationPermission,
   getLastRegisteredPushToken,
   resetPushRegistrationState,
   resetPushRegistrationStateForTests,
   type PushRegistrationResult,
+  type RegisterPushOptions,
 } from './services/pushRegistration';
 export {
   consumeNotificationResponse,

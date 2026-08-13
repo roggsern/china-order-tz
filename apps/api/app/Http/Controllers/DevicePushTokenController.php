@@ -8,9 +8,13 @@ use App\Http\Requests\Devices\DeactivateDevicePushTokenRequest;
 use App\Http\Requests\Devices\RegisterDevicePushTokenRequest;
 use App\Http\Resources\DevicePushTokenResource;
 use App\Models\User;
-use App\Support\Http\ApiResponse;
 use Illuminate\Http\JsonResponse;
 
+/**
+ * Wave 6A device push-token registration.
+ * Uses plain JSON envelopes (same as NotificationController) — do not depend on
+ * uncommitted ApiResponse helpers for this production-critical path.
+ */
 class DevicePushTokenController extends Controller
 {
     public function store(
@@ -22,11 +26,11 @@ class DevicePushTokenController extends Controller
 
         $token = $action->handle($user, $request->validatedPayload());
 
-        return ApiResponse::success(
-            data: new DevicePushTokenResource($token),
-            message: 'Device push token registered',
-            status: 201,
-        );
+        return response()->json([
+            'success' => true,
+            'message' => 'Device push token registered',
+            'data' => new DevicePushTokenResource($token),
+        ], 201);
     }
 
     public function destroy(
@@ -43,9 +47,10 @@ class DevicePushTokenController extends Controller
             isset($validated['push_token']) ? (string) $validated['push_token'] : null,
         );
 
-        return ApiResponse::success(
-            data: ['deactivated' => $marked],
-            message: 'Device push token deactivated',
-        );
+        return response()->json([
+            'success' => true,
+            'message' => 'Device push token deactivated',
+            'data' => ['deactivated' => $marked],
+        ]);
     }
 }

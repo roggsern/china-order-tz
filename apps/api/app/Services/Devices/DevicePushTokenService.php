@@ -6,8 +6,10 @@ use App\Enums\PushTokenPlatform;
 use App\Enums\PushTokenProvider;
 use App\Models\DevicePushToken;
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
+use Throwable;
 
 /**
  * Canonical ownership for mobile push tokens (Wave 6A).
@@ -15,6 +17,8 @@ use InvalidArgumentException;
  */
 class DevicePushTokenService
 {
+    private const DEADLOCK_RETRIES = 3;
+
     /**
      * @param  array{
      *   push_token: string,
@@ -42,6 +46,39 @@ class DevicePushTokenService
             throw new InvalidArgumentException('push_token and installation_id are required.');
         }
 
+        $lastError = null;
+        for ($attempt = 0; $attempt <= self::DEADLOCK_RETRIES; $attempt++) {
+            try {
+                return $this->registerOnce(
+                    $user,
+                    $pushToken,
+                    $installationId,
+                    $provider,
+                    $platform,
+                    $appVersion !== '' ? $appVersion : null,
+                    $deviceName !== '' ? $deviceName : null,
+                );
+            } catch (Throwable $e) {
+                $lastError = $e;
+                if (! $this->isRetryableConcurrencyError($e) || $attempt === self::DEADLOCK_RETRIES) {
+                    throw $e;
+                }
+                usleep(25_000 * ($attempt + 1));
+            }
+        }
+
+        throw $lastError ?? new InvalidArgumentException('Unable to register device push token.');
+    }
+
+    private function registerOnce(
+        User $user,
+        string $pushToken,
+        string $installationId,
+        PushTokenProvider $provider,
+        PushTokenPlatform $platform,
+        ?string $appVersion,
+        ?string $deviceName,
+    ): DevicePushToken {
         return DB::transaction(function () use (
             $user,
             $pushToken,
@@ -51,15 +88,32 @@ class DevicePushTokenService
             $appVersion,
             $deviceName,
         ): DevicePushToken {
-            $byToken = DevicePushToken::query()
-                ->where('push_token', $pushToken)
+            // Lock candidate rows in stable primary-key order to avoid MySQL deadlocks
+            // when concurrent requests lock by push_token vs installation_id differently.
+            $candidateIds = DevicePushToken::query()
+                ->where(function ($q) use ($pushToken, $installationId): void {
+                    $q->where('push_token', $pushToken)
+                        ->orWhere('installation_id', $installationId);
+                })
+                ->orderBy('id')
                 ->lockForUpdate()
-                ->first();
+                ->pluck('id')
+                ->all();
 
-            $byInstallation = DevicePushToken::query()
-                ->where('installation_id', $installationId)
-                ->lockForUpdate()
-                ->first();
+            $locked = $candidateIds === []
+                ? collect()
+                : DevicePushToken::query()
+                    ->whereIn('id', $candidateIds)
+                    ->orderBy('id')
+                    ->get()
+                    ->keyBy('id');
+
+            $byToken = $locked->first(
+                fn (DevicePushToken $row): bool => $row->push_token === $pushToken,
+            );
+            $byInstallation = $locked->first(
+                fn (DevicePushToken $row): bool => $row->installation_id === $installationId,
+            );
 
             if (
                 $byToken !== null
@@ -78,8 +132,8 @@ class DevicePushTokenService
                 'provider' => $provider,
                 'platform' => $platform,
                 'installation_id' => $installationId,
-                'app_version' => $appVersion !== '' ? $appVersion : null,
-                'device_name' => $deviceName !== '' ? $deviceName : null,
+                'app_version' => $appVersion,
+                'device_name' => $deviceName,
                 'is_active' => true,
                 'revoked_at' => null,
                 'last_seen_at' => now(),
@@ -99,6 +153,24 @@ class DevicePushTokenService
 
             return DevicePushToken::query()->create($attributes);
         });
+    }
+
+    private function isRetryableConcurrencyError(Throwable $e): bool
+    {
+        if (! $e instanceof QueryException) {
+            return false;
+        }
+
+        $message = strtolower($e->getMessage());
+        if (str_contains($message, 'deadlock') || str_contains($message, '1213')) {
+            return true;
+        }
+
+        // Unique race after concurrent create — retry resolves via lock + update path.
+        $sqlState = (string) ($e->errorInfo[0] ?? '');
+        $driverCode = (int) ($e->errorInfo[1] ?? 0);
+
+        return $sqlState === '23000' || $driverCode === 1062;
     }
 
     /**
@@ -123,6 +195,7 @@ class DevicePushTokenService
             $query = DevicePushToken::query()
                 ->where('user_id', $user->id)
                 ->where('is_active', true)
+                ->orderBy('id')
                 ->lockForUpdate();
 
             $query->where(function ($q) use ($installationId, $pushToken): void {
@@ -152,6 +225,7 @@ class DevicePushTokenService
             $tokens = DevicePushToken::query()
                 ->where('user_id', $user->id)
                 ->where('is_active', true)
+                ->orderBy('id')
                 ->lockForUpdate()
                 ->get();
 
