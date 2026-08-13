@@ -108,9 +108,10 @@ describe("mega menu performance hotfix contracts", () => {
 
   it("renders featured tiles from slim primary_image + brand.name fields", () => {
     const source = readFileSync(megaMenuPath, "utf8");
-    assert.match(source, /product\.primary_image\?\.url \|\| product\.primary_image\?\.path/);
+    assert.match(source, /resolveMegaMenuProductImage\(product\)/);
     assert.match(source, /product\.brand\?\.name/);
     assert.doesNotMatch(source, /product\.variants/);
     assert.doesNotMatch(source, /product\.inventory/);
+    assert.doesNotMatch(source, /productImage\(product:\s*ApiCatalogProductCard\)/);
   });
 });

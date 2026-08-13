@@ -6,7 +6,8 @@ import Link from "next/link";
 import { CountryFlag } from "@/components/storefront/CountryFlag";
 import { enrichApiCategoryFromStatic } from "@/lib/catalog/category-presentation";
 import { useChinaStorefrontMenu } from "@/lib/catalog/use-china-storefront-menu";
-import type { ApiCatalogCategory, ApiCatalogProductCard } from "@/lib/api/products";
+import { resolveMegaMenuProductImage } from "@/lib/catalog/mega-menu-product-image";
+import type { ApiCatalogCategory } from "@/lib/api/products";
 import { STOREFRONT_NAV_LABELS } from "@/lib/storefront/navigation-policy";
 import { ArrowRightIcon, ChevronDownIcon, GridIcon } from "./icons";
 
@@ -23,10 +24,6 @@ interface MegaMenuProps {
 
 const defaultTriggerClassName =
   "inline-flex min-h-11 items-center gap-2 rounded-lg px-4 py-2.5 text-[13px] font-medium text-zinc-600 transition-all duration-200 ease-out hover:bg-zinc-50 hover:text-zinc-900";
-
-function productImage(product: ApiCatalogProductCard): string | null {
-  return product.primary_image?.url || product.primary_image?.path || null;
-}
 
 function categoryHref(slug: string): string {
   return `/products?origin=china&category=${encodeURIComponent(slug)}`;
@@ -454,7 +451,7 @@ export function MegaMenu({
                   ) : (
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                       {featured.slice(0, 6).map((product) => {
-                        const image = productImage(product);
+                        const image = resolveMegaMenuProductImage(product);
                         return (
                           <Link
                             key={product.id}

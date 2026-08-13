@@ -7,23 +7,28 @@ import type {
   ProductListResult,
 } from "@/lib/api/products";
 
+/** Wave 2 slim mega-menu featured tile — not a full listing card. */
+export type ChinaMegaMenuFeaturedProduct = {
+  id: string;
+  slug: string;
+  name: string;
+  primary_image?: {
+    id?: string | null;
+    path?: string | null;
+    url?: string | null;
+    alt_text?: string | null;
+  } | null;
+  brand?: Pick<ApiCatalogBrand, "id" | "name" | "slug"> | null;
+};
+
 export type ChinaStorefrontMenu = {
   label: string;
   categories: ApiCatalogCategory[];
   active_category: string | null;
   /** Mega-menu brand chips — identity fields required; extra brand fields optional. */
   brands: Array<Pick<ApiCatalogBrand, "id" | "name" | "slug"> & Partial<ApiCatalogBrand>>;
-  /**
-   * Mega-menu featured tiles — slim product cards (id/slug/name/primary_image/brand).
-   * Full listing-card fields remain optional for backward compatibility.
-   */
-  featured_products: Array<
-    Pick<ApiCatalogProductCard, "id" | "slug" | "name"> &
-      Partial<ApiCatalogProductCard> & {
-        primary_image?: ApiCatalogProductCard["primary_image"];
-        brand?: Pick<ApiCatalogBrand, "id" | "name" | "slug"> | null;
-      }
-  >;
+  /** Slim featured tiles (id/slug/name/primary_image/brand) — no listing-card payload. */
+  featured_products: ChinaMegaMenuFeaturedProduct[];
 };
 
 export class ChinaStorefrontApiError extends Error {
