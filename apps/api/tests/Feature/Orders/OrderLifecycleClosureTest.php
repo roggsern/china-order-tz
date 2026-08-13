@@ -70,7 +70,9 @@ class OrderLifecycleClosureTest extends TestCase
     {
         $user = User::factory()->create();
         DeliveryAddress::factory()->create(['user_id' => $user->id]);
-        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::purchasable(20000);
+        // China channel allows customer_agent (default in createOrderWithShippingChoice).
+        // TZ_LOCAL MAIN-stock fixtures reject that shipping choice.
+        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::chinaPurchasable(20000);
 
         $cart = \App\Models\Cart::factory()->create([
             'user_id' => $user->id,
@@ -234,7 +236,10 @@ class OrderLifecycleClosureTest extends TestCase
 
         Sanctum::actingAs($user);
         $this->postJson("/api/v1/orders/{$order->id}/cancel")
-            ->assertStatus(422);
+            ->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'business_rule_violated')
+            ->assertJsonValidationErrors(['order']);
     }
 
     public function test_duplicate_transition_is_idempotent(): void

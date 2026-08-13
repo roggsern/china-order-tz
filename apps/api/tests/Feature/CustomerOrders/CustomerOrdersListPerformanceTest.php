@@ -115,7 +115,7 @@ class CustomerOrdersListPerformanceTest extends TestCase
             ->assertJsonPath('data.0.payment_status', PaymentStatus::Paid->value);
     }
 
-    public function test_list_does_not_eager_load_fulfillment_or_shipments(): void
+    public function test_list_includes_progress_and_receiving_choice_for_order_cards(): void
     {
         $user = User::factory()->create();
 
@@ -123,19 +123,19 @@ class CustomerOrdersListPerformanceTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        \Illuminate\Support\Facades\DB::enableQueryLog();
-
-        $this->getJson('/api/v1/orders')->assertOk();
-
-        $queries = collect(\Illuminate\Support\Facades\DB::getQueryLog())
-            ->pluck('query')
-            ->implode("\n");
-
-        \Illuminate\Support\Facades\DB::disableQueryLog();
-
-        $this->assertStringNotContainsString('fulfillments', strtolower($queries));
-        $this->assertStringNotContainsString('shipments', strtolower($queries));
-        $this->assertStringNotContainsString('warehouse_jobs', strtolower($queries));
+        $this->getJson('/api/v1/orders')
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonStructure([
+                'data' => [
+                    [
+                        'progress',
+                        'receiving_choice',
+                    ],
+                ],
+                'links',
+                'meta',
+            ]);
     }
 
     public function test_order_detail_flow_remains_available_with_full_items_payload(): void

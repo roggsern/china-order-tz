@@ -54,7 +54,10 @@ class CustomerOrdersTest extends TestCase
 
     public function test_unauthenticated_request_returns_401(): void
     {
-        $this->getJson('/api/v1/orders')->assertUnauthorized();
+        $this->getJson('/api/v1/orders')
+            ->assertUnauthorized()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'unauthenticated');
     }
 
     public function test_admin_token_rejected_on_customer_orders(): void

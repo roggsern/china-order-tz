@@ -65,14 +65,19 @@ class CustomerOrderDetailsTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $this->getJson("/api/v1/orders/{$order->id}")->assertNotFound();
+        $this->getJson("/api/v1/orders/{$order->id}")
+            ->assertNotFound()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'not_found');
     }
 
     public function test_unauthenticated_request_returns_401(): void
     {
         $order = Order::factory()->create();
 
-        $this->getJson("/api/v1/orders/{$order->id}")->assertUnauthorized();
+        $this->getJson("/api/v1/orders/{$order->id}")
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'unauthenticated');
     }
 
     public function test_admin_token_rejected_on_customer_order_details(): void

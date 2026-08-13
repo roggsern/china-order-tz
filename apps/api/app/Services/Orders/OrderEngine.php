@@ -25,10 +25,10 @@ use App\Services\Orders\Lifecycle\OrderLifecycleContext;
 use App\Services\Orders\Lifecycle\OrderLifecycleEngine;
 use App\Services\Profile\CustomerAddressService;
 use App\Services\Promotions\PromotionUsageService;
+use App\Support\Http\ApiResponse;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\ValidationException;
 
 /**
  * Order Engine — permanent business records from validated Checkout Sessions.
@@ -72,7 +72,7 @@ class OrderEngine
                 $locked = $this->markExpiredIfNeeded($locked);
 
                 if ($locked->isExpired() || $locked->status === CheckoutSessionStatus::Expired) {
-                    throw ValidationException::withMessages([
+                    ApiResponse::throwCodedValidation([
                         'session' => ['Checkout session has expired.'],
                     ]);
                 }
@@ -82,7 +82,7 @@ class OrderEngine
                 }
 
                 if ($locked->status !== CheckoutSessionStatus::Validated) {
-                    throw ValidationException::withMessages([
+                    ApiResponse::throwCodedValidation([
                         'session' => ['Checkout session must be validated before creating an order.'],
                     ]);
                 }
@@ -134,7 +134,7 @@ class OrderEngine
                     $locked->shipping_method,
                 );
                 if ($locked->cart_fingerprint !== null && ! hash_equals((string) $locked->cart_fingerprint, $fingerprint)) {
-                    throw ValidationException::withMessages([
+                    ApiResponse::throwCodedValidation([
                         'session' => ['Checkout totals are stale. Refresh checkout and confirm shipping again.'],
                     ]);
                 }
@@ -146,7 +146,7 @@ class OrderEngine
                 $cart = $this->cartService->loadCart($locked->cart()->firstOrFail());
 
                 if ($cart->isEmpty()) {
-                    throw ValidationException::withMessages([
+                    ApiResponse::throwCodedValidation([
                         'cart' => ['Cannot create an order from an empty cart.'],
                     ]);
                 }
@@ -276,7 +276,7 @@ class OrderEngine
                 return $this->loadOrderPayload($existing);
             }
 
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'session' => ['Checkout session is already completed.'],
             ]);
         }
@@ -289,7 +289,7 @@ class OrderEngine
             ->first();
 
         if ($existing === null) {
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'session' => ['Checkout session is already completed.'],
             ]);
         }
@@ -331,7 +331,7 @@ class OrderEngine
         foreach ($checks as $key => $expected) {
             $actual = (string) ($totals[$key] ?? '0.00');
             if (bccomp($actual, $expected, 2) !== 0) {
-                throw ValidationException::withMessages([
+                ApiResponse::throwCodedValidation([
                     'session' => ['Checkout totals are stale. Refresh checkout and confirm shipping again.'],
                 ]);
             }
@@ -357,7 +357,7 @@ class OrderEngine
         }
 
         if ($user->deliveryAddress === null) {
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'delivery_address' => ['Delivery address is required before checkout.'],
             ]);
         }

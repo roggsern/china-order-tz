@@ -100,14 +100,19 @@ class CustomerShipmentTrackingTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $this->getJson("/api/v1/orders/{$order->id}/tracking")->assertNotFound();
+        $this->getJson("/api/v1/orders/{$order->id}/tracking")
+            ->assertNotFound()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'not_found');
     }
 
     public function test_unauthenticated_request_returns_401(): void
     {
         $order = Order::factory()->create();
 
-        $this->getJson("/api/v1/orders/{$order->id}/tracking")->assertUnauthorized();
+        $this->getJson("/api/v1/orders/{$order->id}/tracking")
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'unauthenticated');
     }
 
     public function test_admin_token_rejected_on_customer_shipment_tracking(): void

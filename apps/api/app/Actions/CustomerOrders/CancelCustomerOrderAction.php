@@ -10,8 +10,8 @@ use App\Services\Orders\Lifecycle\OrderLifecycleContext;
 use App\Services\Orders\Lifecycle\OrderLifecycleEngine;
 use App\Services\Orders\OrderCancellationCascadeService;
 use App\Services\Returns\RefundEngine;
+use App\Support\Http\ApiResponse;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 class CancelCustomerOrderAction
 {
@@ -29,7 +29,7 @@ class CancelCustomerOrderAction
         }
 
         if (! $this->lifecycle->customerMayCancel($order)) {
-            throw ValidationException::withMessages([
+            ApiResponse::throwCodedValidation([
                 'order' => ['This order can no longer be cancelled.'],
             ]);
         }

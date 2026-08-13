@@ -22,25 +22,35 @@ use App\Http\Resources\ShipmentTrackingResource;
 use App\Models\CheckoutSession;
 use App\Models\Order;
 use App\Models\User;
+use App\Support\Http\ApiResponse;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Request;
 
 class CustomerOrderController extends Controller
 {
     public function index(
         IndexCustomerOrdersRequest $request,
         ListCustomerOrdersAction $action,
-    ): AnonymousResourceCollection {
+    ): JsonResponse {
         /** @var User $user */
         $user = auth()->user();
 
-        return CustomerOrderResource::collection(
+        // Preserve Laravel paginator `data` / `links` / `meta` shape used by the web app.
+        $payload = CustomerOrderResource::collection(
             $action->handle(
                 $user,
                 (int) $request->validated('per_page', 10),
                 $request->validated('filter', 'all'),
             )
-        )->additional(['success' => true]);
+        )->toResponse($request)->getData(true);
+
+        return ApiResponse::success(
+            data: $payload['data'] ?? [],
+            meta: is_array($payload['meta'] ?? null) ? $payload['meta'] : null,
+            extra: array_filter([
+                'links' => $payload['links'] ?? null,
+            ], static fn ($value) => $value !== null),
+        );
     }
 
     public function confirm(
@@ -50,11 +60,11 @@ class CustomerOrderController extends Controller
         /** @var User $user */
         $user = auth()->user();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Order created successfully.',
-            'data' => new OrderConfirmationResource($action->handle($user, $request->validated())),
-        ], 201);
+        return ApiResponse::success(
+            data: new OrderConfirmationResource($action->handle($user, $request->validated())),
+            message: 'Order created successfully.',
+            status: 201,
+        );
     }
 
     public function fromCheckout(
@@ -64,11 +74,11 @@ class CustomerOrderController extends Controller
         /** @var User $user */
         $user = auth()->user();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Order created from checkout session.',
-            'data' => new OrderEngineResource($action->handle($user, $checkoutSession)),
-        ], 201);
+        return ApiResponse::success(
+            data: new OrderEngineResource($action->handle($user, $checkoutSession)),
+            message: 'Order created from checkout session.',
+            status: 201,
+        );
     }
 
     public function storePayment(
@@ -79,11 +89,11 @@ class CustomerOrderController extends Controller
         /** @var User $user */
         $user = auth()->user();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Payment prepared successfully.',
-            'data' => new PaymentPreparationResource($action->handle($order, $request, $user)),
-        ], 201);
+        return ApiResponse::success(
+            data: new PaymentPreparationResource($action->handle($order, $request, $user)),
+            message: 'Payment prepared successfully.',
+            status: 201,
+        );
     }
 
     public function showPayment(Order $order, ShowOrderPaymentAction $action): JsonResponse
@@ -91,10 +101,9 @@ class CustomerOrderController extends Controller
         /** @var User $user */
         $user = auth()->user();
 
-        return response()->json([
-            'success' => true,
-            'data' => new PaymentPreparationResource($action->handle($order, $user)),
-        ]);
+        return ApiResponse::success(
+            data: new PaymentPreparationResource($action->handle($order, $user)),
+        );
     }
 
     public function show(Order $order, ShowCustomerOrderAction $action): JsonResponse
@@ -102,24 +111,24 @@ class CustomerOrderController extends Controller
         /** @var User $user */
         $user = auth()->user();
 
-        return response()->json([
-            'success' => true,
-            'data' => new CustomerOrderDetailResource($action->handle($order, $user)),
-        ]);
+        return ApiResponse::success(
+            data: new CustomerOrderDetailResource($action->handle($order, $user)),
+        );
     }
 
-    public function cancel(Order $order, CancelCustomerOrderAction $action): JsonResponse
+    public function cancel(Order $order, CancelCustomerOrderAction $action, Request $request): JsonResponse
     {
         /** @var User $user */
         $user = auth()->user();
 
-        $reason = request()->input('reason');
+        $reason = $request->input('reason');
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Order cancellation recorded.',
-            'data' => new CustomerOrderDetailResource($action->handle($user, $order, is_string($reason) ? $reason : null)),
-        ]);
+        return ApiResponse::success(
+            data: new CustomerOrderDetailResource(
+                $action->handle($user, $order, is_string($reason) ? $reason : null),
+            ),
+            message: 'Order cancellation recorded.',
+        );
     }
 
     public function tracking(Order $order, ShowShipmentTrackingAction $action): JsonResponse
@@ -127,9 +136,8 @@ class CustomerOrderController extends Controller
         /** @var User $user */
         $user = auth()->user();
 
-        return response()->json([
-            'success' => true,
-            'data' => new ShipmentTrackingResource($action->handle($order, $user)),
-        ]);
+        return ApiResponse::success(
+            data: new ShipmentTrackingResource($action->handle($order, $user)),
+        );
     }
 }
