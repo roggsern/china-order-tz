@@ -48,12 +48,6 @@ Schedule::command('model:prune')
     ->onOneServer()
     ->name('model-prune');
 
-Schedule::command('ops:prune-expired-cache')
-    ->daily()
-    ->withoutOverlapping()
-    ->onOneServer()
-    ->name('ops-prune-expired-cache');
-
 // Redis tagged cache only; no-op / skip when not using Redis.
 Schedule::command('cache:prune-stale-tags')
     ->daily()
@@ -67,12 +61,6 @@ Schedule::command('sanctum:prune-expired --hours=24')
     ->withoutOverlapping()
     ->onOneServer()
     ->name('sanctum-prune-expired');
-
-Schedule::command('ops:prune-temp-uploads')
-    ->daily()
-    ->withoutOverlapping()
-    ->onOneServer()
-    ->name('ops-prune-temp-uploads');
 
 /*
 |--------------------------------------------------------------------------
