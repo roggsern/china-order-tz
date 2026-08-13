@@ -16,15 +16,46 @@ use App\Http\Resources\CustomerCategoryResource;
 use App\Http\Resources\CustomerProductCardResource;
 use App\Http\Resources\CustomerProductDetailResource;
 use App\Models\Product;
+use App\Services\Storefront\StorefrontPublicResponseCache;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class CustomerProductController extends Controller
 {
-    public function index(ListProductsAction $action): AnonymousResourceCollection
+    public function __construct(
+        private readonly StorefrontPublicResponseCache $publicCache,
+    ) {}
+
+    public function index(Request $request, ListProductsAction $action): JsonResponse|AnonymousResourceCollection
     {
-        return CustomerProductCardResource::collection($action->handle())
-            ->additional(['success' => true]);
+        if (! $this->publicCache->isCacheableProductList($request)) {
+            return CustomerProductCardResource::collection($action->handle())
+                ->additional(['success' => true]);
+        }
+
+        $payload = $this->publicCache->remember(
+            'products',
+            $this->publicCache->productListVariant($request),
+            function () use ($action) {
+                $paginator = $action->handle();
+
+                return [
+                    'success' => true,
+                    'data' => CustomerProductCardResource::collection(
+                        collect($paginator->items()),
+                    )->resolve(),
+                    'meta' => [
+                        'current_page' => $paginator->currentPage(),
+                        'last_page' => $paginator->lastPage(),
+                        'per_page' => $paginator->perPage(),
+                        'total' => $paginator->total(),
+                    ],
+                ];
+            },
+        );
+
+        return response()->json($payload);
     }
 
     public function show(Product $product, ShowProductAction $action): JsonResponse

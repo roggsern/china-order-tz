@@ -6,12 +6,17 @@ use App\Actions\CMS\ResolveStorefrontHomepageAction;
 use App\Enums\CMS\CmsCommerceContext;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CmsHomepageLayoutResource;
+use App\Services\Storefront\StorefrontPublicResponseCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class StorefrontCmsHomepageController extends Controller
 {
+    public function __construct(
+        private readonly StorefrontPublicResponseCache $publicCache,
+    ) {}
+
     /**
      * Public storefront homepage for a commerce context.
      *
@@ -30,12 +35,31 @@ class StorefrontCmsHomepageController extends Controller
             ? (bool) $validated['allow_global_fallback']
             : true;
 
+        $variant = $context->value.'|fallback='.($allowFallback ? '1' : '0');
+
+        $payload = $this->publicCache->remember(
+            'cms-homepage',
+            $variant,
+            fn () => $this->buildHomepagePayload($action, $context, $allowFallback),
+        );
+
+        return response()->json($payload);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildHomepagePayload(
+        ResolveStorefrontHomepageAction $action,
+        CmsCommerceContext $context,
+        bool $allowFallback,
+    ): array {
         $resolved = $action->handle($context, $allowFallback);
         $layout = $resolved['layout'];
         $campaign = $resolved['campaign'];
 
         if ($layout === null) {
-            return response()->json([
+            return [
                 'success' => true,
                 'data' => null,
                 'meta' => [
@@ -44,12 +68,12 @@ class StorefrontCmsHomepageController extends Controller
                     'campaign' => null,
                     'message' => 'No active campaign or default homepage layout for this context.',
                 ],
-            ]);
+            ];
         }
 
-        return response()->json([
+        return [
             'success' => true,
-            'data' => new CmsHomepageLayoutResource($layout),
+            'data' => (new CmsHomepageLayoutResource($layout))->resolve(),
             'meta' => [
                 'commerce_context' => $context->value,
                 'resolved_commerce_context' => $layout->commerce_context instanceof \BackedEnum
@@ -69,6 +93,6 @@ class StorefrontCmsHomepageController extends Controller
                         : [],
                 ],
             ],
-        ]);
+        ];
     }
 }

@@ -7,6 +7,7 @@ use App\Http\Resources\CustomerCategoryResource;
 use App\Http\Resources\CustomerProductCardResource;
 use App\Http\Resources\CustomerProductDetailResource;
 use App\Http\Resources\StoreResource;
+use App\Services\Storefront\StorefrontPublicResponseCache;
 use App\Services\Storefront\TzStorefrontCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,13 +17,20 @@ class TzStorefrontController extends Controller
 {
     public function __construct(
         private readonly TzStorefrontCatalog $catalog,
+        private readonly StorefrontPublicResponseCache $publicCache,
     ) {}
 
     public function stores(): JsonResponse
     {
+        $data = $this->publicCache->remember(
+            'tz-stores',
+            'visible',
+            fn () => StoreResource::collection($this->catalog->stores())->resolve(),
+        );
+
         return response()->json([
             'success' => true,
-            'data' => StoreResource::collection($this->catalog->stores()),
+            'data' => $data,
         ]);
     }
 

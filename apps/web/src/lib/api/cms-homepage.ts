@@ -155,7 +155,7 @@ export async function getCmsHomepage(
   try {
     const response = await fetch(buildUrl(search), {
       headers: { Accept: "application/json" },
-      cache: "no-store",
+      next: { revalidate: 120 },
       signal: controller.signal,
     });
 

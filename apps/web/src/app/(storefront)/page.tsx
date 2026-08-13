@@ -25,12 +25,14 @@ import { getTzStores } from "@/lib/api/tz-stores";
 
 async function CommercialNewArrivals() {
   const content = await getHomepageContent();
-  const chinaProducts =
-    content.newArrivalsChina ??
-    (await getHomeNewArrivalsByOrigin("china", 4).catch(() => []));
-  const tzProducts =
-    content.newArrivalsTz ??
-    (await getHomeNewArrivalsByOrigin("tz", 4).catch(() => []));
+  const [chinaProducts, tzProducts] = await Promise.all([
+    content.newArrivalsChina != null
+      ? Promise.resolve(content.newArrivalsChina)
+      : getHomeNewArrivalsByOrigin("china", 4).catch(() => []),
+    content.newArrivalsTz != null
+      ? Promise.resolve(content.newArrivalsTz)
+      : getHomeNewArrivalsByOrigin("tz", 4).catch(() => []),
+  ]);
 
   return (
     <NewArrivalsSplit

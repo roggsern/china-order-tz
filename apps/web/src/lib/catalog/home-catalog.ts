@@ -20,7 +20,7 @@ export const getHomeNewArrivalsByOrigin = cache(
   async (origin: ProductOrigin, limit = 4): Promise<Product[]> => {
     const result = await getProductsPage({
       origin,
-      per_page: Math.max(limit * 2, 12),
+      per_page: limit,
       page: 1,
     });
     return sortProducts(result.products, "newest").slice(0, limit);
@@ -41,7 +41,7 @@ export const getHomeBestSellers = cache(async (limit = 8): Promise<Product[]> =>
   }
 
   const result = await getProductsPage({
-    per_page: Math.max(limit * 3, 24),
+    per_page: Math.max(limit * 2, 12),
     page: 1,
   });
 

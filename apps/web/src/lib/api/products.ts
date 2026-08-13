@@ -221,9 +221,14 @@ function buildCatalogUrl(path: string, searchParams?: URLSearchParams): string {
 }
 
 async function fetchCatalogJson<T>(path: string, searchParams?: URLSearchParams): Promise<T> {
+  const search = searchParams?.get("search")?.trim() ?? "";
+  const canRevalidate = search === "";
+
   const response = await fetch(buildCatalogUrl(path, searchParams), {
     headers: { Accept: "application/json" },
-    cache: "no-store",
+    ...(canRevalidate
+      ? { next: { revalidate: 120 } }
+      : { cache: "no-store" as RequestCache }),
   });
 
   const payload = (await response.json()) as T & { message?: string };

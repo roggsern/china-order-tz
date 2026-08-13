@@ -56,9 +56,14 @@ function buildUrl(path: string, searchParams?: URLSearchParams): string {
 }
 
 async function fetchJson<T>(path: string, searchParams?: URLSearchParams): Promise<T> {
+  const search = searchParams?.get("search")?.trim() ?? "";
+  const canRevalidate = search === "";
+
   const response = await fetch(buildUrl(path, searchParams), {
     headers: { Accept: "application/json" },
-    cache: "no-store",
+    ...(canRevalidate
+      ? { next: { revalidate: 120 } }
+      : { cache: "no-store" as RequestCache }),
   });
   const payload = (await response.json()) as T & { message?: string };
   if (!response.ok) {

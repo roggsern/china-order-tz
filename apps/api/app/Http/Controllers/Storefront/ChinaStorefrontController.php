@@ -10,6 +10,7 @@ use App\Http\Resources\CustomerCategoryResource;
 use App\Http\Resources\CustomerProductCardResource;
 use App\Services\Storefront\ChinaStorefrontCatalog;
 use App\Services\Storefront\ChinaStorefrontMenuCache;
+use App\Services\Storefront\StorefrontPublicResponseCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -19,6 +20,7 @@ class ChinaStorefrontController extends Controller
     public function __construct(
         private readonly ChinaStorefrontCatalog $catalog,
         private readonly ChinaStorefrontMenuCache $menuCache,
+        private readonly StorefrontPublicResponseCache $publicCache,
     ) {}
 
     public function categories(): AnonymousResourceCollection
@@ -27,10 +29,20 @@ class ChinaStorefrontController extends Controller
             ->additional(['success' => true]);
     }
 
-    public function featuredCollections(): AnonymousResourceCollection
+    public function featuredCollections(): JsonResponse
     {
-        return CustomerCategoryResource::collection($this->catalog->featuredCollectionCategories())
-            ->additional(['success' => true]);
+        $data = $this->publicCache->remember(
+            'china-featured-collections',
+            'default',
+            fn () => CustomerCategoryResource::collection(
+                $this->catalog->featuredCollectionCategories(),
+            )->resolve(),
+        );
+
+        return response()->json([
+            'success' => true,
+            'data' => $data,
+        ]);
     }
 
     public function brands(Request $request): AnonymousResourceCollection
@@ -42,11 +54,38 @@ class ChinaStorefrontController extends Controller
         )->additional(['success' => true]);
     }
 
-    public function products(Request $request): AnonymousResourceCollection
+    public function products(Request $request): JsonResponse|AnonymousResourceCollection
     {
-        return CustomerProductCardResource::collection(
-            $this->catalog->products($request->only(['category', 'brand', 'featured', 'search', 'per_page', 'page']))
-        )->additional(['success' => true]);
+        if (! $this->publicCache->isCacheableProductList($request)) {
+            return CustomerProductCardResource::collection(
+                $this->catalog->products($request->only(['category', 'brand', 'featured', 'search', 'per_page', 'page']))
+            )->additional(['success' => true]);
+        }
+
+        $payload = $this->publicCache->remember(
+            'china-products',
+            $this->publicCache->chinaProductListVariant($request),
+            function () use ($request) {
+                $paginator = $this->catalog->products(
+                    $request->only(['category', 'brand', 'featured', 'search', 'per_page', 'page']),
+                );
+
+                return [
+                    'success' => true,
+                    'data' => CustomerProductCardResource::collection(
+                        collect($paginator->items()),
+                    )->resolve(),
+                    'meta' => [
+                        'current_page' => $paginator->currentPage(),
+                        'last_page' => $paginator->lastPage(),
+                        'per_page' => $paginator->perPage(),
+                        'total' => $paginator->total(),
+                    ],
+                ];
+            },
+        );
+
+        return response()->json($payload);
     }
 
     public function menu(Request $request): JsonResponse
