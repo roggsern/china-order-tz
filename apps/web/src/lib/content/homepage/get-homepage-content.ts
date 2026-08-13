@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { getCmsHomepage } from "@/lib/api/cms-homepage";
+import type { CmsHomepageResponse } from "@/lib/api/cms-homepage";
 import type { TzStorefrontStore } from "@/lib/api/tz-stores";
 import type { Product } from "@/lib/types/catalog";
 import { applyStorefrontLaunchPresentation } from "./apply-storefront-launch";
@@ -13,6 +14,7 @@ import { homepageContentSeed } from "./seed";
 import { filterActiveScheduled } from "./schedule";
 import type {
   HomepageAdvertisement,
+  HomepageCollection,
   HomepageContent,
   HomepageFlashDeal,
   HomepageHeroSlide,
@@ -45,6 +47,13 @@ export type ResolvedHomepageContent = {
   shopByStores?: TzStorefrontStore[];
 };
 
+export type HomepageContentLoaderDeps = {
+  /** Clock for schedule filtering. Defaults to `new Date()` once per load. */
+  now?: Date;
+  getCmsHomepage?: (params?: Parameters<typeof getCmsHomepage>[0]) => Promise<CmsHomepageResponse>;
+  fetchFeaturedCollections?: () => Promise<HomepageCollection[]>;
+};
+
 function resolveSeedContent(now: Date): ResolvedHomepageContent {
   const raw = homepageContentSeed;
 
@@ -64,24 +73,40 @@ function resolveSeedContent(now: Date): ResolvedHomepageContent {
   };
 }
 
-/**
- * Load homepage commercial content.
- * Preferred: Laravel CMS storefront homepage API (adapter → existing props).
- * Fallback: TypeScript seed — never returns an empty homepage.
- */
-export async function getHomepageContent(
-  now = new Date(),
-): Promise<ResolvedHomepageContent> {
-  return getHomepageContentCached(now.toISOString());
+function cmsProvidesFeaturedCollections(
+  collections: HomepageCollection[] | undefined,
+): boolean {
+  return Boolean(collections && collections.length > 0);
 }
 
-const getHomepageContentCached = cache(async (nowIso: string): Promise<ResolvedHomepageContent> => {
-  const now = new Date(nowIso);
+/**
+ * Single homepage content resolution (CMS + optional catalog collections).
+ *
+ * Critical-path design (measured):
+ * - featured-collections is often multi-second; CMS may be null/cheap or slow.
+ * - Start catalog fetch immediately alongside CMS (no catalog→CMS waterfall).
+ * - If CMS returns authoritative featured collections, return without awaiting
+ *   catalog (avoids blocking on unnecessary work when CMS wins).
+ * - If CMS is null/empty of collections, await the in-flight catalog promise
+ *   (wall clock ≈ max(CMS, catalog), not sum).
+ *
+ * Exported for focused unit tests with injected upstream mocks.
+ */
+export async function loadHomepageContent(
+  deps: HomepageContentLoaderDeps = {},
+): Promise<ResolvedHomepageContent> {
+  const now = deps.now ?? new Date();
+  const fetchCms = deps.getCmsHomepage ?? getCmsHomepage;
+  const fetchCatalog =
+    deps.fetchFeaturedCollections ?? fetchHomepageFeaturedCollectionsFromCatalog;
+
   const seedBase = resolveSeedContent(now);
-  const catalogCollections = await fetchHomepageFeaturedCollectionsFromCatalog().catch(() => []);
+
+  // Kick catalog immediately; only await when CMS cannot supply collections.
+  const catalogPromise = fetchCatalog().catch(() => [] as HomepageCollection[]);
 
   try {
-    const cms = await getCmsHomepage({
+    const cms = await fetchCms({
       commerceContext: "GLOBAL",
       allowGlobalFallback: true,
     });
@@ -89,6 +114,7 @@ const getHomepageContentCached = cache(async (nowIso: string): Promise<ResolvedH
     const mapped = mapCmsHomepageResponse(cms, seedBase);
 
     if (!mapped.appliedCmsSections) {
+      const catalogCollections = await catalogPromise;
       return applyStorefrontLaunchPresentation({
         ...seedBase,
         collections: resolveHomepageFeaturedCollections(undefined, catalogCollections),
@@ -99,17 +125,50 @@ const getHomepageContentCached = cache(async (nowIso: string): Promise<ResolvedH
 
     const merged = mergeCmsMappedIntoSeed(seedBase, mapped);
 
+    if (cmsProvidesFeaturedCollections(mapped.collections)) {
+      return applyStorefrontLaunchPresentation({
+        ...merged,
+        collections: resolveHomepageFeaturedCollections(mapped.collections, []),
+      });
+    }
+
+    const catalogCollections = await catalogPromise;
     return applyStorefrontLaunchPresentation({
       ...merged,
       collections: resolveHomepageFeaturedCollections(merged.collections, catalogCollections),
     });
   } catch {
+    const catalogCollections = await catalogPromise;
     return applyStorefrontLaunchPresentation({
       ...seedBase,
       collections: resolveHomepageFeaturedCollections(undefined, catalogCollections),
     });
   }
-});
+}
+
+/**
+ * Request-scoped homepage content loader for RSC.
+ * Zero-arg React `cache` identity — never keyed by a volatile timestamp.
+ */
+const getHomepageContentCached = cache(() => loadHomepageContent());
+
+/**
+ * Load homepage commercial content.
+ * Preferred: Laravel CMS storefront homepage API (adapter → existing props).
+ * Fallback: TypeScript seed — never returns an empty homepage.
+ *
+ * Within one RSC request, callers (Home + Suspense children) share one load via
+ * React `cache`. Pass an explicit `now` only for schedule-sensitive tests; that
+ * path bypasses the request cache so clocks stay under caller control.
+ */
+export async function getHomepageContent(
+  now?: Date,
+): Promise<ResolvedHomepageContent> {
+  if (now !== undefined) {
+    return loadHomepageContent({ now });
+  }
+  return getHomepageContentCached();
+}
 
 export function getAdsByPlacement(
   advertisements: HomepageAdvertisement[],

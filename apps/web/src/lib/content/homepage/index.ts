@@ -2,9 +2,11 @@ export type * from "./types";
 export { homepageContentSeed } from "./seed";
 export {
   getHomepageContent,
+  loadHomepageContent,
   getAdsByPlacement,
   discountPercent,
   type ResolvedHomepageContent,
+  type HomepageContentLoaderDeps,
 } from "./get-homepage-content";
 export {
   mapCmsHomepageResponse,
