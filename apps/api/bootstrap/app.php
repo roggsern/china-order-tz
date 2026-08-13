@@ -8,12 +8,16 @@ use App\Http\Middleware\EnsureAdminPermission;
 use App\Http\Middleware\EnsureUser;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Support\Monitoring\ErrorMonitorManager;
+use App\Support\Http\ApiResponse;
 use App\Exceptions\FeatureDisabledException;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -48,10 +52,10 @@ return Application::configure(basePath: dirname(__DIR__))
                 return;
             }
 
-            if ($e instanceof \Illuminate\Validation\ValidationException
+            if ($e instanceof ValidationException
                 || $e instanceof AuthenticationException
-                || $e instanceof \Illuminate\Auth\Access\AuthorizationException
-                || $e instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface
+                || $e instanceof AuthorizationException
+                || $e instanceof HttpExceptionInterface
                 || $e instanceof \Illuminate\Database\Eloquent\ModelNotFoundException) {
                 return;
             }
@@ -72,42 +76,115 @@ return Application::configure(basePath: dirname(__DIR__))
             return $request->is('api/*') || $request->expectsJson();
         });
 
-        $exceptions->render(function (FeatureDisabledException $exception, Request $request) {
-            if (! ($request->is('api/*') || $request->expectsJson())) {
+        $isApiJson = static function (Request $request): bool {
+            return $request->is('api/*') || $request->expectsJson();
+        };
+
+        // Contract v1 — additive fields only (keep existing keys/messages).
+        $exceptions->render(function (FeatureDisabledException $exception, Request $request) use ($isApiJson) {
+            if (! $isApiJson($request)) {
                 return null;
             }
 
-            return response()->json([
-                'success' => false,
-                'code' => 'feature_disabled',
-                'feature' => $exception->feature,
-                'message' => $exception->getMessage(),
-            ], 403);
+            return ApiResponse::error(
+                message: $exception->getMessage(),
+                code: 'feature_disabled',
+                status: 403,
+                extra: ['feature' => $exception->feature],
+            );
         });
 
-        $exceptions->render(function (AuthenticationException $exception, Request $request) {
-            if ($request->is('api/*') || $request->expectsJson()) {
-                return response()->json([
-                    'message' => $exception->getMessage() ?: 'Unauthenticated.',
-                ], 401);
+        $exceptions->render(function (AuthenticationException $exception, Request $request) use ($isApiJson) {
+            if (! $isApiJson($request)) {
+                return null;
             }
+
+            return ApiResponse::error(
+                message: $exception->getMessage() ?: 'Unauthenticated.',
+                code: 'unauthenticated',
+                status: 401,
+            );
+        });
+
+        $exceptions->render(function (AuthorizationException $exception, Request $request) use ($isApiJson) {
+            if (! $isApiJson($request)) {
+                return null;
+            }
+
+            return ApiResponse::error(
+                message: $exception->getMessage() ?: 'This action is unauthorized.',
+                code: 'forbidden',
+                status: 403,
+            );
+        });
+
+        $exceptions->render(function (ValidationException $exception, Request $request) use ($isApiJson) {
+            if (! $isApiJson($request)) {
+                return null;
+            }
+
+            // Preserve action-provided JSON bodies (e.g. login invalid_credentials).
+            if ($exception->response !== null) {
+                return $exception->response;
+            }
+
+            // Preserve Laravel's message + errors; add success + code.
+            return ApiResponse::validationError(
+                message: $exception->getMessage(),
+                errors: $exception->errors(),
+                status: (int) $exception->status,
+            );
+        });
+
+        $exceptions->render(function (HttpExceptionInterface $exception, Request $request) use ($isApiJson) {
+            if (! $isApiJson($request)) {
+                return null;
+            }
+
+            // FeatureDisabledException is handled above; this covers abort(401|403|503|…).
+            if ($exception instanceof FeatureDisabledException) {
+                return null;
+            }
+
+            $status = $exception->getStatusCode();
+            $message = $exception->getMessage();
+
+            $code = match ($status) {
+                401 => 'unauthenticated',
+                403 => 'forbidden',
+                404 => 'not_found',
+                503 => 'maintenance_mode',
+                500 => 'server_error',
+                default => null,
+            };
+
+            $payload = [
+                'success' => false,
+                'message' => $message,
+            ];
+
+            if ($code !== null) {
+                $payload['code'] = $code;
+            }
+
+            return response()->json(ApiResponse::withRequestId($payload), $status);
         });
 
         // RC1-G4B — never leak exception messages/stack in production API responses.
-        $exceptions->render(function (\Throwable $exception, Request $request) {
+        $exceptions->render(function (\Throwable $exception, Request $request) use ($isApiJson) {
             if (! app()->environment('production')) {
                 return null;
             }
 
-            if (! ($request->is('api/*') || $request->expectsJson())) {
+            if (! $isApiJson($request)) {
                 return null;
             }
 
-            if ($exception instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface) {
+            if ($exception instanceof HttpExceptionInterface) {
                 return null;
             }
 
-            if ($exception instanceof \Illuminate\Validation\ValidationException) {
+            if ($exception instanceof ValidationException) {
                 return null;
             }
 
@@ -115,7 +192,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
-            if ($exception instanceof \Illuminate\Auth\Access\AuthorizationException) {
+            if ($exception instanceof AuthorizationException) {
                 return null;
             }
 
@@ -123,8 +200,10 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
-            return response()->json([
-                'message' => 'Server Error',
-            ], 500);
+            return ApiResponse::error(
+                message: 'Server Error',
+                code: 'server_error',
+                status: 500,
+            );
         });
     })->create();
