@@ -33,7 +33,9 @@ class OrderEngineTest extends TestCase
         Sanctum::actingAs($user);
 
         $sessionId = $this->postJson('/api/v1/checkout/start')->json('data.id');
-        $this->applyCheckoutShippingChoice($sessionId);
+        $this->applyCheckoutShippingChoice($sessionId, [
+            'shipping_choice' => 'self_pickup',
+        ]);
 
         $response = $this->postJson("/api/v1/orders/from-checkout/{$sessionId}")
             ->assertCreated()
@@ -102,7 +104,9 @@ class OrderEngineTest extends TestCase
 
         Sanctum::actingAs($user);
         $sessionId = $this->postJson('/api/v1/checkout/start')->json('data.id');
-        $this->applyCheckoutShippingChoice($sessionId);
+        $this->applyCheckoutShippingChoice($sessionId, [
+            'shipping_choice' => 'self_pickup',
+        ]);
 
         VariantPrice::query()->where('product_variant_id', $variant->id)->delete();
 
@@ -141,7 +145,9 @@ class OrderEngineTest extends TestCase
 
         Sanctum::actingAs($user);
         $sessionId = $this->postJson('/api/v1/checkout/start')->json('data.id');
-        $this->applyCheckoutShippingChoice($sessionId);
+        $this->applyCheckoutShippingChoice($sessionId, [
+            'shipping_choice' => 'self_pickup',
+        ]);
         $orderId = $this->postJson("/api/v1/orders/from-checkout/{$sessionId}")->json('data.id');
 
         $this->getJson('/api/v1/orders')
@@ -164,7 +170,9 @@ class OrderEngineTest extends TestCase
 
         Sanctum::actingAs($owner);
         $sessionId = $this->postJson('/api/v1/checkout/start')->json('data.id');
-        $this->applyCheckoutShippingChoice($sessionId);
+        $this->applyCheckoutShippingChoice($sessionId, [
+            'shipping_choice' => 'self_pickup',
+        ]);
         $orderId = $this->postJson("/api/v1/orders/from-checkout/{$sessionId}")->json('data.id');
 
         Sanctum::actingAs($other);
@@ -180,7 +188,9 @@ class OrderEngineTest extends TestCase
 
         Sanctum::actingAs($user);
         $sessionId = $this->postJson('/api/v1/checkout/start')->json('data.id');
-        $this->applyCheckoutShippingChoice($sessionId);
+        $this->applyCheckoutShippingChoice($sessionId, [
+            'shipping_choice' => 'self_pickup',
+        ]);
         $orderId = $this->postJson("/api/v1/orders/from-checkout/{$sessionId}")->json('data.id');
 
         $order = Order::query()->with(['user', 'checkoutSession', 'items.variant'])->findOrFail($orderId);
@@ -206,6 +216,35 @@ class OrderEngineTest extends TestCase
         Sanctum::actingAs(Admin::factory()->create());
         $this->postJson("/api/v1/orders/from-checkout/{$sessionId}")
             ->assertUnauthorized();
+    }
+
+    public function test_retry_from_checkout_returns_same_order_without_duplicate(): void
+    {
+        $user = User::factory()->create();
+        // China channel — default shipping choice customer_agent is allowed.
+        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::chinaPurchasable(20000, 20);
+        $this->seedCart($user, $product->id, $variant->id, 1, 20000);
+
+        Sanctum::actingAs($user);
+        $sessionId = $this->postJson('/api/v1/checkout/start')->json('data.id');
+        $this->applyCheckoutShippingChoice($sessionId, [
+            'shipping_choice' => 'customer_agent',
+        ]);
+
+        $first = $this->postJson("/api/v1/orders/from-checkout/{$sessionId}")
+            ->assertCreated()
+            ->assertJsonPath('success', true)
+            ->json('data');
+
+        $second = $this->postJson("/api/v1/orders/from-checkout/{$sessionId}")
+            ->assertSuccessful()
+            ->assertJsonPath('success', true)
+            ->json('data');
+
+        $this->assertSame($first['id'], $second['id']);
+        $this->assertSame($first['order_number'], $second['order_number']);
+        $this->assertSame(1, Order::query()->where('checkout_session_id', $sessionId)->count());
+        $this->assertSame(1, Order::query()->where('user_id', $user->id)->count());
     }
 
     private function seedCart(

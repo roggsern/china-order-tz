@@ -86,6 +86,11 @@ function isTimeoutLike(error: unknown): boolean {
   return isTimeoutMessage(rawMessage);
 }
 
+/** True when AbortSignal.reason is our request-timeout abort (not a real offline failure). */
+export function isTimeoutAbortReason(reason: unknown): boolean {
+  return isTimeoutLike(reason);
+}
+
 function isTimeoutMessage(message: string): boolean {
   const lower = message.toLowerCase();
   return (

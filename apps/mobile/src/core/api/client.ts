@@ -1,5 +1,5 @@
 import { env } from '@/src/core/config';
-import { ApiError, mapApiError, mapNetworkError } from '@/src/core/errors';
+import { ApiError, isTimeoutAbortReason, mapApiError, mapNetworkError } from '@/src/core/errors';
 import { secureTokenStorage } from '@/src/core/storage';
 import type { ApiRequestOptions, ApiSuccessEnvelope } from './types';
 
@@ -109,6 +109,11 @@ export async function apiRequest<T = unknown>(
       signal,
     });
   } catch (error) {
+    // React Native often surfaces AbortController timeouts as "Network request failed"
+    // (not AbortError). Prefer our signal.reason so UX is timeout, not false offline.
+    if (signal.aborted && isTimeoutAbortReason(signal.reason)) {
+      throw mapNetworkError(signal.reason);
+    }
     throw mapNetworkError(error);
   } finally {
     cleanup();

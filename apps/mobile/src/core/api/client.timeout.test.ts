@@ -1,5 +1,5 @@
 import { createApiRequestSignal, DEFAULT_API_REQUEST_TIMEOUT_MS } from './client';
-import { mapNetworkError } from '@/src/core/errors';
+import { isTimeoutAbortReason, mapNetworkError } from '@/src/core/errors';
 
 describe('createApiRequestSignal', () => {
   beforeEach(() => {
@@ -40,5 +40,13 @@ describe('mapNetworkError timeout classification', () => {
   it('maps TimeoutError to timeout code', () => {
     const error = Object.assign(new Error('Request timed out'), { name: 'TimeoutError' });
     expect(mapNetworkError(error).code).toBe('timeout');
+  });
+
+  it('prefers AbortSignal timeout reason over RN Network request failed', () => {
+    const reason = Object.assign(new Error('Request timed out'), { name: 'TimeoutError' });
+    expect(isTimeoutAbortReason(reason)).toBe(true);
+    // Production path: signal.reason wins when fetch throws RN offline wording.
+    expect(mapNetworkError(reason).code).toBe('timeout');
+    expect(mapNetworkError(new Error('Network request failed')).code).toBe('network_error');
   });
 });

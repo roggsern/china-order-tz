@@ -10,6 +10,7 @@ use App\Events\Audit\OrderCreated as OrderCreatedAudit;
 use App\Events\Commerce\CommerceOrderCreated;
 use App\Models\CartItem;
 use App\Models\CheckoutSession;
+use App\Models\CommerceChannel;
 use App\Models\Order;
 use App\Models\User;
 use App\Services\Cart\CartService;
@@ -59,8 +60,22 @@ class OrderEngine
     {
         $this->assertOwned($user, $session);
 
+        /**
+         * Side effects after commit only.
+         * Sync WhatsApp/email/push inside the request+DB transaction previously held the
+         * HTTP response open long enough for mobile's 30s abort → nginx 499 while FPM still
+         * finished 201 (order created, payment never started).
+         *
+         * @var array{
+         *     order: Order,
+         *     channel: CommerceChannel,
+         *     channel_snapshot: array<string, mixed>
+         * }|null
+         */
+        $createdSideEffects = null;
+
         try {
-            return DB::transaction(function () use ($user, $session): Order {
+            $order = DB::transaction(function () use ($user, $session, &$createdSideEffects): Order {
                 /** @var CheckoutSession $locked */
                 $locked = CheckoutSession::query()
                     ->whereKey($session->id)
@@ -221,47 +236,11 @@ class OrderEngine
 
                 $order = $this->loadOrderPayload($order);
 
-                try {
-                    $notifyKey = 'order_created:'.$order->id.':'.$user->id;
-                    $this->notifications->notifyCustomer(
-                        NotificationEventType::OrderCreated,
-                        $user,
-                        [
-                            'customer_name' => $user->name,
-                            'order_number' => $order->order_number,
-                            'order_id' => $order->id,
-                            'order_total' => (string) $order->total,
-                            'currency' => $order->currency,
-                            'commerce_channel' => $channelSnapshot['code'] ?? null,
-                            'commerce_channel_label' => $channelSnapshot['customer_label'] ?? null,
-                        ],
-                        idempotencyKey: $notifyKey,
-                        correlationKey: $notifyKey,
-                    );
-                } catch (\Throwable $e) {
-                    Log::warning('notification.order_created_failed', [
-                        'order_id' => $order->id,
-                        'message' => $e->getMessage(),
-                    ]);
-                }
-
-                try {
-                    event(OrderCreatedAudit::fromOrder($order, $user));
-                } catch (\Throwable $e) {
-                    Log::warning('audit.order_created_failed', [
-                        'order_id' => $order->id,
-                        'message' => $e->getMessage(),
-                    ]);
-                }
-
-                try {
-                    event(new CommerceOrderCreated($order, $channel, $channelSnapshot));
-                } catch (\Throwable $e) {
-                    Log::warning('commerce.order_created_event_failed', [
-                        'order_id' => $order->id,
-                        'message' => $e->getMessage(),
-                    ]);
-                }
+                $createdSideEffects = [
+                    'order' => $order,
+                    'channel' => $channel,
+                    'channel_snapshot' => $channelSnapshot,
+                ];
 
                 return $order;
             });
@@ -278,6 +257,87 @@ class OrderEngine
 
             ApiResponse::throwCodedValidation([
                 'session' => ['Checkout session is already completed.'],
+            ]);
+        }
+
+        if ($createdSideEffects !== null) {
+            // Return 201 to the client first; sync channel HTTP (WhatsApp/email/push)
+            // must not compete with the mobile API timeout window.
+            $userId = $user->id;
+            $orderId = $createdSideEffects['order']->id;
+            $channelId = $createdSideEffects['channel']->id;
+            $channelSnapshot = $createdSideEffects['channel_snapshot'];
+
+            dispatch(function () use ($userId, $orderId, $channelId, $channelSnapshot): void {
+                $user = User::query()->find($userId);
+                $order = Order::query()->find($orderId);
+                $channel = CommerceChannel::query()->find($channelId);
+                if ($user === null || $order === null || $channel === null) {
+                    return;
+                }
+
+                app(self::class)->dispatchOrderCreatedSideEffects(
+                    $user,
+                    $order,
+                    $channel,
+                    $channelSnapshot,
+                );
+            })->afterResponse();
+        }
+
+        return $order;
+    }
+
+    /**
+     * Post-response order_created fan-out — must not block the from-checkout HTTP response.
+     *
+     * @param  array<string, mixed>  $channelSnapshot
+     */
+    public function dispatchOrderCreatedSideEffects(
+        User $user,
+        Order $order,
+        CommerceChannel $channel,
+        array $channelSnapshot,
+    ): void {
+        try {
+            $notifyKey = 'order_created:'.$order->id.':'.$user->id;
+            $this->notifications->notifyCustomer(
+                NotificationEventType::OrderCreated,
+                $user,
+                [
+                    'customer_name' => $user->name,
+                    'order_number' => $order->order_number,
+                    'order_id' => $order->id,
+                    'order_total' => (string) $order->total,
+                    'currency' => $order->currency,
+                    'commerce_channel' => $channelSnapshot['code'] ?? null,
+                    'commerce_channel_label' => $channelSnapshot['customer_label'] ?? null,
+                ],
+                idempotencyKey: $notifyKey,
+                correlationKey: $notifyKey,
+            );
+        } catch (\Throwable $e) {
+            Log::warning('notification.order_created_failed', [
+                'order_id' => $order->id,
+                'message' => $e->getMessage(),
+            ]);
+        }
+
+        try {
+            event(OrderCreatedAudit::fromOrder($order, $user));
+        } catch (\Throwable $e) {
+            Log::warning('audit.order_created_failed', [
+                'order_id' => $order->id,
+                'message' => $e->getMessage(),
+            ]);
+        }
+
+        try {
+            event(new CommerceOrderCreated($order, $channel, $channelSnapshot));
+        } catch (\Throwable $e) {
+            Log::warning('commerce.order_created_event_failed', [
+                'order_id' => $order->id,
+                'message' => $e->getMessage(),
             ]);
         }
     }

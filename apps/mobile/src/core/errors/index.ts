@@ -7,7 +7,7 @@ export {
   type ApiErrorPayload,
   type ApiFieldErrors,
 } from './apiError';
-export { mapApiError, mapNetworkError } from './mapApiError';
+export { mapApiError, mapNetworkError, isTimeoutAbortReason } from './mapApiError';
 export {
   getSharedTransportErrorMessage,
   NETWORK_OFFLINE_MESSAGE,

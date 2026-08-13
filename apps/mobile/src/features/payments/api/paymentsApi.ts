@@ -1,3 +1,4 @@
+import { ApiError } from '@/src/core/errors';
 import { apiClient } from '@/src/core/api';
 import type {
   PaymentMethodsAvailability,
@@ -29,7 +30,18 @@ export async function createOrderFromCheckoutSession(
   const response = await apiClient.post<unknown>(
     `/orders/from-checkout/${encodeURIComponent(checkoutSessionId)}`,
   );
-  return mapPaymentOrder(response.data);
+  const order = mapPaymentOrder(response.data);
+  if (!order.id.trim()) {
+    throw new ApiError({
+      message:
+        'Order was created but the response was incomplete. Open My Orders and continue payment.',
+      status: 500,
+      code: 'server_error',
+      requestId: typeof response.request_id === 'string' ? response.request_id : null,
+      raw: response && typeof response === 'object' ? (response as never) : null,
+    });
+  }
+  return order;
 }
 
 /** POST /payments/start/{order} */

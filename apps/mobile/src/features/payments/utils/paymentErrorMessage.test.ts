@@ -27,6 +27,18 @@ describe('getPaymentErrorMessage', () => {
     expect(message).not.toMatch(/payment_failed/i);
   });
 
+  it('does not label timeout as offline', () => {
+    const message = getPaymentErrorMessage(
+      new ApiError({
+        message: 'Request timed out. Please try again.',
+        status: 0,
+        code: 'timeout',
+      }),
+    );
+    expect(message).toMatch(/timed out/i);
+    expect(message).not.toMatch(/No internet/i);
+  });
+
   it('maps business_rule_violated', () => {
     expect(
       getPaymentErrorMessage(
