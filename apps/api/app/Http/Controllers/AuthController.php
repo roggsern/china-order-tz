@@ -10,6 +10,7 @@ use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\LogoutRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Resources\UserResource;
+use App\Support\Http\ApiResponse;
 use Illuminate\Http\JsonResponse;
 
 class AuthController extends Controller
@@ -18,43 +19,45 @@ class AuthController extends Controller
     {
         $result = $action->handle($request);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Registration successful',
-            'token' => $result['token'],
-            'token_type' => 'Bearer',
-            'data' => new UserResource($result['user']),
-        ], 201);
+        return ApiResponse::success(
+            data: new UserResource($result['user']),
+            message: 'Registration successful',
+            status: 201,
+            extra: [
+                'token' => $result['token'],
+                'token_type' => 'Bearer',
+            ],
+        );
     }
 
     public function login(LoginRequest $request, LoginUserAction $action): JsonResponse
     {
         $result = $action->handle($request);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Login successful',
-            'token' => $result['token'],
-            'token_type' => 'Bearer',
-            'data' => new UserResource($result['user']),
-        ]);
+        return ApiResponse::success(
+            data: new UserResource($result['user']),
+            message: 'Login successful',
+            extra: [
+                'token' => $result['token'],
+                'token_type' => 'Bearer',
+            ],
+        );
     }
 
     public function me(CurrentUserAction $action): JsonResponse
     {
-        return response()->json([
-            'success' => true,
-            'data' => new UserResource($action->handle()),
-        ]);
+        return ApiResponse::success(
+            data: new UserResource($action->handle()),
+        );
     }
 
     public function logout(LogoutRequest $request, LogoutUserAction $action): JsonResponse
     {
         $action->handle($request->validated());
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Logged out successfully',
-        ]);
+        return ApiResponse::success(
+            data: null,
+            message: 'Logged out successfully',
+        );
     }
 }

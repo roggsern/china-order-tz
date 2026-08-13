@@ -5,6 +5,7 @@ namespace App\Actions\UserAuth;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Models\User;
 use App\Support\Auth\SanctumTokenIssuer;
+use App\Support\Http\ApiResponse;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
@@ -23,10 +24,17 @@ class LoginUserAction
                 'email' => ['Invalid credentials'],
             ]);
 
-            $exception->response = response()->json([
-                'success' => false,
-                'message' => 'Invalid credentials',
-            ], 422);
+            // Keep message-centric body for web; add Contract v1 code + errors (additive).
+            $exception->response = ApiResponse::error(
+                message: 'Invalid credentials',
+                code: 'invalid_credentials',
+                status: 422,
+                extra: [
+                    'errors' => [
+                        'email' => ['Invalid credentials'],
+                    ],
+                ],
+            );
 
             throw $exception;
         }
@@ -37,10 +45,11 @@ class LoginUserAction
         if (! $user->is_active) {
             Auth::guard('web')->logout();
 
-            throw new HttpResponseException(response()->json([
-                'success' => false,
-                'message' => 'Your account has been disabled.',
-            ], 403));
+            throw new HttpResponseException(ApiResponse::error(
+                message: 'Your account has been disabled.',
+                code: 'account_disabled',
+                status: 403,
+            ));
         }
 
         // Customers keep multi-device tokens; new token still has finite expiry.
