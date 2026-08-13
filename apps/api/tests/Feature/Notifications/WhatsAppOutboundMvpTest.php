@@ -393,23 +393,23 @@ class WhatsAppOutboundMvpTest extends TestCase
         ], MetaWhatsAppTemplateMapper::supportedEventTypes());
 
         $this->assertSame(
-            ['in_app', 'whatsapp', 'email'],
+            ['in_app', 'whatsapp', 'email', 'push'],
             config('notifications.event_channels.order_created'),
         );
         $this->assertSame(
-            ['in_app', 'whatsapp', 'email'],
+            ['in_app', 'whatsapp', 'email', 'push'],
             config('notifications.event_channels.payment_confirmed'),
         );
         $this->assertSame(
-            ['in_app', 'whatsapp', 'email'],
+            ['in_app', 'whatsapp', 'email', 'push'],
             config('notifications.event_channels.shipment_arrived_tanzania'),
         );
         $this->assertSame(
-            ['in_app', 'whatsapp', 'email'],
+            ['in_app', 'whatsapp', 'email', 'push'],
             config('notifications.event_channels.order_delivered'),
         );
         $this->assertSame(
-            ['in_app'],
+            ['in_app', 'push'],
             config('notifications.event_channels.order_cancelled'),
         );
         $this->assertSame(
