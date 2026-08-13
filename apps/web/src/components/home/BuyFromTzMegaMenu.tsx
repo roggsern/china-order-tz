@@ -68,13 +68,14 @@ export function BuyFromTzMegaMenu({
   showCountryFlag = false,
   align = "left",
 }: BuyFromTzMegaMenuProps) {
-  const { stores, isLoading } = useTzStores();
   const [activeSlug, setActiveSlug] = useState("");
   const [open, setOpen] = useState(false);
   const [expandedSlug, setExpandedSlug] = useState<string | null>(null);
   const [categoriesByStore, setCategoriesByStore] = useState<Record<string, ApiCatalogCategory[]>>({});
   const rootRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+  const fetchEnabled = mobile || open;
+  const { stores, isLoading, error } = useTzStores({ enabled: fetchEnabled });
 
   useEffect(() => {
     if (!open || mobile) {
@@ -109,7 +110,7 @@ export function BuyFromTzMegaMenu({
   );
 
   useEffect(() => {
-    if (!resolvedActiveSlug) return;
+    if (!resolvedActiveSlug || !fetchEnabled) return;
     let cancelled = false;
 
     void getTzStoreCategories(resolvedActiveSlug)
@@ -129,45 +130,42 @@ export function BuyFromTzMegaMenu({
     return () => {
       cancelled = true;
     };
-  }, [resolvedActiveSlug]);
+  }, [resolvedActiveSlug, fetchEnabled]);
 
   const activeCategories = categoriesByStore[resolvedActiveSlug] ?? [];
 
-  const triggerIcon = showCountryFlag ? (
-    <CountryFlag country="TZ" size={18} decorative />
-  ) : (
-    <StoreIcon className="h-4 w-4 shrink-0 text-zinc-500" />
-  );
-
-  if (isLoading) {
-    return (
-      <div className="group relative">
-        <button
-          type="button"
-          className={linkClassName ?? defaultTriggerClassName}
-          aria-busy="true"
-          aria-label={triggerLabel}
-        >
-          {triggerIcon}
-          <span>{triggerLabel}</span>
-          <ChevronDownIcon className="h-3.5 w-3.5 opacity-60" />
-        </button>
+  const statusPanel =
+    isLoading && stores.length === 0 ? (
+      <div className="space-y-3 p-6" data-testid="tz-mega-loading" aria-busy="true">
+        <div className="h-4 w-40 animate-pulse rounded bg-zinc-100" />
+        <div className="h-3 w-full animate-pulse rounded bg-zinc-100" />
+        <div className="h-3 w-4/5 animate-pulse rounded bg-zinc-100" />
+        <p className="text-[12px] text-zinc-500">Loading Tanzanian stores…</p>
       </div>
-    );
-  }
-
-  if (!activeStore || stores.length === 0) {
-    return (
-      <Link
-        href="/buy-from-tz"
-        className={linkClassName ?? defaultTriggerClassName}
-        aria-label={triggerLabel}
-      >
-        {triggerIcon}
-        <span>{triggerLabel}</span>
-      </Link>
-    );
-  }
+    ) : error && stores.length === 0 ? (
+      <div className="space-y-3 p-6" data-testid="tz-mega-error" role="alert">
+        <p className="text-[13px] font-medium text-zinc-800">Unable to load stores.</p>
+        <p className="text-[12px] text-zinc-500">{error}</p>
+        <Link
+          href="/buy-from-tz"
+          className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#c9a227]"
+        >
+          Browse Buy from TZ
+          <ArrowRightIcon className="h-3 w-3" />
+        </Link>
+      </div>
+    ) : !isLoading && stores.length === 0 ? (
+      <div className="space-y-3 p-6" data-testid="tz-mega-empty">
+        <p className="text-[13px] text-zinc-600">Stores will appear once published.</p>
+        <Link
+          href="/buy-from-tz"
+          className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#c9a227]"
+        >
+          Browse Buy from TZ
+          <ArrowRightIcon className="h-3 w-3" />
+        </Link>
+      </div>
+    ) : null;
 
   if (mobile) {
     return (
@@ -178,6 +176,7 @@ export function BuyFromTzMegaMenu({
           className="flex min-h-11 w-full items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left text-[15px] font-medium leading-tight text-zinc-900 transition-all duration-200 ease-out active:bg-zinc-50"
           aria-expanded={open}
           aria-controls={menuId}
+          data-testid="tz-mega-trigger"
         >
           <span className="flex min-w-0 items-center gap-3">
             {showCountryFlag ? <CountryFlag country="TZ" size={18} decorative /> : null}
@@ -191,71 +190,79 @@ export function BuyFromTzMegaMenu({
         </button>
         {open ? (
           <div id={menuId}>
-            <p className="px-3 pb-2 text-[12px] text-zinc-500">
-              Shop from trusted Tanzanian stores.
-            </p>
-          <ul className="space-y-0.5 pb-1.5 pt-1">
-            {stores.map((store) => {
-              const isExpanded = expandedSlug === store.slug;
-              const categories = categoriesByStore[store.slug] ?? [];
+            {statusPanel ? (
+              statusPanel
+            ) : (
+              <>
+                <p className="px-3 pb-2 text-[12px] text-zinc-500">
+                  Shop from trusted Tanzanian stores.
+                </p>
+                <ul className="space-y-0.5 pb-1.5 pt-1">
+                  {stores.map((store) => {
+                    const isExpanded = expandedSlug === store.slug;
+                    const categories = categoriesByStore[store.slug] ?? [];
 
-              return (
-                <li key={store.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setExpandedSlug((current) => (current === store.slug ? null : store.slug));
-                      setActiveSlug(store.slug);
-                    }}
-                    className="flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left transition-all duration-200 ease-out active:bg-zinc-50"
-                    aria-expanded={isExpanded}
-                  >
-                    <span className="flex min-w-0 items-center gap-3">
-                      <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg ring-1 ring-[#c9a227]/20">
-                        <StoreLogo
-                          name={store.name}
-                          logoUrl={store.logo_url}
-                          themeColor={store.theme_color}
-                        />
-                      </span>
-                      <span className="truncate text-[14px] font-semibold text-[#c9a227]">
-                        {store.name}
-                      </span>
-                    </span>
-                    <ChevronDownIcon
-                      className={`h-3.5 w-3.5 shrink-0 text-zinc-400 transition-transform duration-200 ease-out ${
-                        isExpanded ? "rotate-180" : ""
-                      }`}
-                    />
-                  </button>
-                  {isExpanded ? (
-                    <ul className="mb-1.5 ml-[22px] max-h-52 space-y-0.5 overflow-y-auto border-l-2 border-[#c9a227]/20 pl-4 [scrollbar-width:thin]">
-                      {categories.map((category) => (
-                        <li key={category.id}>
-                          <Link
-                            href={`/buy-from-tz/${store.slug}/category/${category.slug}`}
-                            onClick={onNavigate}
-                            className="block rounded-lg px-2 py-1.5 text-[13px] text-zinc-500 transition-colors duration-200 ease-out active:bg-zinc-50 active:text-[#c9a227]"
-                          >
-                            {category.name}
-                          </Link>
-                        </li>
-                      ))}
-                      <li>
-                        <Link
-                          href={`/buy-from-tz/${store.slug}`}
-                          onClick={onNavigate}
-                          className="block rounded-lg px-2 py-1.5 text-[13px] font-semibold text-[#c9a227]"
+                    return (
+                      <li key={store.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setExpandedSlug((current) =>
+                              current === store.slug ? null : store.slug,
+                            );
+                            setActiveSlug(store.slug);
+                          }}
+                          className="flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left transition-all duration-200 ease-out active:bg-zinc-50"
+                          aria-expanded={isExpanded}
                         >
-                          Shop {store.name}
-                        </Link>
+                          <span className="flex min-w-0 items-center gap-3">
+                            <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg ring-1 ring-[#c9a227]/20">
+                              <StoreLogo
+                                name={store.name}
+                                logoUrl={store.logo_url}
+                                themeColor={store.theme_color}
+                              />
+                            </span>
+                            <span className="truncate text-[14px] font-semibold text-[#c9a227]">
+                              {store.name}
+                            </span>
+                          </span>
+                          <ChevronDownIcon
+                            className={`h-3.5 w-3.5 shrink-0 text-zinc-400 transition-transform duration-200 ease-out ${
+                              isExpanded ? "rotate-180" : ""
+                            }`}
+                          />
+                        </button>
+                        {isExpanded ? (
+                          <ul className="mb-1.5 ml-[22px] max-h-52 space-y-0.5 overflow-y-auto border-l-2 border-[#c9a227]/20 pl-4 [scrollbar-width:thin]">
+                            {categories.map((category) => (
+                              <li key={category.id}>
+                                <Link
+                                  href={`/buy-from-tz/${store.slug}/category/${category.slug}`}
+                                  onClick={onNavigate}
+                                  className="block rounded-lg px-2 py-1.5 text-[13px] text-zinc-500 transition-colors duration-200 ease-out active:bg-zinc-50 active:text-[#c9a227]"
+                                >
+                                  {category.name}
+                                </Link>
+                              </li>
+                            ))}
+                            <li>
+                              <Link
+                                href={`/buy-from-tz/${store.slug}`}
+                                onClick={onNavigate}
+                                className="block rounded-lg px-2 py-1.5 text-[13px] font-semibold text-[#c9a227]"
+                              >
+                                Shop {store.name}
+                              </Link>
+                            </li>
+                          </ul>
+                        ) : null}
                       </li>
-                    </ul>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
+                    );
+                  })}
+                </ul>
+              </>
+            )}
           </div>
         ) : null}
       </div>
@@ -278,6 +285,7 @@ export function BuyFromTzMegaMenu({
         aria-haspopup="true"
         aria-controls={menuId}
         aria-label={triggerLabel}
+        data-testid="tz-mega-trigger"
         onClick={() => setOpen((value) => !value)}
       >
         {showCountryFlag ? (
@@ -309,94 +317,98 @@ export function BuyFromTzMegaMenu({
             : "pointer-events-none invisible -translate-y-1.5 opacity-0"
         }`}
       >
-        <div
-          className="max-h-[calc(100vh-5.5rem)] overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-[0_20px_50px_-12px_rgba(0,0,0,0.18)] ring-1 ring-zinc-900/[0.04]"
-        >
-          <div className="grid max-h-[calc(100vh-5.5rem)] grid-cols-[248px_1fr] overflow-hidden">
-            <div className="sticky top-0 overflow-y-auto border-r border-zinc-100 bg-gradient-to-b from-[#c9a227]/[0.06] to-zinc-50/50 p-2.5 [scrollbar-width:thin]">
-              {stores.map((store) => (
-                <button
-                  key={store.id}
-                  type="button"
-                  onMouseEnter={() => setActiveSlug(store.slug)}
-                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[12px] transition-all duration-200 ease-out ${
-                    resolvedActiveSlug === store.slug
-                      ? "border-l-2 border-[#c9a227] bg-white pl-[10px] font-semibold text-zinc-900 shadow-[0_1px_3px_rgba(0,0,0,0.06)] ring-1 ring-zinc-200/60"
-                      : "border-l-2 border-transparent text-zinc-600 hover:bg-white/70 hover:text-zinc-900"
-                  }`}
-                >
-                  <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-zinc-100">
-                    <StoreLogo
-                      name={store.name}
-                      logoUrl={store.logo_url}
-                      themeColor={store.theme_color}
-                    />
-                  </span>
-                  <span className="truncate leading-snug">{store.name}</span>
-                </button>
-              ))}
-              <Link
-                href="/buy-from-tz"
-                className="mt-2.5 flex items-center gap-1.5 rounded-lg px-3 py-2 text-[11px] font-bold uppercase tracking-[0.08em] text-[#c9a227] transition-colors duration-200 ease-out hover:bg-white/60 hover:text-[#8b6914]"
-              >
-                View all stores
-                <ArrowRightIcon className="h-3 w-3" />
-              </Link>
-            </div>
-
-            <div className="flex min-h-0 flex-col overflow-y-auto p-6 [scrollbar-width:thin]">
-              <div className="sticky top-0 z-10 -mx-6 border-b border-zinc-100 bg-white px-6 pb-4">
-                <div className="flex items-start justify-between gap-5">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl ring-1 ring-zinc-200">
+        <div className="max-h-[calc(100vh-5.5rem)] overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-[0_20px_50px_-12px_rgba(0,0,0,0.18)] ring-1 ring-zinc-900/[0.04]">
+          {statusPanel || !activeStore ? (
+            statusPanel ?? (
+              <div className="p-6 text-[13px] text-zinc-500">Loading stores…</div>
+            )
+          ) : (
+            <div className="grid max-h-[calc(100vh-5.5rem)] grid-cols-[248px_1fr] overflow-hidden">
+              <div className="sticky top-0 overflow-y-auto border-r border-zinc-100 bg-gradient-to-b from-[#c9a227]/[0.06] to-zinc-50/50 p-2.5 [scrollbar-width:thin]">
+                {stores.map((store) => (
+                  <button
+                    key={store.id}
+                    type="button"
+                    onMouseEnter={() => setActiveSlug(store.slug)}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[12px] transition-all duration-200 ease-out ${
+                      resolvedActiveSlug === store.slug
+                        ? "border-l-2 border-[#c9a227] bg-white pl-[10px] font-semibold text-zinc-900 shadow-[0_1px_3px_rgba(0,0,0,0.06)] ring-1 ring-zinc-200/60"
+                        : "border-l-2 border-transparent text-zinc-600 hover:bg-white/70 hover:text-zinc-900"
+                    }`}
+                  >
+                    <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-zinc-100">
                       <StoreLogo
-                        name={activeStore.name}
-                        logoUrl={activeStore.logo_url}
-                        themeColor={activeStore.theme_color}
-                        size={48}
+                        name={store.name}
+                        logoUrl={store.logo_url}
+                        themeColor={store.theme_color}
                       />
                     </span>
-                    <div className="min-w-0">
-                      <h3 className="text-[1.125rem] font-bold tracking-tight text-[#c9a227]">
-                        {activeStore.name}
-                      </h3>
-                      <p className="mt-1 max-w-md text-[13px] leading-relaxed text-zinc-500">
-                        {activeStore.description || "Shop from trusted Tanzanian stores."}
-                      </p>
-                    </div>
-                  </div>
-                  <Link
-                    href={`/buy-from-tz/${activeStore.slug}`}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#c9a227] px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.06em] text-zinc-900 shadow-sm transition-all duration-200 ease-out hover:bg-[#e8c547] hover:shadow-md"
-                  >
-                    Shop store
-                    <ArrowRightIcon className="h-3 w-3" />
-                  </Link>
-                </div>
+                    <span className="truncate leading-snug">{store.name}</span>
+                  </button>
+                ))}
+                <Link
+                  href="/buy-from-tz"
+                  className="mt-2.5 flex items-center gap-1.5 rounded-lg px-3 py-2 text-[11px] font-bold uppercase tracking-[0.08em] text-[#c9a227] transition-colors duration-200 ease-out hover:bg-white/60 hover:text-[#8b6914]"
+                >
+                  View all stores
+                  <ArrowRightIcon className="h-3 w-3" />
+                </Link>
               </div>
 
-              <div className="mt-5 min-h-0 flex-1">
-                {activeCategories.length === 0 ? (
-                  <p className="text-[13px] text-zinc-500">
-                    Categories for this store will appear once they are published.
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-0.5 xl:grid-cols-3">
-                    {activeCategories.map((category) => (
-                      <Link
-                        key={category.id}
-                        href={`/buy-from-tz/${activeStore.slug}/category/${category.slug}`}
-                        className="group/sub flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] text-zinc-600 transition-all duration-200 ease-out hover:bg-zinc-50 hover:text-[#c9a227]"
-                      >
-                        <span className="h-1 w-1 shrink-0 rounded-full bg-zinc-300 transition-colors duration-200 ease-out group-hover/sub:bg-[#c9a227]" />
-                        <span className="truncate">{category.name}</span>
-                      </Link>
-                    ))}
+              <div className="flex min-h-0 flex-col overflow-y-auto p-6 [scrollbar-width:thin]">
+                <div className="sticky top-0 z-10 -mx-6 border-b border-zinc-100 bg-white px-6 pb-4">
+                  <div className="flex items-start justify-between gap-5">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl ring-1 ring-zinc-200">
+                        <StoreLogo
+                          name={activeStore.name}
+                          logoUrl={activeStore.logo_url}
+                          themeColor={activeStore.theme_color}
+                          size={48}
+                        />
+                      </span>
+                      <div className="min-w-0">
+                        <h3 className="text-[1.125rem] font-bold tracking-tight text-[#c9a227]">
+                          {activeStore.name}
+                        </h3>
+                        <p className="mt-1 max-w-md text-[13px] leading-relaxed text-zinc-500">
+                          {activeStore.description || "Shop from trusted Tanzanian stores."}
+                        </p>
+                      </div>
+                    </div>
+                    <Link
+                      href={`/buy-from-tz/${activeStore.slug}`}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#c9a227] px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.06em] text-zinc-900 shadow-sm transition-all duration-200 ease-out hover:bg-[#e8c547] hover:shadow-md"
+                    >
+                      Shop store
+                      <ArrowRightIcon className="h-3 w-3" />
+                    </Link>
                   </div>
-                )}
+                </div>
+
+                <div className="mt-5 min-h-0 flex-1">
+                  {activeCategories.length === 0 ? (
+                    <p className="text-[13px] text-zinc-500">
+                      Categories for this store will appear once they are published.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-0.5 xl:grid-cols-3">
+                      {activeCategories.map((category) => (
+                        <Link
+                          key={category.id}
+                          href={`/buy-from-tz/${activeStore.slug}/category/${category.slug}`}
+                          className="group/sub flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] text-zinc-600 transition-all duration-200 ease-out hover:bg-zinc-50 hover:text-[#c9a227]"
+                        >
+                          <span className="h-1 w-1 shrink-0 rounded-full bg-zinc-300 transition-colors duration-200 ease-out group-hover/sub:bg-[#c9a227]" />
+                          <span className="truncate">{category.name}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
