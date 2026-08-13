@@ -18,9 +18,13 @@ use App\Models\User;
 use App\Models\VariantInventory;
 use App\Models\VariantPrice;
 use App\Services\Production\AbandonedOrderCleanupManifest;
+use App\Services\Production\AbandonedOrderCleanupService;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use RuntimeException;
 use Tests\TestCase;
 
 class ProductionCleanupAbandonedOrdersCommandTest extends TestCase
@@ -249,6 +253,78 @@ class ProductionCleanupAbandonedOrdersCommandTest extends TestCase
             ->expectsOutputToContain('status must be paid');
     }
 
+    public function test_order_cost_snapshots_schema_has_no_order_id(): void
+    {
+        $this->assertTrue(Schema::hasTable('order_cost_snapshots'));
+        $this->assertFalse(
+            Schema::hasColumn('order_cost_snapshots', 'order_id'),
+            'Regression: order_cost_snapshots must match production (no order_id).',
+        );
+        $this->assertTrue(Schema::hasColumn('order_cost_snapshots', 'order_item_id'));
+    }
+
+    public function test_order_cost_snapshots_via_order_item_id_are_counted_and_deleted(): void
+    {
+        $fixture = $this->seedFixture();
+        $abandonedItemId = OrderItem::query()->where('order_id', $fixture['abandoned_order_id'])->value('id');
+        $keepItemId = OrderItem::query()->where('order_id', $fixture['keep_order_id'])->value('id');
+        $this->assertNotNull($abandonedItemId);
+        $this->assertNotNull($keepItemId);
+
+        $abandonedSnapshotId = $this->insertCostSnapshot((string) $abandonedItemId, 1000);
+        $keepSnapshotId = $this->insertCostSnapshot((string) $keepItemId, 5000);
+
+        $preview = app(AbandonedOrderCleanupService::class)->preview($fixture['keep_order_number']);
+        $this->assertSame(1, (int) ($preview['dependency_counts']['order_cost_snapshots'] ?? 0));
+
+        $this->artisan('production:cleanup-abandoned-orders', [
+            '--force' => true,
+            '--confirm' => AbandonedOrderCleanupManifest::CONFIRMATION_PHRASE,
+            '--keep-order' => $fixture['keep_order_number'],
+        ])->assertSuccessful();
+
+        $this->assertDatabaseMissing('order_cost_snapshots', ['id' => $abandonedSnapshotId]);
+        $this->assertDatabaseHas('order_cost_snapshots', [
+            'id' => $keepSnapshotId,
+            'order_item_id' => $keepItemId,
+        ]);
+        $this->assertDatabaseHas('orders', ['id' => $fixture['keep_order_id']]);
+    }
+
+    public function test_missing_expected_mapped_column_aborts_without_whole_table_fallback(): void
+    {
+        Schema::create('zz_abandoned_cleanup_probe', function (Blueprint $table): void {
+            $table->uuid('id')->primary();
+            $table->string('note')->nullable();
+        });
+
+        try {
+            $service = app(AbandonedOrderCleanupService::class);
+
+            try {
+                $service->assertTableMapping('zz_abandoned_cleanup_probe', [
+                    'strategy' => 'order_id',
+                    'column' => 'order_id',
+                ]);
+                $this->fail('Expected mapping validation to abort.');
+            } catch (RuntimeException $e) {
+                $this->assertStringContainsString('zz_abandoned_cleanup_probe', $e->getMessage());
+                $this->assertStringContainsString('order_id', $e->getMessage());
+                $this->assertStringContainsString('Refusing unsafe fallback', $e->getMessage());
+                $this->assertStringNotContainsString('whole-table delete performed', $e->getMessage());
+            }
+
+            $this->assertSame(0, DB::table('zz_abandoned_cleanup_probe')->count());
+            DB::table('zz_abandoned_cleanup_probe')->insert([
+                'id' => (string) Str::uuid(),
+                'note' => 'must-survive',
+            ]);
+            $this->assertSame(1, DB::table('zz_abandoned_cleanup_probe')->count());
+        } finally {
+            Schema::dropIfExists('zz_abandoned_cleanup_probe');
+        }
+    }
+
     /**
      * @return array<string, string>
      */
@@ -361,15 +437,33 @@ class ProductionCleanupAbandonedOrdersCommandTest extends TestCase
         ];
     }
 
+    private function insertCostSnapshot(string $orderItemId, float $totalCost): string
+    {
+        $id = (string) Str::uuid();
+        DB::table('order_cost_snapshots')->insert([
+            'id' => $id,
+            'order_item_id' => $orderItemId,
+            'supplier_cost' => $totalCost,
+            'shipping_cost' => 0,
+            'other_cost' => 0,
+            'total_cost' => $totalCost,
+            'currency' => 'TZS',
+            'exchange_rate' => 1,
+            'created_at' => now(),
+        ]);
+
+        return $id;
+    }
+
     private function hasOrderStatusHistoryTable(): bool
     {
         return DB::getSchemaBuilder()->hasTable('order_status_history')
             && DB::getSchemaBuilder()->hasColumn('order_status_history', 'order_id');
     }
 
-    private function attachItem(Order $order, Product $product, ProductVariant $variant): void
+    private function attachItem(Order $order, Product $product, ProductVariant $variant): OrderItem
     {
-        OrderItem::query()->create([
+        return OrderItem::query()->create([
             'order_id' => $order->id,
             'product_id' => $product->id,
             'product_variant_id' => $variant->id,

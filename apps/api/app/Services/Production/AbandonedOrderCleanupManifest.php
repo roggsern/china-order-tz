@@ -11,6 +11,13 @@ use App\Enums\PaymentTransactionStatus;
  * Reuses table knowledge from CustomerOrderDataCleanupManifest but NEVER deletes
  * customers, catalog, settings, or foundation data.
  *
+ * Schema-aware relation classes used by AbandonedOrderCleanupService:
+ * - DIRECT_ORDER_ID (`order_id` strategy)
+ * - VIA_ORDER_ITEM_ID (`order_item_id` strategy) — e.g. order_cost_snapshots
+ * - VIA_OTHER_PARENT (`via_parent` strategy)
+ * - MORPH/PAYLOAD (`morph`, `morph_reference`, `json_order_id`)
+ * - GLOBAL / NOT SAFE — listed in FORBIDDEN_DELETE_TABLES
+ *
  * Production keep-order for the Aug 2026 selective cleanup:
  * COTZ-20260811-000005 (pass via --keep-order; not a secret).
  */

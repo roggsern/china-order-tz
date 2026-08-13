@@ -32,6 +32,7 @@ class AbandonedOrderCleanupService
     {
         $this->assertAllowedEnvironment();
         $this->assertManifestSafety();
+        $this->assertDeletionPlanSchema();
 
         $protected = $this->assertProtectedOrder($keepOrderNumber);
         $candidates = $this->selectCandidates((string) $protected['id']);
@@ -71,6 +72,7 @@ class AbandonedOrderCleanupService
     {
         $this->assertAllowedEnvironment();
         $this->assertManifestSafety();
+        $this->assertDeletionPlanSchema();
 
         $protectedBefore = $this->assertProtectedOrder($keepOrderNumber);
         $candidates = $this->selectCandidates((string) $protectedBefore['id']);
@@ -193,6 +195,136 @@ class AbandonedOrderCleanupService
             throw new RuntimeException(
                 'Abandoned-order cleanup aborted: forbidden tables appear in deletion plan: '
                 .implode(', ', $overlap),
+            );
+        }
+    }
+
+    /**
+     * Validate every mapped table against the live schema before any count/delete SQL.
+     * Missing expected columns abort loudly — never fall back to whole-table deletes.
+     */
+    public function assertDeletionPlanSchema(): void
+    {
+        foreach ($this->deletionPlan() as $table => $plan) {
+            $this->assertTableMapping($table, $plan);
+        }
+    }
+
+    /**
+     * @param  array{strategy: string, column?: string, parent?: string, parent_fk?: string, parent_order_col?: string, morph_type?: string, morph_id?: string, json_path?: string}  $plan
+     */
+    public function assertTableMapping(string $table, array $plan): void
+    {
+        if (! Schema::hasTable($table)) {
+            return;
+        }
+
+        $strategy = $plan['strategy'] ?? '';
+
+        match ($strategy) {
+            'order_id' => $this->requireColumn(
+                $table,
+                $plan['column'] ?? 'order_id',
+                'DIRECT_ORDER_ID',
+            ),
+            'order_item_id' => $this->assertOrderItemIdMapping($table, $plan['column'] ?? 'order_item_id'),
+            'via_parent' => $this->assertViaParentMapping($table, $plan),
+            'morph' => $this->assertMorphMapping($table, $plan),
+            'morph_reference' => $this->assertMorphReferenceMapping($table, $plan),
+            'json_order_id' => $this->requireColumn($table, 'data', 'MORPH/PAYLOAD (JSON order_id)'),
+            'hard_delete_orders' => $this->requireColumn($table, 'id', 'HARD_DELETE_ORDERS'),
+            default => throw new RuntimeException(
+                "Abandoned-order cleanup aborted: unknown mapping strategy [{$strategy}] for table [{$table}]. "
+                .'Refusing unsafe fallback.',
+            ),
+        };
+    }
+
+    private function requireColumn(string $table, string $column, string $mappingKind): void
+    {
+        if (! Schema::hasColumn($table, $column)) {
+            throw new RuntimeException(
+                "Abandoned-order cleanup aborted: table [{$table}] mapping ({$mappingKind}) expects column [{$column}] "
+                .'but it is missing on the live schema. Refusing unsafe fallback (no whole-table delete).',
+            );
+        }
+    }
+
+    private function assertOrderItemIdMapping(string $table, string $column): void
+    {
+        $this->requireColumn($table, $column, 'VIA_ORDER_ITEM_ID');
+
+        if (! Schema::hasTable('order_items')) {
+            throw new RuntimeException(
+                "Abandoned-order cleanup aborted: table [{$table}] mapping (VIA_ORDER_ITEM_ID) requires "
+                .'[order_items] which is missing. Refusing unsafe fallback.',
+            );
+        }
+
+        $this->requireColumn('order_items', 'order_id', 'VIA_ORDER_ITEM_ID parent');
+        $this->requireColumn('order_items', 'id', 'VIA_ORDER_ITEM_ID parent');
+    }
+
+    /**
+     * @param  array{parent?: string, parent_fk?: string, parent_order_col?: string}  $plan
+     */
+    private function assertViaParentMapping(string $table, array $plan): void
+    {
+        $parent = $plan['parent'] ?? '';
+        $fk = $plan['parent_fk'] ?? '';
+        $parentOrderCol = $plan['parent_order_col'] ?? 'order_id';
+
+        if ($parent === '' || $fk === '') {
+            throw new RuntimeException(
+                "Abandoned-order cleanup aborted: table [{$table}] VIA_OTHER_PARENT mapping is incomplete "
+                .'(parent/parent_fk). Refusing unsafe fallback.',
+            );
+        }
+
+        if (! Schema::hasTable($parent)) {
+            throw new RuntimeException(
+                "Abandoned-order cleanup aborted: table [{$table}] VIA_OTHER_PARENT mapping requires parent "
+                ."[{$parent}] which is missing. Refusing unsafe fallback.",
+            );
+        }
+
+        $this->requireColumn($table, $fk, "VIA_OTHER_PARENT via {$parent}");
+        $this->requireColumn($parent, $parentOrderCol, "VIA_OTHER_PARENT parent {$parent}");
+        $this->requireColumn($parent, 'id', "VIA_OTHER_PARENT parent {$parent}");
+    }
+
+    /**
+     * @param  array{morph_type?: string, morph_id?: string}  $plan
+     */
+    private function assertMorphMapping(string $table, array $plan): void
+    {
+        $typeCol = $plan['morph_type'] ?? '';
+        $idCol = $plan['morph_id'] ?? '';
+        if ($typeCol === '' || $idCol === '') {
+            throw new RuntimeException(
+                "Abandoned-order cleanup aborted: table [{$table}] MORPH mapping is incomplete. "
+                .'Refusing unsafe fallback.',
+            );
+        }
+
+        $this->requireColumn($table, $typeCol, 'MORPH/PAYLOAD');
+        $this->requireColumn($table, $idCol, 'MORPH/PAYLOAD');
+    }
+
+    /**
+     * @param  array{morph_type?: string, morph_id?: string}  $plan
+     */
+    private function assertMorphReferenceMapping(string $table, array $plan): void
+    {
+        $this->assertMorphMapping($table, [
+            'morph_type' => $plan['morph_type'] ?? 'reference_type',
+            'morph_id' => $plan['morph_id'] ?? 'reference_id',
+        ]);
+
+        if (! Schema::hasTable('order_items') || ! Schema::hasColumn('order_items', 'order_id')) {
+            throw new RuntimeException(
+                "Abandoned-order cleanup aborted: table [{$table}] morph_reference mapping requires "
+                .'[order_items.order_id]. Refusing unsafe fallback.',
             );
         }
     }
@@ -483,7 +615,8 @@ class AbandonedOrderCleanupService
             'shipment_status_histories' => ['strategy' => 'order_id', 'column' => 'order_id'],
             'order_tracking_events' => ['strategy' => 'order_id', 'column' => 'order_id'],
             'order_status_history' => ['strategy' => 'order_id', 'column' => 'order_id'],
-            'order_cost_snapshots' => ['strategy' => 'order_id', 'column' => 'order_id'],
+            // Production schema: order_cost_snapshots has order_item_id only (NO order_id).
+            'order_cost_snapshots' => ['strategy' => 'order_item_id', 'column' => 'order_item_id'],
             'profit_records' => ['strategy' => 'order_id', 'column' => 'order_id'],
 
             'payment_transactions' => ['strategy' => 'order_id', 'column' => 'order_id'],
@@ -536,8 +669,11 @@ class AbandonedOrderCleanupService
             return 0;
         }
 
+        $this->assertTableMapping($table, $plan);
+
         return match ($plan['strategy']) {
             'order_id' => (int) DB::table($table)->whereIn($plan['column'] ?? 'order_id', $orderIds)->count(),
+            'order_item_id' => $this->countViaOrderItemIds($table, $plan['column'] ?? 'order_item_id', $orderIds),
             'via_parent' => $this->countViaParent($table, $plan, $orderIds),
             'morph' => (int) DB::table($table)
                 ->where($plan['morph_type'], Order::class)
@@ -546,7 +682,9 @@ class AbandonedOrderCleanupService
             'morph_reference' => $this->countMorphReference($table, $plan, $orderIds),
             'json_order_id' => $this->countJsonOrderId($table, $plan['json_path'] ?? 'data->order_id', $orderIds),
             'hard_delete_orders' => count($orderIds),
-            default => 0,
+            default => throw new RuntimeException(
+                "Abandoned-order cleanup aborted: unknown strategy [{$plan['strategy']}] for [{$table}].",
+            ),
         };
     }
 
@@ -560,15 +698,63 @@ class AbandonedOrderCleanupService
             return 0;
         }
 
+        $this->assertTableMapping($table, $plan);
+
         return match ($plan['strategy']) {
             'order_id' => $this->deleteWhereInChunked($table, $plan['column'] ?? 'order_id', $orderIds),
+            'order_item_id' => $this->deleteViaOrderItemIds($table, $plan['column'] ?? 'order_item_id', $orderIds),
             'via_parent' => $this->deleteViaParent($table, $plan, $orderIds),
             'morph' => $this->deleteMorph($table, $plan, $orderIds),
             'morph_reference' => $this->deleteMorphReference($table, $plan, $orderIds),
             'json_order_id' => $this->deleteJsonOrderId($table, $plan['json_path'] ?? 'data->order_id', $orderIds),
             'hard_delete_orders' => $this->hardDeleteOrders($orderIds),
-            default => 0,
+            default => throw new RuntimeException(
+                "Abandoned-order cleanup aborted: unknown strategy [{$plan['strategy']}] for [{$table}].",
+            ),
         };
+    }
+
+    /**
+     * @param  list<string>  $orderIds
+     * @return list<string>
+     */
+    private function orderItemIdsForOrders(array $orderIds): array
+    {
+        if ($orderIds === [] || ! Schema::hasTable('order_items')) {
+            return [];
+        }
+
+        return DB::table('order_items')
+            ->whereIn('order_id', $orderIds)
+            ->pluck('id')
+            ->map(fn ($id) => (string) $id)
+            ->all();
+    }
+
+    /**
+     * @param  list<string>  $orderIds
+     */
+    private function countViaOrderItemIds(string $table, string $column, array $orderIds): int
+    {
+        $itemIds = $this->orderItemIdsForOrders($orderIds);
+        if ($itemIds === []) {
+            return 0;
+        }
+
+        return (int) DB::table($table)->whereIn($column, $itemIds)->count();
+    }
+
+    /**
+     * @param  list<string>  $orderIds
+     */
+    private function deleteViaOrderItemIds(string $table, string $column, array $orderIds): int
+    {
+        $itemIds = $this->orderItemIdsForOrders($orderIds);
+        if ($itemIds === []) {
+            return 0;
+        }
+
+        return $this->deleteWhereInChunked($table, $column, $itemIds);
     }
 
     /**
@@ -580,10 +766,6 @@ class AbandonedOrderCleanupService
         $parent = $plan['parent'] ?? '';
         $fk = $plan['parent_fk'] ?? '';
         $parentOrderCol = $plan['parent_order_col'] ?? 'order_id';
-
-        if ($parent === '' || $fk === '' || ! Schema::hasTable($parent) || ! Schema::hasColumn($table, $fk)) {
-            return 0;
-        }
 
         $parentIds = DB::table($parent)->whereIn($parentOrderCol, $orderIds)->pluck('id');
         if ($parentIds->isEmpty()) {
@@ -602,10 +784,6 @@ class AbandonedOrderCleanupService
         $parent = $plan['parent'] ?? '';
         $fk = $plan['parent_fk'] ?? '';
         $parentOrderCol = $plan['parent_order_col'] ?? 'order_id';
-
-        if ($parent === '' || $fk === '' || ! Schema::hasTable($parent) || ! Schema::hasColumn($table, $fk)) {
-            return 0;
-        }
 
         $parentIds = DB::table($parent)->whereIn($parentOrderCol, $orderIds)->pluck('id')->map(fn ($id) => (string) $id)->all();
         if ($parentIds === []) {
@@ -748,8 +926,14 @@ class AbandonedOrderCleanupService
      */
     private function deleteWhereInChunked(string $table, string $column, array $ids): int
     {
-        if ($ids === [] || ! Schema::hasTable($table) || ! Schema::hasColumn($table, $column)) {
+        if ($ids === [] || ! Schema::hasTable($table)) {
             return 0;
+        }
+
+        if (! Schema::hasColumn($table, $column)) {
+            throw new RuntimeException(
+                "Abandoned-order cleanup aborted: refuse whole-table fallback — [{$table}.{$column}] missing.",
+            );
         }
 
         $total = 0;
