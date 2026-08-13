@@ -79,7 +79,7 @@ class TzStorefrontCatalog
                 'brand:id,name,slug',
                 'store:id,name,slug,code',
                 'catalogProductType:id,name',
-            ], CustomerProductMediaResolver::catalogEagerLoads(), CatalogStockPresenter::catalogListingEagerLoads()))
+            ], CustomerProductMediaResolver::catalogListingEagerLoads(), CatalogStockPresenter::catalogListingEagerLoads()))
             ->withAvg(
                 ['reviews as average_rating' => fn ($query) => $query->where('is_approved', true)],
                 'rating',

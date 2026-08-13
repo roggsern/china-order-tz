@@ -298,40 +298,49 @@ export async function syncCartToServer(
 ): Promise<void> {
   await clearServerCart(token);
 
-  for (const item of items) {
-    const { productId, requiresChinaShipping } = await resolveCatalogProductForSync(item);
-    const shippingMethod = shouldSendChinaShippingMethod(item, requiresChinaShipping)
-      ? toApiShippingMethod(item.shippingMethod)
-      : undefined;
+  // Resolve product IDs first (may hit catalog show), then POST cart lines in parallel.
+  const resolved = await Promise.all(
+    items.map(async (item) => {
+      const { productId, requiresChinaShipping } = await resolveCatalogProductForSync(item);
+      const shippingMethod = shouldSendChinaShippingMethod(item, requiresChinaShipping)
+        ? toApiShippingMethod(item.shippingMethod)
+        : undefined;
 
-    if (requiresChinaShipping && !shippingMethod) {
-      throw new CustomerCheckoutApiError(
-        `Select Air Freight or Sea Freight for "${item.name}" before continuing.`,
-        422,
+      if (requiresChinaShipping && !shippingMethod) {
+        throw new CustomerCheckoutApiError(
+          `Select Air Freight or Sea Freight for "${item.name}" before continuing.`,
+          422,
+        );
+      }
+
+      return { item, productId, shippingMethod };
+    }),
+  );
+
+  await Promise.all(
+    resolved.map(async ({ item, productId, shippingMethod }) => {
+      const variantId = item.configurationId?.trim();
+      await customerApiFetch(
+        "/api/cart/items",
+        {
+          method: "POST",
+          headers: getAuthHeaders(token),
+          body: JSON.stringify({
+            product_id: productId,
+            ...(variantId
+              ? {
+                  product_variant_id: variantId,
+                  configuration_id: variantId,
+                }
+              : {}),
+            quantity: item.quantity,
+            ...(shippingMethod ? { shipping_method: shippingMethod } : {}),
+          }),
+        },
+        `Unable to add "${item.name}" to your server cart.`,
       );
-    }
-
-    const variantId = item.configurationId?.trim();
-    await customerApiFetch(
-      "/api/cart/items",
-      {
-        method: "POST",
-        headers: getAuthHeaders(token),
-        body: JSON.stringify({
-          product_id: productId,
-          ...(variantId
-            ? {
-                product_variant_id: variantId,
-                configuration_id: variantId,
-              }
-            : {}),
-          quantity: item.quantity,
-          ...(shippingMethod ? { shipping_method: shippingMethod } : {}),
-        }),
-      },
-      `Unable to add "${item.name}" to your server cart.`,
-    );
-  }
+    }),
+  );
 }
 
 /** @deprecated Preview-only. Production order creation uses checkout session + Order Engine. */

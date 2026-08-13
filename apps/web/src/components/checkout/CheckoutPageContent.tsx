@@ -9,6 +9,7 @@ import { calculateCartTotals } from "@/lib/cart/utils";
 import { deepCopyCart, mapCartToOrderItems, buildShippingSnapshotFromCart } from "@/lib/checkout/cart-snapshot";
 import { saveCheckoutDraft, getCheckoutDraft } from "@/lib/checkout/draft";
 import { getCustomerApiToken } from "@/lib/api/customer-auth";
+import { prefetchCheckoutPaymentMethods } from "@/lib/api/checkout-payment-methods";
 import {
   CustomerCheckoutApiError,
   mapBackendSummaryToTotals,
@@ -58,7 +59,7 @@ import {
 import { resolveCheckoutDisplayTotals, shouldShowCompanyShippingEstimate } from "@/lib/checkout/display-totals";
 import { validateCartAgainstCatalog, summarizeCartValidationFailures } from "@/lib/cart/validation";
 import { hasBlockingCartSyncError } from "@/lib/cart/sync-errors";
-import { fetchClientCatalogProducts } from "@/lib/catalog/client-catalog";
+import { fetchClientCatalogProducts, fetchClientCatalogProductsForSlugs } from "@/lib/catalog/client-catalog";
 import { productService } from "@/lib/services/product-service.client";
 import { CartSyncErrorAlert } from "@/components/cart/CartSyncErrorAlert";
 import { CheckoutSection } from "./CheckoutSection";
@@ -144,6 +145,13 @@ export function CheckoutPageContent() {
   useEffect(() => {
     void fetchShippingDurations();
   }, []);
+
+  useEffect(() => {
+    if (!sessionReady || !isLoggedIn) {
+      return;
+    }
+    prefetchCheckoutPaymentMethods();
+  }, [sessionReady, isLoggedIn]);
 
   useEffect(() => {
     if (checkoutTrackedRef.current) {
@@ -443,7 +451,11 @@ export function CheckoutPageContent() {
       let catalog: Awaited<ReturnType<typeof fetchClientCatalogProducts>>;
 
       try {
-        catalog = await fetchClientCatalogProducts();
+        const slugs = cartBeforeOrder.items.map((item) => item.slug);
+        catalog = await fetchClientCatalogProductsForSlugs(slugs);
+        if (catalog.length === 0) {
+          catalog = await fetchClientCatalogProducts();
+        }
       } catch (catalogError) {
         console.warn(
           "[checkout-validation] Live catalog unavailable, falling back to local product service.",

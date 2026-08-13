@@ -95,6 +95,19 @@ class CustomerProductMediaResolver
     }
 
     /**
+     * Listing cards only need a primary still image — skip video rows.
+     *
+     * @return array<string, mixed>
+     */
+    public static function catalogListingEagerLoads(): array
+    {
+        return [
+            'media' => fn ($query) => $query->images()->active()->ordered(),
+            'images' => fn ($query) => $query->orderByDesc('is_primary')->orderBy('sort_order'),
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public static function variantMediaEagerLoads(): array

@@ -1,5 +1,5 @@
-import { getProducts } from "@/lib/api/products";
-import { mapApiProductCardToCatalogProduct } from "@/lib/catalog/map-api-product";
+import { getProduct, getProducts } from "@/lib/api/products";
+import { mapApiProductCardToCatalogProduct, mapApiProductDetailToCatalogProduct } from "@/lib/catalog/map-api-product";
 import type { Product } from "@/lib/types/catalog";
 
 /**
@@ -17,4 +17,30 @@ export async function fetchClientCatalogProducts(): Promise<Product[]> {
   }
 
   return products;
+}
+
+/**
+ * Checkout/cart validation for a known cart — fetch only the needed product slugs
+ * in parallel instead of paging the entire catalog.
+ */
+export async function fetchClientCatalogProductsForSlugs(
+  slugs: string[],
+): Promise<Product[]> {
+  const unique = [...new Set(slugs.map((slug) => slug.trim()).filter(Boolean))];
+  if (unique.length === 0) {
+    return [];
+  }
+
+  const results = await Promise.all(
+    unique.map(async (slug) => {
+      try {
+        const detail = await getProduct(slug);
+        return mapApiProductDetailToCatalogProduct(detail);
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  return results.filter((product): product is Product => product !== null);
 }

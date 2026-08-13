@@ -124,7 +124,7 @@ class ChinaStorefrontCatalog
                 'category:id,name,slug',
                 'brand:id,name,slug',
                 'catalogProductType:id,name',
-            ], CustomerProductMediaResolver::catalogEagerLoads(), CatalogStockPresenter::catalogListingEagerLoads()))
+            ], CustomerProductMediaResolver::catalogListingEagerLoads(), CatalogStockPresenter::catalogListingEagerLoads()))
             ->withAvg(
                 ['reviews as average_rating' => fn ($query) => $query->where('is_approved', true)],
                 'rating',

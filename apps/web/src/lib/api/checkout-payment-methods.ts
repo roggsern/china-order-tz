@@ -39,14 +39,16 @@ function formatError(payload: ApiSuccessResponse<unknown>, fallback: string): st
   return fallback;
 }
 
-export async function fetchCheckoutPaymentMethods(
-  token?: string | null,
-): Promise<CheckoutPaymentAvailability> {
-  const authToken = token ?? getCustomerApiToken();
-  if (!authToken) {
-    throw new CheckoutPaymentMethodsApiError("Sign in to load payment methods.", 401);
-  }
+const PREFETCH_TTL_MS = 60_000;
+let prefetched: {
+  token: string;
+  expiresAt: number;
+  promise: Promise<CheckoutPaymentAvailability>;
+} | null = null;
 
+async function loadCheckoutPaymentMethods(
+  authToken: string,
+): Promise<CheckoutPaymentAvailability> {
   const response = await fetch("/api/payments/methods", {
     method: "GET",
     headers: {
@@ -66,4 +68,71 @@ export async function fetchCheckoutPaymentMethods(
   }
 
   return payload.data;
+}
+
+/** Warm payment-methods for the payment page while the shopper is still on checkout. */
+export function prefetchCheckoutPaymentMethods(token?: string | null): void {
+  const authToken = token ?? getCustomerApiToken();
+  if (!authToken) {
+    return;
+  }
+
+  const now = Date.now();
+  if (
+    prefetched &&
+    prefetched.token === authToken &&
+    prefetched.expiresAt > now
+  ) {
+    return;
+  }
+
+  const promise = loadCheckoutPaymentMethods(authToken).catch((error) => {
+    if (prefetched?.promise === promise) {
+      prefetched = null;
+    }
+    throw error;
+  });
+
+  prefetched = {
+    token: authToken,
+    expiresAt: now + PREFETCH_TTL_MS,
+    promise,
+  };
+}
+
+export async function fetchCheckoutPaymentMethods(
+  token?: string | null,
+): Promise<CheckoutPaymentAvailability> {
+  const authToken = token ?? getCustomerApiToken();
+  if (!authToken) {
+    throw new CheckoutPaymentMethodsApiError("Sign in to load payment methods.", 401);
+  }
+
+  const now = Date.now();
+  if (
+    prefetched &&
+    prefetched.token === authToken &&
+    prefetched.expiresAt > now
+  ) {
+    return prefetched.promise;
+  }
+
+  const promise = loadCheckoutPaymentMethods(authToken).catch((error) => {
+    if (prefetched?.promise === promise) {
+      prefetched = null;
+    }
+    throw error;
+  });
+
+  prefetched = {
+    token: authToken,
+    expiresAt: now + PREFETCH_TTL_MS,
+    promise,
+  };
+
+  return promise;
+}
+
+export function __clearCheckoutPaymentMethodsPrefetchForTests(): void {
+  prefetched = null;
 }

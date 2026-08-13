@@ -20,6 +20,7 @@ final class CatalogStockPresenter
 
     /**
      * Eager loads for customer listing cards (stock presentation without N+1).
+     * Intentionally omits variant media/attributes — listing cards serialize slim stock only.
      *
      * @return array<string, mixed>
      */
@@ -27,9 +28,17 @@ final class CatalogStockPresenter
     {
         return [
             'inventory',
+            'shippingOptions' => fn ($query) => $query->available(),
             'variants' => fn ($query) => $query
                 ->where('is_active', true)
-                ->with(['prices', 'inventories', 'inventory', 'product']),
+                ->with([
+                    // prices: needed for purchasability path (not serialized on listing cards)
+                    'prices',
+                    'inventories',
+                    'inventory',
+                    'chinaCommercialStock',
+                    'product:id,slug,name,price,compare_at_price,fulfillment_source,commerce_channel_id',
+                ]),
         ];
     }
 

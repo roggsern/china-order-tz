@@ -60,7 +60,8 @@ class CustomerProductCardResource extends JsonResource
                 $this->usesSimpleProductStockPath() && $this->simpleProductInventoryContract() !== null,
                 fn () => $this->simpleProductInventoryContract(),
             ),
-            'variants' => CustomerProductVariantResource::collection($this->whenLoaded('variants')),
+            // Listing cards need stock signals only — full variant media/attributes belong on PDP.
+            'variants' => CustomerProductListingVariantResource::collection($this->whenLoaded('variants')),
         ];
     }
 
