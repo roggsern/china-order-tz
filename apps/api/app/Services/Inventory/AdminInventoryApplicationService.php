@@ -312,13 +312,26 @@ final class AdminInventoryApplicationService
                     );
                 }
             } elseif ($productVariantId === null && ! $this->purchasabilityPolicy->hasSellableVariants($product)) {
-                $defaultVariant = $this->tzLocalScope->ensurePosDefaultVariant($product);
-                $this->setTzLocalVariantStockAtStore(
-                    variant: $defaultVariant,
-                    targetOnHand: $targetQuantity,
-                    actor: $actor,
-                    reason: $reason ?? 'TZ local simple stock mirror — store location',
-                );
+                // Do not materialize the POS simple default variant on zero opening stock —
+                // that left owners with an attribute-less "product name" phantom before generate.
+                // Create/mirror only when stock is positive, or a simple default already exists.
+                $existingSimple = ProductVariant::query()
+                    ->where('product_id', $product->id)
+                    ->where('is_active', true)
+                    ->whereDoesntHave('catalogAttributeValues')
+                    ->orderByDesc('is_default')
+                    ->orderBy('sort_order')
+                    ->first();
+
+                if ($targetQuantity > 0 || $existingSimple !== null) {
+                    $defaultVariant = $existingSimple ?? $this->tzLocalScope->ensurePosDefaultVariant($product);
+                    $this->setTzLocalVariantStockAtStore(
+                        variant: $defaultVariant,
+                        targetOnHand: $targetQuantity,
+                        actor: $actor,
+                        reason: $reason ?? 'TZ local simple stock mirror — store location',
+                    );
+                }
             }
         }
 
@@ -345,7 +358,8 @@ final class AdminInventoryApplicationService
             'on_hand' => max(0, $targetOnHand),
         ]);
 
-        $warehouse = strtoupper((string) $data['warehouse_code']);
+        $warehouse = strtoupper((string) ($data['warehouse_code'] ?? 'MAIN'));
+        $data['warehouse_code'] = $warehouse;
         $locationId = $data['inventory_location_id'] ?? null;
 
         $existing = VariantInventory::query()

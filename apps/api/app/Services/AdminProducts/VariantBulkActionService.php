@@ -366,7 +366,8 @@ final class VariantBulkActionService
 
     private function upsertRetailPrice(ProductVariant $variant, ?float $amount, ?float $costPrice): void
     {
-        $retail = $this->activeRetailPrice($variant);
+        // Always lock from DB — parallel bulk selling+cost requests must not each create a row.
+        $retail = $this->lockActiveRetailPrice($variant);
 
         if ($retail !== null) {
             $updates = ['is_active' => true];
@@ -380,6 +381,10 @@ final class VariantBulkActionService
             }
 
             $retail->forceFill($updates)->save();
+
+            if ($amount !== null && (float) $amount > 0) {
+                $this->retireAccidentalZeroRetailDuplicates($variant, $retail);
+            }
 
             return;
         }
@@ -395,43 +400,59 @@ final class VariantBulkActionService
         ]);
     }
 
-    private function activeRetailPrice(ProductVariant $variant): ?VariantPrice
+    /**
+     * Authoritative active retail TZS row (schedule-aware), locked for concurrent bulk upserts.
+     * Prefers a positive selling amount when duplicates already exist.
+     */
+    private function lockActiveRetailPrice(ProductVariant $variant): ?VariantPrice
     {
         $now = Carbon::now();
-        $prices = $variant->relationLoaded('prices')
-            ? $variant->prices
-            : $variant->prices()->get();
 
-        return $prices
-            ->filter(function (VariantPrice $price) use ($now): bool {
-                if (! $price->is_active) {
-                    return false;
-                }
-
-                $type = $price->price_type instanceof VariantPriceType
-                    ? $price->price_type
-                    : VariantPriceType::tryFrom((string) $price->price_type);
-
-                if ($type !== VariantPriceType::Retail) {
-                    return false;
-                }
-
-                if (strcasecmp((string) $price->currency, 'TZS') !== 0) {
-                    return false;
-                }
-
-                if ($price->starts_at !== null && $price->starts_at->gt($now)) {
-                    return false;
-                }
-
-                if ($price->ends_at !== null && $price->ends_at->lt($now)) {
-                    return false;
-                }
-
-                return true;
+        $candidates = VariantPrice::query()
+            ->where('product_variant_id', $variant->id)
+            ->where('price_type', VariantPriceType::Retail)
+            ->whereRaw('UPPER(currency) = ?', ['TZS'])
+            ->where('is_active', true)
+            ->where(function ($query) use ($now): void {
+                $query->whereNull('starts_at')->orWhere('starts_at', '<=', $now);
             })
-            ->sortBy('minimum_quantity')
+            ->where(function ($query) use ($now): void {
+                $query->whereNull('ends_at')->orWhere('ends_at', '>=', $now);
+            })
+            ->orderBy('minimum_quantity')
+            ->lockForUpdate()
+            ->get();
+
+        if ($candidates->isEmpty()) {
+            return null;
+        }
+
+        return $candidates
+            ->sortBy([
+                fn (VariantPrice $price): int => (float) $price->amount > 0 ? 0 : 1,
+                fn (VariantPrice $price): int => (int) $price->minimum_quantity,
+            ])
             ->first();
+    }
+
+    /**
+     * Soft-delete leftover amount=0 retail TZS rows created by a prior parallel cost-only create
+     * once a real selling amount exists on the kept row. Leaves compare-at/wholesale/other types alone.
+     */
+    private function retireAccidentalZeroRetailDuplicates(ProductVariant $variant, VariantPrice $keeper): void
+    {
+        VariantPrice::query()
+            ->where('product_variant_id', $variant->id)
+            ->where('price_type', VariantPriceType::Retail)
+            ->whereRaw('UPPER(currency) = ?', ['TZS'])
+            ->where('is_active', true)
+            ->whereKeyNot($keeper->id)
+            ->where('amount', '<=', 0)
+            ->where('minimum_quantity', (int) $keeper->minimum_quantity)
+            ->get()
+            ->each(function (VariantPrice $duplicate): void {
+                $duplicate->delete();
+            });
     }
 
     /**

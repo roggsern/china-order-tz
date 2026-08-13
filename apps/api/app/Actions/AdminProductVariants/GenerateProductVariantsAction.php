@@ -6,10 +6,14 @@ use App\Actions\AdminProductVariants\Concerns\ResolvesVariantDefaults;
 use App\Actions\Concerns\GuardsActiveProductSubResourceIntegrity;
 use App\Enums\CatalogAttributeType;
 use App\Http\Requests\Admin\GenerateProductVariantsRequest;
+use App\Models\CartItem;
 use App\Models\CatalogAttribute;
 use App\Models\CatalogAttributeOption;
+use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\VariantInventory;
+use App\Models\VariantPrice;
 use App\Services\Catalog\GenerateVariantSku;
 use App\Services\Catalog\SyncVariantCatalogAttributeValues;
 use App\Services\Inventory\CanonicalVariantInventoryInitializer;
@@ -145,6 +149,10 @@ class GenerateProductVariantsAction
                     $variant->catalogAttributeValues()->delete();
                     $variant->delete();
                 }
+            } else {
+                // Simple POS/default variants (no attributes) must not survive into
+                // attribute-based generation — owners previously had to delete them manually.
+                $this->retireAttributeLessPlaceholderVariants($product);
             }
 
             $existingSignatures = $this->existingSignatures($product);
@@ -307,6 +315,56 @@ class GenerateProductVariantsAction
         }
 
         return $result;
+    }
+
+    /**
+     * Soft-delete (or deactivate if referenced) attribute-less simple/POS placeholders
+     * so generate leaves only attribute-based variants.
+     */
+    private function retireAttributeLessPlaceholderVariants(Product $product): void
+    {
+        $placeholders = ProductVariant::query()
+            ->where('product_id', $product->id)
+            ->whereDoesntHave('catalogAttributeValues')
+            ->get();
+
+        foreach ($placeholders as $variant) {
+            if ($this->variantHasProtectedReferences($variant)) {
+                $variant->forceFill([
+                    'is_active' => false,
+                    'is_default' => false,
+                ])->save();
+
+                continue;
+            }
+
+            $variant->catalogAttributeValues()->delete();
+
+            VariantPrice::query()
+                ->where('product_variant_id', $variant->id)
+                ->get()
+                ->each(fn (VariantPrice $price) => $price->delete());
+
+            VariantInventory::query()
+                ->where('product_variant_id', $variant->id)
+                ->get()
+                ->each(fn (VariantInventory $row) => $row->delete());
+
+            $variant->delete();
+        }
+    }
+
+    private function variantHasProtectedReferences(ProductVariant $variant): bool
+    {
+        if (OrderItem::query()->where('product_variant_id', $variant->id)->exists()) {
+            return true;
+        }
+
+        if (CartItem::query()->where('product_variant_id', $variant->id)->exists()) {
+            return true;
+        }
+
+        return false;
     }
 
     /**

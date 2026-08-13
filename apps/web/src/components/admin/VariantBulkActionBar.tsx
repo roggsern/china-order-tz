@@ -59,57 +59,59 @@ export function VariantBulkActionBar({
     setError(null);
     setResults(null);
 
-    const calls: Promise<VariantBulkActionResponse>[] = [];
+    // Run sequentially: parallel selling+cost both saw "no retail row" and created
+    // one real-price row plus one amount=0 cost-only row. Selling first, then cost, upserts one row.
     const selling = parseBulkNumericField(fields.sellingPrice);
     const cost = parseBulkNumericField(fields.costPrice);
     const stock = parseBulkNumericField(fields.stockQuantity);
 
-    if (selling !== null) {
-      calls.push(
-        executeBulkVariantAction({
-          productId,
-          actionKey: "set_selling_price",
-          variantIds: selectedIds,
-          payload: { amount: selling },
-        }),
-      );
-    }
-
-    if (cost !== null) {
-      calls.push(
-        executeBulkVariantAction({
-          productId,
-          actionKey: "set_cost_price",
-          variantIds: selectedIds,
-          payload: { cost_price: cost },
-        }),
-      );
-    }
-
-    if (stock !== null && isChinaImport) {
-      calls.push(
-        executeBulkVariantAction({
-          productId,
-          actionKey: "set_commercial_stock",
-          variantIds: selectedIds,
-          payload: { available_quantity: Math.trunc(stock) },
-        }),
-      );
-    }
-
-    if (stock !== null && !isChinaImport) {
-      calls.push(
-        executeBulkVariantAction({
-          productId,
-          actionKey: "set_inventory_stock",
-          variantIds: selectedIds,
-          payload: { on_hand: Math.trunc(stock) },
-        }),
-      );
-    }
-
     try {
-      const responses = await Promise.all(calls);
+      const responses: VariantBulkActionResponse[] = [];
+
+      if (selling !== null) {
+        responses.push(
+          await executeBulkVariantAction({
+            productId,
+            actionKey: "set_selling_price",
+            variantIds: selectedIds,
+            payload: { amount: selling },
+          }),
+        );
+      }
+
+      if (cost !== null) {
+        responses.push(
+          await executeBulkVariantAction({
+            productId,
+            actionKey: "set_cost_price",
+            variantIds: selectedIds,
+            payload: { cost_price: cost },
+          }),
+        );
+      }
+
+      if (stock !== null && isChinaImport) {
+        responses.push(
+          await executeBulkVariantAction({
+            productId,
+            actionKey: "set_commercial_stock",
+            variantIds: selectedIds,
+            payload: { available_quantity: Math.trunc(stock) },
+          }),
+        );
+      }
+
+      if (stock !== null && !isChinaImport) {
+        responses.push(
+          await executeBulkVariantAction({
+            productId,
+            actionKey: "set_inventory_stock",
+            variantIds: selectedIds,
+            payload: { on_hand: Math.trunc(stock) },
+          }),
+        );
+      }
+
       setResults(responses);
       onCompleted?.(responses);
 

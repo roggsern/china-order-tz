@@ -335,4 +335,117 @@ class GenerateProductVariantsSellabilityTest extends TestCase
         $missingInventory = $health->json('data.issues.inventory.variants_missing_inventory_policy');
         $this->assertNotContains($variantId, $missingInventory['variant_ids'] ?? []);
     }
+
+    public function test_generate_retires_attribute_less_tz_pos_default_variant(): void
+    {
+        Sanctum::actingAs(Admin::factory()->create());
+        $ctx = $this->seedGenerateContext();
+
+        $product = Product::factory()->tzLocal()->create([
+            'name' => 'TZ Phantom Tee',
+            'slug' => 'tz-phantom-tee',
+            'sku' => 'TZ-PHANTOM',
+            'catalog_product_type_id' => $ctx['product']->catalog_product_type_id,
+            'category_id' => $ctx['product']->category_id,
+            'lifecycle_status' => ProductLifecycleStatus::Draft,
+            'visibility' => ProductVisibility::Public,
+            'price' => 0,
+            'is_active' => true,
+        ]);
+
+        $placeholder = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'name' => $product->name,
+            'sku' => $product->sku,
+            'price' => null,
+            'is_active' => true,
+            'is_default' => true,
+            'sort_order' => 0,
+        ]);
+        VariantInventory::query()->create([
+            'product_variant_id' => $placeholder->id,
+            'warehouse_code' => 'MAIN',
+            'on_hand' => 0,
+            'reserved' => 0,
+            'is_active' => true,
+        ]);
+        VariantPrice::query()->create([
+            'product_variant_id' => $placeholder->id,
+            'price_type' => VariantPriceType::Retail,
+            'currency' => 'TZS',
+            'amount' => 0,
+            'minimum_quantity' => 1,
+            'is_active' => true,
+        ]);
+
+        $this->postJson('/api/v1/admin/products/'.$product->id.'/variants/generate', [
+            'attributes' => [
+                [
+                    'catalog_attribute_id' => $ctx['color']->id,
+                    'option_ids' => [$ctx['black']->id, $ctx['white']->id],
+                ],
+                [
+                    'catalog_attribute_id' => $ctx['size']->id,
+                    'option_ids' => [$ctx['s']->id],
+                ],
+            ],
+            'replace_existing' => false,
+        ])->assertOk()
+            ->assertJsonPath('data.generated', 2);
+
+        $this->assertSoftDeleted('product_variants', ['id' => $placeholder->id]);
+        $this->assertSoftDeleted('variant_prices', [
+            'product_variant_id' => $placeholder->id,
+        ]);
+        $this->assertSoftDeleted('variant_inventories', [
+            'product_variant_id' => $placeholder->id,
+        ]);
+
+        $live = ProductVariant::query()->where('product_id', $product->id)->get();
+        $this->assertCount(2, $live);
+        foreach ($live as $variant) {
+            $this->assertTrue($variant->catalogAttributeValues()->exists());
+            $this->assertNotSame($product->name, $variant->name);
+        }
+    }
+
+    public function test_tz_local_zero_simple_stock_does_not_create_pos_default_variant(): void
+    {
+        $product = Product::factory()->tzLocal()->create([
+            'name' => 'TZ Draft Simple',
+            'lifecycle_status' => ProductLifecycleStatus::Draft,
+            'price' => 0,
+        ]);
+
+        app(\App\Services\Inventory\AdminInventoryApplicationService::class)
+            ->setSimpleProductStock($product, 0);
+
+        $this->assertSame(
+            0,
+            ProductVariant::query()->where('product_id', $product->id)->count(),
+        );
+    }
+
+    public function test_tz_local_positive_simple_stock_still_creates_pos_default_variant(): void
+    {
+        $product = Product::factory()->tzLocal()->create([
+            'name' => 'TZ Simple Stocked',
+            'lifecycle_status' => ProductLifecycleStatus::Draft,
+            'price' => 15000,
+        ]);
+
+        app(\App\Services\Inventory\AdminInventoryApplicationService::class)
+            ->setSimpleProductStock($product, 5);
+
+        $variant = ProductVariant::query()->where('product_id', $product->id)->first();
+        $this->assertNotNull($variant);
+        $this->assertSame($product->name, $variant->name);
+        $this->assertTrue((bool) $variant->is_default);
+        $this->assertFalse($variant->catalogAttributeValues()->exists());
+        $this->assertDatabaseHas('variant_inventories', [
+            'product_variant_id' => $variant->id,
+            'warehouse_code' => 'MAIN',
+            'on_hand' => 5,
+        ]);
+    }
 }

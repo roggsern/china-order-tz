@@ -248,6 +248,133 @@ class AdminVariantBulkActionTest extends TestCase
         $this->assertSame(0, ChinaCommercialStock::query()->where('product_id', $product->id)->count());
     }
 
+    public function test_bulk_selling_then_cost_keeps_single_retail_row_per_variant(): void
+    {
+        [$product, $variants] = $this->chinaVariantProduct(3);
+
+        $this->postJson('/api/v1/admin/products/'.$product->id.'/variants/bulk-action', [
+            'action_key' => 'set_selling_price',
+            'variant_ids' => $variants->pluck('id')->all(),
+            'payload' => ['amount' => 99000],
+        ])->assertOk()->assertJsonPath('data.succeeded', 3);
+
+        $this->postJson('/api/v1/admin/products/'.$product->id.'/variants/bulk-action', [
+            'action_key' => 'set_cost_price',
+            'variant_ids' => $variants->pluck('id')->all(),
+            'payload' => ['cost_price' => 70000],
+        ])->assertOk()->assertJsonPath('data.succeeded', 3);
+
+        foreach ($variants as $variant) {
+            $rows = VariantPrice::query()
+                ->where('product_variant_id', $variant->id)
+                ->where('price_type', VariantPriceType::Retail)
+                ->get();
+
+            $this->assertCount(1, $rows);
+            $this->assertSame('99000.00', (string) $rows->first()->amount);
+            $this->assertSame('70000.00', (string) $rows->first()->cost_price);
+        }
+    }
+
+    public function test_bulk_cost_only_creates_one_retail_row_not_duplicate_zeros(): void
+    {
+        [$product, $variants] = $this->chinaVariantProduct(2);
+
+        $this->postJson('/api/v1/admin/products/'.$product->id.'/variants/bulk-action', [
+            'action_key' => 'set_cost_price',
+            'variant_ids' => $variants->pluck('id')->all(),
+            'payload' => ['cost_price' => 12000],
+        ])->assertOk()->assertJsonPath('data.succeeded', 2);
+
+        foreach ($variants as $variant) {
+            $this->assertSame(
+                1,
+                VariantPrice::query()->where('product_variant_id', $variant->id)->count(),
+            );
+            $this->assertDatabaseHas('variant_prices', [
+                'product_variant_id' => $variant->id,
+                'amount' => '0.00',
+                'cost_price' => '12000.00',
+            ]);
+        }
+    }
+
+    public function test_bulk_selling_retires_accidental_zero_retail_duplicate(): void
+    {
+        [$product, $variants] = $this->chinaVariantProduct(1);
+        $variant = $variants->first();
+
+        VariantPrice::query()->create([
+            'product_variant_id' => $variant->id,
+            'price_type' => VariantPriceType::Retail,
+            'currency' => 'TZS',
+            'amount' => 0,
+            'cost_price' => 5000,
+            'minimum_quantity' => 1,
+            'is_active' => true,
+        ]);
+        VariantPrice::query()->create([
+            'product_variant_id' => $variant->id,
+            'price_type' => VariantPriceType::Retail,
+            'currency' => 'TZS',
+            'amount' => 45000,
+            'minimum_quantity' => 1,
+            'is_active' => true,
+        ]);
+        VariantPrice::query()->create([
+            'product_variant_id' => $variant->id,
+            'price_type' => VariantPriceType::Wholesale,
+            'currency' => 'TZS',
+            'amount' => 40000,
+            'minimum_quantity' => 1,
+            'is_active' => true,
+        ]);
+
+        $this->postJson('/api/v1/admin/products/'.$product->id.'/variants/bulk-action', [
+            'action_key' => 'set_selling_price',
+            'variant_ids' => [$variant->id],
+            'payload' => ['amount' => 48000],
+        ])->assertOk()->assertJsonPath('data.succeeded', 1);
+
+        $retail = VariantPrice::query()
+            ->where('product_variant_id', $variant->id)
+            ->where('price_type', VariantPriceType::Retail)
+            ->get();
+
+        $this->assertCount(1, $retail);
+        $this->assertSame('48000.00', (string) $retail->first()->amount);
+
+        $this->assertDatabaseHas('variant_prices', [
+            'product_variant_id' => $variant->id,
+            'price_type' => VariantPriceType::Wholesale->value,
+            'amount' => '40000.00',
+        ]);
+    }
+
+    public function test_bulk_selling_reapply_upserts_without_extra_rows(): void
+    {
+        [$product, $variants] = $this->chinaVariantProduct(2);
+
+        foreach ([11000, 22000] as $amount) {
+            $this->postJson('/api/v1/admin/products/'.$product->id.'/variants/bulk-action', [
+                'action_key' => 'set_selling_price',
+                'variant_ids' => $variants->pluck('id')->all(),
+                'payload' => ['amount' => $amount],
+            ])->assertOk()->assertJsonPath('data.succeeded', 2);
+        }
+
+        foreach ($variants as $variant) {
+            $this->assertSame(
+                1,
+                VariantPrice::query()->where('product_variant_id', $variant->id)->count(),
+            );
+            $this->assertDatabaseHas('variant_prices', [
+                'product_variant_id' => $variant->id,
+                'amount' => '22000.00',
+            ]);
+        }
+    }
+
     public function test_tz_local_bulk_warehouse_stock_update(): void
     {
         $product = Product::factory()->tzLocal()->create([
