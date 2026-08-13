@@ -98,4 +98,19 @@ describe("mega menu performance hotfix contracts", () => {
     assert.equal(cache.getStats().starts, 2);
     assert.equal(cache.getStats().joins, 1);
   });
+
+  it("defers china menu fetch until open or mobile (Wave 1 contract)", () => {
+    const source = readFileSync(megaMenuPath, "utf8");
+    assert.match(source, /const fetchEnabled = mobile \|\| open/);
+    assert.match(source, /enabled:\s*fetchEnabled/);
+    assert.doesNotMatch(source, /useChinaStorefrontMenu\([^)]*\{\s*enabled:\s*true/);
+  });
+
+  it("renders featured tiles from slim primary_image + brand.name fields", () => {
+    const source = readFileSync(megaMenuPath, "utf8");
+    assert.match(source, /product\.primary_image\?\.url \|\| product\.primary_image\?\.path/);
+    assert.match(source, /product\.brand\?\.name/);
+    assert.doesNotMatch(source, /product\.variants/);
+    assert.doesNotMatch(source, /product\.inventory/);
+  });
 });

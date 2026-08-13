@@ -148,6 +148,53 @@ class ChinaStorefrontCatalog
             ->withQueryString();
     }
 
+    /**
+     * Mega-menu brand chips — same discovery rules as brands(), capped for chrome.
+     *
+     * @return Collection<int, Brand>
+     */
+    public function menuBrands(?string $categorySlug = null, int $limit = 12): Collection
+    {
+        return $this->brands($categorySlug, $limit);
+    }
+
+    /**
+     * Mega-menu featured tiles — same sellable gates as listing, without listing-card
+     * eager loads (variants/inventory/reviews) or paginator COUNT.
+     *
+     * @param  array{category?: string|null, featured?: mixed, per_page?: int}  $filters
+     * @return Collection<int, Product>
+     */
+    public function menuProducts(array $filters = []): Collection
+    {
+        $limit = min(max((int) ($filters['per_page'] ?? 6), 1), 12);
+        $category = $filters['category'] ?? null;
+        $featured = $filters['featured'] ?? null;
+
+        return $this->chinaPublishedProductQuery(Product::query())
+            ->real()
+            ->whereNull('store_id')
+            ->with([
+                'brand:id,name,slug',
+                'media' => fn ($query) => $query->images()->active()->ordered(),
+                'images' => fn ($query) => $query->orderByDesc('is_primary')->orderBy('sort_order'),
+            ])
+            ->latest()
+            ->when(filled($category), fn (Builder $query) => $this->applyDiscoveryCategoryFilter($query, $category))
+            ->when(in_array($featured, ['1', 'true', 1, true], true), fn (Builder $q) => $q->where('is_featured', true))
+            ->limit($limit)
+            ->get([
+                'id',
+                'slug',
+                'name',
+                'brand_id',
+                'category_id',
+                'commerce_channel_id',
+                'is_featured',
+                'created_at',
+            ]);
+    }
+
     private function applyDiscoveryCategoryFilter(Builder $query, string $category): Builder
     {
         if (CatalogNavigationCrosswalk::forBibleSlug($category) !== null) {

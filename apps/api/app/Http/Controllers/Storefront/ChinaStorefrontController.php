@@ -3,10 +3,13 @@
 namespace App\Http\Controllers\Storefront;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ChinaMegaMenuBrandResource;
+use App\Http\Resources\ChinaMegaMenuProductResource;
 use App\Http\Resources\CustomerBrandResource;
 use App\Http\Resources\CustomerCategoryResource;
 use App\Http\Resources\CustomerProductCardResource;
 use App\Services\Storefront\ChinaStorefrontCatalog;
+use App\Services\Storefront\ChinaStorefrontMenuCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -15,6 +18,7 @@ class ChinaStorefrontController extends Controller
 {
     public function __construct(
         private readonly ChinaStorefrontCatalog $catalog,
+        private readonly ChinaStorefrontMenuCache $menuCache,
     ) {}
 
     public function categories(): AnonymousResourceCollection
@@ -48,37 +52,60 @@ class ChinaStorefrontController extends Controller
     public function menu(Request $request): JsonResponse
     {
         $category = $request->query('category');
+        $categorySlug = is_string($category) && trim($category) !== ''
+            ? trim($category)
+            : null;
+
+        $data = $this->menuCache->remember(
+            $categorySlug,
+            fn () => $this->buildMenuPayload($categorySlug),
+        );
+
+        return response()->json([
+            'success' => true,
+            'data' => $data,
+        ]);
+    }
+
+    /**
+     * @return array{
+     *     label: string,
+     *     categories: list<array<string, mixed>>,
+     *     active_category: string|null,
+     *     brands: list<array<string, mixed>>,
+     *     featured_products: list<array<string, mixed>>
+     * }
+     */
+    private function buildMenuPayload(?string $categorySlug): array
+    {
         $categories = $this->catalog->navigationCategories();
-        $activeSlug = is_string($category) && $category !== ''
-            ? $category
-            : ($categories->first()?->slug);
+        $activeSlug = $categorySlug ?? $categories->first()?->slug;
 
         $brands = $activeSlug
-            ? $this->catalog->brands($activeSlug, 12)
+            ? $this->catalog->menuBrands($activeSlug, 12)
             : collect();
 
-        $featured = $this->catalog->products([
-            'category' => $activeSlug,
-            'featured' => true,
-            'per_page' => 6,
-        ]);
+        $featured = $activeSlug
+            ? $this->catalog->menuProducts([
+                'category' => $activeSlug,
+                'featured' => true,
+                'per_page' => 6,
+            ])
+            : collect();
 
-        if ($featured->total() === 0 && $activeSlug) {
-            $featured = $this->catalog->products([
+        if ($featured->isEmpty() && $activeSlug) {
+            $featured = $this->catalog->menuProducts([
                 'category' => $activeSlug,
                 'per_page' => 6,
             ]);
         }
 
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'label' => 'ORDER FROM CHINA',
-                'categories' => CustomerCategoryResource::collection($categories),
-                'active_category' => $activeSlug,
-                'brands' => CustomerBrandResource::collection($brands),
-                'featured_products' => CustomerProductCardResource::collection($featured->items()),
-            ],
-        ]);
+        return [
+            'label' => 'ORDER FROM CHINA',
+            'categories' => CustomerCategoryResource::collection($categories)->resolve(),
+            'active_category' => $activeSlug,
+            'brands' => ChinaMegaMenuBrandResource::collection($brands)->resolve(),
+            'featured_products' => ChinaMegaMenuProductResource::collection($featured)->resolve(),
+        ];
     }
 }
