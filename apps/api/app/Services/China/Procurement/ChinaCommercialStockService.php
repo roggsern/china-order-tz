@@ -66,6 +66,25 @@ final class ChinaCommercialStockService
 
     public function findForProduct(Product $product, ?ProductVariant $variant = null): ?ChinaCommercialStock
     {
+        // Prefer already-eager-loaded listing relations to avoid N+1 on catalog cards.
+        if ($variant !== null) {
+            if ($variant->relationLoaded('chinaCommercialStock')) {
+                return $variant->getRelation('chinaCommercialStock');
+            }
+
+            if ($product->relationLoaded('chinaCommercialStocks')) {
+                $variantId = (string) $variant->id;
+
+                return $product->chinaCommercialStocks->first(
+                    static fn (ChinaCommercialStock $row): bool => (string) $row->product_variant_id === $variantId,
+                );
+            }
+        } elseif ($product->relationLoaded('chinaCommercialStocks')) {
+            return $product->chinaCommercialStocks->first(
+                static fn (ChinaCommercialStock $row): bool => $row->product_variant_id === null,
+            );
+        }
+
         return ChinaCommercialStock::query()
             ->where('product_id', $product->id)
             ->where('product_variant_id', $variant?->id)

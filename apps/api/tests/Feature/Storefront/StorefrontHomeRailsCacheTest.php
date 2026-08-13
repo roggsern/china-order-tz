@@ -110,6 +110,30 @@ class StorefrontHomeRailsCacheTest extends TestCase
             $cache->key('tz-stores', 'visible'),
             $cache->key('tz-stores', 'visible'),
         );
+
+        $page2 = $cache->chinaProductListVariant(\Illuminate\Http\Request::create(
+            '/api/v1/storefront/china/products',
+            'GET',
+            ['per_page' => 12, 'page' => 2],
+        ));
+        $category = $cache->chinaProductListVariant(\Illuminate\Http\Request::create(
+            '/api/v1/storefront/china/products',
+            'GET',
+            ['per_page' => 12, 'page' => 1, 'category' => 'electronics'],
+        ));
+        $this->assertNotSame($a, $page2);
+        $this->assertNotSame($a, $category);
+        $this->assertNotSame(
+            $cache->key('china-products', $a),
+            $cache->key('china-products', $page2),
+        );
+
+        $this->assertFalse($cache->isCacheableProductList(
+            \Illuminate\Http\Request::create('/api/v1/storefront/china/products', 'GET', [
+                'search' => 'blazer',
+            ]),
+        ));
+        $this->assertTrue($cache->isCacheableProductList($request));
     }
 
     /**

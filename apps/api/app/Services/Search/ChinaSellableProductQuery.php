@@ -6,6 +6,7 @@ use App\Enums\CommerceChannelCode;
 use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductVisibility;
 use App\Enums\VariantPriceType;
+use App\Models\CommerceChannel;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -16,13 +17,22 @@ class ChinaSellableProductQuery
 {
     public function apply(Builder $query): Builder
     {
+        $chinaChannelId = CommerceChannel::query()
+            ->where('code', CommerceChannelCode::ChinaImport->value)
+            ->value('id');
+
+        if ($chinaChannelId === null) {
+            return $query->whereRaw('0 = 1');
+        }
+
         return $query
             ->where('is_active', true)
             ->where('is_demo', false)
             ->where('lifecycle_status', ProductLifecycleStatus::Active)
             ->where('visibility', ProductVisibility::Public)
             ->whereNull('store_id')
-            ->whereHas('commerceChannel', fn (Builder $q) => $q->where('code', CommerceChannelCode::ChinaImport->value))
+            // Equality beats whereHas(EXISTS) for the hot COUNT + page SELECT path.
+            ->where('commerce_channel_id', $chinaChannelId)
             ->whereHas('shippingOptions', fn (Builder $q) => $q->available()->where('price', '>', 0))
             ->where(function (Builder $q) {
                 $q->whereHas('variants', fn (Builder $variant) => $this->applySellableVariantConstraints($variant))

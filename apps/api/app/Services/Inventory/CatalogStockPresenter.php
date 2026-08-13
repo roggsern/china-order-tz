@@ -28,6 +28,8 @@ final class CatalogStockPresenter
     {
         return [
             'inventory',
+            // China simple-path stock (null variant) — used by StockResolver via findForProduct.
+            'chinaCommercialStocks',
             'shippingOptions' => fn ($query) => $query->available(),
             'variants' => fn ($query) => $query
                 ->where('is_active', true)

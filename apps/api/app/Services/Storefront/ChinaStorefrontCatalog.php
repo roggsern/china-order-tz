@@ -123,6 +123,7 @@ class ChinaStorefrontCatalog
                 'commerceChannel:id,name,code',
                 'category:id,name,slug',
                 'brand:id,name,slug',
+                // Needed by ProductConditionResolver::effectiveForProduct (badge), not serialized as a type graph.
                 'catalogProductType:id,name',
             ], CustomerProductMediaResolver::catalogListingEagerLoads(), CatalogStockPresenter::catalogListingEagerLoads()))
             ->withAvg(
