@@ -110,8 +110,8 @@ export function CartScreen() {
         {isEmpty ? (
           <EmptyState
             title="Your cart is empty"
-            message="Add products from Browse or Search to continue."
-            actionLabel="Browse products"
+            message="Add products from Shop or Search to continue."
+            actionLabel="Shop products"
             onActionPress={() => router.push('/(app)/(tabs)/browse')}
             style={styles.empty}
           />
