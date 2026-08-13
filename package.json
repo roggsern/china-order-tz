@@ -16,6 +16,11 @@
     "lint": "npm run lint --workspace=apps/web",
     "typecheck": "npm run typecheck --workspace=apps/web",
     "lint:web": "npm run lint --workspace=apps/web",
+    "dev:mobile": "npm --prefix apps/mobile run start",
+    "start:mobile": "npm --prefix apps/mobile run start",
+    "lint:mobile": "npm --prefix apps/mobile run lint",
+    "typecheck:mobile": "npm --prefix apps/mobile run typecheck",
+    "test:mobile": "npm --prefix apps/mobile run test",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md,yml,yaml,css,scss}\"",
     "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,md,yml,yaml,css,scss}\""
   },
