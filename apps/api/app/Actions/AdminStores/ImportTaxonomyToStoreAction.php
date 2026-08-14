@@ -86,6 +86,7 @@ class ImportTaxonomyToStoreAction
             $productTypesReused = 0;
             $attributeMappingsSynced = 0;
             $importedProductTypes = [];
+            $leavesWithoutSourceProductTypes = [];
 
             if ($includeProductTypes) {
                 foreach ($ordered as $source) {
@@ -106,6 +107,16 @@ class ImportTaxonomyToStoreAction
                         ->orderBy('sort_order')
                         ->orderBy('name')
                         ->get();
+
+                    if ($sourceTypes->isEmpty()) {
+                        $leavesWithoutSourceProductTypes[] = [
+                            'source_category_id' => $source->id,
+                            'source_category_name' => $source->name,
+                            'target_category_id' => $target->id,
+                            'target_category_name' => $target->name,
+                        ];
+                        continue;
+                    }
 
                     foreach ($sourceTypes as $sourceType) {
                         $cptResult = $this->provisionProductType(
@@ -135,6 +146,8 @@ class ImportTaxonomyToStoreAction
                 'product_types_created' => $productTypesCreated,
                 'product_types_reused' => $productTypesReused,
                 'attribute_mappings_synced' => $attributeMappingsSynced,
+                'product_types_skipped_no_source' => count($leavesWithoutSourceProductTypes),
+                'leaves_without_source_product_types' => $leavesWithoutSourceProductTypes,
                 'categories' => collect($importedCategories)->map(fn (Category $c) => [
                     'id' => $c->id,
                     'name' => $c->name,
@@ -197,10 +210,18 @@ class ImportTaxonomyToStoreAction
                 ]);
             }
 
+            // Inactive Catalog Bible parents (have children) are valid import templates.
+            // Truly disabled inactive leaves are not.
             if (! $category->is_active) {
-                throw ValidationException::withMessages([
-                    'category_ids' => ['Inactive China categories cannot be imported.'],
-                ]);
+                $hasChildren = Category::query()
+                    ->where('parent_id', $category->id)
+                    ->exists();
+
+                if (! $hasChildren) {
+                    throw ValidationException::withMessages([
+                        'category_ids' => ['Inactive China categories cannot be imported.'],
+                    ]);
+                }
             }
         }
 
@@ -229,14 +250,8 @@ class ImportTaxonomyToStoreAction
             $current = $departmentTree->get($id) ?? $selectedById->get($id);
             $guard = 0;
             while ($current !== null && $guard++ < 100) {
-                if (! $current->is_active) {
-                    throw ValidationException::withMessages([
-                        'category_ids' => [
-                            "Required parent “{$current->name}” is inactive and cannot be provisioned.",
-                        ],
-                    ]);
-                }
-
+                // Inactive parents are Catalog Bible structural nodes — copy as TZ templates.
+                // Soft-deleted ancestors are already absent from $departmentTree.
                 $expanded->put($current->id, $current);
                 $parentId = $current->parent_id;
                 $current = $parentId ? $departmentTree->get($parentId) : null;

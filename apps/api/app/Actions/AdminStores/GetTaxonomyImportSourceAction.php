@@ -12,6 +12,13 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Read-only China taxonomy tree for the TZ store import modal.
+ *
+ * Source visibility is based on Catalog Bible / department taxonomy authority,
+ * NOT products and NOT Catalog Product Type existence.
+ *
+ * China intentionally keeps many parent categories inactive for storefront
+ * mega-menu safety while their children remain active. Those inactive parents
+ * must still appear here so admins can import the hierarchy into TZ stores.
  */
 class GetTaxonomyImportSourceAction
 {
@@ -41,26 +48,43 @@ class GetTaxonomyImportSourceAction
         $categories = Category::query()
             ->where('origin', CatalogOrigin::China)
             ->where('department_id', $department->id)
-            ->where('is_active', true)
-            ->whereNull('deleted_at')
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get(['id', 'name', 'slug', 'parent_id', 'sort_order', 'is_active', 'department_id']);
 
+        $parentIdsWithChildren = $categories
+            ->pluck('parent_id')
+            ->filter()
+            ->unique()
+            ->flip();
+
+        // Soft-deleted already excluded by SoftDeletes. Drop truly disabled leaves
+        // (inactive + no children). Keep inactive structural parents for tree display.
+        $categories = $categories->filter(function (Category $category) use ($parentIdsWithChildren) {
+            if ($category->is_active) {
+                return true;
+            }
+
+            return $parentIdsWithChildren->has($category->id);
+        })->values();
+
         $categoryIds = $categories->pluck('id')->all();
 
         /** @var Collection<string, Collection<int, CatalogProductType>> $typesByLeaf */
-        $typesByLeaf = CatalogProductType::query()
-            ->whereIn('subcategory_id', $categoryIds)
-            ->where('is_active', true)
-            ->withCount('attributes')
-            ->orderBy('sort_order')
-            ->orderBy('name')
-            ->get(['id', 'subcategory_id', 'name', 'slug', 'is_active', 'sort_order'])
-            ->groupBy('subcategory_id');
+        $typesByLeaf = $categoryIds === []
+            ? collect()
+            : CatalogProductType::query()
+                ->whereIn('subcategory_id', $categoryIds)
+                ->where('is_active', true)
+                ->withCount('attributes')
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(['id', 'subcategory_id', 'name', 'slug', 'is_active', 'sort_order'])
+                ->groupBy('subcategory_id');
 
-        $rows = $categories->map(function (Category $category) use ($typesByLeaf) {
+        $rows = $categories->map(function (Category $category) use ($typesByLeaf, $parentIdsWithChildren) {
             $types = $typesByLeaf->get($category->id, collect());
+            $isStructuralParent = $parentIdsWithChildren->has($category->id);
 
             return [
                 'id' => $category->id,
@@ -69,6 +93,9 @@ class GetTaxonomyImportSourceAction
                 'parent_id' => $category->parent_id,
                 'sort_order' => $category->sort_order,
                 'is_active' => $category->is_active,
+                'is_structural_parent' => $isStructuralParent,
+                // Selectable when active, or when inactive only as Catalog Bible parent.
+                'importable' => $category->is_active || $isStructuralParent,
                 'product_types' => $types->map(fn (CatalogProductType $type) => [
                     'id' => $type->id,
                     'name' => $type->name,
@@ -77,6 +104,7 @@ class GetTaxonomyImportSourceAction
                     'attributes_count' => (int) ($type->attributes_count ?? 0),
                     'has_attribute_mappings' => (int) ($type->attributes_count ?? 0) > 0,
                 ])->values()->all(),
+                'has_product_types' => $types->isNotEmpty(),
             ];
         })->values()->all();
 

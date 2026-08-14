@@ -361,6 +361,97 @@ class AdminTzTaxonomyImportTest extends TestCase
         $this->assertNotContains('Blouses', $roviNames);
     }
 
+    public function test_source_includes_inactive_parent_and_zero_product_zero_cpt_leaf(): void
+    {
+        [$store, $department, $tops, $blouses] = $this->seedChinaFashionTree();
+
+        // No products, no CPT — taxonomy must still appear.
+        $this->assertSame(0, \App\Models\Product::query()->where('category_id', $blouses->id)->count());
+        $this->assertSame(0, CatalogProductType::query()->where('subcategory_id', $blouses->id)->count());
+        $this->assertFalse($tops->is_active);
+
+        $data = $this->getJson(
+            "/api/v1/admin/stores/{$store->id}/taxonomy-import-source?department_id={$department->id}",
+        )->assertOk()->json('data');
+
+        $ids = collect($data['categories'])->pluck('id')->all();
+        $this->assertContains($tops->id, $ids);
+        $this->assertContains($blouses->id, $ids);
+
+        $topsRow = collect($data['categories'])->firstWhere('id', $tops->id);
+        $blousesRow = collect($data['categories'])->firstWhere('id', $blouses->id);
+
+        $this->assertFalse($topsRow['is_active']);
+        $this->assertTrue($topsRow['is_structural_parent']);
+        $this->assertTrue($topsRow['importable']);
+        $this->assertTrue($blousesRow['is_active']);
+        $this->assertFalse($blousesRow['has_product_types']);
+        $this->assertSame([], $blousesRow['product_types']);
+    }
+
+    public function test_source_exposes_cpt_even_when_leaf_has_zero_products(): void
+    {
+        [$store, $department, $tops, $blouses, , , $blouseType] = $this->seedChinaFashionTreeWithTypes();
+
+        $this->assertSame(0, \App\Models\Product::query()->where('category_id', $blouses->id)->count());
+
+        $data = $this->getJson(
+            "/api/v1/admin/stores/{$store->id}/taxonomy-import-source?department_id={$department->id}",
+        )->assertOk()->json('data');
+
+        $blousesRow = collect($data['categories'])->firstWhere('id', $blouses->id);
+        $this->assertTrue($blousesRow['has_product_types']);
+        $this->assertSame($blouseType->id, $blousesRow['product_types'][0]['id']);
+        $this->assertContains($tops->id, collect($data['categories'])->pluck('id')->all());
+    }
+
+    public function test_import_category_without_source_cpt_succeeds_and_skips_product_types(): void
+    {
+        [$store, $department, $tops, $blouses] = $this->seedChinaFashionTree();
+
+        $response = $this->postJson("/api/v1/admin/stores/{$store->id}/taxonomy-import", [
+            'department_id' => $department->id,
+            'category_ids' => [$blouses->id],
+            'include_product_types' => true,
+            'include_attribute_mappings' => true,
+        ])->assertOk();
+
+        $this->assertSame(2, $response->json('data.categories_created'));
+        $this->assertSame(0, $response->json('data.product_types_created'));
+        $this->assertSame(1, $response->json('data.product_types_skipped_no_source'));
+
+        $tzTops = Category::query()
+            ->where('store_id', $store->id)
+            ->where('name', 'Tops')
+            ->firstOrFail();
+        $this->assertTrue($tzTops->is_active);
+        $this->assertSame(CatalogOrigin::Tz, $tzTops->origin);
+
+        $tops->refresh();
+        $this->assertFalse($tops->is_active);
+        $this->assertSame(CatalogOrigin::China, $tops->origin);
+    }
+
+    public function test_source_hides_disabled_inactive_leaf_without_children(): void
+    {
+        [$store, $department, $tops, $blouses] = $this->seedChinaFashionTree();
+        $disabled = Category::factory()->china()->forDepartment($department)->create([
+            'name' => 'Retired Line',
+            'slug' => 'retired-line',
+            'parent_id' => null,
+            'is_active' => false,
+        ]);
+
+        $data = $this->getJson(
+            "/api/v1/admin/stores/{$store->id}/taxonomy-import-source?department_id={$department->id}",
+        )->assertOk()->json('data');
+
+        $ids = collect($data['categories'])->pluck('id')->all();
+        $this->assertContains($tops->id, $ids);
+        $this->assertContains($blouses->id, $ids);
+        $this->assertNotContains($disabled->id, $ids);
+    }
+
     /**
      * @return array{0: Store, 1: Department, 2: Category, 3: Category}
      */
@@ -376,7 +467,8 @@ class AdminTzTaxonomyImportTest extends TestCase
             'name' => 'Tops',
             'slug' => 'tops',
             'parent_id' => null,
-            'is_active' => true,
+            // Matches Catalog Bible: parents with children stay inactive for storefront.
+            'is_active' => false,
             'sort_order' => 1,
         ]);
         $blouses = Category::factory()->china()->forDepartment($department)->child($tops)->create([
@@ -409,7 +501,7 @@ class AdminTzTaxonomyImportTest extends TestCase
             'name' => 'Bottoms',
             'slug' => 'bottoms',
             'parent_id' => null,
-            'is_active' => true,
+            'is_active' => false,
         ]);
         $skirts = Category::factory()->china()->forDepartment($department)->child($bottoms)->create([
             'name' => 'Skirts',

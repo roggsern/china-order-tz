@@ -12,6 +12,7 @@ import {
 import {
   buildTaxonomyImportPayload,
   buildTaxonomyImportSummary,
+  taxonomyNodeProductTypeLabel,
   toggleTaxonomyImportSelection,
   type TaxonomyImportSourceNode,
 } from "@/lib/admin/taxonomy-import";
@@ -31,6 +32,8 @@ function toNodes(categories: TaxonomyImportSourceCategory[]): TaxonomyImportSour
     slug: category.slug,
     parentId: category.parentId,
     sortOrder: category.sortOrder,
+    isActive: category.isActive,
+    importable: category.importable,
     productTypes: category.productTypes.map((type) => ({
       id: type.id,
       name: type.name,
@@ -178,6 +181,9 @@ export function AdminImportTaxonomyModal({
           (payload.include_attribute_mappings
             ? `; ${result.attributeMappingsSynced} attribute mappings synced`
             : "") +
+          (result.productTypesSkippedNoSource > 0
+            ? `; ${result.productTypesSkippedNoSource} leaf categor${result.productTypesSkippedNoSource === 1 ? "y" : "ies"} had no source Product Type (categories still imported)`
+            : "") +
           ".",
       );
       onImported();
@@ -260,7 +266,7 @@ export function AdminImportTaxonomyModal({
                 <p className="text-sm text-zinc-500">Loading China taxonomy…</p>
               ) : roots.length === 0 ? (
                 <p className="text-sm text-zinc-500">
-                  No active China categories in this department.
+                  No China taxonomy categories in this department.
                 </p>
               ) : (
                 <ul className="space-y-2">
@@ -273,7 +279,7 @@ export function AdminImportTaxonomyModal({
                             type="checkbox"
                             className="mt-0.5"
                             checked={selectedIds.includes(root.id)}
-                            disabled={submitting}
+                            disabled={submitting || !root.importable}
                             onChange={(event) =>
                               setSelectedIds(
                                 toggleTaxonomyImportSelection({
@@ -287,12 +293,14 @@ export function AdminImportTaxonomyModal({
                           />
                           <span>
                             <span className="font-medium">{root.name}</span>
-                            {root.productTypes.length > 0 ? (
-                              <span className="ml-1 text-xs text-zinc-500">
-                                ({root.productTypes.length} product type
-                                {root.productTypes.length === 1 ? "" : "s"})
+                            {!root.isActive ? (
+                              <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+                                parent
                               </span>
                             ) : null}
+                            <span className="ml-1 text-xs text-zinc-500">
+                              ({taxonomyNodeProductTypeLabel(root)})
+                            </span>
                           </span>
                         </label>
                         {children.length > 0 ? (
@@ -304,7 +312,7 @@ export function AdminImportTaxonomyModal({
                                     type="checkbox"
                                     className="mt-0.5"
                                     checked={selectedIds.includes(child.id)}
-                                    disabled={submitting}
+                                    disabled={submitting || !child.importable}
                                     onChange={(event) =>
                                       setSelectedIds(
                                         toggleTaxonomyImportSelection({
@@ -318,12 +326,9 @@ export function AdminImportTaxonomyModal({
                                   />
                                   <span>
                                     {child.name}
-                                    {child.productTypes.length > 0 ? (
-                                      <span className="ml-1 text-xs text-zinc-500">
-                                        ({child.productTypes.length} product type
-                                        {child.productTypes.length === 1 ? "" : "s"})
-                                      </span>
-                                    ) : null}
+                                    <span className="ml-1 text-xs text-zinc-500">
+                                      ({taxonomyNodeProductTypeLabel(child)})
+                                    </span>
                                   </span>
                                 </label>
                               </li>
@@ -337,7 +342,8 @@ export function AdminImportTaxonomyModal({
               )}
             </div>
             <p className="mt-1 text-xs text-zinc-500">
-              Selecting a child also selects its required parent.
+              Selecting a child also selects its required parent. Taxonomy appears even when China
+              has no products yet. Product Types are optional and listed separately.
             </p>
           </div>
 
@@ -377,6 +383,9 @@ export function AdminImportTaxonomyModal({
                   : ""}
                 {includeProductTypes && includeAttributeMappings
                   ? ` · ${summary.attributeMappedTypeCount} with attribute mappings`
+                  : ""}
+                {includeProductTypes && summary.leavesWithoutProductTypes > 0
+                  ? ` · ${summary.leavesWithoutProductTypes} with no source Product Type`
                   : ""}
               </p>
               <p className="mt-1 text-zinc-600">{summary.labels.join(", ")}</p>

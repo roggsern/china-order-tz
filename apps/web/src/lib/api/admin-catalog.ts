@@ -1871,6 +1871,8 @@ export type TaxonomyImportSourceCategory = {
   parentId: string | null;
   sortOrder: number;
   isActive: boolean;
+  importable: boolean;
+  hasProductTypes: boolean;
   productTypes: Array<{
     id: string;
     name: string;
@@ -1892,6 +1894,7 @@ export type TaxonomyImportResult = {
   productTypesCreated: number;
   productTypesReused: number;
   attributeMappingsSynced: number;
+  productTypesSkippedNoSource: number;
 };
 
 export async function fetchTaxonomyImportSource(input: {
@@ -1917,6 +1920,8 @@ export async function fetchTaxonomyImportSource(input: {
         parent_id: string | null;
         sort_order: number;
         is_active: boolean;
+        importable?: boolean;
+        has_product_types?: boolean;
         product_types: Array<{
           id: string;
           name: string;
@@ -1945,6 +1950,9 @@ export async function fetchTaxonomyImportSource(input: {
       parentId: row.parent_id,
       sortOrder: row.sort_order ?? 0,
       isActive: row.is_active !== false,
+      importable: row.importable !== false,
+      hasProductTypes:
+        row.has_product_types === true || (row.product_types ?? []).length > 0,
       productTypes: (row.product_types ?? []).map((type) => ({
         id: type.id,
         name: type.name,
@@ -1970,6 +1978,7 @@ export async function importTaxonomyToStore(input: {
     product_types_created?: number;
     product_types_reused?: number;
     attribute_mappings_synced?: number;
+    product_types_skipped_no_source?: number;
   }>(
     `/api/admin/stores/${encodeURIComponent(input.storeId)}/taxonomy-import`,
     "POST",
@@ -1988,6 +1997,7 @@ export async function importTaxonomyToStore(input: {
     productTypesCreated: data.product_types_created ?? 0,
     productTypesReused: data.product_types_reused ?? 0,
     attributeMappingsSynced: data.attribute_mappings_synced ?? 0,
+    productTypesSkippedNoSource: data.product_types_skipped_no_source ?? 0,
   };
 }
 

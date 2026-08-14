@@ -8,6 +8,8 @@ export type TaxonomyImportSourceNode = {
   slug: string;
   parentId: string | null;
   sortOrder: number;
+  isActive: boolean;
+  importable: boolean;
   productTypes: Array<{
     id: string;
     name: string;
@@ -15,6 +17,13 @@ export type TaxonomyImportSourceNode = {
     hasAttributeMappings: boolean;
   }>;
 };
+
+export function taxonomyNodeProductTypeLabel(node: TaxonomyImportSourceNode): string {
+  if (node.productTypes.length > 0) {
+    return `${node.productTypes.length} product type${node.productTypes.length === 1 ? "" : "s"}`;
+  }
+  return "No source Product Type available";
+}
 
 /** When a child is selected, ensure all ancestors are also selected. */
 export function ensureTaxonomyAncestorsSelected(input: {
@@ -84,6 +93,7 @@ export function buildTaxonomyImportSummary(input: {
   categoryCount: number;
   productTypeCount: number;
   attributeMappedTypeCount: number;
+  leavesWithoutProductTypes: number;
   labels: string[];
 } {
   const selected = input.nodes.filter((node) => input.selectedIds.includes(node.id));
@@ -94,9 +104,13 @@ export function buildTaxonomyImportSummary(input: {
 
   let productTypeCount = 0;
   let attributeMappedTypeCount = 0;
+  let leavesWithoutProductTypes = 0;
   if (input.includeProductTypes) {
     for (const node of selected) {
       productTypeCount += node.productTypes.length;
+      if (node.productTypes.length === 0) {
+        leavesWithoutProductTypes += 1;
+      }
       if (input.includeAttributeMappings) {
         attributeMappedTypeCount += node.productTypes.filter(
           (type) => type.hasAttributeMappings || type.attributesCount > 0,
@@ -109,6 +123,7 @@ export function buildTaxonomyImportSummary(input: {
     categoryCount: selected.length,
     productTypeCount,
     attributeMappedTypeCount,
+    leavesWithoutProductTypes,
     labels,
   };
 }

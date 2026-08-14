@@ -4,6 +4,7 @@ import {
   buildTaxonomyImportPayload,
   buildTaxonomyImportSummary,
   ensureTaxonomyAncestorsSelected,
+  taxonomyNodeProductTypeLabel,
   toggleTaxonomyImportSelection,
   type TaxonomyImportSourceNode,
 } from "@/lib/admin/taxonomy-import";
@@ -15,6 +16,8 @@ const nodes: TaxonomyImportSourceNode[] = [
     slug: "tops",
     parentId: null,
     sortOrder: 1,
+    isActive: false,
+    importable: true,
     productTypes: [],
   },
   {
@@ -23,6 +26,8 @@ const nodes: TaxonomyImportSourceNode[] = [
     slug: "blouses",
     parentId: "tops",
     sortOrder: 1,
+    isActive: true,
+    importable: true,
     productTypes: [
       {
         id: "pt1",
@@ -38,6 +43,8 @@ const nodes: TaxonomyImportSourceNode[] = [
     slug: "shirts",
     parentId: "tops",
     sortOrder: 2,
+    isActive: true,
+    importable: true,
     productTypes: [],
   },
   {
@@ -46,6 +53,8 @@ const nodes: TaxonomyImportSourceNode[] = [
     slug: "bottoms",
     parentId: null,
     sortOrder: 2,
+    isActive: false,
+    importable: true,
     productTypes: [],
   },
   {
@@ -54,6 +63,8 @@ const nodes: TaxonomyImportSourceNode[] = [
     slug: "skirts",
     parentId: "bottoms",
     sortOrder: 1,
+    isActive: true,
+    importable: true,
     productTypes: [{ id: "pt2", name: "Skirt", attributesCount: 0, hasAttributeMappings: false }],
   },
 ];
@@ -123,6 +134,18 @@ describe("taxonomy-import helpers", () => {
     assert.equal(summary.categoryCount, 4);
     assert.equal(summary.productTypeCount, 2);
     assert.equal(summary.attributeMappedTypeCount, 1);
+    assert.equal(summary.leavesWithoutProductTypes, 2);
     assert.ok(summary.labels.includes("Blouses"));
+  });
+
+  it("labels missing source product types explicitly", () => {
+    assert.equal(
+      taxonomyNodeProductTypeLabel(nodes.find((node) => node.id === "shirts")!),
+      "No source Product Type available",
+    );
+    assert.match(
+      taxonomyNodeProductTypeLabel(nodes.find((node) => node.id === "blouses")!),
+      /1 product type/,
+    );
   });
 });
