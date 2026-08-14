@@ -8,17 +8,23 @@ import {
   fetchAdminCatalogProductTypes,
   fetchAdminCategories,
   fetchAdminDepartments,
+  fetchAdminStores,
   fetchAdminSubcategories,
   restoreAdminCatalogProductType,
   updateAdminCatalogProductType,
   type AdminCatalogProductType,
   type AdminCategory,
   type AdminDepartment,
+  type AdminStoreOption,
   type AdminSubcategory,
 } from "@/lib/api/admin-catalog";
 
+type CatalogOriginScope = "china" | "tz";
+
 type FormState = {
   id?: string;
+  origin: CatalogOriginScope;
+  storeId: string;
   departmentId: string;
   categoryId: string;
   subcategoryId: string;
@@ -30,14 +36,12 @@ type FormState = {
   isActive: boolean;
 };
 
-const emptyForm = (
-  departmentId = "",
-  categoryId = "",
-  subcategoryId = "",
-): FormState => ({
-  departmentId,
-  categoryId,
-  subcategoryId,
+const emptyForm = (defaults?: Partial<FormState>): FormState => ({
+  origin: defaults?.origin ?? "china",
+  storeId: defaults?.storeId ?? "",
+  departmentId: defaults?.departmentId ?? "",
+  categoryId: defaults?.categoryId ?? "",
+  subcategoryId: defaults?.subcategoryId ?? "",
   name: "",
   slug: "",
   image: "",
@@ -53,11 +57,14 @@ export function AdminCatalogProductTypesPanel() {
   const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [subcategories, setSubcategories] = useState<AdminSubcategory[]>([]);
   const [departments, setDepartments] = useState<AdminDepartment[]>([]);
+  const [stores, setStores] = useState<AdminStoreOption[]>([]);
   const [trashed, setTrashed] = useState<AdminCatalogProductType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [originFilter, setOriginFilter] = useState<CatalogOriginScope>("china");
+  const [storeFilter, setStoreFilter] = useState("all");
   const [departmentFilter, setDepartmentFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [subcategoryFilter, setSubcategoryFilter] = useState("all");
@@ -71,25 +78,77 @@ export function AdminCatalogProductTypesPanel() {
     setIsLoading(true);
     setError(null);
     try {
-      const [nextItems, deleted, nextCategories, nextSubcategories, nextDepartments] =
-        await Promise.all([
-          fetchAdminCatalogProductTypes(),
-          fetchAdminCatalogProductTypes({ trashed: true }),
-          fetchAdminCategories({ rootsOnly: true }),
-          fetchAdminSubcategories(),
-          fetchAdminDepartments(),
-        ]);
+      const listParams =
+        originFilter === "tz"
+          ? {
+              origin: "tz" as const,
+              storeId: storeFilter !== "all" ? storeFilter : undefined,
+            }
+          : {
+              origin: "china" as const,
+              departmentId: departmentFilter !== "all" ? departmentFilter : undefined,
+            };
+
+      const categoryParams =
+        originFilter === "tz"
+          ? {
+              rootsOnly: true as const,
+              origin: "tz" as const,
+              storeId: storeFilter !== "all" ? storeFilter : undefined,
+            }
+          : {
+              rootsOnly: true as const,
+              origin: "china" as const,
+              departmentId: departmentFilter !== "all" ? departmentFilter : undefined,
+            };
+
+      const subcategoryParams =
+        originFilter === "tz"
+          ? {
+              origin: "tz" as const,
+              storeId: storeFilter !== "all" ? storeFilter : undefined,
+            }
+          : {
+              origin: "china" as const,
+              departmentId: departmentFilter !== "all" ? departmentFilter : undefined,
+            };
+
+      const [
+        nextItems,
+        deleted,
+        nextCategories,
+        nextSubcategories,
+        nextDepartments,
+        nextStores,
+      ] = await Promise.all([
+        fetchAdminCatalogProductTypes(listParams),
+        fetchAdminCatalogProductTypes({ ...listParams, trashed: true }),
+        fetchAdminCategories(categoryParams),
+        fetchAdminSubcategories(subcategoryParams),
+        fetchAdminDepartments(),
+        fetchAdminStores().catch(() => [] as AdminStoreOption[]),
+      ]);
       setItems(nextItems);
       setTrashed(deleted);
-      setCategories(nextCategories.filter((item) => !item.parentId && item.departmentId));
+      setCategories(
+        nextCategories.filter((item) => {
+          if (item.parentId) return false;
+          if (originFilter === "tz") {
+            return item.origin === "tz" && Boolean(item.storeId);
+          }
+          return Boolean(item.departmentId);
+        }),
+      );
       setSubcategories(nextSubcategories);
       setDepartments(nextDepartments);
+      setStores(nextStores);
     } catch (err) {
       setItems([]);
       setTrashed([]);
       setCategories([]);
       setSubcategories([]);
       setDepartments([]);
+      setStores([]);
       setError(
         err instanceof AdminCatalogApiError
           ? err.message
@@ -98,20 +157,31 @@ export function AdminCatalogProductTypesPanel() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [originFilter, storeFilter, departmentFilter]);
 
   useEffect(() => {
     void reload();
   }, [reload]);
 
   const categoriesForFilter = useMemo(() => {
+    if (originFilter === "tz") {
+      if (storeFilter === "all") return categories;
+      return categories.filter((category) => category.storeId === storeFilter);
+    }
     if (departmentFilter === "all") return categories;
     return categories.filter((category) => category.departmentId === departmentFilter);
-  }, [categories, departmentFilter]);
+  }, [categories, departmentFilter, originFilter, storeFilter]);
 
   const subcategoriesForFilter = useMemo(() => {
     return subcategories.filter((subcategory) => {
-      if (departmentFilter !== "all" && subcategory.departmentId !== departmentFilter) {
+      if (originFilter === "tz") {
+        if (storeFilter !== "all" && subcategory.storeId !== storeFilter) {
+          return false;
+        }
+      } else if (
+        departmentFilter !== "all" &&
+        subcategory.departmentId !== departmentFilter
+      ) {
         return false;
       }
       if (categoryFilter !== "all" && subcategory.categoryId !== categoryFilter) {
@@ -119,12 +189,19 @@ export function AdminCatalogProductTypesPanel() {
       }
       return true;
     });
-  }, [subcategories, departmentFilter, categoryFilter]);
+  }, [subcategories, departmentFilter, categoryFilter, originFilter, storeFilter]);
 
   const categoriesForForm = useMemo(() => {
-    if (!form?.departmentId) return [];
+    if (!form) return [];
+    if (form.origin === "tz") {
+      if (!form.storeId) return [];
+      return categories.filter(
+        (category) => category.origin === "tz" && category.storeId === form.storeId,
+      );
+    }
+    if (!form.departmentId) return [];
     return categories.filter((category) => category.departmentId === form.departmentId);
-  }, [categories, form?.departmentId]);
+  }, [categories, form]);
 
   const subcategoriesForForm = useMemo(() => {
     if (!form?.categoryId) return [];
@@ -145,7 +222,6 @@ export function AdminCatalogProductTypesPanel() {
       return leafChildren;
     }
 
-    // Leaf root category: no active children — attach CPT to the category itself.
     const category = categories.find((item) => item.id === form.categoryId);
     if (!category || !category.isActive || hasActiveChild(category.id)) {
       return [];
@@ -177,7 +253,15 @@ export function AdminCatalogProductTypesPanel() {
     const q = search.trim().toLowerCase();
     return items
       .filter((item) => {
-        if (departmentFilter !== "all" && item.departmentId !== departmentFilter) return false;
+        if (originFilter === "tz") {
+          if (item.origin !== "tz") return false;
+          if (storeFilter !== "all" && item.storeId !== storeFilter) return false;
+        } else if (item.origin === "tz") {
+          return false;
+        }
+        if (departmentFilter !== "all" && item.departmentId !== departmentFilter) {
+          return false;
+        }
         if (categoryFilter !== "all" && item.categoryId !== categoryFilter) return false;
         if (subcategoryFilter !== "all" && item.subcategoryId !== subcategoryFilter) {
           return false;
@@ -191,10 +275,13 @@ export function AdminCatalogProductTypesPanel() {
           item.description.toLowerCase().includes(q) ||
           item.subcategoryName.toLowerCase().includes(q) ||
           (item.categoryName ?? "").toLowerCase().includes(q) ||
-          (item.departmentName ?? "").toLowerCase().includes(q)
+          (item.departmentName ?? "").toLowerCase().includes(q) ||
+          (item.storeName ?? "").toLowerCase().includes(q)
         );
       })
       .sort((a, b) => {
+        const storeCmp = (a.storeName ?? "").localeCompare(b.storeName ?? "");
+        if (storeCmp !== 0) return storeCmp;
         const deptCmp = (a.departmentName ?? "").localeCompare(b.departmentName ?? "");
         if (deptCmp !== 0) return deptCmp;
         const catCmp = (a.categoryName ?? "").localeCompare(b.categoryName ?? "");
@@ -208,6 +295,8 @@ export function AdminCatalogProductTypesPanel() {
   }, [
     items,
     search,
+    originFilter,
+    storeFilter,
     departmentFilter,
     categoryFilter,
     subcategoryFilter,
@@ -223,7 +312,7 @@ export function AdminCatalogProductTypesPanel() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, departmentFilter, categoryFilter, subcategoryFilter, statusFilter]);
+  }, [search, originFilter, storeFilter, departmentFilter, categoryFilter, subcategoryFilter, statusFilter]);
 
   useEffect(() => {
     if (categoryFilter === "all") return;
@@ -240,7 +329,6 @@ export function AdminCatalogProductTypesPanel() {
     }
   }, [subcategoriesForFilter, subcategoryFilter]);
 
-  // Keep leaf parent selection valid when category options change.
   useEffect(() => {
     if (!form) return;
     if (subcategoriesForForm.length === 0) {
@@ -260,6 +348,24 @@ export function AdminCatalogProductTypesPanel() {
 
   const openCreate = () => {
     setActionError(null);
+    if (originFilter === "tz") {
+      const defaultStoreId =
+        storeFilter !== "all" ? storeFilter : stores[0]?.id ?? "";
+      const defaultCategoryId =
+        categoryFilter !== "all"
+          ? categoryFilter
+          : categories.find((category) => category.storeId === defaultStoreId)?.id ?? "";
+      setForm(
+        emptyForm({
+          origin: "tz",
+          storeId: defaultStoreId,
+          categoryId: defaultCategoryId,
+          subcategoryId: subcategoryFilter !== "all" ? subcategoryFilter : "",
+        }),
+      );
+      return;
+    }
+
     const defaultDepartmentId =
       departmentFilter !== "all" ? departmentFilter : departments[0]?.id ?? "";
     const defaultCategoryId =
@@ -267,17 +373,23 @@ export function AdminCatalogProductTypesPanel() {
         ? categoryFilter
         : categories.find((category) => category.departmentId === defaultDepartmentId)?.id ??
           "";
-    // Prefer an explicit subcategory filter when it is a leaf; otherwise leave blank
-    // for the leaf-selector effect to fill from DB-backed options.
-    const defaultSubcategoryId =
-      subcategoryFilter !== "all" ? subcategoryFilter : "";
-    setForm(emptyForm(defaultDepartmentId, defaultCategoryId, defaultSubcategoryId));
+    setForm(
+      emptyForm({
+        origin: "china",
+        departmentId: defaultDepartmentId,
+        categoryId: defaultCategoryId,
+        subcategoryId: subcategoryFilter !== "all" ? subcategoryFilter : "",
+      }),
+    );
   };
 
   const openEdit = (item: AdminCatalogProductType) => {
     setActionError(null);
+    const origin: CatalogOriginScope = item.origin === "tz" ? "tz" : "china";
     setForm({
       id: item.id,
+      origin,
+      storeId: item.storeId ?? "",
       departmentId: item.departmentId ?? "",
       categoryId: item.categoryId ?? "",
       subcategoryId: item.subcategoryId,
@@ -356,8 +468,12 @@ export function AdminCatalogProductTypesPanel() {
       setActionError("Product type name is required.");
       return;
     }
-    if (!form.departmentId) {
+    if (form.origin === "china" && !form.departmentId) {
       setActionError("Department is required.");
+      return;
+    }
+    if (form.origin === "tz" && !form.storeId) {
+      setActionError("Store is required for Tanzania product types.");
       return;
     }
     if (!form.categoryId) {
@@ -411,8 +527,8 @@ export function AdminCatalogProductTypesPanel() {
         <div>
           <h1 className="text-lg font-semibold text-zinc-900">Product Types</h1>
           <p className="mt-1 text-xs text-zinc-500">
-            Catalog Product Types — taxonomy leaf under Department → Category →
-            Subcategory. Distinct from Configuration Templates (variant/SKU schema).
+            Catalog Product Types attach to leaf categories. China uses department
+            taxonomy; Tanzania uses store-owned catalog leaves.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -442,37 +558,92 @@ export function AdminCatalogProductTypesPanel() {
           </h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="admin-label" htmlFor="pt-department">
-                Department *
+              <label className="admin-label" htmlFor="pt-origin">
+                Origin *
               </label>
               <select
-                id="pt-department"
+                id="pt-origin"
                 className="admin-input mt-1.5"
-                value={form.departmentId}
+                value={form.origin}
                 onChange={(event) => {
-                  const departmentId = event.target.value;
-                  const firstCategory =
-                    categories.find((category) => category.departmentId === departmentId)
-                      ?.id ?? "";
-                  const firstSub =
-                    subcategories.find((item) => item.categoryId === firstCategory)?.id ??
-                    firstCategory;
-                  setForm({
-                    ...form,
-                    departmentId,
-                    categoryId: firstCategory,
-                    subcategoryId: firstSub,
-                  });
+                  const origin = event.target.value === "tz" ? "tz" : "china";
+                  setForm(
+                    emptyForm({
+                      id: form.id,
+                      origin,
+                      storeId: origin === "tz" ? form.storeId || (storeFilter !== "all" ? storeFilter : "") : "",
+                      departmentId:
+                        origin === "china"
+                          ? form.departmentId || (departmentFilter !== "all" ? departmentFilter : "")
+                          : "",
+                    }),
+                  );
                 }}
               >
-                <option value="">Select department</option>
-                {departments.map((department) => (
-                  <option key={department.id} value={department.id}>
-                    {department.icon} {department.name}
-                  </option>
-                ))}
+                <option value="china">China (Catalog Bible)</option>
+                <option value="tz">Tanzania (store catalog)</option>
               </select>
             </div>
+            {form.origin === "china" ? (
+              <div>
+                <label className="admin-label" htmlFor="pt-department">
+                  Department *
+                </label>
+                <select
+                  id="pt-department"
+                  className="admin-input mt-1.5"
+                  value={form.departmentId}
+                  onChange={(event) => {
+                    const departmentId = event.target.value;
+                    const firstCategory =
+                      categories.find((category) => category.departmentId === departmentId)
+                        ?.id ?? "";
+                    setForm({
+                      ...form,
+                      departmentId,
+                      categoryId: firstCategory,
+                      subcategoryId: "",
+                    });
+                  }}
+                >
+                  <option value="">Select department</option>
+                  {departments.map((department) => (
+                    <option key={department.id} value={department.id}>
+                      {department.icon} {department.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label className="admin-label" htmlFor="pt-store">
+                  Store *
+                </label>
+                <select
+                  id="pt-store"
+                  className="admin-input mt-1.5"
+                  value={form.storeId}
+                  onChange={(event) => {
+                    const storeId = event.target.value;
+                    const firstCategory =
+                      categories.find((category) => category.storeId === storeId)?.id ?? "";
+                    setForm({
+                      ...form,
+                      storeId,
+                      categoryId: firstCategory,
+                      subcategoryId: "",
+                    });
+                  }}
+                >
+                  <option value="">Select store</option>
+                  {stores.map((store) => (
+                    <option key={store.id} value={store.id}>
+                      {store.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <label className="admin-label" htmlFor="pt-category">
                 Parent category *
@@ -634,20 +805,54 @@ export function AdminCatalogProductTypesPanel() {
           />
           <select
             className="admin-input w-auto"
-            value={departmentFilter}
+            value={originFilter}
             onChange={(event) => {
-              setDepartmentFilter(event.target.value);
+              const next = event.target.value === "tz" ? "tz" : "china";
+              setOriginFilter(next);
               setCategoryFilter("all");
               setSubcategoryFilter("all");
+              if (next === "china") setStoreFilter("all");
+              if (next === "tz") setDepartmentFilter("all");
             }}
           >
-            <option value="all">All departments</option>
-            {departments.map((department) => (
-              <option key={department.id} value={department.id}>
-                {department.name}
-              </option>
-            ))}
+            <option value="china">China</option>
+            <option value="tz">Tanzania</option>
           </select>
+          {originFilter === "china" ? (
+            <select
+              className="admin-input w-auto"
+              value={departmentFilter}
+              onChange={(event) => {
+                setDepartmentFilter(event.target.value);
+                setCategoryFilter("all");
+                setSubcategoryFilter("all");
+              }}
+            >
+              <option value="all">All departments</option>
+              {departments.map((department) => (
+                <option key={department.id} value={department.id}>
+                  {department.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <select
+              className="admin-input w-auto"
+              value={storeFilter}
+              onChange={(event) => {
+                setStoreFilter(event.target.value);
+                setCategoryFilter("all");
+                setSubcategoryFilter("all");
+              }}
+            >
+              <option value="all">All stores</option>
+              {stores.map((store) => (
+                <option key={store.id} value={store.id}>
+                  {store.name}
+                </option>
+              ))}
+            </select>
+          )}
           <select
             className="admin-input w-auto"
             value={categoryFilter}
@@ -716,9 +921,11 @@ export function AdminCatalogProductTypesPanel() {
                       ) : null}
                     </p>
                     <p className="text-xs text-zinc-500">
-                      {item.departmentIcon ? `${item.departmentIcon} ` : ""}
-                      {item.departmentName ?? "No department"} → {item.categoryName ?? "—"} →{" "}
-                      {item.subcategoryName} · {item.slug} · sort {item.sortOrder}
+                      {item.origin === "tz"
+                        ? `${item.storeName ?? "Store"} → `
+                        : `${item.departmentIcon ? `${item.departmentIcon} ` : ""}${item.departmentName ?? "No department"} → `}
+                      {item.categoryName ?? "—"} → {item.subcategoryName} · {item.slug} · sort{" "}
+                      {item.sortOrder}
                     </p>
                     <p className="mt-0.5 text-xs text-zinc-500">
                       {item.productsCount} product{item.productsCount === 1 ? "" : "s"} ·{" "}

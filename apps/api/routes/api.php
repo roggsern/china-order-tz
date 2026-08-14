@@ -49,6 +49,7 @@ use App\Http\Controllers\CustomerGrowthController;
 use App\Http\Controllers\Admin\AdminPermissionController;
 use App\Http\Controllers\Admin\AdminRoleController;
 use App\Http\Controllers\Admin\AdminStoreController;
+use App\Http\Controllers\Admin\AdminStoreTaxonomyImportController;
 use App\Http\Controllers\Admin\AdminStoreSettingsController;
 use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\AdminStoreAssignmentController;
@@ -369,6 +370,9 @@ Route::middleware(['auth:sanctum', 'ensure.admin', 'admin.active'])->prefix('adm
         ->middleware('throttle:admin-mutations');
     Route::get('/stores/{store}/settings', [AdminStoreSettingsController::class, 'show']);
     Route::put('/stores/{store}/settings', [AdminStoreSettingsController::class, 'update'])
+        ->middleware('throttle:admin-mutations');
+    Route::get('/stores/{store}/taxonomy-import-source', [AdminStoreTaxonomyImportController::class, 'source']);
+    Route::post('/stores/{store}/taxonomy-import', [AdminStoreTaxonomyImportController::class, 'import'])
         ->middleware('throttle:admin-mutations');
     Route::get('/stores/{store}/team', [AdminStoreTeamController::class, 'index']);
     Route::post('/stores/{store}/team', [AdminStoreTeamController::class, 'store'])

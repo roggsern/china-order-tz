@@ -22,10 +22,11 @@ class GetAdminCatalogProductTypesAction
 
         $query = CatalogProductType::query()
             ->with([
-                'subcategory:id,name,slug,parent_id,department_id',
-                'subcategory.parent:id,name,slug,department_id',
+                'subcategory:id,name,slug,parent_id,department_id,store_id,origin',
+                'subcategory.parent:id,name,slug,department_id,store_id,origin',
                 'subcategory.parent.department:id,name,slug,icon',
                 'subcategory.department:id,name,slug,icon',
+                'subcategory.store:id,name,slug',
             ])
             ->withCount(['products', 'attributes']);
 
@@ -61,6 +62,22 @@ class GetAdminCatalogProductTypesAction
             $query->whereHas('subcategory', function (Builder $sub) use ($departmentId) {
                 $sub->where('department_id', $departmentId)
                     ->orWhereHas('parent', fn (Builder $parent) => $parent->where('department_id', $departmentId));
+            });
+        }
+
+        $storeId = request()->query('store_id');
+        if (is_string($storeId) && $storeId !== '') {
+            $query->whereHas('subcategory', function (Builder $sub) use ($storeId) {
+                $sub->where('store_id', $storeId)
+                    ->orWhereHas('parent', fn (Builder $parent) => $parent->where('store_id', $storeId));
+            });
+        }
+
+        $origin = request()->query('origin');
+        if (is_string($origin) && $origin !== '') {
+            $query->whereHas('subcategory', function (Builder $sub) use ($origin) {
+                $sub->where('origin', $origin)
+                    ->orWhereHas('parent', fn (Builder $parent) => $parent->where('origin', $origin));
             });
         }
 

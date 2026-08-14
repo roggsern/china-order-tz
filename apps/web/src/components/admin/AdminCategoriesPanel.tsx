@@ -25,6 +25,7 @@ import {
   type CatalogOriginFilter,
   validateCategoryFormDraft,
 } from "@/lib/admin/tz-store-categories";
+import { AdminImportTaxonomyModal } from "@/components/admin/AdminImportTaxonomyModal";
 
 type CategoryFormState = {
   id?: string;
@@ -95,6 +96,7 @@ export function AdminCategoriesPanel() {
   const [showTrashed, setShowTrashed] = useState(false);
   const [form, setForm] = useState<CategoryFormState | null>(null);
   const [saving, setSaving] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const syncUrl = useCallback(
     (next: { origin: CatalogOriginFilter; storeId: string; departmentId: string }) => {
@@ -429,11 +431,32 @@ export function AdminCategoriesPanel() {
           >
             {showTrashed ? "Hide trash" : `Trash (${trashed.length})`}
           </button>
+          {originFilter === "tz" && storeFilter ? (
+            <button
+              type="button"
+              className="admin-btn-secondary"
+              onClick={() => setImportOpen(true)}
+            >
+              Add from existing taxonomy
+            </button>
+          ) : null}
           <button type="button" className="admin-btn-primary" onClick={openCreate}>
             Add category
           </button>
         </div>
       </div>
+
+      {importOpen && originFilter === "tz" && storeFilter ? (
+        <AdminImportTaxonomyModal
+          storeId={storeFilter}
+          storeName={selectedStoreName ?? "store"}
+          open={importOpen}
+          onClose={() => setImportOpen(false)}
+          onImported={() => {
+            void reload();
+          }}
+        />
+      ) : null}
 
       {actionError ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">

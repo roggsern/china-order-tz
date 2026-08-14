@@ -15,8 +15,11 @@ class CatalogProductTypeResource extends JsonResource
         $category = null;
         $department = null;
 
+        $store = null;
+        $origin = null;
+
         if ($subcategory !== null) {
-            $subcategory->loadMissing(['parent.department', 'department']);
+            $subcategory->loadMissing(['parent.department', 'department', 'store']);
 
             if ($subcategory->parent_id !== null) {
                 $category = $subcategory->parent;
@@ -25,6 +28,21 @@ class CatalogProductTypeResource extends JsonResource
                 $category = $subcategory;
                 $department = $subcategory->department;
             }
+
+            $store = $subcategory->store
+                ?? ($category !== null && $category->relationLoaded('store') ? $category->store : null);
+            if ($store === null && filled($subcategory->store_id)) {
+                $store = (object) [
+                    'id' => $subcategory->store_id,
+                    'name' => null,
+                    'slug' => null,
+                ];
+            }
+
+            $originValue = $subcategory->origin;
+            $origin = $originValue instanceof \App\Enums\CatalogOrigin
+                ? $originValue->value
+                : (is_string($originValue) ? $originValue : null);
         }
 
         return [
@@ -41,24 +59,37 @@ class CatalogProductTypeResource extends JsonResource
             ),
             'products_count' => $this->whenCounted('products'),
             'attributes_count' => $this->whenCounted('attributes'),
+            'origin' => $origin,
+            'store_id' => $subcategory?->store_id,
             'subcategory' => $subcategory === null ? null : [
                 'id' => $subcategory->id,
                 'name' => $subcategory->name,
                 'slug' => $subcategory->slug,
                 'parent_id' => $subcategory->parent_id,
                 'department_id' => $subcategory->department_id,
+                'store_id' => $subcategory->store_id,
+                'origin' => $origin,
             ],
             'category' => $category === null ? null : [
                 'id' => $category->id,
                 'name' => $category->name,
                 'slug' => $category->slug,
                 'department_id' => $category->department_id,
+                'store_id' => $category->store_id ?? null,
+                'origin' => $category->origin instanceof \App\Enums\CatalogOrigin
+                    ? $category->origin->value
+                    : ($category->origin ?? null),
             ],
             'department' => $department === null ? null : [
                 'id' => $department->id,
                 'name' => $department->name,
                 'slug' => $department->slug,
                 'icon' => $department->icon,
+            ],
+            'store' => $store === null ? null : [
+                'id' => $store->id,
+                'name' => $store->name ?? null,
+                'slug' => $store->slug ?? null,
             ],
             'deleted_at' => $this->deleted_at,
             'created_at' => $this->created_at,

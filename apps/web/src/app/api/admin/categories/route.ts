@@ -9,6 +9,7 @@ export async function GET(request: Request) {
     "page",
     "per_page",
     "department_id",
+    "store_id",
     "origin",
     "parent_id",
     "roots_only",

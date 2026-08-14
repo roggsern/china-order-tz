@@ -1282,24 +1282,35 @@ export type AdminApiCatalogProductType = {
   supports_product_condition?: boolean;
   products_count?: number;
   attributes_count?: number;
+  origin?: string | null;
+  store_id?: string | null;
   subcategory?: {
     id: string;
     name: string;
     slug: string;
     parent_id?: string | null;
     department_id?: string | null;
+    store_id?: string | null;
+    origin?: string | null;
   } | null;
   category?: {
     id: string;
     name: string;
     slug: string;
     department_id?: string | null;
+    store_id?: string | null;
+    origin?: string | null;
   } | null;
   department?: {
     id: string;
     name: string;
     slug: string;
     icon?: string | null;
+  } | null;
+  store?: {
+    id: string;
+    name?: string | null;
+    slug?: string | null;
   } | null;
   deleted_at?: string | null;
 };
@@ -1313,6 +1324,9 @@ export type AdminCatalogProductType = {
   departmentId: string | null;
   departmentName: string | null;
   departmentIcon: string | null;
+  storeId: string | null;
+  storeName: string | null;
+  origin: "china" | "tz" | null;
   name: string;
   slug: string;
   description: string;
@@ -1328,6 +1342,11 @@ export type AdminCatalogProductType = {
 export function mapAdminApiCatalogProductType(
   item: AdminApiCatalogProductType,
 ): AdminCatalogProductType {
+  const rawOrigin =
+    item.origin ?? item.subcategory?.origin ?? item.category?.origin ?? null;
+  const origin =
+    rawOrigin === "tz" || rawOrigin === "china" ? rawOrigin : null;
+
   return {
     id: item.id,
     subcategoryId: item.subcategory_id,
@@ -1337,6 +1356,9 @@ export function mapAdminApiCatalogProductType(
     departmentId: item.department?.id ?? null,
     departmentName: item.department?.name ?? null,
     departmentIcon: item.department?.icon ?? null,
+    storeId: item.store_id ?? item.store?.id ?? item.subcategory?.store_id ?? null,
+    storeName: item.store?.name ?? null,
+    origin,
     name: item.name,
     slug: item.slug,
     description: item.description?.trim() || "",
@@ -1352,6 +1374,8 @@ export function mapAdminApiCatalogProductType(
 
 export type AdminCatalogProductTypeListParams = {
   departmentId?: string;
+  storeId?: string;
+  origin?: "china" | "tz";
   categoryId?: string;
   subcategoryId?: string;
   search?: string;
@@ -1374,6 +1398,8 @@ export async function fetchAdminCatalogProductTypes(
 ): Promise<AdminCatalogProductType[]> {
   const query: Record<string, string | number | undefined> = {};
   if (params.departmentId) query.department_id = params.departmentId;
+  if (params.storeId) query.store_id = params.storeId;
+  if (params.origin) query.origin = params.origin;
   if (params.categoryId) query.category_id = params.categoryId;
   if (params.subcategoryId) query.subcategory_id = params.subcategoryId;
   if (params.search) query.search = params.search;
@@ -1836,6 +1862,133 @@ export async function restoreAdminCategory(id: string): Promise<AdminCategory> {
     "Unable to restore category.",
   );
   return mapAdminApiCategory(data);
+}
+
+export type TaxonomyImportSourceCategory = {
+  id: string;
+  name: string;
+  slug: string;
+  parentId: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  productTypes: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    isActive: boolean;
+    attributesCount: number;
+    hasAttributeMappings: boolean;
+  }>;
+};
+
+export type TaxonomyImportSource = {
+  department: { id: string; name: string; slug: string };
+  categories: TaxonomyImportSourceCategory[];
+};
+
+export type TaxonomyImportResult = {
+  categoriesCreated: number;
+  categoriesReused: number;
+  productTypesCreated: number;
+  productTypesReused: number;
+  attributeMappingsSynced: number;
+};
+
+export async function fetchTaxonomyImportSource(input: {
+  storeId: string;
+  departmentId: string;
+}): Promise<TaxonomyImportSource> {
+  const params = new URLSearchParams({
+    department_id: input.departmentId,
+  });
+  const response = await fetch(
+    `/api/admin/stores/${encodeURIComponent(input.storeId)}/taxonomy-import-source?${params}`,
+    { headers: { Accept: "application/json" }, cache: "no-store" },
+  );
+  const payload = await parseJsonResponse<{
+    success?: boolean;
+    message?: string;
+    data?: {
+      department: { id: string; name: string; slug: string };
+      categories: Array<{
+        id: string;
+        name: string;
+        slug: string;
+        parent_id: string | null;
+        sort_order: number;
+        is_active: boolean;
+        product_types: Array<{
+          id: string;
+          name: string;
+          slug: string;
+          is_active: boolean;
+          attributes_count: number;
+          has_attribute_mappings: boolean;
+        }>;
+      }>;
+    };
+  }>(response);
+
+  if (!response.ok || payload.success === false || !payload.data) {
+    throw new AdminCatalogApiError(
+      payload.message?.trim() || "Unable to load taxonomy import source.",
+      response.status,
+    );
+  }
+
+  return {
+    department: payload.data.department,
+    categories: payload.data.categories.map((row) => ({
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+      parentId: row.parent_id,
+      sortOrder: row.sort_order ?? 0,
+      isActive: row.is_active !== false,
+      productTypes: (row.product_types ?? []).map((type) => ({
+        id: type.id,
+        name: type.name,
+        slug: type.slug,
+        isActive: type.is_active !== false,
+        attributesCount: type.attributes_count ?? 0,
+        hasAttributeMappings: type.has_attribute_mappings === true,
+      })),
+    })),
+  };
+}
+
+export async function importTaxonomyToStore(input: {
+  storeId: string;
+  departmentId: string;
+  categoryIds: string[];
+  includeProductTypes: boolean;
+  includeAttributeMappings: boolean;
+}): Promise<TaxonomyImportResult> {
+  const data = await mutateAdminJson<{
+    categories_created?: number;
+    categories_reused?: number;
+    product_types_created?: number;
+    product_types_reused?: number;
+    attribute_mappings_synced?: number;
+  }>(
+    `/api/admin/stores/${encodeURIComponent(input.storeId)}/taxonomy-import`,
+    "POST",
+    {
+      department_id: input.departmentId,
+      category_ids: input.categoryIds,
+      include_product_types: input.includeProductTypes,
+      include_attribute_mappings: input.includeAttributeMappings,
+    },
+    "Unable to import taxonomy into store catalog.",
+  );
+
+  return {
+    categoriesCreated: data.categories_created ?? 0,
+    categoriesReused: data.categories_reused ?? 0,
+    productTypesCreated: data.product_types_created ?? 0,
+    productTypesReused: data.product_types_reused ?? 0,
+    attributeMappingsSynced: data.attribute_mappings_synced ?? 0,
+  };
 }
 
 export async function createAdminBrand(

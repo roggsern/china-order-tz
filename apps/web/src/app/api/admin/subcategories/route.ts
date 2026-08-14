@@ -10,6 +10,8 @@ export async function GET(request: Request) {
     "per_page",
     "department_id",
     "category_id",
+    "store_id",
+    "origin",
     "search",
     "is_active",
     "trashed",

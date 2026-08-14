@@ -1,0 +1,450 @@
+<?php
+
+namespace Tests\Feature\Admin;
+
+use App\Enums\CatalogOrigin;
+use App\Models\Admin;
+use App\Models\CatalogAttribute;
+use App\Models\CatalogProductType;
+use App\Models\Category;
+use App\Models\Department;
+use App\Models\Store;
+use App\Support\Admin\AdminPermissions;
+use App\Support\Catalog\TzTaxonomyImportIdentity;
+use Database\Seeders\RoleSeeder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
+use Tests\TestCase;
+
+class AdminTzTaxonomyImportTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(RoleSeeder::class);
+        Sanctum::actingAs(
+            Admin::factory()->withPermissions([
+                AdminPermissions::CATALOG_VIEW,
+                AdminPermissions::CATALOG_CREATE,
+                AdminPermissions::CATALOG_UPDATE,
+                AdminPermissions::CONFIGURATION_VIEW,
+                AdminPermissions::CONFIGURATION_MANAGE,
+                AdminPermissions::STORES_VIEW,
+            ])->create(),
+        );
+    }
+
+    public function test_import_root_and_leaf_with_parent_auto_provision(): void
+    {
+        [$store, $department, $tops, $blouses] = $this->seedChinaFashionTree();
+
+        $response = $this->postJson("/api/v1/admin/stores/{$store->id}/taxonomy-import", [
+            'department_id' => $department->id,
+            'category_ids' => [$blouses->id],
+            'include_product_types' => false,
+            'include_attribute_mappings' => false,
+        ])->assertOk();
+
+        $this->assertSame(2, $response->json('data.categories_created'));
+
+        $tzTops = Category::query()
+            ->where('store_id', $store->id)
+            ->where('slug', TzTaxonomyImportIdentity::categorySlug($store->slug, $tops->slug))
+            ->firstOrFail();
+        $tzBlouses = Category::query()
+            ->where('store_id', $store->id)
+            ->where('slug', TzTaxonomyImportIdentity::categorySlug($store->slug, $blouses->slug))
+            ->firstOrFail();
+
+        $this->assertSame(CatalogOrigin::Tz, $tzTops->origin);
+        $this->assertSame(CatalogOrigin::Tz, $tzBlouses->origin);
+        $this->assertNull($tzTops->department_id);
+        $this->assertNull($tzBlouses->department_id);
+        $this->assertSame($store->id, $tzTops->store_id);
+        $this->assertSame($store->id, $tzBlouses->store_id);
+        $this->assertNull($tzTops->parent_id);
+        $this->assertSame($tzTops->id, $tzBlouses->parent_id);
+
+        $tops->refresh();
+        $this->assertSame(CatalogOrigin::China, $tops->origin);
+        $this->assertSame($department->id, $tops->department_id);
+        $this->assertNull($tops->store_id);
+    }
+
+    public function test_import_multiple_branches_and_product_types_with_shared_attributes(): void
+    {
+        [$store, $department, $tops, $blouses, $bottoms, $skirts, $blouseType, $color] =
+            $this->seedChinaFashionTreeWithTypes();
+
+        $response = $this->postJson("/api/v1/admin/stores/{$store->id}/taxonomy-import", [
+            'department_id' => $department->id,
+            'category_ids' => [$blouses->id, $skirts->id],
+            'include_product_types' => true,
+            'include_attribute_mappings' => true,
+        ])->assertOk();
+
+        $this->assertGreaterThanOrEqual(4, $response->json('data.categories_created'));
+        $this->assertSame(1, $response->json('data.product_types_created'));
+
+        $tzBlouses = Category::query()
+            ->where('store_id', $store->id)
+            ->where('slug', TzTaxonomyImportIdentity::categorySlug($store->slug, $blouses->slug))
+            ->firstOrFail();
+
+        $tzType = CatalogProductType::query()
+            ->where('subcategory_id', $tzBlouses->id)
+            ->where('name', 'Women\'s Blouse')
+            ->firstOrFail();
+
+        $this->assertSame(
+            TzTaxonomyImportIdentity::productTypeSlug($tzBlouses->slug, 'Women\'s Blouse'),
+            $tzType->slug,
+        );
+        $this->assertNotSame($blouseType->id, $tzType->id);
+
+        $tzType->load('attributes');
+        $this->assertTrue($tzType->attributes->contains('id', $color->id));
+        $this->assertSame(1, CatalogAttribute::query()->whereKey($color->id)->count());
+
+        // China CPT untouched
+        $blouseType->refresh();
+        $this->assertSame($blouses->id, $blouseType->subcategory_id);
+    }
+
+    public function test_repeated_import_is_idempotent(): void
+    {
+        [$store, $department, , $blouses] = $this->seedChinaFashionTreeWithTypes();
+
+        $payload = [
+            'department_id' => $department->id,
+            'category_ids' => [$blouses->id],
+            'include_product_types' => true,
+            'include_attribute_mappings' => true,
+        ];
+
+        $this->postJson("/api/v1/admin/stores/{$store->id}/taxonomy-import", $payload)->assertOk();
+        $second = $this->postJson("/api/v1/admin/stores/{$store->id}/taxonomy-import", $payload)->assertOk();
+
+        $this->assertSame(0, $second->json('data.categories_created'));
+        $this->assertGreaterThanOrEqual(2, $second->json('data.categories_reused'));
+        $this->assertSame(0, $second->json('data.product_types_created'));
+        $this->assertSame(1, $second->json('data.product_types_reused'));
+
+        $this->assertSame(
+            1,
+            Category::query()
+                ->where('store_id', $store->id)
+                ->where('name', 'Blouses')
+                ->count(),
+        );
+        $this->assertSame(
+            1,
+            CatalogProductType::query()
+                ->where('name', 'Women\'s Blouse')
+                ->whereHas('subcategory', fn ($q) => $q->where('store_id', $store->id))
+                ->count(),
+        );
+    }
+
+    public function test_second_store_gets_independent_rows(): void
+    {
+        [$zion, $department, , $blouses] = $this->seedChinaFashionTreeWithTypes();
+        $rovi = $this->makeStore('ROVI BEAUTY', 'ROVI');
+
+        $payload = [
+            'department_id' => $department->id,
+            'category_ids' => [$blouses->id],
+            'include_product_types' => true,
+            'include_attribute_mappings' => true,
+        ];
+
+        $this->postJson("/api/v1/admin/stores/{$zion->id}/taxonomy-import", $payload)->assertOk();
+        $this->postJson("/api/v1/admin/stores/{$rovi->id}/taxonomy-import", $payload)->assertOk();
+
+        $this->assertSame(
+            0,
+            Category::query()->where('store_id', $rovi->id)->where('name', 'Blouses')
+                ->whereIn('id', Category::query()->where('store_id', $zion->id)->pluck('id'))
+                ->count(),
+        );
+
+        $zionBlouses = Category::query()->where('store_id', $zion->id)->where('name', 'Blouses')->firstOrFail();
+        $roviBlouses = Category::query()->where('store_id', $rovi->id)->where('name', 'Blouses')->firstOrFail();
+        $this->assertNotSame($zionBlouses->id, $roviBlouses->id);
+
+        $zionCpt = CatalogProductType::query()->where('subcategory_id', $zionBlouses->id)->firstOrFail();
+        $roviCpt = CatalogProductType::query()->where('subcategory_id', $roviBlouses->id)->firstOrFail();
+        $this->assertNotSame($zionCpt->id, $roviCpt->id);
+    }
+
+    public function test_manual_tz_categories_preserved_and_not_merged_by_name(): void
+    {
+        [$store, $department, $tops, $blouses] = $this->seedChinaFashionTree();
+
+        $manual = Category::factory()->forStore($store)->create([
+            'name' => 'Tops',
+            'slug' => 'manual-tops-custom',
+            'parent_id' => null,
+        ]);
+
+        $this->postJson("/api/v1/admin/stores/{$store->id}/taxonomy-import", [
+            'department_id' => $department->id,
+            'category_ids' => [$blouses->id],
+            'include_product_types' => false,
+            'include_attribute_mappings' => false,
+        ])->assertOk();
+
+        $manual->refresh();
+        $this->assertSame('manual-tops-custom', $manual->slug);
+        $this->assertSame($store->id, $manual->store_id);
+
+        $this->assertSame(
+            2,
+            Category::query()->where('store_id', $store->id)->where('name', 'Tops')->count(),
+        );
+    }
+
+    public function test_inactive_and_deleted_source_rejected(): void
+    {
+        [$store, $department, $tops, $blouses] = $this->seedChinaFashionTree();
+        $blouses->update(['is_active' => false]);
+
+        $this->postJson("/api/v1/admin/stores/{$store->id}/taxonomy-import", [
+            'department_id' => $department->id,
+            'category_ids' => [$blouses->id],
+        ])->assertUnprocessable();
+
+        $blouses->update(['is_active' => true]);
+        $blouses->delete();
+
+        $this->postJson("/api/v1/admin/stores/{$store->id}/taxonomy-import", [
+            'department_id' => $department->id,
+            'category_ids' => [$blouses->id],
+        ])->assertUnprocessable();
+    }
+
+    public function test_permission_enforcement(): void
+    {
+        [$store, $department, , $blouses] = $this->seedChinaFashionTree();
+
+        Sanctum::actingAs(
+            Admin::factory()->withPermissions([
+                AdminPermissions::CATALOG_VIEW,
+            ])->create(),
+        );
+
+        $this->postJson("/api/v1/admin/stores/{$store->id}/taxonomy-import", [
+            'department_id' => $department->id,
+            'category_ids' => [$blouses->id],
+            'include_product_types' => false,
+        ])->assertForbidden();
+
+        Sanctum::actingAs(
+            Admin::factory()->withPermissions([
+                AdminPermissions::CATALOG_CREATE,
+            ])->create(),
+        );
+
+        $this->postJson("/api/v1/admin/stores/{$store->id}/taxonomy-import", [
+            'department_id' => $department->id,
+            'category_ids' => [$blouses->id],
+            'include_product_types' => true,
+        ])->assertForbidden();
+    }
+
+    public function test_transaction_rolls_back_on_cpt_slug_collision(): void
+    {
+        [$store, $department, , $blouses, , , $blouseType] = $this->seedChinaFashionTreeWithTypes();
+
+        $foreignLeaf = Category::factory()->china()->forDepartment($department)->create([
+            'name' => 'Other Leaf',
+            'slug' => 'other-leaf-collision',
+        ]);
+        $expectedSlug = TzTaxonomyImportIdentity::productTypeSlug(
+            TzTaxonomyImportIdentity::categorySlug($store->slug, $blouses->slug),
+            $blouseType->name,
+        );
+        CatalogProductType::factory()->create([
+            'subcategory_id' => $foreignLeaf->id,
+            'name' => 'Foreign Type',
+            'slug' => $expectedSlug,
+        ]);
+
+        $before = Category::query()->where('store_id', $store->id)->count();
+
+        $this->postJson("/api/v1/admin/stores/{$store->id}/taxonomy-import", [
+            'department_id' => $department->id,
+            'category_ids' => [$blouses->id],
+            'include_product_types' => true,
+            'include_attribute_mappings' => true,
+        ])->assertUnprocessable();
+
+        $this->assertSame($before, Category::query()->where('store_id', $store->id)->count());
+    }
+
+    public function test_source_endpoint_lists_china_taxonomy_only(): void
+    {
+        [$store, $department, $tops, $blouses] = $this->seedChinaFashionTreeWithTypes();
+
+        $data = $this->getJson(
+            "/api/v1/admin/stores/{$store->id}/taxonomy-import-source?department_id={$department->id}",
+        )->assertOk()->json('data');
+
+        $ids = collect($data['categories'])->pluck('id')->all();
+        $this->assertContains($tops->id, $ids);
+        $this->assertContains($blouses->id, $ids);
+
+        $blouseRow = collect($data['categories'])->firstWhere('id', $blouses->id);
+        $this->assertNotEmpty($blouseRow['product_types']);
+        $this->assertTrue($blouseRow['product_types'][0]['has_attribute_mappings']);
+    }
+
+    public function test_catalog_product_types_can_filter_by_tz_store(): void
+    {
+        [$store, $department, , $blouses] = $this->seedChinaFashionTreeWithTypes();
+
+        $this->postJson("/api/v1/admin/stores/{$store->id}/taxonomy-import", [
+            'department_id' => $department->id,
+            'category_ids' => [$blouses->id],
+            'include_product_types' => true,
+            'include_attribute_mappings' => true,
+        ])->assertOk();
+
+        $rows = $this->getJson(
+            '/api/v1/admin/catalog-product-types?origin=tz&store_id='.$store->id.'&per_page=100',
+        )->assertOk()->json('data');
+
+        $this->assertNotEmpty($rows);
+        foreach ($rows as $row) {
+            $this->assertSame('tz', $row['origin']);
+            $this->assertSame($store->id, $row['store_id']);
+        }
+    }
+
+    public function test_storefront_only_shows_target_store_imported_categories(): void
+    {
+        [$zion, $department, , $blouses] = $this->seedChinaFashionTreeWithTypes();
+        $rovi = $this->makeStore('ROVI BEAUTY', 'ROVI');
+        $rovi->update([
+            'storefront_enabled' => true,
+            'storefront_visible' => true,
+        ]);
+        $zion->update([
+            'storefront_enabled' => true,
+            'storefront_visible' => true,
+        ]);
+
+        $this->postJson("/api/v1/admin/stores/{$zion->id}/taxonomy-import", [
+            'department_id' => $department->id,
+            'category_ids' => [$blouses->id],
+            'include_product_types' => false,
+            'include_attribute_mappings' => false,
+        ])->assertOk();
+
+        $zionCats = $this->getJson('/api/v1/storefront/tz/stores/'.$zion->slug.'/categories')
+            ->assertOk()
+            ->json('data');
+        $rootNames = collect($zionCats)->pluck('name')->all();
+        $this->assertContains('Tops', $rootNames);
+        $childNames = collect($zionCats)
+            ->flatMap(fn ($row) => collect($row['children'] ?? [])->pluck('name'))
+            ->all();
+        $this->assertContains('Blouses', $childNames);
+
+        $roviCats = $this->getJson('/api/v1/storefront/tz/stores/'.$rovi->slug.'/categories')
+            ->assertOk()
+            ->json('data');
+        $roviNames = collect($roviCats)->pluck('name')->all();
+        $this->assertNotContains('Tops', $roviNames);
+        $this->assertNotContains('Blouses', $roviNames);
+    }
+
+    /**
+     * @return array{0: Store, 1: Department, 2: Category, 3: Category}
+     */
+    private function seedChinaFashionTree(): array
+    {
+        $store = $this->makeStore('ZION MODE', 'ZION');
+        $department = Department::factory()->create([
+            'name' => 'Women\'s Fashion',
+            'slug' => 'womens-fashion',
+            'is_active' => true,
+        ]);
+        $tops = Category::factory()->china()->forDepartment($department)->create([
+            'name' => 'Tops',
+            'slug' => 'tops',
+            'parent_id' => null,
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+        $blouses = Category::factory()->china()->forDepartment($department)->child($tops)->create([
+            'name' => 'Blouses',
+            'slug' => 'blouses',
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+
+        return [$store, $department, $tops, $blouses];
+    }
+
+    /**
+     * @return array{
+     *     0: Store,
+     *     1: Department,
+     *     2: Category,
+     *     3: Category,
+     *     4: Category,
+     *     5: Category,
+     *     6: CatalogProductType,
+     *     7: CatalogAttribute
+     * }
+     */
+    private function seedChinaFashionTreeWithTypes(): array
+    {
+        [$store, $department, $tops, $blouses] = $this->seedChinaFashionTree();
+
+        $bottoms = Category::factory()->china()->forDepartment($department)->create([
+            'name' => 'Bottoms',
+            'slug' => 'bottoms',
+            'parent_id' => null,
+            'is_active' => true,
+        ]);
+        $skirts = Category::factory()->china()->forDepartment($department)->child($bottoms)->create([
+            'name' => 'Skirts',
+            'slug' => 'skirts',
+            'is_active' => true,
+        ]);
+
+        $color = CatalogAttribute::factory()->create([
+            'name' => 'Color',
+            'slug' => 'color-import-test',
+        ]);
+
+        $blouseType = CatalogProductType::factory()->create([
+            'subcategory_id' => $blouses->id,
+            'name' => 'Women\'s Blouse',
+            'slug' => 'womens-blouse',
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+        $blouseType->attributes()->sync([
+            $color->id => ['is_required' => true, 'sort_order' => 1],
+        ]);
+
+        return [$store, $department, $tops, $blouses, $bottoms, $skirts, $blouseType, $color];
+    }
+
+    private function makeStore(string $name, string $code): Store
+    {
+        return Store::query()->create([
+            'code' => $code,
+            'name' => $name,
+            'slug' => str($name)->slug()->toString(),
+            'is_active' => true,
+            'storefront_enabled' => true,
+            'storefront_visible' => true,
+        ]);
+    }
+}
