@@ -226,6 +226,19 @@ export function mapCmsProductDataToCatalogProduct(
     price: (data.price as string | number) ?? 0,
     compare_at_price: (data.compare_at_price as string | number | null) ?? null,
     is_featured: Boolean(data.is_featured),
+    is_purchasable: data.is_purchasable as boolean | undefined,
+    availability_status: data.availability_status as
+      | "available"
+      | "out_of_stock"
+      | "unavailable"
+      | undefined,
+    unavailability_reason: data.unavailability_reason as string | undefined,
+    stock: data.stock as number | undefined,
+    in_stock: data.in_stock as boolean | undefined,
+    inventory: data.inventory as ApiCatalogProductCard["inventory"],
+    variants: Array.isArray(data.variants)
+      ? (data.variants as ApiCatalogProductCard["variants"])
+      : undefined,
     primary_image: primaryImage
       ? {
           id: String(primaryImage.id ?? id),

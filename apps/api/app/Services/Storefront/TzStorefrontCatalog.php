@@ -5,8 +5,8 @@ namespace App\Services\Storefront;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\Store;
+use App\Http\Resources\CustomerProductCardResource;
 use App\Services\Catalog\CustomerProductMediaResolver;
-use App\Services\Inventory\CatalogStockPresenter;
 use App\Services\Search\TzStorefrontProductCorpus;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -73,13 +73,7 @@ class TzStorefrontCatalog
         $search = trim((string) ($filters['search'] ?? ''));
 
         return $this->storeProductQuery($store)
-            ->with(array_merge([
-                'commerceChannel:id,name,code',
-                'category:id,name,slug,store_id',
-                'brand:id,name,slug',
-                'store:id,name,slug,code',
-                'catalogProductType:id,name',
-            ], CustomerProductMediaResolver::catalogListingEagerLoads(), CatalogStockPresenter::catalogListingEagerLoads()))
+            ->with(CustomerProductCardResource::listingEagerLoads())
             ->withAvg(
                 ['reviews as average_rating' => fn ($query) => $query->where('is_approved', true)],
                 'rating',

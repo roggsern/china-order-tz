@@ -7,6 +7,7 @@ use App\Http\Resources\Concerns\PresentsCustomerCatalogStock;
 use App\Http\Resources\Concerns\PresentsCustomerCatalogPrice;
 use App\Models\Product;
 use App\Services\Catalog\CustomerProductMediaResolver;
+use App\Services\Inventory\CatalogStockPresenter;
 use App\Support\Catalog\ProductConditionResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -17,6 +18,23 @@ class CustomerProductCardResource extends JsonResource
     use PresentsCustomerCatalogAvailability;
     use PresentsCustomerCatalogPrice;
     use PresentsCustomerCatalogStock;
+
+    /**
+     * Canonical lightweight eager-load graph for every customer-facing product card.
+     * Includes TZ_LOCAL store_id on nested variants.product for warehouse remap.
+     *
+     * @return array<int|string, mixed>
+     */
+    public static function listingEagerLoads(): array
+    {
+        return array_merge([
+            'commerceChannel:id,name,code',
+            'category:id,name,slug',
+            'brand:id,name,slug',
+            'store:id,name,slug',
+            'catalogProductType:id,name',
+        ], CustomerProductMediaResolver::catalogListingEagerLoads(), CatalogStockPresenter::catalogListingEagerLoads());
+    }
 
     public function toArray(Request $request): array
     {

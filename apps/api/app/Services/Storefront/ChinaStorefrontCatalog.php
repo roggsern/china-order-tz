@@ -3,11 +3,10 @@
 namespace App\Services\Storefront;
 
 use App\Enums\CatalogOrigin;
+use App\Http\Resources\CustomerProductCardResource;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
-use App\Services\Catalog\CustomerProductMediaResolver;
-use App\Services\Inventory\CatalogStockPresenter;
 use App\Services\Search\ChinaSellableProductQuery;
 use App\Services\Search\SearchRelevance;
 use App\Support\Catalog\CatalogNavigationCrosswalk;
@@ -119,13 +118,7 @@ class ChinaStorefrontCatalog
         return $this->chinaPublishedProductQuery(Product::query())
             ->real()
             ->whereNull('store_id')
-            ->with(array_merge([
-                'commerceChannel:id,name,code',
-                'category:id,name,slug',
-                'brand:id,name,slug',
-                // Needed by ProductConditionResolver::effectiveForProduct (badge), not serialized as a type graph.
-                'catalogProductType:id,name',
-            ], CustomerProductMediaResolver::catalogListingEagerLoads(), CatalogStockPresenter::catalogListingEagerLoads()))
+            ->with(CustomerProductCardResource::listingEagerLoads())
             ->withAvg(
                 ['reviews as average_rating' => fn ($query) => $query->where('is_approved', true)],
                 'rating',

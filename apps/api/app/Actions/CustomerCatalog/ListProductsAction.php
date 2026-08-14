@@ -3,9 +3,8 @@
 namespace App\Actions\CustomerCatalog;
 
 use App\Enums\CommerceChannelCode;
+use App\Http\Resources\CustomerProductCardResource;
 use App\Models\Product;
-use App\Services\Catalog\CustomerProductMediaResolver;
-use App\Services\Inventory\CatalogStockPresenter;
 use App\Services\Storefront\CatalogNavigationCrosswalkResolver;
 use App\Support\Catalog\CatalogNavigationCrosswalk;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -38,13 +37,7 @@ class ListProductsAction
         return Product::query()
             ->real()
             ->purchasable()
-            ->with(array_merge([
-                'commerceChannel:id,name,code',
-                'category:id,name,slug',
-                'brand:id,name,slug',
-                'store:id,name,slug',
-                'catalogProductType:id,name',
-            ], CustomerProductMediaResolver::catalogListingEagerLoads(), CatalogStockPresenter::catalogListingEagerLoads()))
+            ->with(CustomerProductCardResource::listingEagerLoads())
             ->withAvg(
                 ['reviews as average_rating' => fn ($query) => $query->where('is_approved', true)],
                 'rating',

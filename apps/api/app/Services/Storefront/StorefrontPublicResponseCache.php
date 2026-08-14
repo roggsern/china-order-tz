@@ -15,7 +15,7 @@ final class StorefrontPublicResponseCache
 {
     public const TTL_SECONDS = 120;
 
-    public const KEY_PREFIX = 'storefront:public:v1:';
+    public const KEY_PREFIX = 'storefront:public:v2:';
 
     public function key(string $bucket, string $variant): string
     {

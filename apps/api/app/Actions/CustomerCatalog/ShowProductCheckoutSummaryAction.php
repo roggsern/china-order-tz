@@ -3,8 +3,7 @@
 namespace App\Actions\CustomerCatalog;
 
 use App\Models\Product;
-use App\Services\Catalog\CustomerProductMediaResolver;
-use App\Services\Inventory\CatalogStockPresenter;
+use App\Http\Resources\CustomerProductCardResource;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
@@ -19,11 +18,7 @@ class ShowProductCheckoutSummaryAction
             throw new NotFoundHttpException('Product not found.');
         }
 
-        $product->load(array_merge([
-            'commerceChannel:id,name,code',
-            'category:id,name,slug',
-            'brand:id,name,slug',
-        ], CustomerProductMediaResolver::catalogListingEagerLoads(), CatalogStockPresenter::catalogListingEagerLoads()));
+        $product->load(CustomerProductCardResource::listingEagerLoads());
 
         // Checkout validation does not need review aggregates.
         $product->setAttribute('average_rating', null);

@@ -8,6 +8,7 @@ use App\Enums\CMS\CmsFeaturedSourceType;
 use App\Enums\CommerceChannelCode;
 use App\Enums\ProductLifecycleStatus;
 use App\Enums\PromotionRuleType;
+use App\Http\Resources\CustomerProductCardResource;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\CmsFeaturedContent;
@@ -305,7 +306,7 @@ class CmsFeaturedContentResolver
         $query = Product::query()
             ->where('is_active', true)
             ->where('lifecycle_status', ProductLifecycleStatus::Active->value)
-            ->with(['brand', 'category', 'commerceChannel', 'images']);
+            ->with(CustomerProductCardResource::listingEagerLoads());
 
         $channel = $context->toCommerceChannelCode();
         if ($channel instanceof CommerceChannelCode) {
