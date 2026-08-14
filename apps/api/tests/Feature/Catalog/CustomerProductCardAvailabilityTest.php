@@ -2,10 +2,17 @@
 
 namespace Tests\Feature\Catalog;
 
+use App\Enums\CommerceChannelCode;
 use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductVisibility;
+use App\Models\Category;
+use App\Models\CommerceChannel;
 use App\Models\Product;
+use App\Models\Store;
 use Database\Factories\Support\CatalogCartFixture;
+use Database\Seeders\CommerceChannelSeeder;
+use Database\Seeders\StoreSeeder;
+use Database\Seeders\TzStoreCategorySeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -18,8 +25,27 @@ class CustomerProductCardAvailabilityTest extends TestCase
 
     public function test_listing_card_exposes_unavailable_product_availability_fields(): void
     {
+        // China simple products intentionally skip inventory-policy gating; use TZ_LOCAL
+        // without inventory so the card remains unavailable for missing policy.
+        $this->seed(CommerceChannelSeeder::class);
+        $this->seed(StoreSeeder::class);
+        $this->seed(TzStoreCategorySeeder::class);
+
+        $store = Store::query()->where('slug', 'zion-mode')->firstOrFail();
+        $category = Category::query()
+            ->where('store_id', $store->id)
+            ->where('name', 'Dresses')
+            ->firstOrFail();
+        $tz = CommerceChannel::query()
+            ->where('code', CommerceChannelCode::TzLocal->value)
+            ->firstOrFail();
+
         $product = Product::factory()->create([
             'slug' => 'card-unavailable-product',
+            'store_id' => $store->id,
+            'category_id' => $category->id,
+            'commerce_channel_id' => $tz->id,
+            'fulfillment_source' => CommerceChannelCode::TzLocal->fulfillmentSource(),
             'is_active' => true,
             'lifecycle_status' => ProductLifecycleStatus::Active,
             'visibility' => ProductVisibility::Public,

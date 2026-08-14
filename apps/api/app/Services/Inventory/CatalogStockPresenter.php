@@ -39,7 +39,8 @@ final class CatalogStockPresenter
                     'inventories',
                     'inventory',
                     'chinaCommercialStock',
-                    'product:id,slug,name,price,compare_at_price,fulfillment_source,commerce_channel_id',
+                    // store_id required for TZ_LOCAL warehouse remap (TzLocalInventoryScope).
+                    'product:id,slug,name,price,compare_at_price,fulfillment_source,commerce_channel_id,store_id',
                 ]),
         ];
     }

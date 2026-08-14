@@ -50,11 +50,16 @@ import { clearCheckoutDraft } from "@/lib/checkout/draft";
 import { isAdminPath, isPostCheckoutPath } from "@/lib/checkout/routes";
 import {
   getCustomerCartErrorMessage,
+  isCustomerCartAuthError,
+  resolveCartSyncFailure,
   shouldFallbackToLocalCartOnError,
+  STALE_CART_AUTH_RECOVERY_MESSAGE,
 } from "@/lib/cart/sync-errors";
+import type { AddToCartResult } from "@/lib/cart/add-to-cart-ui";
 import { filterLocalItemsForServerSync } from "@/lib/cart/sync-local-to-server";
 import { PRODUCTS_UPDATED_EVENT } from "@/lib/admin/product-storage";
 import { getCustomerApiToken } from "@/lib/api/customer-auth";
+import { clearStaleCustomerAuth } from "@/lib/customer/clear-stale-customer-auth";
 import {
   addServerCartItem,
   clearServerCartEngine,
@@ -134,6 +139,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
                 token,
               );
             } catch (error) {
+              if (isCustomerCartAuthError(error)) {
+                clearStaleCustomerAuth();
+                serverModeRef.current = false;
+                throw error;
+              }
+
               if (shouldFallbackToLocalCartOnError(error)) {
                 throw error;
               }
@@ -160,6 +171,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
         serverModeRef.current = false;
         return validated;
       } catch (error) {
+        if (isCustomerCartAuthError(error)) {
+          clearStaleCustomerAuth();
+          serverModeRef.current = false;
+          return validated;
+        }
+
         if (shouldFallbackToLocalCartOnError(error)) {
           serverModeRef.current = false;
           return validated;
@@ -351,7 +368,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   );
 
   const addToCart = useCallback(
-    ({
+    async ({
       product,
       quantity = 1,
       variant,
@@ -362,153 +379,118 @@ export function CartProvider({ children }: { children: ReactNode }) {
       quotedUnitPrice,
       compareAtUnitPrice,
       stockOverride,
-    }: AddToCartInput) => {
+    }: AddToCartInput): Promise<AddToCartResult> => {
       const stockLimit = stockOverride ?? product.stock;
       if (stockLimit <= 0) {
-        return;
+        return { ok: false, message: "This item is out of stock." };
       }
 
       clearCheckoutDraft();
 
       const normalizedVariant = normalizeVariantChoice(variant);
       if (!configurationId && !canAddProductToCart(product, normalizedVariant)) {
-        return;
+        return { ok: false, message: "Unable to add item to your cart." };
       }
+
+      const appendLocalItem = (): void => {
+        const snapshot = productToCartSnapshot(product, {
+          variant: normalizedVariant,
+          configurationId,
+          configurationLabel,
+          configurationSku,
+          selectedAttributes,
+          quotedUnitPrice,
+          compareAtUnitPrice,
+          stockOverride,
+        });
+        const nextQuantity = clampQuantity(quantity, stockLimit);
+
+        updateState((prev) => {
+          const existing = prev.items.find((item) =>
+            cartItemsMatch(item, {
+              productId: product.id,
+              variant: normalizedVariant,
+              configurationId,
+            }),
+          );
+
+          if (existing) {
+            const mergedQuantity = clampQuantity(existing.quantity + nextQuantity, stockLimit);
+            const merged = applyCartItemShipping({
+              ...existing,
+              ...snapshot,
+              quantity: mergedQuantity,
+              shippingMethod: existing.shippingMethod,
+            });
+            return {
+              ...prev,
+              items: prev.items.map((item) => (item.id === existing.id ? merged : item)),
+            };
+          }
+
+          const newItem = withShipping({
+            id: configurationId
+              ? createConfigurationCartItemId(product.id, configurationId)
+              : createCartItemId(product.id, normalizedVariant),
+            ...snapshot,
+            quantity: nextQuantity,
+            addedAt: new Date().toISOString(),
+          });
+
+          return {
+            ...prev,
+            items: [...prev.items, newItem],
+          };
+        });
+      };
 
       const token = getCustomerApiToken();
       const catalogProductId = product.catalogProductId?.trim();
 
       if (token && catalogProductId) {
-        void (async () => {
-          try {
-            const serverCart = await addServerCartItem(
-              {
-                productId: catalogProductId,
-                productVariantId: configurationId ?? null,
-                quantity: clampQuantity(quantity, stockLimit),
-              },
-              token,
-            );
-            updateState((prev) => applyServerCart(mapServerCartItems(serverCart), prev));
-          } catch (error) {
-            if (!shouldFallbackToLocalCartOnError(error)) {
-              setSyncError(
-                getCustomerCartErrorMessage(error, "Unable to add item to your cart."),
-              );
-              await restoreServerCart(token);
-              return;
-            }
+        try {
+          const serverCart = await addServerCartItem(
+            {
+              productId: catalogProductId,
+              productVariantId: configurationId ?? null,
+              quantity: clampQuantity(quantity, stockLimit),
+            },
+            token,
+          );
+          updateState((prev) => applyServerCart(mapServerCartItems(serverCart), prev));
+          setSyncError(null);
+          return { ok: true };
+        } catch (error) {
+          const resolution = resolveCartSyncFailure(
+            error,
+            "Unable to add item to your cart.",
+          );
 
-            const snapshot = productToCartSnapshot(product, {
-              variant: normalizedVariant,
-              configurationId,
-              configurationLabel,
-              configurationSku,
-              selectedAttributes,
-              quotedUnitPrice,
-              compareAtUnitPrice,
-              stockOverride,
-            });
-            const nextQuantity = clampQuantity(quantity, stockLimit);
-
-            updateState((prev) => {
-              const existing = prev.items.find((item) =>
-                cartItemsMatch(item, {
-                  productId: product.id,
-                  variant: normalizedVariant,
-                  configurationId,
-                }),
-              );
-
-              if (existing) {
-                const mergedQuantity = clampQuantity(
-                  existing.quantity + nextQuantity,
-                  stockLimit,
-                );
-                return {
-                  ...prev,
-                  items: prev.items.map((item) =>
-                    item.id === existing.id
-                      ? applyCartItemShipping({
-                          ...existing,
-                          ...snapshot,
-                          quantity: mergedQuantity,
-                          shippingMethod: existing.shippingMethod,
-                        })
-                      : item,
-                  ),
-                };
-              }
-
-              return {
-                ...prev,
-                items: [
-                  ...prev.items,
-                  withShipping({
-                    id: configurationId
-                      ? createConfigurationCartItemId(product.id, configurationId)
-                      : createCartItemId(product.id, normalizedVariant),
-                    ...snapshot,
-                    quantity: nextQuantity,
-                    addedAt: new Date().toISOString(),
-                  }),
-                ],
-              };
-            });
+          if (resolution.kind === "fallback_local_stale_auth") {
+            clearStaleCustomerAuth();
+            serverModeRef.current = false;
+            appendLocalItem();
+            setSyncError(STALE_CART_AUTH_RECOVERY_MESSAGE);
+            return { ok: true, recoveredFromStaleAuth: true };
           }
-        })();
-        return;
+
+          if (resolution.kind === "fallback_local") {
+            appendLocalItem();
+            setSyncError(null);
+            return { ok: true };
+          }
+
+          setSyncError(resolution.message);
+          // Do not restore with a rejected Bearer — that loops 401s.
+          if (!isCustomerCartAuthError(error)) {
+            await restoreServerCart(token);
+          }
+          return { ok: false, message: resolution.message };
+        }
       }
 
-      const snapshot = productToCartSnapshot(product, {
-        variant: normalizedVariant,
-        configurationId,
-        configurationLabel,
-        configurationSku,
-        selectedAttributes,
-        quotedUnitPrice,
-        compareAtUnitPrice,
-        stockOverride,
-      });
-      const nextQuantity = clampQuantity(quantity, stockLimit);
-
-      updateState((prev) => {
-        const existing = prev.items.find((item) =>
-          cartItemsMatch(item, {
-            productId: product.id,
-            variant: normalizedVariant,
-            configurationId,
-          }),
-        );
-
-        if (existing) {
-          const mergedQuantity = clampQuantity(existing.quantity + nextQuantity, stockLimit);
-          const merged = applyCartItemShipping({
-            ...existing,
-            ...snapshot,
-            quantity: mergedQuantity,
-            shippingMethod: existing.shippingMethod,
-          });
-          return {
-            ...prev,
-            items: prev.items.map((item) => (item.id === existing.id ? merged : item)),
-          };
-        }
-
-        const newItem = withShipping({
-          id: configurationId
-            ? createConfigurationCartItemId(product.id, configurationId)
-            : createCartItemId(product.id, normalizedVariant),
-          ...snapshot,
-          quantity: nextQuantity,
-          addedAt: new Date().toISOString(),
-        });
-
-        return {
-          ...prev,
-          items: [...prev.items, newItem],
-        };
-      });
+      appendLocalItem();
+      return { ok: true };
     },
     [applyServerCart, restoreServerCart, updateState],
   );
@@ -535,6 +517,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
                   );
             updateState((prev) => applyServerCart(mapServerCartItems(serverCart), prev));
           } catch (error) {
+            if (isCustomerCartAuthError(error)) {
+              clearStaleCustomerAuth();
+              serverModeRef.current = false;
+              return;
+            }
+
             if (shouldFallbackToLocalCartOnError(error)) {
               return;
             }
@@ -626,6 +614,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
             const serverCart = await removeServerCartItem(itemId, token);
             updateState((prev) => applyServerCart(mapServerCartItems(serverCart), prev));
           } catch (error) {
+            if (isCustomerCartAuthError(error)) {
+              clearStaleCustomerAuth();
+              serverModeRef.current = false;
+              return;
+            }
+
             if (shouldFallbackToLocalCartOnError(error)) {
               return;
             }
@@ -814,6 +808,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
             }),
           );
         } catch (error) {
+          if (isCustomerCartAuthError(error)) {
+            clearStaleCustomerAuth();
+            serverModeRef.current = false;
+            updateState(() => EMPTY_CART_STATE);
+            return;
+          }
+
           if (shouldFallbackToLocalCartOnError(error)) {
             updateState(() => EMPTY_CART_STATE);
             return;
@@ -919,9 +920,11 @@ export function useAddToCart(
 ) {
   const { addToCart } = useCart();
 
-  return useCallback(() => {
-    if (options?.disabled) return;
-    addToCart({
+  return useCallback(async (): Promise<AddToCartResult> => {
+    if (options?.disabled) {
+      return { ok: false, message: "Unable to add item to your cart." };
+    }
+    return addToCart({
       product,
       quantity,
       variant: options?.variant,

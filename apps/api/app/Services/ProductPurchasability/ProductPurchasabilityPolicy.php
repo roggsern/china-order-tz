@@ -130,11 +130,11 @@ final class ProductPurchasabilityPolicy
             : $product->variants()->with(['prices', 'inventories'])->get();
 
         return $variants
-            ->filter(fn (ProductVariant $variant) => $this->isSellableVariant($variant))
+            ->filter(fn (ProductVariant $variant) => $this->isSellableVariant($variant, $product))
             ->values();
     }
 
-    public function isSellableVariant(ProductVariant $variant): bool
+    public function isSellableVariant(ProductVariant $variant, ?Product $product = null): bool
     {
         if (! $variant->is_active) {
             return false;
@@ -144,7 +144,9 @@ final class ProductPurchasabilityPolicy
             return false;
         }
 
-        return $this->stockResolver->hasVariantInventoryPolicy($variant);
+        // Prefer the known parent product so TZ_LOCAL store warehouse remap
+        // does not depend on an underspecified nested variants.product eager load.
+        return $this->stockResolver->hasVariantInventoryPolicy($variant, null, $product);
     }
 
     /**

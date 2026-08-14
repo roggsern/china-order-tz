@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
+import type { AddToCartResult } from "@/lib/cart/add-to-cart-ui";
 import type {
   AddToCartInput,
   CartLineItem,
@@ -17,7 +18,7 @@ export type CartContextValue = {
   isHydrated: boolean;
   syncError: string | null;
   clearSyncError: () => void;
-  addToCart: (input: AddToCartInput) => void;
+  addToCart: (input: AddToCartInput) => Promise<AddToCartResult>;
   updateQuantity: (itemId: string, quantity: number) => void;
   updateLinePricing: (
     itemId: string,

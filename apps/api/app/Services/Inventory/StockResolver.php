@@ -274,8 +274,9 @@ final class StockResolver
     public function hasVariantInventoryPolicy(
         ProductVariant $variant,
         ?StockResolutionContext $context = null,
+        ?Product $product = null,
     ): bool {
-        return $this->resolveVariantProduct($variant, $context)->hasInventoryPolicy();
+        return $this->resolveVariantProduct($variant, $context, $product)->hasInventoryPolicy();
     }
 
     private function findSimpleInventory(Product $product): ?Inventory

@@ -6,7 +6,11 @@ import type { Product } from "@/lib/types/catalog";
 import { CartIcon } from "@/components/home/icons";
 import { useAddToCart } from "@/components/cart/CartProvider";
 import { useCartDrawer } from "@/lib/cart/drawer-context";
-import { showProductAddedToast } from "@/lib/customer/customer-toast";
+import { runAddToCartUi } from "@/lib/cart/add-to-cart-ui";
+import {
+  showCustomerToast,
+  showProductAddedToast,
+} from "@/lib/customer/customer-toast";
 import { getCatalogProductImageSrc } from "@/lib/catalog/product-images";
 import {
   isProductPurchaseUnavailable,
@@ -67,20 +71,30 @@ export function AddToCartButton({
   });
   const { open: openCartDrawer } = useCartDrawer();
   const [added, setAdded] = useState(false);
+  const [pending, setPending] = useState(false);
 
   const handleClick = () => {
-    if (isDisabled) return;
+    if (isDisabled || pending) return;
 
-    addToCart();
-    openCartDrawer();
-    setAdded(true);
-    showProductAddedToast({
-      productName: product.name,
-      configurationLabel: configurationLabel.trim() || undefined,
-      quantity,
-      imageUrl: getCatalogProductImageSrc(product) || undefined,
+    setPending(true);
+    void runAddToCartUi(addToCart, {
+      onSuccess: () => {
+        openCartDrawer();
+        setAdded(true);
+        showProductAddedToast({
+          productName: product.name,
+          configurationLabel: configurationLabel.trim() || undefined,
+          quantity,
+          imageUrl: getCatalogProductImageSrc(product) || undefined,
+        });
+        window.setTimeout(() => setAdded(false), 2000);
+        setPending(false);
+      },
+      onFailure: (message) => {
+        showCustomerToast(message);
+        setPending(false);
+      },
     });
-    window.setTimeout(() => setAdded(false), 2000);
   };
 
   const baseClasses =
@@ -96,15 +110,18 @@ export function AddToCartButton({
         configurationId,
         variant,
       })
-    : added
-      ? "Added to cart"
-      : "Add to Cart";
+    : pending
+      ? "Adding…"
+      : added
+        ? "Added to cart"
+        : "Add to Cart";
 
   return (
     <button
       type="button"
       onClick={handleClick}
-      disabled={isDisabled}
+      disabled={isDisabled || pending}
+      aria-busy={pending || undefined}
       aria-live="polite"
       className={`${baseClasses} ${
         added

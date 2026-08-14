@@ -82,7 +82,7 @@ final class ValidateCartProductSelection
                 ]);
             }
 
-            if (! $variant->is_active || ! $this->purchasabilityPolicy->isSellableVariant($variant)) {
+            if (! $variant->is_active || ! $this->purchasabilityPolicy->isSellableVariant($variant, $product)) {
                 $this->reject([
                     'product_variant_id' => ['Product variant is not available.'],
                 ]);

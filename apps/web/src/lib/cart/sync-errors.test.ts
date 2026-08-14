@@ -4,10 +4,12 @@ import { CustomerCartApiError } from "@/lib/api/customer-cart";
 import {
   getCustomerCartErrorMessage,
   hasBlockingCartSyncError,
+  isCustomerCartAuthError,
   isCustomerCartBusinessError,
   isCustomerCartNetworkError,
   resolveCartSyncFailure,
   shouldFallbackToLocalCartOnError,
+  STALE_CART_AUTH_RECOVERY_MESSAGE,
 } from "./sync-errors";
 
 const MIXED_CHANNEL_MESSAGE =
@@ -52,6 +54,20 @@ test("5xx cart API responses are treated as network/unavailable errors", () => {
   assert.equal(shouldFallbackToLocalCartOnError(error), true);
 });
 
+test("stale auth 401 falls back locally and never surfaces raw Unauthenticated", () => {
+  const error = new CustomerCartApiError("Unauthenticated.", 401);
+
+  assert.equal(isCustomerCartAuthError(error), true);
+  assert.equal(isCustomerCartBusinessError(error), false);
+  assert.equal(shouldFallbackToLocalCartOnError(error), true);
+  assert.deepEqual(resolveCartSyncFailure(error), {
+    kind: "fallback_local_stale_auth",
+    message: STALE_CART_AUTH_RECOVERY_MESSAGE,
+  });
+  assert.equal(getCustomerCartErrorMessage(error), STALE_CART_AUTH_RECOVERY_MESSAGE);
+  assert.equal(getCustomerCartErrorMessage(error).includes("Unauthenticated"), false);
+});
+
 test("getCustomerCartErrorMessage prefers API message", () => {
   assert.equal(
     getCustomerCartErrorMessage(new CustomerCartApiError("Stock limit reached.", 422)),
@@ -69,4 +85,8 @@ test("checkout blocks when cart sync error is present", () => {
     ),
     true,
   );
+});
+
+test("stale auth recovery message is informational and does not block checkout", () => {
+  assert.equal(hasBlockingCartSyncError(STALE_CART_AUTH_RECOVERY_MESSAGE), false);
 });
