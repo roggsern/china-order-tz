@@ -32,6 +32,12 @@ class CreateSubcategoryAction
             ]);
         }
 
+        if ($origin === 'tz' && blank($parent->store_id)) {
+            throw ValidationException::withMessages([
+                'category_id' => ['Tanzania parent category must belong to a store.'],
+            ]);
+        }
+
         $slugSource = isset($validated['slug']) && is_string($validated['slug']) && trim($validated['slug']) !== ''
             ? $validated['slug']
             : $parent->slug.'-'.$validated['name'];

@@ -350,6 +350,7 @@ export type AdminCategory = Category & {
   departmentIcon?: string | null;
   parentId?: string | null;
   storeId?: string | null;
+  storeName?: string | null;
   origin?: ProductOrigin | null;
   productTypeId?: string | null;
   productTypeName?: string | null;
@@ -671,6 +672,7 @@ export function mapAdminApiCategory(category: AdminApiCategory): AdminCategory {
     departmentIcon: category.department?.icon ?? null,
     parentId: category.parent_id ?? null,
     storeId: category.store_id ?? category.store?.id ?? null,
+    storeName: category.store?.name ?? null,
     origin: category.origin ?? null,
     productTypeId: category.product_type_id ?? null,
     productTypeName: category.product_type?.name ?? null,
@@ -957,7 +959,7 @@ export async function fetchAdminBrandsPage(
 
 export type AdminCategoryWritePayload = {
   name: string;
-  department_id: string;
+  department_id?: string | null;
   slug?: string | null;
   parent_id?: string | null;
   origin: "china" | "tz";
@@ -1117,6 +1119,8 @@ export type AdminApiSubcategory = {
   id: string;
   category_id: string;
   department_id?: string | null;
+  store_id?: string | null;
+  origin?: "china" | "tz" | null;
   name: string;
   slug: string;
   description?: string | null;
@@ -1147,6 +1151,8 @@ export type AdminSubcategory = {
   departmentId: string | null;
   departmentName: string | null;
   departmentIcon: string | null;
+  storeId: string | null;
+  origin: "china" | "tz" | null;
   name: string;
   slug: string;
   description: string;
@@ -1166,6 +1172,8 @@ export function mapAdminApiSubcategory(subcategory: AdminApiSubcategory): AdminS
     departmentId: subcategory.department_id ?? subcategory.department?.id ?? null,
     departmentName: subcategory.department?.name ?? null,
     departmentIcon: subcategory.department?.icon ?? null,
+    storeId: subcategory.store_id ?? null,
+    origin: subcategory.origin ?? null,
     name: subcategory.name,
     slug: subcategory.slug,
     description: subcategory.description?.trim() || "",
@@ -1180,6 +1188,8 @@ export function mapAdminApiSubcategory(subcategory: AdminApiSubcategory): AdminS
 export type AdminSubcategoryListParams = {
   departmentId?: string;
   categoryId?: string;
+  storeId?: string;
+  origin?: "china" | "tz";
   search?: string;
   isActive?: boolean;
   trashed?: boolean;
@@ -1201,6 +1211,8 @@ export async function fetchAdminSubcategories(
   const query: Record<string, string | number | undefined> = {};
   if (params.departmentId) query.department_id = params.departmentId;
   if (params.categoryId) query.category_id = params.categoryId;
+  if (params.storeId) query.store_id = params.storeId;
+  if (params.origin) query.origin = params.origin;
   if (params.search) query.search = params.search;
   if (params.isActive === true) query.is_active = 1;
   if (params.isActive === false) query.is_active = 0;

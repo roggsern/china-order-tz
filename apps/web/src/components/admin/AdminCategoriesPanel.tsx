@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   AdminCatalogApiError,
   createAdminCategory,
@@ -17,6 +19,12 @@ import {
   type AdminDepartment,
   type AdminStoreOption,
 } from "@/lib/api/admin-catalog";
+import {
+  buildSubcategoriesHref,
+  parseCategoriesPageScope,
+  type CatalogOriginFilter,
+  validateCategoryFormDraft,
+} from "@/lib/admin/tz-store-categories";
 
 type CategoryFormState = {
   id?: string;
@@ -32,22 +40,36 @@ type CategoryFormState = {
   productTypeId: string;
 };
 
-const emptyForm = (departmentId = ""): CategoryFormState => ({
-  departmentId,
+const emptyForm = (defaults?: {
+  departmentId?: string;
+  origin?: "china" | "tz";
+  storeId?: string;
+}): CategoryFormState => ({
+  departmentId: defaults?.departmentId ?? "",
   name: "",
   slug: "",
   image: "",
   description: "",
   sortOrder: 0,
   isActive: true,
-  origin: "china",
-  storeId: "",
+  origin: defaults?.origin ?? "china",
+  storeId: defaults?.storeId ?? "",
   productTypeId: "",
 });
 
 const PAGE_SIZE = 15;
 
 export function AdminCategoriesPanel() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const initialScope = useMemo(
+    () => parseCategoriesPageScope(searchParams),
+    // Initialize once from URL; subsequent filter changes sync via replace below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
   const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [departments, setDepartments] = useState<AdminDepartment[]>([]);
   const [stores, setStores] = useState<AdminStoreOption[]>([]);
@@ -63,12 +85,34 @@ export function AdminCategoriesPanel() {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [originFilter, setOriginFilter] = useState<CatalogOriginFilter>(initialScope.origin);
+  const [storeFilter, setStoreFilter] = useState(initialScope.storeId);
+  const [departmentFilter, setDepartmentFilter] = useState(
+    initialScope.departmentId || "all",
+  );
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [page, setPage] = useState(1);
   const [showTrashed, setShowTrashed] = useState(false);
   const [form, setForm] = useState<CategoryFormState | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const syncUrl = useCallback(
+    (next: { origin: CatalogOriginFilter; storeId: string; departmentId: string }) => {
+      const params = new URLSearchParams();
+      if (next.origin === "tz" || next.origin === "china") {
+        params.set("origin", next.origin);
+      }
+      if (next.origin === "tz" && next.storeId) {
+        params.set("store_id", next.storeId);
+      }
+      if (next.origin === "china" && next.departmentId && next.departmentId !== "all") {
+        params.set("department_id", next.departmentId);
+      }
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router],
+  );
 
   const reload = useCallback(async () => {
     setIsLoading(true);
@@ -78,10 +122,30 @@ export function AdminCategoriesPanel() {
     setTemplatesLoading(true);
     setTemplatesError(null);
     try {
+      const listParams: {
+        rootsOnly: true;
+        origin?: "china" | "tz";
+        storeId?: string;
+        departmentId?: string;
+        trashed?: boolean;
+      } = { rootsOnly: true };
+
+      if (originFilter === "tz" || originFilter === "china") {
+        listParams.origin = originFilter;
+      }
+      if (originFilter === "tz" && storeFilter) {
+        listParams.storeId = storeFilter;
+      }
+      if (originFilter === "china" && departmentFilter !== "all") {
+        listParams.departmentId = departmentFilter;
+      }
+
+      const trashParams = { ...listParams, trashed: true as const };
+
       const [nextCategories, deleted, nextDepartments, nextStores, nextTemplates] =
         await Promise.all([
-          fetchAdminCategories({ rootsOnly: true }),
-          fetchAdminCategories({ rootsOnly: true, trashed: true }),
+          fetchAdminCategories(listParams),
+          fetchAdminCategories(trashParams),
           fetchAdminDepartments(),
           fetchAdminStores().catch((err: unknown) => {
             setStoresError(
@@ -121,17 +185,34 @@ export function AdminCategoriesPanel() {
       setTemplatesLoading(false);
       setIsLoading(false);
     }
-  }, []);
+  }, [originFilter, storeFilter, departmentFilter]);
 
   useEffect(() => {
     void reload();
   }, [reload]);
 
+  useEffect(() => {
+    syncUrl({
+      origin: originFilter,
+      storeId: storeFilter,
+      departmentId: departmentFilter,
+    });
+  }, [originFilter, storeFilter, departmentFilter, syncUrl]);
+
   const filteredCategories = useMemo(() => {
     const q = search.trim().toLowerCase();
     return categories
       .filter((category) => {
-        if (departmentFilter !== "all" && category.departmentId !== departmentFilter) {
+        if (originFilter === "tz" && category.origin !== "tz") return false;
+        if (originFilter === "china" && category.origin === "tz") return false;
+        if (originFilter === "tz" && storeFilter && category.storeId !== storeFilter) {
+          return false;
+        }
+        if (
+          originFilter === "china" &&
+          departmentFilter !== "all" &&
+          category.departmentId !== departmentFilter
+        ) {
           return false;
         }
         if (statusFilter === "active" && !category.isActive) return false;
@@ -141,17 +222,20 @@ export function AdminCategoriesPanel() {
           category.name.toLowerCase().includes(q) ||
           category.slug.toLowerCase().includes(q) ||
           (category.description ?? "").toLowerCase().includes(q) ||
-          (category.departmentName ?? "").toLowerCase().includes(q)
+          (category.departmentName ?? "").toLowerCase().includes(q) ||
+          (category.storeName ?? "").toLowerCase().includes(q)
         );
       })
       .sort((a, b) => {
+        const storeCmp = (a.storeName ?? "").localeCompare(b.storeName ?? "");
+        if (storeCmp !== 0) return storeCmp;
         const deptCmp = (a.departmentName ?? "").localeCompare(b.departmentName ?? "");
         if (deptCmp !== 0) return deptCmp;
         const sortCmp = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
         if (sortCmp !== 0) return sortCmp;
         return a.name.localeCompare(b.name);
       });
-  }, [categories, search, departmentFilter, statusFilter]);
+  }, [categories, search, originFilter, storeFilter, departmentFilter, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredCategories.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -162,15 +246,20 @@ export function AdminCategoriesPanel() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, departmentFilter, statusFilter]);
+  }, [search, originFilter, storeFilter, departmentFilter, statusFilter]);
 
   const openCreate = () => {
     setActionError(null);
-    const defaultDepartmentId =
-      departmentFilter !== "all"
-        ? departmentFilter
-        : departments[0]?.id ?? "";
-    setForm(emptyForm(defaultDepartmentId));
+    const origin: "china" | "tz" =
+      originFilter === "tz" ? "tz" : originFilter === "china" ? "china" : "china";
+    setForm(
+      emptyForm({
+        origin,
+        storeId: origin === "tz" ? storeFilter : "",
+        departmentId:
+          origin === "china" && departmentFilter !== "all" ? departmentFilter : "",
+      }),
+    );
   };
 
   const openEdit = (category: AdminCategory) => {
@@ -218,19 +307,23 @@ export function AdminCategoriesPanel() {
   };
 
   const handleToggleActive = async (category: AdminCategory) => {
-    if (!category.departmentId) {
+    if (!category.origin) {
+      setActionError("Assign an origin (china or tz) before changing status.");
+      return;
+    }
+    if (category.origin === "china" && !category.departmentId) {
       setActionError("Assign a department before changing status.");
       return;
     }
-    if (!category.origin) {
-      setActionError("Assign an origin (china or tz) before changing status.");
+    if (category.origin === "tz" && !category.storeId) {
+      setActionError("Assign a store before changing status.");
       return;
     }
     setActionError(null);
     try {
       await updateAdminCategory(category.id, {
         name: category.name,
-        department_id: category.departmentId,
+        department_id: category.origin === "tz" ? null : category.departmentId,
         slug: category.slug,
         origin: category.origin,
         store_id: category.origin === "china" ? null : category.storeId ?? null,
@@ -250,27 +343,28 @@ export function AdminCategoriesPanel() {
   };
 
   const handleSave = async () => {
-    if (!form || !form.name.trim()) {
-      setActionError("Category name is required.");
-      return;
-    }
-    if (!form.departmentId) {
-      setActionError("Department is required.");
+    if (!form) {
       return;
     }
 
-    const origin: AdminCategoryWritePayload["origin"] = form.origin === "tz" ? "tz" : "china";
-    if (origin === "tz" && !form.storeId.trim()) {
-      setActionError("Select a store for Tanzania categories.");
+    const validationError = validateCategoryFormDraft({
+      name: form.name,
+      origin: form.origin,
+      departmentId: form.departmentId,
+      storeId: form.storeId,
+    });
+    if (validationError) {
+      setActionError(validationError);
       return;
     }
 
     setSaving(true);
     setActionError(null);
 
-    const payload = {
+    const origin: AdminCategoryWritePayload["origin"] = form.origin === "tz" ? "tz" : "china";
+    const payload: AdminCategoryWritePayload = {
       name: form.name.trim(),
-      department_id: form.departmentId,
+      department_id: origin === "tz" ? null : form.departmentId.trim() || null,
       slug: form.slug.trim() || null,
       origin,
       store_id: origin === "china" ? null : form.storeId.trim() || null,
@@ -298,14 +392,34 @@ export function AdminCategoriesPanel() {
     }
   };
 
+  const selectedStoreName =
+    stores.find((store) => store.id === storeFilter)?.name ??
+    (storeFilter ? "Selected store" : null);
+
   return (
     <div className="px-4 pb-8 sm:px-6 lg:px-8">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold text-zinc-900">Categories</h1>
           <p className="mt-1 text-xs text-zinc-500">
-            Categories belong to departments. Filter, search, and manage catalog groups.
+            {originFilter === "tz"
+              ? "TZ_LOCAL store catalog categories — scoped to a store. China Catalog Bible is separate."
+              : originFilter === "china"
+                ? "China import categories belong to departments (Catalog Bible)."
+                : "Manage China department categories or Tanzania store catalog categories."}
           </p>
+          {originFilter === "tz" && selectedStoreName ? (
+            <p className="mt-1 text-xs font-medium text-zinc-700">
+              Viewing store catalog: {selectedStoreName}
+              {" · "}
+              <Link
+                href={buildSubcategoriesHref({ origin: "tz", storeId: storeFilter })}
+                className="text-[#8b6914] underline-offset-2 hover:underline"
+              >
+                Manage subcategories
+              </Link>
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -334,24 +448,6 @@ export function AdminCategoriesPanel() {
           </h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="admin-label" htmlFor="category-department">
-                Department *
-              </label>
-              <select
-                id="category-department"
-                className="admin-input mt-1.5"
-                value={form.departmentId}
-                onChange={(event) => setForm({ ...form, departmentId: event.target.value })}
-              >
-                <option value="">Select department</option>
-                {departments.map((department) => (
-                  <option key={department.id} value={department.id}>
-                    {department.icon} {department.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
               <label className="admin-label" htmlFor="category-origin">
                 Origin *
               </label>
@@ -364,16 +460,37 @@ export function AdminCategoriesPanel() {
                   setForm({
                     ...form,
                     origin,
-                    storeId: origin === "china" ? "" : form.storeId,
+                    storeId: origin === "china" ? "" : form.storeId || storeFilter,
+                    departmentId: origin === "tz" ? "" : form.departmentId,
                   });
                 }}
               >
-                <option value="china">China</option>
-                <option value="tz">Tanzania</option>
+                <option value="china">China (Catalog Bible)</option>
+                <option value="tz">Tanzania (store catalog)</option>
               </select>
             </div>
-            {form.origin === "tz" ? (
-              <div className="sm:col-span-2">
+
+            {form.origin === "china" ? (
+              <div>
+                <label className="admin-label" htmlFor="category-department">
+                  Department *
+                </label>
+                <select
+                  id="category-department"
+                  className="admin-input mt-1.5"
+                  value={form.departmentId}
+                  onChange={(event) => setForm({ ...form, departmentId: event.target.value })}
+                >
+                  <option value="">Select department</option>
+                  {departments.map((department) => (
+                    <option key={department.id} value={department.id}>
+                      {department.icon} {department.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div>
                 <label className="admin-label" htmlFor="category-store">
                   Store *
                 </label>
@@ -393,11 +510,8 @@ export function AdminCategoriesPanel() {
                           ? "No active stores available"
                           : "Select store"}
                   </option>
-                  {form.storeId &&
-                  !stores.some((store) => store.id === form.storeId) ? (
-                    <option value={form.storeId}>
-                      Saved store (inactive or unavailable)
-                    </option>
+                  {form.storeId && !stores.some((store) => store.id === form.storeId) ? (
+                    <option value={form.storeId}>Saved store (inactive or unavailable)</option>
                   ) : null}
                   {stores.map((store) => (
                     <option key={store.id} value={store.id}>
@@ -410,11 +524,12 @@ export function AdminCategoriesPanel() {
                   <p className="mt-1 text-xs text-red-600">{storesError}</p>
                 ) : (
                   <p className="mt-1 text-xs text-zinc-500">
-                    Tanzania categories must belong to an active store.
+                    Store catalog category for TZ_LOCAL products in this store only.
                   </p>
                 )}
               </div>
-            ) : null}
+            )}
+
             <div className="sm:col-span-2">
               <label className="admin-label" htmlFor="category-configuration-template">
                 Configuration Template
@@ -428,21 +543,7 @@ export function AdminCategoriesPanel() {
                   setForm({ ...form, productTypeId: event.target.value })
                 }
               >
-                <option value="">
-                  {templatesLoading
-                    ? "Loading templates…"
-                    : templatesError
-                      ? "Unable to load templates"
-                      : configurationTemplates.length === 0
-                        ? "No active Configuration Templates"
-                        : "None (inherit from parent / none)"}
-                </option>
-                {form.productTypeId &&
-                !configurationTemplates.some((t) => t.id === form.productTypeId) ? (
-                  <option value={form.productTypeId}>
-                    Saved template (inactive or unavailable — clear or reassign)
-                  </option>
-                ) : null}
+                <option value="">None</option>
                 {configurationTemplates.map((template) => (
                   <option key={template.id} value={template.id}>
                     {template.name}
@@ -451,31 +552,9 @@ export function AdminCategoriesPanel() {
               </select>
               {templatesError ? (
                 <p className="mt-1 text-xs text-red-600">{templatesError}</p>
-              ) : (
-                <p className="mt-1 text-xs text-zinc-500">
-                  Optional. Assigns the Configuration Template (SKU/schema engine) for
-                  this category. Distinct from Catalog Product Types.
-                </p>
-              )}
+              ) : null}
             </div>
-            <div>
-              <label className="admin-label" htmlFor="category-sort-order">
-                Sort order
-              </label>
-              <input
-                id="category-sort-order"
-                type="number"
-                min={0}
-                className="admin-input mt-1.5"
-                value={form.sortOrder}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    sortOrder: Number.parseInt(event.target.value, 10) || 0,
-                  })
-                }
-              />
-            </div>
+
             <div>
               <label className="admin-label" htmlFor="category-name">
                 Name *
@@ -494,19 +573,32 @@ export function AdminCategoriesPanel() {
               <input
                 id="category-slug"
                 className="admin-input mt-1.5"
-                placeholder="auto from name if empty"
                 value={form.slug}
                 onChange={(event) => setForm({ ...form, slug: event.target.value })}
+                placeholder="Auto-generated if empty"
               />
             </div>
-            <div className="sm:col-span-2">
+            <div>
+              <label className="admin-label" htmlFor="category-sort">
+                Sort order
+              </label>
+              <input
+                id="category-sort"
+                type="number"
+                className="admin-input mt-1.5"
+                value={form.sortOrder}
+                onChange={(event) =>
+                  setForm({ ...form, sortOrder: Number(event.target.value) || 0 })
+                }
+              />
+            </div>
+            <div>
               <label className="admin-label" htmlFor="category-image">
                 Image URL
               </label>
               <input
                 id="category-image"
                 className="admin-input mt-1.5"
-                placeholder="https://… or storage path"
                 value={form.image}
                 onChange={(event) => setForm({ ...form, image: event.target.value })}
               />
@@ -563,16 +655,51 @@ export function AdminCategoriesPanel() {
           />
           <select
             className="admin-input w-auto"
-            value={departmentFilter}
-            onChange={(event) => setDepartmentFilter(event.target.value)}
+            value={originFilter}
+            onChange={(event) => {
+              const next = event.target.value as CatalogOriginFilter;
+              setOriginFilter(next);
+              if (next !== "tz") {
+                setStoreFilter("");
+              }
+              if (next !== "china") {
+                setDepartmentFilter("all");
+              }
+            }}
           >
-            <option value="all">All departments</option>
-            {departments.map((department) => (
-              <option key={department.id} value={department.id}>
-                {department.name}
-              </option>
-            ))}
+            <option value="all">All origins</option>
+            <option value="china">China</option>
+            <option value="tz">Tanzania (store catalog)</option>
           </select>
+          {originFilter === "tz" ? (
+            <select
+              className="admin-input w-auto min-w-[160px]"
+              value={storeFilter}
+              disabled={storesLoading}
+              onChange={(event) => setStoreFilter(event.target.value)}
+            >
+              <option value="">All stores</option>
+              {stores.map((store) => (
+                <option key={store.id} value={store.id}>
+                  {store.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          {originFilter === "china" || originFilter === "all" ? (
+            <select
+              className="admin-input w-auto"
+              value={departmentFilter}
+              onChange={(event) => setDepartmentFilter(event.target.value)}
+            >
+              <option value="all">All departments</option>
+              {departments.map((department) => (
+                <option key={department.id} value={department.id}>
+                  {department.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
           <select
             className="admin-input w-auto"
             value={statusFilter}
@@ -595,7 +722,9 @@ export function AdminCategoriesPanel() {
           </div>
         ) : filteredCategories.length === 0 ? (
           <div className="px-5 py-12 text-center text-sm text-zinc-500">
-            No categories configured.
+            {originFilter === "tz" && !storeFilter
+              ? "Select a store to manage its catalog categories, or add a category."
+              : "No categories configured."}
           </div>
         ) : (
           <>
@@ -610,11 +739,17 @@ export function AdminCategoriesPanel() {
                           Inactive
                         </span>
                       ) : null}
+                      {category.origin === "tz" ? (
+                        <span className="ml-2 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-800">
+                          Store catalog
+                        </span>
+                      ) : null}
                     </p>
                     <p className="text-xs text-zinc-500">
-                      {category.departmentIcon ? `${category.departmentIcon} ` : ""}
-                      {category.departmentName ?? "No department"} · {category.slug} · sort{" "}
-                      {category.sortOrder ?? 0}
+                      {category.origin === "tz"
+                        ? `${category.storeName ?? "Store"} · `
+                        : `${category.departmentIcon ? `${category.departmentIcon} ` : ""}${category.departmentName ?? "No department"} · `}
+                      {category.slug} · sort {category.sortOrder ?? 0}
                       {` · ${category.productsCount} products`}
                     </p>
                     {category.description ? (

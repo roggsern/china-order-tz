@@ -186,6 +186,20 @@ export function AdminStoreSettingsPanel() {
             ))}
           </select>
         </label>
+        {storeId ? (
+          <p className="mt-3 text-sm text-zinc-600">
+            <a
+              href={`/admin/categories?origin=tz&store_id=${encodeURIComponent(storeId)}`}
+              className="font-medium text-[#8b6914] underline-offset-2 hover:underline"
+            >
+              Manage store categories →
+            </a>
+            <span className="text-zinc-500">
+              {" "}
+              (TZ_LOCAL catalog for the selected store)
+            </span>
+          </p>
+        ) : null}
       </section>
 
       {loadingStores || loadingSettings ? (

@@ -18,6 +18,10 @@ class SubcategoryResource extends JsonResource
             'id' => $this->id,
             'category_id' => $this->parent_id,
             'department_id' => $this->department_id ?? $department?->id,
+            'store_id' => $this->store_id,
+            'origin' => $this->origin instanceof \App\Enums\CatalogOrigin
+                ? $this->origin->value
+                : $this->origin,
             'name' => $this->name,
             'slug' => $this->slug,
             'description' => $this->description,

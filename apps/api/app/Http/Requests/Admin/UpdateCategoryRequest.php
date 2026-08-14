@@ -26,10 +26,17 @@ class UpdateCategoryRequest extends FormRequest
     {
         /** @var \App\Models\Category $category */
         $category = $this->route('category');
+        $isChina = $this->input('origin') === CatalogOrigin::China->value;
+        $isTz = $this->input('origin') === CatalogOrigin::Tz->value;
 
         return [
             'name' => ['required', 'string', 'max:255'],
-            'department_id' => ['required', 'uuid', 'exists:departments,id'],
+            'department_id' => [
+                Rule::requiredIf($isChina),
+                'nullable',
+                'uuid',
+                'exists:departments,id',
+            ],
             'slug' => [
                 'sometimes',
                 'nullable',
@@ -45,7 +52,12 @@ class UpdateCategoryRequest extends FormRequest
                 Rule::notIn([$category->id]),
             ],
             'origin' => ['required', Rule::enum(CatalogOrigin::class)],
-            'store_id' => ['sometimes', 'nullable', 'uuid', 'exists:stores,id'],
+            'store_id' => [
+                Rule::requiredIf($isTz),
+                'nullable',
+                'uuid',
+                'exists:stores,id',
+            ],
             'product_type_id' => [
                 'sometimes',
                 'nullable',
@@ -90,7 +102,7 @@ class UpdateCategoryRequest extends FormRequest
 
                 CategoryRelationshipRules::assertParentRelationship(
                     $parentId,
-                    (string) $this->input('department_id'),
+                    (string) ($this->input('department_id') ?? ''),
                     (string) $category->id,
                 );
             } catch (\Illuminate\Validation\ValidationException $e) {

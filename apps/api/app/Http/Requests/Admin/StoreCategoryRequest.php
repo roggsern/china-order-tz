@@ -24,13 +24,26 @@ class StoreCategoryRequest extends FormRequest
      */
     public function rules(): array
     {
+        $isChina = $this->input('origin') === CatalogOrigin::China->value;
+        $isTz = $this->input('origin') === CatalogOrigin::Tz->value;
+
         return [
             'name' => ['required', 'string', 'max:255'],
-            'department_id' => ['required', 'uuid', 'exists:departments,id'],
+            'department_id' => [
+                Rule::requiredIf($isChina),
+                'nullable',
+                'uuid',
+                'exists:departments,id',
+            ],
             'slug' => ['sometimes', 'nullable', 'string', 'max:255', 'unique:categories,slug'],
             'parent_id' => ['sometimes', 'nullable', 'uuid', 'exists:categories,id'],
             'origin' => ['required', Rule::enum(CatalogOrigin::class)],
-            'store_id' => ['sometimes', 'nullable', 'uuid', 'exists:stores,id'],
+            'store_id' => [
+                Rule::requiredIf($isTz),
+                'nullable',
+                'uuid',
+                'exists:stores,id',
+            ],
             'product_type_id' => [
                 'sometimes',
                 'nullable',
@@ -66,7 +79,7 @@ class StoreCategoryRequest extends FormRequest
                 );
                 CategoryRelationshipRules::assertParentRelationship(
                     $this->input('parent_id'),
-                    (string) $this->input('department_id'),
+                    (string) ($this->input('department_id') ?? ''),
                 );
             } catch (\Illuminate\Validation\ValidationException $e) {
                 foreach ($e->errors() as $field => $messages) {

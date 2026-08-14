@@ -21,12 +21,17 @@ class CreateCategoryAction
             ? null
             : ($validated['store_id'] ?? null);
 
+        // TZ store catalog is store-scoped — never attach a China department.
+        $departmentId = $origin === CatalogOrigin::Tz->value
+            ? null
+            : ($validated['department_id'] ?? null);
+
         $slugSource = isset($validated['slug']) && is_string($validated['slug']) && trim($validated['slug']) !== ''
             ? $validated['slug']
             : $validated['name'];
 
         return Category::create([
-            'department_id' => $validated['department_id'],
+            'department_id' => $departmentId,
             'store_id' => $storeId,
             'name' => $validated['name'],
             'slug' => $this->generateUniqueSlug($slugSource),

@@ -422,16 +422,24 @@ export function AdminStoresPanel({ initialStoreId }: { initialStoreId?: string }
               onSubmit={(e) => void handleUpdateSubmit(e)}
               className="admin-card space-y-4 p-5"
             >
-              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">
                   Store identity
                 </p>
-                <Link
-                  href={`/admin/stores/${selected.id}/dashboard`}
-                  className="rounded-lg border border-[#c9a227]/40 px-3 py-1 text-xs font-medium text-[#8b6914] hover:bg-[#c9a227]/10"
-                >
-                  Open dashboard →
-                </Link>
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    href={`/admin/categories?origin=tz&store_id=${encodeURIComponent(selected.id)}`}
+                    className="rounded-lg border border-zinc-300 px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                  >
+                    Manage store categories
+                  </Link>
+                  <Link
+                    href={`/admin/stores/${selected.id}/dashboard`}
+                    className="rounded-lg border border-[#c9a227]/40 px-3 py-1 text-xs font-medium text-[#8b6914] hover:bg-[#c9a227]/10"
+                  >
+                    Open dashboard →
+                  </Link>
+                </div>
               </div>
               <StoreIdentityFields
                 form={form}

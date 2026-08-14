@@ -19,14 +19,18 @@ class UpdateCategoryAction
 
         $data = [
             'name' => $validated['name'],
-            'department_id' => $validated['department_id'],
             'origin' => $origin,
         ];
 
-        if ($origin === CatalogOrigin::China->value) {
+        if ($origin === CatalogOrigin::Tz->value) {
+            // TZ store catalog is store-scoped — clear any China department linkage.
+            $data['department_id'] = null;
+            if (array_key_exists('store_id', $validated)) {
+                $data['store_id'] = $validated['store_id'];
+            }
+        } else {
+            $data['department_id'] = $validated['department_id'] ?? null;
             $data['store_id'] = null;
-        } elseif (array_key_exists('store_id', $validated)) {
-            $data['store_id'] = $validated['store_id'];
         }
 
         if (array_key_exists('slug', $validated) && is_string($validated['slug']) && trim($validated['slug']) !== '') {

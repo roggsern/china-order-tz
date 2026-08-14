@@ -53,10 +53,15 @@ final class CategoryRelationshipRules
             return;
         }
 
-        if ((string) $parent->department_id !== (string) $departmentId) {
-            throw ValidationException::withMessages([
-                'department_id' => ['Parent and child categories must belong to the same department.'],
-            ]);
+        // TZ store categories often have null department_id on both parent and child.
+        // Only enforce department matching when either side is department-backed (China).
+        $parentDepartmentId = $parent->department_id;
+        if (filled($parentDepartmentId) || filled($departmentId)) {
+            if ((string) $parentDepartmentId !== (string) $departmentId) {
+                throw ValidationException::withMessages([
+                    'department_id' => ['Parent and child categories must belong to the same department.'],
+                ]);
+            }
         }
 
         if ($categoryId !== null && self::isDescendantOf($parentId, $categoryId)) {

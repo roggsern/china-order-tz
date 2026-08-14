@@ -1,23 +1,32 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   AdminCatalogApiError,
   createAdminSubcategory,
   deleteAdminSubcategory,
   fetchAdminCategories,
   fetchAdminDepartments,
+  fetchAdminStores,
   fetchAdminSubcategories,
   restoreAdminSubcategory,
   updateAdminSubcategory,
   type AdminCategory,
   type AdminDepartment,
+  type AdminStoreOption,
   type AdminSubcategory,
 } from "@/lib/api/admin-catalog";
+import {
+  filterRootCategoriesForSubcategoryParent,
+  parseCategoriesPageScope,
+  type CatalogOriginFilter,
+} from "@/lib/admin/tz-store-categories";
 
 type SubcategoryFormState = {
   id?: string;
   departmentId: string;
+  storeId: string;
   categoryId: string;
   name: string;
   slug: string;
@@ -27,8 +36,13 @@ type SubcategoryFormState = {
   isActive: boolean;
 };
 
-const emptyForm = (departmentId = "", categoryId = ""): SubcategoryFormState => ({
+const emptyForm = (
+  departmentId = "",
+  categoryId = "",
+  storeId = "",
+): SubcategoryFormState => ({
   departmentId,
+  storeId,
   categoryId,
   name: "",
   slug: "",
@@ -41,15 +55,31 @@ const emptyForm = (departmentId = "", categoryId = ""): SubcategoryFormState => 
 const PAGE_SIZE = 15;
 
 export function AdminSubcategoriesPanel() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const initialScope = useMemo(
+    () => parseCategoriesPageScope(searchParams),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
   const [subcategories, setSubcategories] = useState<AdminSubcategory[]>([]);
   const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [departments, setDepartments] = useState<AdminDepartment[]>([]);
+  const [stores, setStores] = useState<AdminStoreOption[]>([]);
   const [trashed, setTrashed] = useState<AdminSubcategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [originFilter, setOriginFilter] = useState<CatalogOriginFilter>(
+    initialScope.origin === "all" ? "all" : initialScope.origin,
+  );
+  const [storeFilter, setStoreFilter] = useState(initialScope.storeId);
+  const [departmentFilter, setDepartmentFilter] = useState(
+    initialScope.departmentId || "all",
+  );
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [page, setPage] = useState(1);
@@ -57,25 +87,73 @@ export function AdminSubcategoriesPanel() {
   const [form, setForm] = useState<SubcategoryFormState | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const syncUrl = useCallback(
+    (next: { origin: CatalogOriginFilter; storeId: string; departmentId: string }) => {
+      const params = new URLSearchParams();
+      if (next.origin === "tz" || next.origin === "china") {
+        params.set("origin", next.origin);
+      }
+      if (next.origin === "tz" && next.storeId) {
+        params.set("store_id", next.storeId);
+      }
+      if (next.origin === "china" && next.departmentId && next.departmentId !== "all") {
+        params.set("department_id", next.departmentId);
+      }
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router],
+  );
+
   const reload = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const [nextSubcategories, deleted, nextCategories, nextDepartments] = await Promise.all([
-        fetchAdminSubcategories(),
-        fetchAdminSubcategories({ trashed: true }),
-        fetchAdminCategories({ rootsOnly: true }),
-        fetchAdminDepartments(),
-      ]);
+      const categoryParams: {
+        rootsOnly: true;
+        origin?: "china" | "tz";
+        storeId?: string;
+        departmentId?: string;
+      } = { rootsOnly: true };
+      const subcategoryParams: {
+        origin?: "china" | "tz";
+        storeId?: string;
+        departmentId?: string;
+        trashed?: boolean;
+      } = {};
+
+      if (originFilter === "tz" || originFilter === "china") {
+        categoryParams.origin = originFilter;
+        subcategoryParams.origin = originFilter;
+      }
+      if (originFilter === "tz" && storeFilter) {
+        categoryParams.storeId = storeFilter;
+        subcategoryParams.storeId = storeFilter;
+      }
+      if (originFilter === "china" && departmentFilter !== "all") {
+        categoryParams.departmentId = departmentFilter;
+        subcategoryParams.departmentId = departmentFilter;
+      }
+
+      const [nextSubcategories, deleted, nextCategories, nextDepartments, nextStores] =
+        await Promise.all([
+          fetchAdminSubcategories(subcategoryParams),
+          fetchAdminSubcategories({ ...subcategoryParams, trashed: true }),
+          fetchAdminCategories(categoryParams),
+          fetchAdminDepartments(),
+          fetchAdminStores().catch(() => [] as AdminStoreOption[]),
+        ]);
       setSubcategories(nextSubcategories);
       setTrashed(deleted);
       setCategories(nextCategories.filter((item) => !item.parentId));
       setDepartments(nextDepartments);
+      setStores(nextStores);
     } catch (err) {
       setSubcategories([]);
       setTrashed([]);
       setCategories([]);
       setDepartments([]);
+      setStores([]);
       setError(
         err instanceof AdminCatalogApiError
           ? err.message
@@ -84,38 +162,56 @@ export function AdminSubcategoriesPanel() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [originFilter, storeFilter, departmentFilter]);
 
   useEffect(() => {
     void reload();
   }, [reload]);
 
-  const rootCategories = useMemo(
-    () =>
-      categories
-        .filter((category) => !category.parentId && category.departmentId)
-        .sort((a, b) => {
-          const deptCmp = (a.departmentName ?? "").localeCompare(b.departmentName ?? "");
-          if (deptCmp !== 0) return deptCmp;
-          return a.name.localeCompare(b.name);
-        }),
-    [categories],
-  );
+  useEffect(() => {
+    syncUrl({
+      origin: originFilter,
+      storeId: storeFilter,
+      departmentId: departmentFilter,
+    });
+  }, [originFilter, storeFilter, departmentFilter, syncUrl]);
 
-  const categoriesForFilter = useMemo(() => {
-    if (departmentFilter === "all") return rootCategories;
-    return rootCategories.filter((category) => category.departmentId === departmentFilter);
-  }, [rootCategories, departmentFilter]);
+  const rootCategories = useMemo(() => {
+    const filtered = filterRootCategoriesForSubcategoryParent({
+      categories,
+      origin: originFilter,
+      storeId: storeFilter,
+      departmentId: departmentFilter === "all" ? "" : departmentFilter,
+    });
+    return filtered
+      .map((row) => categories.find((category) => category.id === row.id))
+      .filter((row): row is AdminCategory => Boolean(row))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [categories, originFilter, storeFilter, departmentFilter]);
+
+  const categoriesForFilter = rootCategories;
 
   const categoriesForForm = useMemo(() => {
-    if (!form?.departmentId) return [];
+    if (!form) return [];
+    if (originFilter === "tz" || form.storeId) {
+      const storeId = form.storeId || storeFilter;
+      return rootCategories.filter((category) => category.storeId === storeId);
+    }
+    if (!form.departmentId) return [];
     return rootCategories.filter((category) => category.departmentId === form.departmentId);
-  }, [rootCategories, form?.departmentId]);
+  }, [rootCategories, form, originFilter, storeFilter]);
 
   const filteredSubcategories = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const allowedParentIds = new Set(rootCategories.map((row) => row.id));
     return subcategories
       .filter((item) => {
+        if (originFilter === "tz") {
+          if (item.origin !== "tz") return false;
+          if (storeFilter && item.storeId !== storeFilter) return false;
+          if (storeFilter && !allowedParentIds.has(item.categoryId)) return false;
+        }
+        if (originFilter === "china" && item.origin === "tz") return false;
         if (departmentFilter !== "all" && item.departmentId !== departmentFilter) return false;
         if (categoryFilter !== "all" && item.categoryId !== categoryFilter) return false;
         if (statusFilter === "active" && !item.isActive) return false;
@@ -130,15 +226,22 @@ export function AdminSubcategoriesPanel() {
         );
       })
       .sort((a, b) => {
-        const deptCmp = (a.departmentName ?? "").localeCompare(b.departmentName ?? "");
-        if (deptCmp !== 0) return deptCmp;
         const catCmp = a.categoryName.localeCompare(b.categoryName);
         if (catCmp !== 0) return catCmp;
         const sortCmp = a.sortOrder - b.sortOrder;
         if (sortCmp !== 0) return sortCmp;
         return a.name.localeCompare(b.name);
       });
-  }, [subcategories, search, departmentFilter, categoryFilter, statusFilter]);
+  }, [
+    subcategories,
+    search,
+    originFilter,
+    storeFilter,
+    departmentFilter,
+    categoryFilter,
+    statusFilter,
+    rootCategories,
+  ]);
 
   const totalPages = Math.max(1, Math.ceil(filteredSubcategories.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -149,7 +252,7 @@ export function AdminSubcategoriesPanel() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, departmentFilter, categoryFilter, statusFilter]);
+  }, [search, originFilter, storeFilter, departmentFilter, categoryFilter, statusFilter]);
 
   useEffect(() => {
     if (categoryFilter === "all") return;
@@ -159,6 +262,16 @@ export function AdminSubcategoriesPanel() {
 
   const openCreate = () => {
     setActionError(null);
+    if (originFilter === "tz") {
+      const storeId = storeFilter || stores[0]?.id || "";
+      const defaultCategoryId =
+        categoryFilter !== "all"
+          ? categoryFilter
+          : rootCategories.find((category) => category.storeId === storeId)?.id ?? "";
+      setForm(emptyForm("", defaultCategoryId, storeId));
+      return;
+    }
+
     const defaultDepartmentId =
       departmentFilter !== "all" ? departmentFilter : departments[0]?.id ?? "";
     const defaultCategoryId =
@@ -166,7 +279,7 @@ export function AdminSubcategoriesPanel() {
         ? categoryFilter
         : rootCategories.find((category) => category.departmentId === defaultDepartmentId)?.id ??
           "";
-    setForm(emptyForm(defaultDepartmentId, defaultCategoryId));
+    setForm(emptyForm(defaultDepartmentId, defaultCategoryId, ""));
   };
 
   const openEdit = (subcategory: AdminSubcategory) => {
@@ -174,6 +287,7 @@ export function AdminSubcategoriesPanel() {
     setForm({
       id: subcategory.id,
       departmentId: subcategory.departmentId ?? "",
+      storeId: subcategory.storeId ?? "",
       categoryId: subcategory.categoryId,
       name: subcategory.name,
       slug: subcategory.slug,
@@ -246,12 +360,18 @@ export function AdminSubcategoriesPanel() {
       setActionError("Subcategory name is required.");
       return;
     }
-    if (!form.departmentId) {
-      setActionError("Department is required.");
+    if (!form.categoryId) {
+      setActionError("Parent category is required.");
       return;
     }
-    if (!form.categoryId) {
-      setActionError("Category is required.");
+    const parent = categories.find((row) => row.id === form.categoryId);
+    if (parent?.origin === "tz" || originFilter === "tz") {
+      if (!parent?.storeId) {
+        setActionError("Select a Tanzania store catalog parent category.");
+        return;
+      }
+    } else if (!parent?.departmentId && !form.departmentId) {
+      setActionError("Department is required for China subcategories.");
       return;
     }
 
@@ -287,13 +407,20 @@ export function AdminSubcategoriesPanel() {
     }
   };
 
+  const formUsesStore =
+    originFilter === "tz" ||
+    Boolean(form?.storeId) ||
+    Boolean(form && categories.find((row) => row.id === form.categoryId)?.origin === "tz");
+
   return (
     <div className="px-4 pb-8 sm:px-6 lg:px-8">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold text-zinc-900">Subcategories</h1>
           <p className="mt-1 text-xs text-zinc-500">
-            Child categories linked via parent_id. Filter by department and category.
+            {originFilter === "tz"
+              ? "Child categories for a TZ_LOCAL store catalog (root + one child level)."
+              : "Child categories linked via parent_id. China parents are department-backed; Tanzania parents are store-scoped."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -322,33 +449,59 @@ export function AdminSubcategoriesPanel() {
             {form.id ? "Edit subcategory" : "New subcategory"}
           </h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="admin-label" htmlFor="subcategory-department">
-                Department *
-              </label>
-              <select
-                id="subcategory-department"
-                className="admin-input mt-1.5"
-                value={form.departmentId}
-                onChange={(event) => {
-                  const departmentId = event.target.value;
-                  const firstCategory =
-                    rootCategories.find((category) => category.departmentId === departmentId)
-                      ?.id ?? "";
-                  setForm({ ...form, departmentId, categoryId: firstCategory });
-                }}
-              >
-                <option value="">Select department</option>
-                {departments.map((department) => (
-                  <option key={department.id} value={department.id}>
-                    {department.icon} {department.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {formUsesStore ? (
+              <div>
+                <label className="admin-label" htmlFor="subcategory-store">
+                  Store *
+                </label>
+                <select
+                  id="subcategory-store"
+                  className="admin-input mt-1.5"
+                  value={form.storeId}
+                  onChange={(event) => {
+                    const storeId = event.target.value;
+                    const firstCategory =
+                      rootCategories.find((category) => category.storeId === storeId)?.id ?? "";
+                    setForm({ ...form, storeId, departmentId: "", categoryId: firstCategory });
+                  }}
+                >
+                  <option value="">Select store</option>
+                  {stores.map((store) => (
+                    <option key={store.id} value={store.id}>
+                      {store.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label className="admin-label" htmlFor="subcategory-department">
+                  Department *
+                </label>
+                <select
+                  id="subcategory-department"
+                  className="admin-input mt-1.5"
+                  value={form.departmentId}
+                  onChange={(event) => {
+                    const departmentId = event.target.value;
+                    const firstCategory =
+                      rootCategories.find((category) => category.departmentId === departmentId)
+                        ?.id ?? "";
+                    setForm({ ...form, departmentId, categoryId: firstCategory });
+                  }}
+                >
+                  <option value="">Select department</option>
+                  {departments.map((department) => (
+                    <option key={department.id} value={department.id}>
+                      {department.icon} {department.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <label className="admin-label" htmlFor="subcategory-category">
-                Category *
+                Parent category *
               </label>
               <select
                 id="subcategory-category"
@@ -469,25 +622,59 @@ export function AdminSubcategoriesPanel() {
           />
           <select
             className="admin-input w-auto"
-            value={departmentFilter}
+            value={originFilter}
             onChange={(event) => {
-              setDepartmentFilter(event.target.value);
+              const next = event.target.value as CatalogOriginFilter;
+              setOriginFilter(next);
               setCategoryFilter("all");
+              if (next !== "tz") setStoreFilter("");
+              if (next !== "china") setDepartmentFilter("all");
             }}
           >
-            <option value="all">All departments</option>
-            {departments.map((department) => (
-              <option key={department.id} value={department.id}>
-                {department.name}
-              </option>
-            ))}
+            <option value="all">All origins</option>
+            <option value="china">China</option>
+            <option value="tz">Tanzania (store catalog)</option>
           </select>
+          {originFilter === "tz" ? (
+            <select
+              className="admin-input w-auto min-w-[160px]"
+              value={storeFilter}
+              onChange={(event) => {
+                setStoreFilter(event.target.value);
+                setCategoryFilter("all");
+              }}
+            >
+              <option value="">All stores</option>
+              {stores.map((store) => (
+                <option key={store.id} value={store.id}>
+                  {store.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          {originFilter === "china" || originFilter === "all" ? (
+            <select
+              className="admin-input w-auto"
+              value={departmentFilter}
+              onChange={(event) => {
+                setDepartmentFilter(event.target.value);
+                setCategoryFilter("all");
+              }}
+            >
+              <option value="all">All departments</option>
+              {departments.map((department) => (
+                <option key={department.id} value={department.id}>
+                  {department.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
           <select
             className="admin-input w-auto"
             value={categoryFilter}
             onChange={(event) => setCategoryFilter(event.target.value)}
           >
-            <option value="all">All categories</option>
+            <option value="all">All parent categories</option>
             {categoriesForFilter.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}
@@ -538,9 +725,10 @@ export function AdminSubcategoriesPanel() {
                       ) : null}
                     </p>
                     <p className="text-xs text-zinc-500">
-                      {subcategory.departmentIcon ? `${subcategory.departmentIcon} ` : ""}
-                      {subcategory.departmentName ?? "No department"} →{" "}
-                      {subcategory.categoryName} · {subcategory.slug} · sort{" "}
+                      {subcategory.origin === "tz"
+                        ? "Store catalog"
+                        : `${subcategory.departmentIcon ? `${subcategory.departmentIcon} ` : ""}${subcategory.departmentName ?? "No department"}`}{" "}
+                      → {subcategory.categoryName} · {subcategory.slug} · sort{" "}
                       {subcategory.sortOrder}
                     </p>
                     {subcategory.description ? (

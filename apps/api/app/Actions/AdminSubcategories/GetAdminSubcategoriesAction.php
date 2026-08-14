@@ -65,6 +65,16 @@ class GetAdminSubcategoriesAction
             }
         }
 
+        $storeId = request()->query('store_id');
+        if (is_string($storeId) && $storeId !== '') {
+            $query->where('store_id', $storeId);
+        }
+
+        $origin = request()->query('origin');
+        if (is_string($origin) && $origin !== '') {
+            $query->where('origin', $origin);
+        }
+
         $search = request()->query('search');
         if (is_string($search) && trim($search) !== '') {
             $term = '%'.trim($search).'%';
