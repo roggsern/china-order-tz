@@ -9,6 +9,8 @@ export type ApiCatalogCategory = {
   slug: string;
   sort_order?: number;
   children?: ApiCatalogCategory[];
+  /** Root → … → parent (excludes self). Present on TZ category deep-link resolve. */
+  ancestors?: Array<{ id: string; name: string; slug: string }>;
 };
 
 export type ApiCatalogBrand = {

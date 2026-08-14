@@ -37,11 +37,8 @@ class TzStorefrontController extends Controller
     public function showStore(string $store): JsonResponse
     {
         $model = $this->catalog->findStore($store);
-        $model->load([
-            'categories' => fn ($q) => $q->where('is_active', true)->whereNull('parent_id')
-                ->with(['children' => fn ($c) => $c->where('is_active', true)->orderBy('sort_order')])
-                ->orderBy('sort_order'),
-        ]);
+        // Same product-aware navigable roots as GET .../categories (mega-menu / store chrome).
+        $model->setRelation('categories', $this->catalog->categories($model));
 
         return response()->json([
             'success' => true,
@@ -55,6 +52,24 @@ class TzStorefrontController extends Controller
 
         return CustomerCategoryResource::collection($this->catalog->categories($model))
             ->additional(['success' => true]);
+    }
+
+    public function showCategory(string $store, string $category): JsonResponse
+    {
+        $model = $this->catalog->findStore($store);
+        $resolved = $this->catalog->findCategory($model, $category);
+        $payload = (new CustomerCategoryResource($resolved))->resolve();
+        $payload['ancestors'] = $this->catalog->categoryAncestors($model, $resolved);
+
+        return response()->json([
+            'success' => true,
+            'data' => $payload,
+            'store' => [
+                'id' => $model->id,
+                'slug' => $model->slug,
+                'name' => $model->name,
+            ],
+        ]);
     }
 
     public function products(Request $request, string $store): AnonymousResourceCollection

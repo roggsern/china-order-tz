@@ -330,6 +330,7 @@ class AdminTzTaxonomyImportTest extends TestCase
 
     public function test_storefront_only_shows_target_store_imported_categories(): void
     {
+        $this->seed(\Database\Seeders\CommerceChannelSeeder::class);
         [$zion, $department, , $blouses] = $this->seedChinaFashionTreeWithTypes();
         $rovi = $this->makeStore('ROVI BEAUTY', 'ROVI');
         $rovi->update([
@@ -347,6 +348,29 @@ class AdminTzTaxonomyImportTest extends TestCase
             'include_product_types' => false,
             'include_attribute_mappings' => false,
         ])->assertOk();
+
+        $tzBlouses = Category::query()
+            ->where('store_id', $zion->id)
+            ->where('name', 'Blouses')
+            ->firstOrFail();
+        $tzChannel = \App\Models\CommerceChannel::query()
+            ->where('code', \App\Enums\CommerceChannelCode::TzLocal->value)
+            ->firstOrFail();
+
+        // Product-aware navigation: empty imported shells are not advertised.
+        \App\Models\Product::factory()->create([
+            'name' => 'Zion Blouse Visible',
+            'slug' => 'zion-blouse-visible-import',
+            'store_id' => $zion->id,
+            'category_id' => $tzBlouses->id,
+            'commerce_channel_id' => $tzChannel->id,
+            'fulfillment_source' => \App\Enums\CommerceChannelCode::TzLocal->fulfillmentSource(),
+            'is_active' => true,
+            'is_demo' => false,
+            'lifecycle_status' => \App\Enums\ProductLifecycleStatus::Active,
+            'visibility' => \App\Enums\ProductVisibility::Public,
+            'price' => 25000,
+        ]);
 
         $zionCats = $this->getJson('/api/v1/storefront/tz/stores/'.$zion->slug.'/categories')
             ->assertOk()

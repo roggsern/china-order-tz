@@ -75,6 +75,20 @@ export async function getTzStoreCategories(storeSlug: string): Promise<ApiCatalo
   return payload.data ?? [];
 }
 
+/**
+ * Resolve any active same-store category by slug (root or nested deep-link).
+ */
+export async function getTzStoreCategory(
+  storeSlug: string,
+  categorySlug: string,
+): Promise<ApiCatalogCategory> {
+  const payload = await fetchJson<{ data?: ApiCatalogCategory }>(
+    `/stores/${encodeURIComponent(storeSlug)}/categories/${encodeURIComponent(categorySlug)}`,
+  );
+  if (!payload.data) throw new TzStorefrontApiError("Category not found.", 404);
+  return payload.data;
+}
+
 export async function getTzStoreProducts(
   storeSlug: string,
   params?: { category?: string; search?: string; page?: number; per_page?: number },

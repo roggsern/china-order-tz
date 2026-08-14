@@ -213,6 +213,7 @@ Route::prefix('storefront/tz')->group(function () {
     Route::get('/stores', [TzStorefrontController::class, 'stores']);
     Route::get('/stores/{store}', [TzStorefrontController::class, 'showStore']);
     Route::get('/stores/{store}/categories', [TzStorefrontController::class, 'categories']);
+    Route::get('/stores/{store}/categories/{category}', [TzStorefrontController::class, 'showCategory']);
     Route::get('/stores/{store}/products', [TzStorefrontController::class, 'products']);
     Route::get('/stores/{store}/products/{product}', [TzStorefrontController::class, 'showProduct']);
 });

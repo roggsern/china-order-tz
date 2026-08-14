@@ -2,7 +2,12 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Breadcrumbs } from "@/components/catalog/Breadcrumbs";
 import { ProductCard } from "@/components/catalog/ProductCard";
-import { getTzStore, getTzStoreCategories, getTzStoreProducts } from "@/lib/api/tz-stores";
+import {
+  getTzStore,
+  getTzStoreCategory,
+  getTzStoreProducts,
+  TzStorefrontApiError,
+} from "@/lib/api/tz-stores";
 import { mapApiProductCardToCatalogProduct } from "@/lib/catalog/map-api-product";
 
 interface CategoryPageProps {
@@ -12,15 +17,12 @@ interface CategoryPageProps {
 export async function generateMetadata({ params }: CategoryPageProps): Promise<Metadata> {
   const { storeSlug, categorySlug } = await params;
   try {
-    const [store, categories] = await Promise.all([
+    const [store, category] = await Promise.all([
       getTzStore(storeSlug),
-      getTzStoreCategories(storeSlug),
+      getTzStoreCategory(storeSlug, categorySlug),
     ]);
-    const category = categories.find((item) => item.slug === categorySlug);
     return {
-      title: category
-        ? `${category.name} — ${store.name} — CHINA ORDER TZ`
-        : `${store.name} — Buy From TZ`,
+      title: `${category.name} — ${store.name} — CHINA ORDER TZ`,
     };
   } catch {
     return { title: "Category — Buy From TZ" };
@@ -37,9 +39,13 @@ export default async function BuyFromTzCategoryPage({ params }: CategoryPageProp
     notFound();
   }
 
-  const categories = await getTzStoreCategories(storeSlug).catch(() => []);
-  const category = categories.find((item) => item.slug === categorySlug);
-  if (!category) {
+  let category;
+  try {
+    category = await getTzStoreCategory(storeSlug, categorySlug);
+  } catch (error) {
+    if (error instanceof TzStorefrontApiError && error.statusCode === 404) {
+      notFound();
+    }
     notFound();
   }
 
@@ -52,6 +58,10 @@ export default async function BuyFromTzCategoryPage({ params }: CategoryPageProp
   }));
 
   const products = productResult.products.map(mapApiProductCardToCatalogProduct);
+  const ancestorCrumbs = (category.ancestors ?? []).map((ancestor) => ({
+    label: ancestor.name,
+    href: `/buy-from-tz/${store.slug}/category/${ancestor.slug}`,
+  }));
 
   return (
     <div className="bg-zinc-50 py-10 sm:py-14">
@@ -60,6 +70,7 @@ export default async function BuyFromTzCategoryPage({ params }: CategoryPageProp
           items={[
             { label: "Buy From TZ", href: "/buy-from-tz" },
             { label: store.name, href: `/buy-from-tz/${store.slug}` },
+            ...ancestorCrumbs,
             { label: category.name },
           ]}
         />
