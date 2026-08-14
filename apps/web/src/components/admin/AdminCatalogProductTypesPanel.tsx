@@ -160,6 +160,8 @@ export function AdminCatalogProductTypesPanel() {
         departmentId: category.departmentId ?? null,
         departmentName: category.departmentName ?? null,
         departmentIcon: category.departmentIcon ?? null,
+        storeId: category.storeId ?? null,
+        origin: category.origin === "tz" || category.origin === "china" ? category.origin : null,
         name: `${category.name} (leaf category)`,
         slug: category.slug,
         description: "",

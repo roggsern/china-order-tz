@@ -79,18 +79,20 @@ export function validateCategoryFormDraft(input: {
   return null;
 }
 
+export type CategoryRootCandidate = {
+  id: string;
+  parentId?: string | null;
+  departmentId?: string | null;
+  storeId?: string | null;
+  origin?: "china" | "tz" | null;
+};
+
 export function filterRootCategoriesForSubcategoryParent(input: {
-  categories: Array<{
-    id: string;
-    parentId: string | null;
-    departmentId: string | null;
-    storeId: string | null;
-    origin: "china" | "tz" | null;
-  }>;
+  categories: CategoryRootCandidate[];
   origin: CatalogOriginFilter;
   storeId: string;
   departmentId: string;
-}): Array<{ id: string; parentId: string | null; departmentId: string | null; storeId: string | null; origin: "china" | "tz" | null }> {
+}): CategoryRootCandidate[] {
   return input.categories.filter((category) => {
     if (category.parentId) {
       return false;
