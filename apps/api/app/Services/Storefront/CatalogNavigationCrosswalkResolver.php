@@ -171,6 +171,132 @@ class CatalogNavigationCrosswalkResolver
     }
 
     /**
+     * Product-aware department subcategories for a Bible root mapped via department_slugs.
+     *
+     * Top-level department categories (parent_id null) are advertised when their
+     * branch (self + descendants) holds ≥1 navigation-visible China product.
+     * Soft-deleted categories are excluded (SoftDeletes). Structural inactive
+     * parents remain eligible when an active descendant branch is populated —
+     * matching the seeded China department taxonomy pattern.
+     *
+     * Performance: one department category load + one distinct populated-id query.
+     *
+     * @return Collection<int, Category>
+     */
+    public function visibleDepartmentChildCategories(string $bibleRootSlug): Collection
+    {
+        $mapping = CatalogNavigationCrosswalk::forBibleSlug($bibleRootSlug);
+        $departmentSlugs = $mapping['department_slugs'] ?? [];
+
+        if ($departmentSlugs === []) {
+            return collect();
+        }
+
+        $categories = Category::query()
+            ->whereNull('store_id')
+            ->where('origin', CatalogOrigin::China)
+            ->whereHas('department', fn (Builder $q) => $q->whereIn('slug', $departmentSlugs))
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get(['id', 'slug', 'name', 'parent_id', 'is_active', 'department_id', 'sort_order', 'origin']);
+
+        if ($categories->isEmpty()) {
+            return collect();
+        }
+
+        $excluded = array_fill_keys(
+            Category::query()
+                ->whereIn('slug', CatalogNavigationCrosswalk::EXCLUDED_CATEGORY_SLUGS)
+                ->pluck('id')
+                ->all(),
+            true,
+        );
+
+        $categories = $categories->reject(
+            fn (Category $category) => isset($excluded[(string) $category->id]),
+        );
+
+        $allIds = $categories->map(fn (Category $c) => (string) $c->id)->all();
+        $populated = $this->navigationVisibleProductQuery(Product::query())
+            ->whereIn('category_id', $allIds)
+            ->whereNotNull('category_id')
+            ->distinct()
+            ->pluck('category_id')
+            ->mapWithKeys(fn ($id) => [(string) $id => true])
+            ->all();
+
+        if ($populated === []) {
+            return collect();
+        }
+
+        $childrenByParent = [];
+        foreach ($categories as $category) {
+            if ($category->parent_id === null) {
+                continue;
+            }
+            $parentKey = (string) $category->parent_id;
+            $childrenByParent[$parentKey][] = (string) $category->id;
+        }
+
+        $branchHasProduct = function (string $rootId) use ($childrenByParent, $populated): bool {
+            $frontier = [$rootId];
+            $seen = [$rootId => true];
+
+            while ($frontier !== []) {
+                $current = array_pop($frontier);
+                if (isset($populated[$current])) {
+                    return true;
+                }
+                foreach ($childrenByParent[$current] ?? [] as $childId) {
+                    if (! isset($seen[$childId])) {
+                        $seen[$childId] = true;
+                        $frontier[] = $childId;
+                    }
+                }
+            }
+
+            return false;
+        };
+
+        return $categories
+            ->filter(function (Category $category) use ($branchHasProduct) {
+                if ($category->parent_id !== null) {
+                    return false;
+                }
+
+                return $branchHasProduct((string) $category->id);
+            })
+            ->values();
+    }
+
+    /**
+     * Category + descendants for a China storefront category slug or id.
+     * Used for department-child deep links outside the Bible child map.
+     *
+     * @return list<string>
+     */
+    public function resolveChinaCategoryBranchIds(string $categoryKey): array
+    {
+        if (in_array($categoryKey, CatalogNavigationCrosswalk::EXCLUDED_CATEGORY_SLUGS, true)) {
+            return [];
+        }
+
+        $anchor = Category::query()
+            ->whereNull('store_id')
+            ->where('origin', CatalogOrigin::China)
+            ->where(function (Builder $query) use ($categoryKey) {
+                $query->where('slug', $categoryKey)->orWhere('id', $categoryKey);
+            })
+            ->first();
+
+        if ($anchor === null || $this->isExcludedCategoryId((string) $anchor->id)) {
+            return [];
+        }
+
+        return $this->collectDescendantCategoryIds($anchor);
+    }
+
+    /**
      * @return list<string>
      */
     private function categoryIdsForDepartmentSlug(string $departmentSlug): array
@@ -190,25 +316,7 @@ class CatalogNavigationCrosswalkResolver
      */
     private function categoryIdsForCategorySlug(string $categorySlug): array
     {
-        if (in_array($categorySlug, CatalogNavigationCrosswalk::EXCLUDED_CATEGORY_SLUGS, true)) {
-            return [];
-        }
-
-        $anchor = Category::query()
-            ->where('slug', $categorySlug)
-            ->whereNull('store_id')
-            ->where('origin', CatalogOrigin::China)
-            ->first();
-
-        if ($anchor === null) {
-            return [];
-        }
-
-        if ($this->isExcludedCategoryId($anchor->id)) {
-            return [];
-        }
-
-        return $this->collectDescendantCategoryIds($anchor);
+        return $this->resolveChinaCategoryBranchIds($categorySlug);
     }
 
     /**

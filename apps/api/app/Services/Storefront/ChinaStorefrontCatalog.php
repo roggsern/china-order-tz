@@ -21,6 +21,9 @@ use Illuminate\Database\Eloquent\Collection;
  */
 class ChinaStorefrontCatalog
 {
+    /** Compact mega-menu featured strip — one desktop row inside ~640px content column. */
+    public const MENU_FEATURED_PREVIEW_LIMIT = 4;
+
     public function __construct(
         private readonly CatalogNavigationCrosswalkResolver $crosswalkResolver,
         private readonly ChinaSellableProductQuery $chinaSellable,
@@ -53,6 +56,13 @@ class ChinaStorefrontCatalog
     /**
      * Navigation category tree for the ORDER FROM CHINA mega menu.
      *
+     * Roots remain Catalog Bible ∩ active China roots.
+     * Children:
+     * - aggregate_of roots (e.g. Electronics) → product-aware Bible children
+     * - department_slugs roots (e.g. fashion / beauty / home-care) → product-aware
+     *   top-level department categories (self + descendants)
+     * - otherwise → product-aware Bible children when defined
+     *
      * @return Collection<int, Category>
      */
     public function navigationCategories(): Collection
@@ -73,11 +83,23 @@ class ChinaStorefrontCatalog
             ->map(function (Category $root) use ($bibleRoots) {
                 $definition = $bibleRoots->firstWhere('slug', $root->slug);
                 $childDefinitions = $definition['children'] ?? [];
+                $mapping = CatalogNavigationCrosswalk::forBibleSlug($root->slug) ?? [];
 
-                $visibleChildren = $this->crosswalkResolver->visibleBibleChildCategories(
-                    $root->slug,
-                    $childDefinitions,
-                );
+                if (! empty($mapping['aggregate_of'])) {
+                    $visibleChildren = $this->crosswalkResolver->visibleBibleChildCategories(
+                        $root->slug,
+                        $childDefinitions,
+                    );
+                } elseif (! empty($mapping['department_slugs'])) {
+                    $visibleChildren = $this->crosswalkResolver->visibleDepartmentChildCategories(
+                        $root->slug,
+                    );
+                } else {
+                    $visibleChildren = $this->crosswalkResolver->visibleBibleChildCategories(
+                        $root->slug,
+                        $childDefinitions,
+                    );
+                }
 
                 $root->setRelation('children', $visibleChildren);
 
@@ -156,12 +178,14 @@ class ChinaStorefrontCatalog
      * Mega-menu featured tiles — same sellable gates as listing, without listing-card
      * eager loads (variants/inventory/reviews) or paginator COUNT.
      *
+     * Default limit is the compact desktop preview strip (one row).
+     *
      * @param  array{category?: string|null, featured?: mixed, per_page?: int}  $filters
      * @return Collection<int, Product>
      */
     public function menuProducts(array $filters = []): Collection
     {
-        $limit = min(max((int) ($filters['per_page'] ?? 6), 1), 12);
+        $limit = min(max((int) ($filters['per_page'] ?? self::MENU_FEATURED_PREVIEW_LIMIT), 1), 12);
         $category = $filters['category'] ?? null;
         $featured = $filters['featured'] ?? null;
 
@@ -201,17 +225,13 @@ class ChinaStorefrontCatalog
             return $query->whereIn('category_id', $categoryIds);
         }
 
-        return $query->where(function (Builder $q) use ($category) {
-            $q->where('category_id', $category)
-                ->orWhereHas('category', function (Builder $c) use ($category) {
-                    $c->whereNull('store_id')
-                        ->where(function (Builder $inner) use ($category) {
-                            $inner->where('slug', $category)
-                                ->orWhere('id', $category)
-                                ->orWhereHas('parent', fn (Builder $p) => $p->where('slug', $category));
-                        });
-                });
-        });
+        // Department / nested China category deep-links: full branch (self + descendants).
+        $branchIds = $this->crosswalkResolver->resolveChinaCategoryBranchIds($category);
+        if ($branchIds !== []) {
+            return $query->whereIn('category_id', $branchIds);
+        }
+
+        return $query->whereRaw('0 = 1');
     }
 
     private function chinaPublishedProductQuery(Builder $query): Builder

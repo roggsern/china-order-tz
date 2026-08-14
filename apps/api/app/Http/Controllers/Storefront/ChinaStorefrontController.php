@@ -128,14 +128,14 @@ class ChinaStorefrontController extends Controller
             ? $this->catalog->menuProducts([
                 'category' => $activeSlug,
                 'featured' => true,
-                'per_page' => 6,
+                'per_page' => ChinaStorefrontCatalog::MENU_FEATURED_PREVIEW_LIMIT,
             ])
             : collect();
 
         if ($featured->isEmpty() && $activeSlug) {
             $featured = $this->catalog->menuProducts([
                 'category' => $activeSlug,
-                'per_page' => 6,
+                'per_page' => ChinaStorefrontCatalog::MENU_FEATURED_PREVIEW_LIMIT,
             ]);
         }
 

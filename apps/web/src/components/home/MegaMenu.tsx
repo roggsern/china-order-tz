@@ -50,9 +50,11 @@ function MegaMenuPanelStatus({
         <div className="h-4 w-40 animate-pulse rounded bg-zinc-100" />
         <div className="h-3 w-full animate-pulse rounded bg-zinc-100" />
         <div className="h-3 w-5/6 animate-pulse rounded bg-zinc-100" />
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <div className="aspect-square animate-pulse rounded-xl bg-zinc-100" />
-          <div className="aspect-square animate-pulse rounded-xl bg-zinc-100" />
+        <div className="mt-4 grid grid-cols-4 gap-2">
+          <div className="aspect-[4/5] animate-pulse rounded-lg bg-zinc-100" />
+          <div className="aspect-[4/5] animate-pulse rounded-lg bg-zinc-100" />
+          <div className="aspect-[4/5] animate-pulse rounded-lg bg-zinc-100" />
+          <div className="aspect-[4/5] animate-pulse rounded-lg bg-zinc-100" />
         </div>
         <p className="text-[12px] text-zinc-500">Loading China categories…</p>
       </div>
@@ -449,16 +451,20 @@ export function MegaMenu({
                       No published China-import products in this category yet.
                     </p>
                   ) : (
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                      {featured.slice(0, 6).map((product) => {
+                    <div
+                      className="grid grid-cols-4 gap-2 overflow-hidden"
+                      data-testid="china-mega-featured-strip"
+                    >
+                      {featured.slice(0, 4).map((product) => {
                         const image = resolveMegaMenuProductImage(product);
                         return (
                           <Link
                             key={product.id}
                             href={`/products/${product.slug}`}
-                            className="group/card overflow-hidden rounded-xl border border-zinc-100 bg-zinc-50/80 transition hover:border-[#c9a227]/35 hover:shadow-sm"
+                            className="group/card min-w-0 overflow-hidden rounded-lg border border-zinc-100 bg-zinc-50/80 transition hover:border-[#c9a227]/35 hover:shadow-sm"
+                            data-testid="china-mega-featured-tile"
                           >
-                            <div className="relative aspect-square bg-zinc-100">
+                            <div className="relative aspect-[4/5] bg-zinc-100">
                               {image ? (
                                 <Image
                                   src={image}
@@ -468,17 +474,17 @@ export function MegaMenu({
                                   unoptimized
                                 />
                               ) : (
-                                <span className="flex h-full items-center justify-center text-2xl">
+                                <span className="flex h-full items-center justify-center text-lg">
                                   {presentation?.icon || "📦"}
                                 </span>
                               )}
                             </div>
-                            <div className="p-2.5">
-                              <p className="truncate text-[12px] font-medium text-zinc-800">
+                            <div className="px-1.5 py-1.5">
+                              <p className="truncate text-[11px] font-medium leading-snug text-zinc-800">
                                 {product.name}
                               </p>
                               {product.brand?.name ? (
-                                <p className="mt-0.5 truncate text-[10px] uppercase tracking-wide text-zinc-400">
+                                <p className="mt-0.5 truncate text-[9px] uppercase tracking-wide text-zinc-400">
                                   {product.brand.name}
                                 </p>
                               ) : null}

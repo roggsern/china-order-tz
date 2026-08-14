@@ -236,6 +236,151 @@ class CatalogNavigationCrosswalkTest extends TestCase
         $this->assertContains($midi, $ids);
     }
 
+    public function test_department_mapped_root_shows_all_populated_subcategories(): void
+    {
+        $midi = Category::query()->where('slug', 'womens-fashion-dresses-midi-dresses')->firstOrFail();
+        $blouses = Category::query()->where('slug', 'womens-fashion-tops-blouses')->firstOrFail();
+        $palazzo = Category::query()->where('slug', 'womens-fashion-pants-palazzo-pants')->firstOrFail();
+        $emptyShoes = Category::query()->where('slug', 'womens-fashion-shoes')->firstOrFail();
+
+        $this->createNavigationVisibleProduct($midi, 'wf-midi-visible', null);
+        $this->createNavigationVisibleProduct($blouses, 'wf-blouse-visible', null);
+        $this->createNavigationVisibleProduct($palazzo, 'wf-palazzo-visible', null);
+
+        $womens = app(ChinaStorefrontCatalog::class)
+            ->navigationCategories()
+            ->firstWhere('slug', 'womens-fashion');
+
+        $this->assertNotNull($womens);
+        $childSlugs = $womens->children->pluck('slug')->all();
+
+        $this->assertContains('womens-fashion-dresses', $childSlugs);
+        $this->assertContains('womens-fashion-tops', $childSlugs);
+        $this->assertContains('womens-fashion-pants', $childSlugs);
+        $this->assertNotContains('womens-fashion-shoes', $childSlugs);
+        $this->assertNotContains($emptyShoes->slug.'-high-heels', $childSlugs);
+        $this->assertGreaterThanOrEqual(3, count($childSlugs));
+    }
+
+    public function test_department_child_branch_product_discovery_includes_descendants(): void
+    {
+        $jeans = Category::query()->where('slug', 'womens-fashion-pants-jeans')->firstOrFail();
+        $china = CommerceChannel::query()
+            ->where('code', CommerceChannelCode::ChinaImport->value)
+            ->firstOrFail();
+        $this->createListableChinaProduct($jeans, 'wf-jeans-branch', $china);
+
+        $ids = $this->resolver->resolveChinaCategoryBranchIds('womens-fashion-pants');
+        $this->assertContains((string) $jeans->id, $ids);
+
+        $products = $this->getJson('/api/v1/storefront/china/products?category=womens-fashion-pants')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertContains('wf-jeans-branch', collect($products)->pluck('slug')->all());
+    }
+
+    public function test_draft_product_does_not_populate_department_subcategory(): void
+    {
+        $pencil = Category::query()->where('slug', 'womens-fashion-skirts-pencil-skirts')->firstOrFail();
+
+        Product::factory()->create([
+            'name' => 'Draft skirt',
+            'slug' => 'wf-draft-skirt',
+            'category_id' => $pencil->id,
+            'store_id' => null,
+            'commerce_channel_id' => null,
+            'is_active' => true,
+            'is_demo' => false,
+            'lifecycle_status' => ProductLifecycleStatus::Draft,
+            'visibility' => ProductVisibility::Public,
+            'price' => 50000,
+        ]);
+
+        $womens = app(ChinaStorefrontCatalog::class)
+            ->navigationCategories()
+            ->firstWhere('slug', 'womens-fashion');
+
+        $this->assertTrue(
+            $womens === null || ! $womens->children->contains('slug', 'womens-fashion-skirts'),
+        );
+    }
+
+    public function test_soft_deleted_department_category_is_omitted_from_nav_children(): void
+    {
+        $midi = Category::query()->where('slug', 'womens-fashion-dresses-midi-dresses')->firstOrFail();
+        $this->createNavigationVisibleProduct($midi, 'wf-soft-delete-dress', null);
+
+        $dresses = Category::query()->where('slug', 'womens-fashion-dresses')->firstOrFail();
+        $dresses->delete();
+
+        $womens = app(ChinaStorefrontCatalog::class)
+            ->navigationCategories()
+            ->firstWhere('slug', 'womens-fashion');
+
+        $this->assertNotNull($womens);
+        $this->assertNotContains(
+            'womens-fashion-dresses',
+            $womens->children->pluck('slug')->all(),
+        );
+    }
+
+    public function test_tz_store_category_does_not_appear_in_china_department_children(): void
+    {
+        $this->seed(\Database\Seeders\StoreSeeder::class);
+        $store = \App\Models\Store::query()->where('slug', 'zion-mode')->firstOrFail();
+        $dept = \App\Models\Department::query()->where('slug', 'womens-fashion')->firstOrFail();
+
+        Category::factory()->create([
+            'name' => 'TZ Pants Leak',
+            'slug' => 'zion-mode-pants-leak',
+            'origin' => CatalogOrigin::Tz,
+            'store_id' => $store->id,
+            'department_id' => $dept->id,
+            'parent_id' => null,
+            'is_active' => true,
+        ]);
+
+        $midi = Category::query()->where('slug', 'womens-fashion-dresses-midi-dresses')->firstOrFail();
+        $this->createNavigationVisibleProduct($midi, 'wf-tz-isolation-dress', null);
+
+        $womens = app(ChinaStorefrontCatalog::class)
+            ->navigationCategories()
+            ->firstWhere('slug', 'womens-fashion');
+
+        $this->assertNotNull($womens);
+        $this->assertNotContains(
+            'zion-mode-pants-leak',
+            $womens->children->pluck('slug')->all(),
+        );
+    }
+
+    public function test_menu_featured_products_are_department_scoped_and_bounded(): void
+    {
+        $midi = Category::query()->where('slug', 'womens-fashion-dresses-midi-dresses')->firstOrFail();
+        $phones = Category::query()->where('slug', 'electronics-phones')->firstOrFail();
+        $china = CommerceChannel::query()
+            ->where('code', CommerceChannelCode::ChinaImport->value)
+            ->firstOrFail();
+
+        for ($i = 1; $i <= 6; $i++) {
+            $this->createListableChinaProduct($midi, "wf-featured-dress-{$i}", $china);
+        }
+        $this->createListableChinaProduct($phones, 'electronics-featured-phone', $china);
+
+        $menu = $this->getJson('/api/v1/storefront/china/menu?category=womens-fashion')
+            ->assertOk()
+            ->json('data');
+
+        $featured = collect($menu['featured_products'] ?? []);
+        $this->assertLessThanOrEqual(4, $featured->count());
+        $this->assertNotEmpty($featured);
+        $this->assertNotContains('electronics-featured-phone', $featured->pluck('slug')->all());
+        foreach ($featured as $tile) {
+            $this->assertStringStartsWith('wf-featured-dress-', $tile['slug']);
+        }
+    }
+
     public function test_navigation_api_uses_crosswalk_filtered_tree(): void
     {
         $iphoneCategory = Category::query()
@@ -277,5 +422,33 @@ class CatalogNavigationCrosswalkTest extends TestCase
             'visibility' => ProductVisibility::Public,
             'price' => 120000,
         ]);
+    }
+
+    private function createListableChinaProduct(
+        Category $category,
+        string $slug,
+        CommerceChannel $channel,
+    ): Product {
+        $product = Product::factory()->create([
+            'name' => $slug,
+            'slug' => $slug,
+            'category_id' => $category->id,
+            'store_id' => null,
+            'commerce_channel_id' => $channel->id,
+            'fulfillment_source' => CommerceChannelCode::ChinaImport->fulfillmentSource(),
+            'is_active' => true,
+            'is_demo' => false,
+            'lifecycle_status' => ProductLifecycleStatus::Active,
+            'visibility' => ProductVisibility::Public,
+            'price' => 120000,
+        ]);
+
+        \App\Models\Inventory::query()->updateOrCreate(
+            ['product_id' => $product->id, 'product_variant_id' => null],
+            ['quantity' => 5, 'reserved_quantity' => 0, 'low_stock_threshold' => 1],
+        );
+        \App\Models\ProductShippingOption::factory()->air(5000)->create(['product_id' => $product->id]);
+
+        return $product;
     }
 }
