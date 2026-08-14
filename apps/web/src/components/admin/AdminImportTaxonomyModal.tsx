@@ -12,6 +12,7 @@ import {
 import {
   buildTaxonomyImportPayload,
   buildTaxonomyImportSummary,
+  taxonomyNodeImportStatusLabel,
   taxonomyNodeProductTypeLabel,
   toggleTaxonomyImportSelection,
   type TaxonomyImportSourceNode,
@@ -34,6 +35,11 @@ function toNodes(categories: TaxonomyImportSourceCategory[]): TaxonomyImportSour
     sortOrder: category.sortOrder,
     isActive: category.isActive,
     importable: category.importable,
+    importPreview: category.importPreview ?? {
+      status: "new" as const,
+      reason: null,
+      target: null,
+    },
     productTypes: category.productTypes.map((type) => ({
       id: type.id,
       name: type.name,
@@ -293,6 +299,15 @@ export function AdminImportTaxonomyModal({
                           />
                           <span>
                             <span className="font-medium">{root.name}</span>
+                            <span
+                              className={
+                                root.importPreview.status === "reuse"
+                                  ? "ml-2 text-[10px] font-semibold uppercase tracking-wide text-emerald-700"
+                                  : "ml-2 text-[10px] font-semibold uppercase tracking-wide text-sky-700"
+                              }
+                            >
+                              {taxonomyNodeImportStatusLabel(root)}
+                            </span>
                             {!root.isActive ? (
                               <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
                                 parent
@@ -326,6 +341,15 @@ export function AdminImportTaxonomyModal({
                                   />
                                   <span>
                                     {child.name}
+                                    <span
+                                      className={
+                                        child.importPreview.status === "reuse"
+                                          ? "ml-2 text-[10px] font-semibold uppercase tracking-wide text-emerald-700"
+                                          : "ml-2 text-[10px] font-semibold uppercase tracking-wide text-sky-700"
+                                      }
+                                    >
+                                      {taxonomyNodeImportStatusLabel(child)}
+                                    </span>
                                     <span className="ml-1 text-xs text-zinc-500">
                                       ({taxonomyNodeProductTypeLabel(child)})
                                     </span>

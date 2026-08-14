@@ -1873,6 +1873,11 @@ export type TaxonomyImportSourceCategory = {
   isActive: boolean;
   importable: boolean;
   hasProductTypes: boolean;
+  importPreview: {
+    status: "new" | "reuse";
+    reason: string | null;
+    target: { id: string; name: string; slug: string } | null;
+  };
   productTypes: Array<{
     id: string;
     name: string;
@@ -1922,6 +1927,11 @@ export async function fetchTaxonomyImportSource(input: {
         is_active: boolean;
         importable?: boolean;
         has_product_types?: boolean;
+        import_preview?: {
+          status?: string;
+          reason?: string | null;
+          target?: { id: string; name: string; slug: string } | null;
+        };
         product_types: Array<{
           id: string;
           name: string;
@@ -1953,6 +1963,17 @@ export async function fetchTaxonomyImportSource(input: {
       importable: row.importable !== false,
       hasProductTypes:
         row.has_product_types === true || (row.product_types ?? []).length > 0,
+      importPreview: {
+        status: row.import_preview?.status === "reuse" ? "reuse" : "new",
+        reason: row.import_preview?.reason ?? null,
+        target: row.import_preview?.target
+          ? {
+              id: row.import_preview.target.id,
+              name: row.import_preview.target.name,
+              slug: row.import_preview.target.slug,
+            }
+          : null,
+      },
       productTypes: (row.product_types ?? []).map((type) => ({
         id: type.id,
         name: type.name,

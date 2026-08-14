@@ -10,6 +10,11 @@ export type TaxonomyImportSourceNode = {
   sortOrder: number;
   isActive: boolean;
   importable: boolean;
+  importPreview: {
+    status: "new" | "reuse";
+    reason: string | null;
+    target: { id: string; name: string; slug: string } | null;
+  };
   productTypes: Array<{
     id: string;
     name: string;
@@ -23,6 +28,10 @@ export function taxonomyNodeProductTypeLabel(node: TaxonomyImportSourceNode): st
     return `${node.productTypes.length} product type${node.productTypes.length === 1 ? "" : "s"}`;
   }
   return "No source Product Type available";
+}
+
+export function taxonomyNodeImportStatusLabel(node: TaxonomyImportSourceNode): string {
+  return node.importPreview.status === "reuse" ? "REUSE EXISTING" : "NEW";
 }
 
 /** When a child is selected, ensure all ancestors are also selected. */

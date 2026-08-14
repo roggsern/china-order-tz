@@ -7,6 +7,7 @@ use App\Models\CatalogProductType;
 use App\Models\Category;
 use App\Models\Store;
 use App\Support\Catalog\CatalogLeafCategoryRules;
+use App\Support\Catalog\TzTaxonomyImportCategoryResolver;
 use App\Support\Catalog\TzTaxonomyImportIdentity;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -18,10 +19,17 @@ use Illuminate\Validation\ValidationException;
  * - Creates store-owned categories (origin=tz, store_id, department_id=null)
  * - Optionally clones CPT rows under target leaves (new subcategory_id)
  * - Optionally snapshots CPT↔attribute pivots using shared global attribute IDs
- * - Idempotent via deterministic store-scoped slugs (no mapping table)
+ * - Idempotent via durable source→target maps + deterministic slugs + compatible reuse
  */
 class ImportTaxonomyToStoreAction
 {
+    private TzTaxonomyImportCategoryResolver $categoryResolver;
+
+    public function __construct(?TzTaxonomyImportCategoryResolver $categoryResolver = null)
+    {
+        $this->categoryResolver = $categoryResolver ?? new TzTaxonomyImportCategoryResolver;
+    }
+
     /**
      * @param  array{
      *     department_id: string,
@@ -304,10 +312,36 @@ class ImportTaxonomyToStoreAction
 
     /**
      * @param  array<string, Category>  $sourceToTarget
-     * @return array{category: Category, created: bool}
+     * @return array{category: Category, created: bool, reuse_reason: ?string}
      */
     private function provisionCategory(Store $store, Category $source, array $sourceToTarget): array
     {
+        $resolved = $this->categoryResolver->resolve($store, $source, $sourceToTarget, persistMap: true);
+
+        if ($resolved['category'] instanceof Category) {
+            $existing = $resolved['category'];
+
+            // Keep existing slug/URLs. Refresh soft metadata only; never rename slug.
+            $existing->fill([
+                'name' => $source->name,
+                'department_id' => null,
+                'origin' => CatalogOrigin::Tz,
+                'store_id' => $store->id,
+                'description' => $existing->description ?: $source->description,
+                'image' => $existing->image ?: $source->image,
+            ]);
+            if ($existing->sort_order === null || (int) $existing->sort_order === 0) {
+                $existing->sort_order = $source->sort_order;
+            }
+            $existing->save();
+
+            return [
+                'category' => $existing->fresh(),
+                'created' => false,
+                'reuse_reason' => $resolved['reason'],
+            ];
+        }
+
         $targetSlug = TzTaxonomyImportIdentity::categorySlug(
             (string) $store->slug,
             (string) $source->slug,
@@ -319,30 +353,6 @@ class ImportTaxonomyToStoreAction
             if ($parentTarget instanceof Category) {
                 $parentId = $parentTarget->id;
             }
-        }
-
-        $existing = Category::query()
-            ->where('store_id', $store->id)
-            ->where('origin', CatalogOrigin::Tz)
-            ->where('slug', $targetSlug)
-            ->first();
-
-        if ($existing !== null) {
-            // Reuse unambiguously matched store category. Do not merge by display name.
-            // Keep operator-controlled is_active; repair parent_id / ownership if needed.
-            $existing->fill([
-                'name' => $source->name,
-                'parent_id' => $parentId,
-                'department_id' => null,
-                'origin' => CatalogOrigin::Tz,
-                'store_id' => $store->id,
-                'sort_order' => $source->sort_order,
-                'description' => $existing->description ?: $source->description,
-                'image' => $existing->image ?: $source->image,
-            ]);
-            $existing->save();
-
-            return ['category' => $existing->fresh(), 'created' => false];
         }
 
         // Guard: slug globally unique — if taken outside this store, fail loudly.
@@ -367,7 +377,13 @@ class ImportTaxonomyToStoreAction
             'is_active' => true,
         ]);
 
-        return ['category' => $created->fresh(), 'created' => true];
+        $this->categoryResolver->remember($store, $source, $created);
+
+        return [
+            'category' => $created->fresh(),
+            'created' => true,
+            'reuse_reason' => null,
+        ];
     }
 
     /**
@@ -383,7 +399,15 @@ class ImportTaxonomyToStoreAction
             (string) $sourceType->name,
         );
 
-        $existing = CatalogProductType::query()->where('slug', $targetSlug)->first();
+        // Prefer CPT already on this leaf with the same name (reused categories / alternate slugs).
+        $existing = CatalogProductType::query()
+            ->where('subcategory_id', $targetLeaf->id)
+            ->where('name', $sourceType->name)
+            ->first();
+
+        if ($existing === null) {
+            $existing = CatalogProductType::query()->where('slug', $targetSlug)->first();
+        }
 
         if ($existing !== null) {
             // Idempotent reuse only when the CPT already points at this store leaf
@@ -397,17 +421,18 @@ class ImportTaxonomyToStoreAction
                 if (! $sameStore) {
                     throw ValidationException::withMessages([
                         'include_product_types' => [
-                            "Cannot provision product type “{$sourceType->name}”: slug “{$targetSlug}” belongs to another catalog.",
+                            "Cannot provision product type “{$sourceType->name}”: slug “{$existing->slug}” belongs to another catalog.",
                         ],
                     ]);
                 }
 
-                // Same store but different leaf — retarget to the imported leaf.
+                // Same store but different leaf — retarget to the imported/reused leaf.
                 $existing->subcategory_id = $targetLeaf->id;
             }
 
             $existing->fill([
                 'name' => $sourceType->name,
+                // Keep existing CPT slug when already attached to this leaf.
                 'description' => $existing->description ?: $sourceType->description,
                 'image' => $existing->image ?: $sourceType->image,
                 'sort_order' => $sourceType->sort_order,

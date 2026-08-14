@@ -7,6 +7,7 @@ use App\Models\CatalogProductType;
 use App\Models\Category;
 use App\Models\Department;
 use App\Models\Store;
+use App\Support\Catalog\TzTaxonomyImportCategoryResolver;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
@@ -16,12 +17,18 @@ use Illuminate\Validation\ValidationException;
  * Source visibility is based on Catalog Bible / department taxonomy authority,
  * NOT products and NOT Catalog Product Type existence.
  *
- * China intentionally keeps many parent categories inactive for storefront
- * mega-menu safety while their children remain active. Those inactive parents
- * must still appear here so admins can import the hierarchy into TZ stores.
+ * Preview annotations (NEW / REUSE EXISTING) are computed via the same
+ * authoritative resolver used by ImportTaxonomyToStoreAction (persistMap=false).
  */
 class GetTaxonomyImportSourceAction
 {
+    private TzTaxonomyImportCategoryResolver $categoryResolver;
+
+    public function __construct(?TzTaxonomyImportCategoryResolver $categoryResolver = null)
+    {
+        $this->categoryResolver = $categoryResolver ?? new TzTaxonomyImportCategoryResolver;
+    }
+
     /**
      * @return array{
      *     department: array{id: string, name: string, slug: string},
@@ -30,9 +37,6 @@ class GetTaxonomyImportSourceAction
      */
     public function handle(Store $store, string $departmentId): array
     {
-        // $store is the import target — validated by the controller/route binding.
-        unset($store);
-
         $department = Department::query()
             ->whereKey($departmentId)
             ->where('is_active', true)
@@ -82,9 +86,12 @@ class GetTaxonomyImportSourceAction
                 ->get(['id', 'subcategory_id', 'name', 'slug', 'is_active', 'sort_order'])
                 ->groupBy('subcategory_id');
 
-        $rows = $categories->map(function (Category $category) use ($typesByLeaf, $parentIdsWithChildren) {
+        $previewTargets = $this->previewTargets($store, $categories);
+
+        $rows = $categories->map(function (Category $category) use ($typesByLeaf, $parentIdsWithChildren, $previewTargets) {
             $types = $typesByLeaf->get($category->id, collect());
             $isStructuralParent = $parentIdsWithChildren->has($category->id);
+            $preview = $previewTargets[$category->id] ?? ['status' => 'new', 'target' => null, 'reason' => null];
 
             return [
                 'id' => $category->id,
@@ -96,6 +103,11 @@ class GetTaxonomyImportSourceAction
                 'is_structural_parent' => $isStructuralParent,
                 // Selectable when active, or when inactive only as Catalog Bible parent.
                 'importable' => $category->is_active || $isStructuralParent,
+                'import_preview' => [
+                    'status' => $preview['status'],
+                    'reason' => $preview['reason'],
+                    'target' => $preview['target'],
+                ],
                 'product_types' => $types->map(fn (CatalogProductType $type) => [
                     'id' => $type->id,
                     'name' => $type->name,
@@ -116,5 +128,96 @@ class GetTaxonomyImportSourceAction
             ],
             'categories' => $rows,
         ];
+    }
+
+    /**
+     * Dry-run resolve in parent-before-child order so child preview uses reconciled parents.
+     *
+     * @param  Collection<int, Category>  $categories
+     * @return array<string, array{status: string, reason: ?string, target: ?array{id: string, name: string, slug: string}}>
+     */
+    private function previewTargets(Store $store, Collection $categories): array
+    {
+        $byId = $categories->keyBy('id');
+        $ordered = $this->orderParentsBeforeChildren($byId);
+        $sourceToTarget = [];
+        $preview = [];
+
+        foreach ($ordered as $source) {
+            $resolved = $this->categoryResolver->resolve($store, $source, $sourceToTarget, persistMap: false);
+            $target = $resolved['category'];
+
+            if ($target instanceof Category) {
+                $sourceToTarget[$source->id] = $target;
+                $preview[$source->id] = [
+                    'status' => 'reuse',
+                    'reason' => $resolved['reason'],
+                    'target' => [
+                        'id' => $target->id,
+                        'name' => $target->name,
+                        'slug' => $target->slug,
+                    ],
+                ];
+            } else {
+                // Synthetic placeholder so children resolve parent context in preview.
+                $placeholder = new Category([
+                    'id' => 'preview-'.$source->id,
+                    'store_id' => $store->id,
+                    'origin' => CatalogOrigin::Tz,
+                    'name' => $source->name,
+                    'slug' => 'preview-'.$source->slug,
+                    'parent_id' => null,
+                ]);
+                $placeholder->id = 'preview-'.$source->id;
+                $sourceToTarget[$source->id] = $placeholder;
+                $preview[$source->id] = [
+                    'status' => 'new',
+                    'reason' => null,
+                    'target' => null,
+                ];
+            }
+        }
+
+        return $preview;
+    }
+
+    /**
+     * @param  Collection<string, Category>  $categories
+     * @return list<Category>
+     */
+    private function orderParentsBeforeChildren(Collection $categories): array
+    {
+        $remaining = $categories->keyBy('id');
+        $ordered = [];
+        $placed = [];
+
+        while ($remaining->isNotEmpty()) {
+            $progress = false;
+
+            foreach ($remaining as $id => $category) {
+                $parentId = $category->parent_id;
+                $parentReady = $parentId === null
+                    || isset($placed[$parentId])
+                    || ! $categories->has($parentId);
+
+                if (! $parentReady) {
+                    continue;
+                }
+
+                $ordered[] = $category;
+                $placed[$id] = true;
+                $remaining->forget($id);
+                $progress = true;
+            }
+
+            if (! $progress) {
+                foreach ($remaining->sortBy('name') as $category) {
+                    $ordered[] = $category;
+                }
+                break;
+            }
+        }
+
+        return $ordered;
     }
 }

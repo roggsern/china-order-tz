@@ -4,6 +4,7 @@ import {
   buildTaxonomyImportPayload,
   buildTaxonomyImportSummary,
   ensureTaxonomyAncestorsSelected,
+  taxonomyNodeImportStatusLabel,
   taxonomyNodeProductTypeLabel,
   toggleTaxonomyImportSelection,
   type TaxonomyImportSourceNode,
@@ -18,6 +19,7 @@ const nodes: TaxonomyImportSourceNode[] = [
     sortOrder: 1,
     isActive: false,
     importable: true,
+    importPreview: { status: "reuse", reason: "compatible_existing", target: { id: "t1", name: "Tops", slug: "tops" } },
     productTypes: [],
   },
   {
@@ -28,6 +30,7 @@ const nodes: TaxonomyImportSourceNode[] = [
     sortOrder: 1,
     isActive: true,
     importable: true,
+    importPreview: { status: "new", reason: null, target: null },
     productTypes: [
       {
         id: "pt1",
@@ -45,6 +48,7 @@ const nodes: TaxonomyImportSourceNode[] = [
     sortOrder: 2,
     isActive: true,
     importable: true,
+    importPreview: { status: "new", reason: null, target: null },
     productTypes: [],
   },
   {
@@ -55,6 +59,7 @@ const nodes: TaxonomyImportSourceNode[] = [
     sortOrder: 2,
     isActive: false,
     importable: true,
+    importPreview: { status: "new", reason: null, target: null },
     productTypes: [],
   },
   {
@@ -65,6 +70,7 @@ const nodes: TaxonomyImportSourceNode[] = [
     sortOrder: 1,
     isActive: true,
     importable: true,
+    importPreview: { status: "reuse", reason: "map", target: { id: "s1", name: "Skirts", slug: "zion-mode-skirts" } },
     productTypes: [{ id: "pt2", name: "Skirt", attributesCount: 0, hasAttributeMappings: false }],
   },
 ];
@@ -147,5 +153,10 @@ describe("taxonomy-import helpers", () => {
       taxonomyNodeProductTypeLabel(nodes.find((node) => node.id === "blouses")!),
       /1 product type/,
     );
+  });
+
+  it("labels import preview as NEW or REUSE EXISTING", () => {
+    assert.equal(taxonomyNodeImportStatusLabel(nodes.find((n) => n.id === "tops")!), "REUSE EXISTING");
+    assert.equal(taxonomyNodeImportStatusLabel(nodes.find((n) => n.id === "blouses")!), "NEW");
   });
 });
