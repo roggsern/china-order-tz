@@ -102,3 +102,12 @@ export function resolveProductCardAvailabilityOverlay(product: {
 
   return null;
 }
+
+/**
+ * Card CTA: Variant-path products must navigate to PDP — never invent a sell unit.
+ */
+export function productCardRequiresOptionsNavigation(product: {
+  requiresVariantSelection?: boolean;
+}): boolean {
+  return product.requiresVariantSelection === true;
+}

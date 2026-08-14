@@ -349,6 +349,34 @@ describe("map-cms-homepage — featured product mapping", () => {
     assert.equal(product!.stock, 4);
   });
 
+  it("preserves requires_variant_selection from CMS card payload", () => {
+    const product = mapCmsProductDataToCatalogProduct({
+      id: "uuid-tz-2",
+      slug: "stretch-pencil-dresses",
+      name: "Stretch Pencil Dresses",
+      price: "40000.00",
+      is_featured: true,
+      is_purchasable: true,
+      availability_status: "available",
+      requires_variant_selection: true,
+      variants: [
+        {
+          id: "var-1",
+          stock: 4,
+          in_stock: true,
+          inventory: { available_quantity: 4 },
+        },
+      ],
+      primary_image: null,
+      category: { id: "c", name: "Dresses", slug: "dresses" },
+      brand: null,
+      commerce_channel_code: "TZ_LOCAL",
+    });
+
+    assert.ok(product);
+    assert.equal(product!.requiresVariantSelection, true);
+  });
+
   it("returns null when required fields are missing", () => {
     assert.equal(mapCmsProductDataToCatalogProduct({ name: "Only name" }), null);
   });

@@ -13,6 +13,7 @@ import { WishlistButton } from "./WishlistButton";
 import {
   isProductCardPurchaseDisabled,
   isProductPurchaseUnavailable,
+  productCardRequiresOptionsNavigation,
   resolveProductCardAvailabilityOverlay,
 } from "@/lib/catalog/product-availability";
 
@@ -28,6 +29,8 @@ export function ProductCard({ product, variant = "default" }: ProductCardProps) 
   const purchaseUnavailable = isProductPurchaseUnavailable(product);
   const cardPurchaseDisabled = isProductCardPurchaseDisabled(product);
   const availabilityOverlay = resolveProductCardAvailabilityOverlay(product);
+  const selectOptionsCta =
+    !cardPurchaseDisabled && productCardRequiresOptionsNavigation(product);
 
   return (
     <article
@@ -120,14 +123,23 @@ export function ProductCard({ product, variant = "default" }: ProductCardProps) 
         </div>
 
         <div className="mt-auto pt-3 sm:pt-4">
-          <AddToCartButton
-            product={product}
-            disabled={cardPurchaseDisabled}
-            purchaseUnavailable={purchaseUnavailable}
-            availabilityStatus={product.availabilityStatus}
-            variant="card"
-            className="w-full"
-          />
+          {selectOptionsCta ? (
+            <Link
+              href={`/products/${product.slug}`}
+              className="inline-flex w-full flex-1 items-center justify-center gap-2 rounded-xl border-2 border-zinc-900 bg-white px-3 py-2.5 text-xs font-bold tracking-wide text-zinc-900 transition-all duration-200 ease-out hover:bg-zinc-900 hover:text-white active:scale-[0.98] sm:py-3 sm:text-sm"
+            >
+              Select options
+            </Link>
+          ) : (
+            <AddToCartButton
+              product={product}
+              disabled={cardPurchaseDisabled}
+              purchaseUnavailable={purchaseUnavailable}
+              availabilityStatus={product.availabilityStatus}
+              variant="card"
+              className="w-full"
+            />
+          )}
         </div>
       </div>
 

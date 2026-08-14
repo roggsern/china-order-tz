@@ -229,6 +229,11 @@ export type Product = {
   commerceChannelCode?: string | null;
   /** Policy-level purchase eligibility from customer product detail API. */
   isPurchasable?: boolean;
+  /**
+   * Authoritative Variant-path signal — must select a configuration before ATC.
+   * Do not infer from legacy size arrays.
+   */
+  requiresVariantSelection?: boolean;
   availabilityStatus?: import("@/lib/catalog/product-availability").ProductAvailabilityStatus;
   unavailabilityReason?: import("@/lib/catalog/product-availability").ProductUnavailabilityReason;
   weightKg?: number;

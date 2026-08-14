@@ -18,6 +18,7 @@ import type {
 import type { Product, ProductVariantChoice } from "@/lib/types/catalog";
 import type { ShippingMethodCode } from "@/lib/shipping/types";
 import { normalizeVariantChoice, canAddProductToCart } from "@/lib/catalog/variants";
+import { rejectNullConfigurationForVariantPathProduct } from "@/lib/cart/variant-selection-guard";
 import {
   CartActionsContext,
   CartContext,
@@ -383,6 +384,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
       const stockLimit = stockOverride ?? product.stock;
       if (stockLimit <= 0) {
         return { ok: false, message: "This item is out of stock." };
+      }
+
+      const variantSelectionError = rejectNullConfigurationForVariantPathProduct(
+        product,
+        configurationId,
+      );
+      if (variantSelectionError) {
+        return { ok: false, message: variantSelectionError };
       }
 
       clearCheckoutDraft();

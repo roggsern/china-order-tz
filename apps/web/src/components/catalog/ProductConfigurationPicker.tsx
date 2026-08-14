@@ -16,6 +16,10 @@ import {
   type StorefrontPriceQuote,
 } from "@/lib/catalog/storefront-configuration";
 import { resolveMediaPreviewConfigurationId } from "@/lib/catalog/storefront-media-preview";
+import {
+  resolveVariantGalleryPrimaryUrl,
+  warmStorefrontVariantPrimaryImage,
+} from "@/lib/catalog/warm-storefront-variant-image";
 import type { ProductImage } from "@/lib/types/catalog";
 
 export type StorefrontConfigurationSelection = {
@@ -321,6 +325,22 @@ export function ProductConfigurationPicker({
     });
   };
 
+  const warmPreviewForValue = (attributeId: string, valueId: string) => {
+    if (!experience) return;
+
+    const previewSelections = { ...selections, [attributeId]: valueId };
+    const previewConfigurationId = resolveMediaPreviewConfigurationId({
+      configurations: experience.configurations,
+      selections: previewSelections,
+      attributes: configAttributes,
+      variantGalleries,
+    });
+
+    warmStorefrontVariantPrimaryImage(
+      resolveVariantGalleryPrimaryUrl(previewConfigurationId, variantGalleries),
+    );
+  };
+
   if (loading && !experience) {
     return (
       <div className="rounded-2xl border border-zinc-100 bg-zinc-50/60 p-4 text-sm text-zinc-500">
@@ -404,7 +424,18 @@ export function ProductConfigurationPicker({
                     key={value.id}
                     type="button"
                     disabled={disabled}
-                    onClick={() => selectValue(attribute.id, value.id)}
+                    onClick={() => {
+                      warmPreviewForValue(attribute.id, value.id);
+                      selectValue(attribute.id, value.id);
+                    }}
+                    onPointerEnter={() => {
+                      if (disabled) return;
+                      warmPreviewForValue(attribute.id, value.id);
+                    }}
+                    onFocus={() => {
+                      if (disabled) return;
+                      warmPreviewForValue(attribute.id, value.id);
+                    }}
                     whileTap={reduceMotion || disabled ? undefined : { scale: 0.98 }}
                     animate={
                       reduceMotion

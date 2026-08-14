@@ -233,6 +233,7 @@ export function mapCmsProductDataToCatalogProduct(
       | "unavailable"
       | undefined,
     unavailability_reason: data.unavailability_reason as string | undefined,
+    requires_variant_selection: data.requires_variant_selection as boolean | undefined,
     stock: data.stock as number | undefined,
     in_stock: data.in_stock as boolean | undefined,
     inventory: data.inventory as ApiCatalogProductCard["inventory"],

@@ -70,34 +70,46 @@ export function ProductImageDisplay({
   const gradient = displayImage.gradient || fallbackGradient || "from-zinc-200 to-zinc-300";
   const [hasError, setHasError] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  /** Last successfully shown URL — kept visible while a new cold asset loads. */
+  const [visibleUrl, setVisibleUrl] = useState<string | undefined>(undefined);
   const imageRef = useRef<HTMLImageElement>(null);
 
   const rawUrl = src?.trim() || displayImage.url?.trim() || displayImage.path?.trim();
   const hasRealUrl = Boolean(rawUrl && !isPlaceholderImageUrl(rawUrl));
   const resolvedUrl = hasRealUrl && !hasError ? resolveImageUrl(rawUrl) : undefined;
   const showPlaceholderImage = hasError && hasRealUrl && !rawUrl?.startsWith("blob:");
+  const pendingUrl =
+    resolvedUrl && visibleUrl && resolvedUrl !== visibleUrl ? resolvedUrl : undefined;
 
   useLayoutEffect(() => {
     if (!resolvedUrl) {
+      setVisibleUrl(undefined);
+      setIsLoaded(false);
+      setHasError(false);
       return;
     }
 
-    setIsLoaded(false);
     setHasError(false);
-  }, [resolvedUrl]);
+
+    if (!visibleUrl) {
+      setVisibleUrl(resolvedUrl);
+      setIsLoaded(false);
+    }
+  }, [resolvedUrl, visibleUrl]);
 
   useLayoutEffect(() => {
     const img = imageRef.current;
     if (img?.complete && img.naturalWidth > 0) {
       setIsLoaded(true);
     }
-  }, [resolvedUrl]);
+  }, [visibleUrl]);
 
-  const handleImageLoad = () => {
+  const promoteUrl = (url: string) => {
+    setVisibleUrl(url);
     setIsLoaded(true);
   };
 
-  if (resolvedUrl && !showPlaceholderImage) {
+  if ((resolvedUrl || visibleUrl) && !showPlaceholderImage) {
     return (
       <div className={`relative overflow-hidden bg-zinc-100 ${className}`}>
         <div
@@ -109,14 +121,28 @@ export function ProductImageDisplay({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           ref={imageRef}
-          src={resolvedUrl}
+          src={visibleUrl ?? resolvedUrl}
           alt={displayImage.alt || "Product image"}
           className={`relative z-[2] h-full w-full object-cover transition-all duration-500 ease-out group-hover:scale-[1.04] ${
-            isLoaded ? "opacity-100" : "opacity-0"
+            isLoaded || Boolean(visibleUrl) ? "opacity-100" : "opacity-0"
           }`}
-          onLoad={handleImageLoad}
+          onLoad={() => setIsLoaded(true)}
           onError={() => setHasError(true)}
         />
+        {pendingUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={pendingUrl}
+            alt=""
+            aria-hidden
+            className="pointer-events-none absolute h-0 w-0 opacity-0"
+            onLoad={() => promoteUrl(pendingUrl)}
+            onError={() => {
+              setVisibleUrl(pendingUrl);
+              setHasError(true);
+            }}
+          />
+        ) : null}
       </div>
     );
   }

@@ -55,25 +55,36 @@ class ResolveStorefrontConfigurationOptions
             ->values();
         $configurationAttributeIds = $configAttributes->pluck('id')->all();
 
-        $matching = $this->filterMatchingConfigurations(
-            $configurations,
-            $selections,
-            $configurationAttributeIds,
-        );
-
-        if ($inStockOnly) {
-            $matching = $matching->filter(fn (array $row) => $row['in_stock'])->values();
-        }
-
-        $allowedFromConfigs = $this->allowedValuesFromConfigurations($configAttributes, $matching);
         $allowedFromDeps = $type instanceof ProductType
             ? $this->dependencyResolver->allowedValues($type, $selections, $product)
             : [];
 
+        // Peer-option allowlists: for attribute A, match using selections excluding A
+        // so selecting Light Blue does not disable Royal Blue. Exact match still uses
+        // the full selection below.
         $allowed = [];
         foreach ($configAttributes as $attribute) {
-            $attributeId = $attribute['id'];
-            $configAllowed = $allowedFromConfigs[$attributeId] ?? [];
+            $attributeId = (string) $attribute['id'];
+            $selectionsWithoutAttribute = $selections;
+            unset($selectionsWithoutAttribute[$attributeId]);
+
+            $matchingForAttribute = $this->filterMatchingConfigurations(
+                $configurations,
+                $selectionsWithoutAttribute,
+                $configurationAttributeIds,
+            );
+
+            if ($inStockOnly) {
+                $matchingForAttribute = $matchingForAttribute
+                    ->filter(fn (array $row) => $row['in_stock'])
+                    ->values();
+            }
+
+            $configAllowed = $this->allowedValuesFromConfigurations(
+                collect([$attribute]),
+                $matchingForAttribute,
+            )[$attributeId] ?? [];
+
             $depAllowed = $allowedFromDeps[$attributeId] ?? null;
 
             if ($depAllowed === null) {

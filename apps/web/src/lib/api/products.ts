@@ -50,6 +50,11 @@ export type ApiCatalogProductCard = ApiCatalogStockSource & {
   is_purchasable?: boolean;
   availability_status?: "available" | "out_of_stock" | "unavailable";
   unavailability_reason?: string | null;
+  /**
+   * Authoritative Variant-path signal from ProductPurchasabilityPolicy.
+   * True means the customer must pick a concrete configuration before cart.
+   */
+  requires_variant_selection?: boolean;
   id: string;
   slug: string;
   name: string;

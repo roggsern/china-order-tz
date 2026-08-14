@@ -87,7 +87,69 @@ class CustomerProductCardAvailabilityTest extends TestCase
             ->assertJsonPath('data.0.slug', $product->slug)
             ->assertJsonPath('data.0.is_purchasable', true)
             ->assertJsonPath('data.0.availability_status', 'available')
+            ->assertJsonPath('data.0.requires_variant_selection', true)
             ->assertJsonMissingPath('data.0.unavailability_reason');
+    }
+
+    public function test_listing_card_simple_product_does_not_require_variant_selection(): void
+    {
+        $this->seed(CommerceChannelSeeder::class);
+        $this->seed(\Database\Seeders\CategorySeeder::class);
+
+        $china = CommerceChannel::query()
+            ->where('code', CommerceChannelCode::ChinaImport->value)
+            ->firstOrFail();
+        $phones = Category::query()->where('slug', 'electronics-phones')->firstOrFail();
+
+        $product = Product::factory()->create([
+            'slug' => 'card-simple-no-variant',
+            'category_id' => $phones->id,
+            'store_id' => null,
+            'commerce_channel_id' => $china->id,
+            'fulfillment_source' => CommerceChannelCode::ChinaImport->fulfillmentSource(),
+            'is_active' => true,
+            'lifecycle_status' => ProductLifecycleStatus::Active,
+            'visibility' => ProductVisibility::Public,
+            'is_demo' => false,
+            'price' => 45000,
+        ]);
+
+        \App\Models\ProductShippingOption::factory()->air(9000)->create([
+            'product_id' => $product->id,
+            'is_available' => true,
+        ]);
+
+        \App\Models\ChinaCommercialStock::query()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => null,
+            'available_quantity' => 8,
+            'reserved_quantity' => 0,
+            'ordered_quantity' => 0,
+        ]);
+
+        $this->getJson('/api/v1/products')
+            ->assertOk()
+            ->assertJsonPath('data.0.slug', $product->slug)
+            ->assertJsonPath('data.0.is_purchasable', true)
+            ->assertJsonPath('data.0.availability_status', 'available')
+            ->assertJsonPath('data.0.requires_variant_selection', false);
+    }
+
+    public function test_listing_card_unavailable_variant_path_still_requires_selection(): void
+    {
+        ['product' => $product] = CatalogCartFixture::purchasable(22000, 5);
+        $product->update([
+            'slug' => 'card-unavailable-variant-path',
+            'lifecycle_status' => ProductLifecycleStatus::OutOfStock,
+        ]);
+
+        // OutOfStock lifecycle is storefront-visible but not listing-purchasable.
+        $this->getJson("/api/v1/products/{$product->slug}")
+            ->assertOk()
+            ->assertJsonPath('data.slug', $product->slug)
+            ->assertJsonPath('data.is_purchasable', false)
+            ->assertJsonPath('data.availability_status', 'unavailable')
+            ->assertJsonPath('data.requires_variant_selection', true);
     }
 
     public function test_listing_query_results_unchanged_except_availability_fields(): void

@@ -10,6 +10,7 @@ use App\Models\CatalogAttribute;
 use App\Models\CatalogAttributeOption;
 use App\Models\CatalogProductType;
 use App\Models\Category;
+use App\Models\ChinaCommercialStock;
 use App\Models\Department;
 use App\Models\Inventory;
 use App\Models\Product;
@@ -88,16 +89,19 @@ class CustomerProductConfigurationTest extends TestCase
         Sanctum::actingAs(User::factory()->create());
 
         $fashion = ProductType::query()->where('slug', 'fashion')->firstOrFail();
-        $product = Product::factory()->create([
+        $product = Product::factory()->tzLocal()->create([
             'product_type_id' => $fashion->id,
-            'price' => 20000,
+            'price' => 0,
             'is_active' => true,
+            'is_demo' => false,
+            'lifecycle_status' => ProductLifecycleStatus::Active,
+            'visibility' => ProductVisibility::Public,
         ]);
 
         $config = ProductVariant::factory()->create([
             'product_id' => $product->id,
             'is_active' => true,
-            'price' => 22000,
+            'price' => null,
         ]);
         VariantPrice::query()->create([
             'product_variant_id' => $config->id,
@@ -170,11 +174,14 @@ class CustomerProductConfigurationTest extends TestCase
         $this->seed(ProductTypeSeeder::class);
 
         $fashion = ProductType::query()->where('slug', 'fashion')->firstOrFail();
-        $product = Product::factory()->create([
+        $product = Product::factory()->tzLocal()->create([
             'product_type_id' => $fashion->id,
-            'price' => 25000,
+            'price' => 0,
             'slug' => 'fashion-deps',
             'is_active' => true,
+            'is_demo' => false,
+            'lifecycle_status' => ProductLifecycleStatus::Active,
+            'visibility' => ProductVisibility::Public,
         ]);
 
         $size = ProductAttribute::query()->where('slug', 'size')->firstOrFail();
@@ -189,11 +196,25 @@ class CustomerProductConfigurationTest extends TestCase
             'sku' => 'FASH-M-BLACK',
             'name' => 'M / Black',
             'is_active' => true,
+            'price' => null,
         ]);
         $inStock->attributeValues()->sync([$m->id, $black->id]);
-        Inventory::factory()->forVariant($inStock)->create([
-            'quantity' => 4,
-            'reserved_quantity' => 0,
+        VariantPrice::query()->create([
+            'product_variant_id' => $inStock->id,
+            'price_type' => VariantPriceType::Retail,
+            'currency' => 'TZS',
+            'amount' => 25000,
+            'minimum_quantity' => 1,
+            'is_active' => true,
+        ]);
+        VariantInventory::query()->create([
+            'product_variant_id' => $inStock->id,
+            'warehouse_code' => 'MAIN',
+            'on_hand' => 4,
+            'reserved' => 0,
+            'reorder_level' => 1,
+            'safety_stock' => 0,
+            'is_active' => true,
         ]);
 
         $oos = ProductVariant::factory()->create([
@@ -201,11 +222,25 @@ class CustomerProductConfigurationTest extends TestCase
             'sku' => 'FASH-M-RED',
             'name' => 'M / Red',
             'is_active' => true,
+            'price' => null,
         ]);
         $oos->attributeValues()->sync([$m->id, $red->id]);
-        Inventory::factory()->forVariant($oos)->create([
-            'quantity' => 0,
-            'reserved_quantity' => 0,
+        VariantPrice::query()->create([
+            'product_variant_id' => $oos->id,
+            'price_type' => VariantPriceType::Retail,
+            'currency' => 'TZS',
+            'amount' => 25000,
+            'minimum_quantity' => 1,
+            'is_active' => true,
+        ]);
+        VariantInventory::query()->create([
+            'product_variant_id' => $oos->id,
+            'warehouse_code' => 'MAIN',
+            'on_hand' => 0,
+            'reserved' => 0,
+            'reorder_level' => 1,
+            'safety_stock' => 0,
+            'is_active' => true,
         ]);
 
         $xlBlack = ProductVariant::factory()->create([
@@ -213,11 +248,25 @@ class CustomerProductConfigurationTest extends TestCase
             'sku' => 'FASH-XL-BLACK',
             'name' => 'XL / Black',
             'is_active' => true,
+            'price' => null,
         ]);
         $xlBlack->attributeValues()->sync([$xl->id, $black->id]);
-        Inventory::factory()->forVariant($xlBlack)->create([
-            'quantity' => 2,
-            'reserved_quantity' => 0,
+        VariantPrice::query()->create([
+            'product_variant_id' => $xlBlack->id,
+            'price_type' => VariantPriceType::Retail,
+            'currency' => 'TZS',
+            'amount' => 27000,
+            'minimum_quantity' => 1,
+            'is_active' => true,
+        ]);
+        VariantInventory::query()->create([
+            'product_variant_id' => $xlBlack->id,
+            'warehouse_code' => 'MAIN',
+            'on_hand' => 2,
+            'reserved' => 0,
+            'reorder_level' => 1,
+            'safety_stock' => 0,
+            'is_active' => true,
         ]);
 
         // Out-of-stock-only color (red) is not offered as an available option.
@@ -342,6 +391,13 @@ class CustomerProductConfigurationTest extends TestCase
             'safety_stock' => 0,
             'is_active' => true,
         ]);
+        ChinaCommercialStock::query()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => $black128->id,
+            'available_quantity' => 5,
+            'reserved_quantity' => 0,
+            'ordered_quantity' => 0,
+        ]);
 
         $white256 = ProductVariant::factory()->create([
             'product_id' => $product->id,
@@ -378,6 +434,13 @@ class CustomerProductConfigurationTest extends TestCase
             'reorder_level' => 1,
             'safety_stock' => 0,
             'is_active' => true,
+        ]);
+        ChinaCommercialStock::query()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => $white256->id,
+            'available_quantity' => 3,
+            'reserved_quantity' => 0,
+            'ordered_quantity' => 0,
         ]);
 
         $schema = $this->getJson("/api/v1/products/{$product->slug}/configuration");
@@ -555,6 +618,13 @@ class CustomerProductConfigurationTest extends TestCase
             'safety_stock' => 0,
             'is_active' => true,
         ]);
+        ChinaCommercialStock::query()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => $black256->id,
+            'available_quantity' => 4,
+            'reserved_quantity' => 0,
+            'ordered_quantity' => 0,
+        ]);
 
         $white128 = ProductVariant::factory()->create([
             'product_id' => $product->id,
@@ -586,6 +656,13 @@ class CustomerProductConfigurationTest extends TestCase
             'reorder_level' => 1,
             'safety_stock' => 0,
             'is_active' => true,
+        ]);
+        ChinaCommercialStock::query()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => $white128->id,
+            'available_quantity' => 2,
+            'reserved_quantity' => 0,
+            'ordered_quantity' => 0,
         ]);
 
         $schema = $this->getJson("/api/v1/products/{$product->slug}/configuration");
@@ -619,5 +696,233 @@ class CustomerProductConfigurationTest extends TestCase
         $quote->assertOk()
             ->assertJsonPath('data.configuration_id', $black256->id)
             ->assertJsonPath('data.unit_price', '2000000.00');
+    }
+
+    public function test_peer_color_and_size_options_remain_selectable_after_partial_selection(): void
+    {
+        $this->seed(ProductTypeSeeder::class);
+
+        $fashion = ProductType::query()->where('slug', 'fashion')->firstOrFail();
+        $product = Product::factory()->tzLocal()->create([
+            'product_type_id' => $fashion->id,
+            'price' => 0,
+            'slug' => 'fashion-peer-options',
+            'is_active' => true,
+            'lifecycle_status' => ProductLifecycleStatus::Active,
+            'visibility' => ProductVisibility::Public,
+            'is_demo' => false,
+        ]);
+
+        $size = ProductAttribute::query()->where('slug', 'size')->firstOrFail();
+        $color = ProductAttribute::query()->where('slug', 'color')->firstOrFail();
+        $m = ProductAttributeValue::query()->where('product_attribute_id', $size->id)->where('slug', 'm')->firstOrFail();
+        $xl = ProductAttributeValue::query()->where('product_attribute_id', $size->id)->where('slug', 'xl')->firstOrFail();
+        $black = ProductAttributeValue::query()->where('product_attribute_id', $color->id)->where('slug', 'black')->firstOrFail();
+        $red = ProductAttributeValue::query()->where('product_attribute_id', $color->id)->where('slug', 'red')->firstOrFail();
+
+        $mBlack = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'sku' => 'PEER-M-BLACK',
+            'name' => 'M / Black',
+            'is_active' => true,
+            'price' => null,
+        ]);
+        $mBlack->attributeValues()->sync([$m->id, $black->id]);
+        VariantPrice::query()->create([
+            'product_variant_id' => $mBlack->id,
+            'price_type' => VariantPriceType::Retail,
+            'currency' => 'TZS',
+            'amount' => 25000,
+            'minimum_quantity' => 1,
+            'is_active' => true,
+        ]);
+        VariantInventory::query()->create([
+            'product_variant_id' => $mBlack->id,
+            'warehouse_code' => 'MAIN',
+            'on_hand' => 4,
+            'reserved' => 0,
+            'reorder_level' => 1,
+            'safety_stock' => 0,
+            'is_active' => true,
+        ]);
+
+        $mRed = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'sku' => 'PEER-M-RED',
+            'name' => 'M / Red',
+            'is_active' => true,
+            'price' => null,
+        ]);
+        $mRed->attributeValues()->sync([$m->id, $red->id]);
+        VariantPrice::query()->create([
+            'product_variant_id' => $mRed->id,
+            'price_type' => VariantPriceType::Retail,
+            'currency' => 'TZS',
+            'amount' => 25000,
+            'minimum_quantity' => 1,
+            'is_active' => true,
+        ]);
+        VariantInventory::query()->create([
+            'product_variant_id' => $mRed->id,
+            'warehouse_code' => 'MAIN',
+            'on_hand' => 3,
+            'reserved' => 0,
+            'reorder_level' => 1,
+            'safety_stock' => 0,
+            'is_active' => true,
+        ]);
+
+        $xlBlack = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'sku' => 'PEER-XL-BLACK',
+            'name' => 'XL / Black',
+            'is_active' => true,
+            'price' => null,
+        ]);
+        $xlBlack->attributeValues()->sync([$xl->id, $black->id]);
+        VariantPrice::query()->create([
+            'product_variant_id' => $xlBlack->id,
+            'price_type' => VariantPriceType::Retail,
+            'currency' => 'TZS',
+            'amount' => 27000,
+            'minimum_quantity' => 1,
+            'is_active' => true,
+        ]);
+        VariantInventory::query()->create([
+            'product_variant_id' => $xlBlack->id,
+            'warehouse_code' => 'MAIN',
+            'on_hand' => 2,
+            'reserved' => 0,
+            'reorder_level' => 1,
+            'safety_stock' => 0,
+            'is_active' => true,
+        ]);
+
+        // XL / Red intentionally missing — incompatible when Size=XL and Color=Red.
+
+        // A. Color selected → peer colors remain selectable where eligible.
+        $withBlack = $this->getJson(
+            "/api/v1/products/{$product->slug}/configuration?selections[{$color->id}]={$black->id}"
+        );
+        $withBlack->assertOk();
+        $allowedColorsWithBlack = $withBlack->json("data.allowed_value_ids.{$color->id}");
+        $this->assertContains($black->id, $allowedColorsWithBlack);
+        $this->assertContains($red->id, $allowedColorsWithBlack);
+        $this->assertNull($withBlack->json('data.matched_configuration_id'));
+        $this->assertFalse((bool) $withBlack->json('data.is_complete'));
+
+        // B. Size selected → peer sizes remain selectable where eligible.
+        $withM = $this->getJson(
+            "/api/v1/products/{$product->slug}/configuration?selections[{$size->id}]={$m->id}"
+        );
+        $withM->assertOk();
+        $allowedSizesWithM = $withM->json("data.allowed_value_ids.{$size->id}");
+        $this->assertContains($m->id, $allowedSizesWithM);
+        $this->assertContains($xl->id, $allowedSizesWithM);
+
+        // Color → Size cascade still applies for the selected color.
+        $allowedSizesForBlack = $withBlack->json("data.allowed_value_ids.{$size->id}");
+        $this->assertContains($m->id, $allowedSizesForBlack);
+        $this->assertContains($xl->id, $allowedSizesForBlack);
+
+        // Size → Color compatibility: XL only exists with Black.
+        $withXl = $this->getJson(
+            "/api/v1/products/{$product->slug}/configuration?selections[{$size->id}]={$xl->id}"
+        );
+        $withXl->assertOk();
+        $allowedColorsForXl = $withXl->json("data.allowed_value_ids.{$color->id}");
+        $this->assertContains($black->id, $allowedColorsForXl);
+        $this->assertNotContains($red->id, $allowedColorsForXl);
+
+        // Exact match still requires the full selection.
+        $exact = $this->getJson(
+            "/api/v1/products/{$product->slug}/configuration?selections[{$color->id}]={$black->id}&selections[{$size->id}]={$m->id}"
+        );
+        $exact->assertOk()
+            ->assertJsonPath('data.matched_configuration_id', $mBlack->id)
+            ->assertJsonPath('data.is_complete', true)
+            ->assertJsonPath('data.is_in_stock', true);
+    }
+
+    public function test_peer_option_allowlists_still_exclude_out_of_stock_combinations(): void
+    {
+        $this->seed(ProductTypeSeeder::class);
+
+        $fashion = ProductType::query()->where('slug', 'fashion')->firstOrFail();
+        $product = Product::factory()->tzLocal()->create([
+            'product_type_id' => $fashion->id,
+            'price' => 0,
+            'slug' => 'fashion-peer-oos',
+            'is_active' => true,
+            'lifecycle_status' => ProductLifecycleStatus::Active,
+            'visibility' => ProductVisibility::Public,
+            'is_demo' => false,
+        ]);
+
+        $size = ProductAttribute::query()->where('slug', 'size')->firstOrFail();
+        $color = ProductAttribute::query()->where('slug', 'color')->firstOrFail();
+        $m = ProductAttributeValue::query()->where('product_attribute_id', $size->id)->where('slug', 'm')->firstOrFail();
+        $black = ProductAttributeValue::query()->where('product_attribute_id', $color->id)->where('slug', 'black')->firstOrFail();
+        $red = ProductAttributeValue::query()->where('product_attribute_id', $color->id)->where('slug', 'red')->firstOrFail();
+
+        $mBlack = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'sku' => 'PEER-OOS-M-BLACK',
+            'name' => 'M / Black',
+            'is_active' => true,
+            'price' => null,
+        ]);
+        $mBlack->attributeValues()->sync([$m->id, $black->id]);
+        VariantPrice::query()->create([
+            'product_variant_id' => $mBlack->id,
+            'price_type' => VariantPriceType::Retail,
+            'currency' => 'TZS',
+            'amount' => 25000,
+            'minimum_quantity' => 1,
+            'is_active' => true,
+        ]);
+        VariantInventory::query()->create([
+            'product_variant_id' => $mBlack->id,
+            'warehouse_code' => 'MAIN',
+            'on_hand' => 4,
+            'reserved' => 0,
+            'reorder_level' => 1,
+            'safety_stock' => 0,
+            'is_active' => true,
+        ]);
+
+        $mRed = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'sku' => 'PEER-OOS-M-RED',
+            'name' => 'M / Red',
+            'is_active' => true,
+            'price' => null,
+        ]);
+        $mRed->attributeValues()->sync([$m->id, $red->id]);
+        VariantPrice::query()->create([
+            'product_variant_id' => $mRed->id,
+            'price_type' => VariantPriceType::Retail,
+            'currency' => 'TZS',
+            'amount' => 25000,
+            'minimum_quantity' => 1,
+            'is_active' => true,
+        ]);
+        VariantInventory::query()->create([
+            'product_variant_id' => $mRed->id,
+            'warehouse_code' => 'MAIN',
+            'on_hand' => 0,
+            'reserved' => 0,
+            'reorder_level' => 1,
+            'safety_stock' => 0,
+            'is_active' => true,
+        ]);
+
+        $withBlack = $this->getJson(
+            "/api/v1/products/{$product->slug}/configuration?selections[{$color->id}]={$black->id}"
+        );
+        $withBlack->assertOk();
+        $allowedColors = $withBlack->json("data.allowed_value_ids.{$color->id}");
+        $this->assertContains($black->id, $allowedColors);
+        $this->assertNotContains($red->id, $allowedColors);
     }
 }

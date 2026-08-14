@@ -266,6 +266,17 @@ test("detail mapping preserves purchasability availability fields", () => {
   assert.equal(mapped.unavailabilityReason, "missing_inventory_policy");
 });
 
+test("detail mapping preserves requires_variant_selection", () => {
+  const mapped = mapApiProductDetailToCatalogProduct({
+    ...BASE_PRODUCT,
+    is_purchasable: true,
+    availability_status: "available",
+    requires_variant_selection: true,
+  });
+
+  assert.equal(mapped.requiresVariantSelection, true);
+});
+
 test("detail mapping defaults purchasable product to available fields", () => {
   const mapped = mapApiProductDetailToCatalogProduct({
     ...BASE_PRODUCT,

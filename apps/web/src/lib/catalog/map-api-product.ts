@@ -238,6 +238,7 @@ export function mapApiProductCardToCatalogProduct(product: ApiCatalogProductCard
     featured: product.is_featured,
     status: "active",
     isPurchasable: product.is_purchasable,
+    requiresVariantSelection: product.requires_variant_selection,
     availabilityStatus: product.availability_status as ProductAvailabilityStatus | undefined,
     unavailabilityReason: product.unavailability_reason as ProductUnavailabilityReason | undefined,
   };

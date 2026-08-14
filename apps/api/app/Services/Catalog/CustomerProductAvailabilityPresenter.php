@@ -23,17 +23,20 @@ final class CustomerProductAvailabilityPresenter
      * @return array{
      *     is_purchasable: bool,
      *     availability_status: string,
+     *     requires_variant_selection: bool,
      *     unavailability_reason?: string
      * }
      */
     public function present(Product $product): array
     {
         $evaluation = $this->purchasabilityPolicy->evaluate($product);
+        $requiresVariantSelection = $evaluation->path === PurchasabilityPath::Variant;
 
         if (! $evaluation->isPurchasable) {
             $payload = [
                 'is_purchasable' => false,
                 'availability_status' => CustomerProductAvailabilityStatus::Unavailable->value,
+                'requires_variant_selection' => $requiresVariantSelection,
             ];
 
             $reason = $this->resolveUnavailabilityReason($evaluation->errors);
@@ -48,12 +51,14 @@ final class CustomerProductAvailabilityPresenter
             return [
                 'is_purchasable' => true,
                 'availability_status' => CustomerProductAvailabilityStatus::OutOfStock->value,
+                'requires_variant_selection' => $requiresVariantSelection,
             ];
         }
 
         return [
             'is_purchasable' => true,
             'availability_status' => CustomerProductAvailabilityStatus::Available->value,
+            'requires_variant_selection' => $requiresVariantSelection,
         ];
     }
 

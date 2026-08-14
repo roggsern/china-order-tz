@@ -12,6 +12,7 @@ trait PresentsCustomerCatalogAvailability
      * @return array{
      *     is_purchasable: bool,
      *     availability_status: string,
+     *     requires_variant_selection: bool,
      *     unavailability_reason?: string
      * }
      */

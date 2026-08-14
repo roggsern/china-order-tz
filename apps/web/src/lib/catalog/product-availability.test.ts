@@ -4,6 +4,7 @@ import { mapApiProductCardToCatalogProduct } from "./map-api-product";
 import {
   isProductCardPurchaseDisabled,
   isProductPurchaseUnavailable,
+  productCardRequiresOptionsNavigation,
   resolveProductCardAvailabilityOverlay,
   resolvePurchaseDisabledLabel,
 } from "./product-availability";
@@ -141,6 +142,48 @@ test("card mapping preserves listing availability fields", () => {
   assert.equal(mapped.unavailabilityReason, "missing_inventory_policy");
 });
 
+test("card mapping preserves requires_variant_selection authority", () => {
+  const configurable = mapApiProductCardToCatalogProduct({
+    id: "019f99db-3b6b-720d-b5d6-f4666a6444ed",
+    slug: "iphone-16-pro",
+    name: "iPhone 16 Pro",
+    short_description: "Demo",
+    price: "3499000",
+    compare_at_price: null,
+    is_featured: false,
+    primary_image: null,
+    category: null,
+    brand: null,
+    average_rating: 0,
+    review_count: 0,
+    is_purchasable: true,
+    availability_status: "available",
+    requires_variant_selection: true,
+  });
+
+  assert.equal(configurable.requiresVariantSelection, true);
+
+  const simple = mapApiProductCardToCatalogProduct({
+    id: "019f99db-aaaa-720d-b5d6-f4666a6444ed",
+    slug: "simple-phone",
+    name: "Simple Phone",
+    short_description: "Phone",
+    price: "1000",
+    compare_at_price: null,
+    is_featured: false,
+    primary_image: null,
+    category: null,
+    brand: null,
+    average_rating: 0,
+    review_count: 0,
+    is_purchasable: true,
+    availability_status: "available",
+    requires_variant_selection: false,
+  });
+
+  assert.equal(simple.requiresVariantSelection, false);
+});
+
 test("available purchasable card mapping unchanged aside from availability fields", () => {
   const mapped = mapApiProductCardToCatalogProduct({
     id: "019f99db-aaaa-720d-b5d6-f4666a6444ed",
@@ -165,4 +208,16 @@ test("available purchasable card mapping unchanged aside from availability field
   assert.equal(mapped.availabilityStatus, "available");
   assert.equal(isProductCardPurchaseDisabled(mapped), false);
   assert.equal(resolveProductCardAvailabilityOverlay(mapped), null);
+});
+
+test("configurable cards require options navigation; simple cards do not", () => {
+  assert.equal(
+    productCardRequiresOptionsNavigation({ requiresVariantSelection: true }),
+    true,
+  );
+  assert.equal(
+    productCardRequiresOptionsNavigation({ requiresVariantSelection: false }),
+    false,
+  );
+  assert.equal(productCardRequiresOptionsNavigation({}), false);
 });
