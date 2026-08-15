@@ -45,7 +45,7 @@ describe("catalog product type scope", () => {
     { id: "type-other-store", subcategoryId: "other-store-category", name: "Other Type" },
   ];
 
-  it("shows Wigs product type when ROVI Wigs category is selected", () => {
+  it("shows Wigs product type when ROVI Wigs leaf category is selected alone", () => {
     const matches = filterCatalogProductTypesForCategoryScope({
       productTypes,
       categoryId: "wigs-root",
@@ -59,7 +59,7 @@ describe("catalog product type scope", () => {
     );
   });
 
-  it("shows leaf product types when a TZ subcategory is selected", () => {
+  it("shows only leaf product types when a TZ subcategory leaf is selected", () => {
     const matches = filterCatalogProductTypesForCategoryScope({
       productTypes,
       categoryId: "wigs-root",
@@ -68,12 +68,12 @@ describe("catalog product type scope", () => {
     });
 
     assert.deepEqual(
-      matches.map((type) => type.id).sort(),
-      ["type-lace", "type-wigs"].sort(),
+      matches.map((type) => type.id),
+      ["type-lace"],
     );
   });
 
-  it("includes child product types when parent category is selected", () => {
+  it("returns no product types when a structural parent is selected", () => {
     const matches = filterCatalogProductTypesForCategoryScope({
       productTypes,
       categoryId: "wigs-root",
@@ -81,9 +81,59 @@ describe("catalog product type scope", () => {
       categories,
     });
 
+    assert.deepEqual(matches.map((type) => type.id), []);
+  });
+
+  it("scopes DC UPS leaf CPTs without parent Networking types", () => {
+    const networking = {
+      id: "np",
+      name: "Networking & Power",
+      slug: "computers-office-networking-power",
+      description: "",
+      gradient: "",
+      icon: "",
+      parentId: null,
+      departmentId: "computers-office",
+      origin: "china" as const,
+      isActive: false,
+      sortOrder: 1,
+      productsCount: 0,
+      selectable: false,
+      hasActiveChildren: true,
+    };
+    const dcLeaf = {
+      id: "dc",
+      name: "DC UPS / Router Backup",
+      slug: "computers-office-networking-power-dc-ups-router-backup",
+      description: "",
+      gradient: "",
+      icon: "",
+      parentId: "np",
+      departmentId: "computers-office",
+      origin: "china" as const,
+      isActive: true,
+      sortOrder: 1,
+      productsCount: 0,
+      selectable: true,
+      hasActiveChildren: false,
+    };
+
+    const types = [
+      { id: "mini", subcategoryId: "dc", name: "Mini DC UPS" },
+      { id: "dc-ups", subcategoryId: "dc", name: "DC UPS" },
+      { id: "other", subcategoryId: "np", name: "Should not appear" },
+    ];
+
+    const matches = filterCatalogProductTypesForCategoryScope({
+      productTypes: types,
+      categoryId: "np",
+      subcategoryId: "dc",
+      categories: [networking, dcLeaf],
+    });
+
     assert.deepEqual(
-      matches.map((type) => type.id).sort(),
-      ["type-lace", "type-wigs"].sort(),
+      matches.map((type) => type.name).sort(),
+      ["DC UPS", "Mini DC UPS"],
     );
   });
 

@@ -17,6 +17,8 @@ export type AdminAsyncOption = {
   label: string;
   description?: string;
   indent?: number;
+  /** Structural / inactive nodes: visible for navigation, not selectable. */
+  disabled?: boolean;
 };
 
 type LoadResult = {
@@ -111,10 +113,14 @@ export function AdminAsyncSearchSelect({
   }, [open]);
 
   useEffect(() => {
-    setHighlightIndex(0);
+    const firstEnabled = options.findIndex((option) => !option.disabled);
+    setHighlightIndex(firstEnabled >= 0 ? firstEnabled : 0);
   }, [options, open]);
 
   const selectOption = (option: AdminAsyncOption) => {
+    if (option.disabled) {
+      return;
+    }
     onChange(option.id, option);
     setQuery("");
     setOpen(false);
@@ -123,6 +129,20 @@ export function AdminAsyncSearchSelect({
   const clearSelection = () => {
     onChange("", null);
     setQuery("");
+  };
+
+  const moveHighlight = (direction: 1 | -1) => {
+    if (options.length === 0) {
+      return;
+    }
+    let next = highlightIndex;
+    for (let step = 0; step < options.length; step += 1) {
+      next = (next + direction + options.length) % options.length;
+      if (!options[next]?.disabled) {
+        setHighlightIndex(next);
+        return;
+      }
+    }
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -134,10 +154,10 @@ export function AdminAsyncSearchSelect({
 
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setHighlightIndex((index) => Math.min(index + 1, Math.max(options.length - 1, 0)));
+      moveHighlight(1);
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
-      setHighlightIndex((index) => Math.max(index - 1, 0));
+      moveHighlight(-1);
     } else if (event.key === "Enter" && options[highlightIndex]) {
       event.preventDefault();
       selectOption(options[highlightIndex]);
@@ -200,14 +220,28 @@ export function AdminAsyncSearchSelect({
               <li className="px-3 py-2 text-sm text-zinc-500">{error ?? emptyMessage}</li>
             ) : null}
             {options.map((option, index) => (
-              <li key={option.id} role="option" aria-selected={value === option.id}>
+              <li
+                key={option.id}
+                role="option"
+                aria-selected={value === option.id}
+                aria-disabled={option.disabled || undefined}
+              >
                 <button
                   type="button"
+                  disabled={option.disabled}
                   className={`flex w-full flex-col px-3 py-2 text-left text-sm transition ${
-                    index === highlightIndex ? "bg-[#c9a227]/15" : "hover:bg-zinc-50"
-                  } ${value === option.id ? "font-semibold text-zinc-900" : "text-zinc-700"}`}
+                    option.disabled
+                      ? "cursor-default text-zinc-400"
+                      : index === highlightIndex
+                        ? "bg-[#c9a227]/15 text-zinc-700"
+                        : "text-zinc-700 hover:bg-zinc-50"
+                  } ${!option.disabled && value === option.id ? "font-semibold text-zinc-900" : ""}`}
                   style={{ paddingLeft: `${12 + (option.indent ?? 0) * 14}px` }}
-                  onMouseEnter={() => setHighlightIndex(index)}
+                  onMouseEnter={() => {
+                    if (!option.disabled) {
+                      setHighlightIndex(index);
+                    }
+                  }}
                   onClick={() => selectOption(option)}
                 >
                   <span>{option.label}</span>

@@ -22,7 +22,9 @@ class GetAdminCategoriesAction
 
         $query = Category::query()
             ->with(['department', 'productType', 'parent', 'store'])
-            ->withCount('products');
+            ->withCount('products')
+            // Matches CatalogLeafCategoryRules: active, non-deleted children only.
+            ->withCount(['children as active_children_count']);
 
         if (request()->boolean('trashed')) {
             $query->onlyTrashed();

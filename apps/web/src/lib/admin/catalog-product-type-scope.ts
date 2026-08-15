@@ -1,4 +1,5 @@
 import type { AdminCategory } from "@/lib/api/admin-catalog";
+import { isSelectableCategoryLeaf } from "@/lib/admin/catalog-selector-utils";
 
 /** Category id plus every parent up the tree (leaf → root). */
 export function categoryAncestorIds(
@@ -27,9 +28,14 @@ export function productTypeMatchesCategoryScope(
     return false;
   }
 
-  return categoryAncestorIds(scopeCategoryId, categories).has(typeSubcategoryId);
+  // CPT must attach to the selected leaf itself (not an ancestor/descendant).
+  return typeSubcategoryId === scopeCategoryId && categories.some((c) => c.id === scopeCategoryId);
 }
 
+/**
+ * CPT choices for the resolved product classification leaf only.
+ * Structural (non-leaf) selections yield no types.
+ */
 export function filterCatalogProductTypesForCategoryScope<T extends { id: string; subcategoryId: string }>(input: {
   productTypes: T[];
   categoryId: string;
@@ -41,35 +47,19 @@ export function filterCatalogProductTypesForCategoryScope<T extends { id: string
     return [];
   }
 
+  const scopeCategory = input.categories.find((category) => category.id === scopeId);
+  if (!scopeCategory || !isSelectableCategoryLeaf(scopeCategory, input.categories)) {
+    return [];
+  }
+
   const allowedCategoryIds = new Set(input.categories.map((category) => category.id));
-  const childCategoryIds = input.subcategoryId
-    ? []
-    : input.categories
-        .filter((category) => category.parentId === scopeId)
-        .map((category) => category.id);
 
   return input.productTypes.filter((type) => {
     if (!allowedCategoryIds.has(type.subcategoryId)) {
       return false;
     }
 
-    if (type.subcategoryId === scopeId) {
-      return true;
-    }
-
-    if (childCategoryIds.includes(type.subcategoryId)) {
-      return true;
-    }
-
-    if (input.subcategoryId) {
-      return productTypeMatchesCategoryScope(
-        type.subcategoryId,
-        input.subcategoryId,
-        input.categories,
-      );
-    }
-
-    return false;
+    return type.subcategoryId === scopeId;
   });
 }
 

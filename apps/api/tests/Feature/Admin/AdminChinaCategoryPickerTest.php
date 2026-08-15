@@ -55,6 +55,142 @@ class AdminChinaCategoryPickerTest extends TestCase
 
         $this->assertContains($clothing->id, $ids);
         $this->assertContains($tShirts->id, $ids);
+
+        $rows = collect($response->json('data'))->keyBy('id');
+        $this->assertTrue($rows[$clothing->id]['has_active_children']);
+        $this->assertFalse($rows[$clothing->id]['selectable']);
+        $this->assertFalse($rows[$tShirts->id]['has_active_children']);
+        $this->assertTrue($rows[$tShirts->id]['selectable']);
+    }
+
+    public function test_networking_power_structural_parent_not_selectable_and_leaves_are(): void
+    {
+        $this->seed(DepartmentSeeder::class);
+        $this->seed(CategorySeeder::class);
+        $this->seed(SubcategorySeeder::class);
+
+        $department = Department::query()->where('slug', 'computers-office')->firstOrFail();
+        $parent = Category::query()->where('slug', 'computers-office-networking-power')->firstOrFail();
+        $dcUps = Category::query()
+            ->where('slug', 'computers-office-networking-power-dc-ups-router-backup')
+            ->firstOrFail();
+
+        $response = $this->getJson(
+            '/api/v1/admin/categories?origin=china&department_id='.$department->id.'&per_page=100',
+        )
+            ->assertOk()
+            ->json('data');
+
+        $rows = collect($response)->keyBy('slug');
+
+        $this->assertArrayHasKey('computers-office-networking-power', $rows->all());
+        $this->assertFalse($rows['computers-office-networking-power']['is_active']);
+        $this->assertTrue($rows['computers-office-networking-power']['has_active_children']);
+        $this->assertFalse($rows['computers-office-networking-power']['selectable']);
+
+        $this->assertTrue($rows['computers-office-networking-power-dc-ups-router-backup']['is_active']);
+        $this->assertFalse($rows['computers-office-networking-power-dc-ups-router-backup']['has_active_children']);
+        $this->assertTrue($rows['computers-office-networking-power-dc-ups-router-backup']['selectable']);
+        $this->assertSame($parent->id, $rows['computers-office-networking-power-dc-ups-router-backup']['parent_id']);
+        $this->assertSame($dcUps->id, $rows['computers-office-networking-power-dc-ups-router-backup']['id']);
+    }
+
+    public function test_deep_hierarchy_fixture_marks_only_deep_leaf_selectable(): void
+    {
+        $department = Department::factory()->create([
+            'slug' => 'deep-dept',
+            'name' => 'Deep Dept',
+            'is_active' => true,
+        ]);
+
+        $root = Category::factory()->create([
+            'department_id' => $department->id,
+            'parent_id' => null,
+            'origin' => CatalogOrigin::China,
+            'store_id' => null,
+            'name' => 'Root Structural',
+            'slug' => 'deep-dept-root',
+            'is_active' => false,
+        ]);
+        $mid = Category::factory()->create([
+            'department_id' => $department->id,
+            'parent_id' => $root->id,
+            'origin' => CatalogOrigin::China,
+            'store_id' => null,
+            'name' => 'Mid Structural',
+            'slug' => 'deep-dept-mid',
+            'is_active' => false,
+        ]);
+        $leaf = Category::factory()->create([
+            'department_id' => $department->id,
+            'parent_id' => $mid->id,
+            'origin' => CatalogOrigin::China,
+            'store_id' => null,
+            'name' => 'Deep Leaf',
+            'slug' => 'deep-dept-leaf',
+            'is_active' => true,
+        ]);
+
+        $response = $this->getJson(
+            '/api/v1/admin/categories?origin=china&department_id='.$department->id.'&per_page=100',
+        )
+            ->assertOk()
+            ->json('data');
+
+        $rows = collect($response)->keyBy('id');
+
+        $this->assertFalse($rows[$root->id]['has_active_children']);
+        $this->assertFalse($rows[$root->id]['selectable']);
+        $this->assertTrue($rows[$mid->id]['has_active_children']);
+        $this->assertFalse($rows[$mid->id]['selectable']);
+        $this->assertFalse($rows[$leaf->id]['has_active_children']);
+        $this->assertTrue($rows[$leaf->id]['selectable']);
+    }
+
+    public function test_bible_chrome_root_excluded_from_department_picker(): void
+    {
+        $this->seed(DepartmentSeeder::class);
+        $this->seed(CategorySeeder::class);
+
+        $department = Department::query()->where('slug', 'computers-office')->firstOrFail();
+        $bibleElectronics = Category::query()->where('slug', 'electronics')->firstOrFail();
+
+        $this->assertNull($bibleElectronics->department_id);
+
+        $response = $this->getJson(
+            '/api/v1/admin/categories?origin=china&department_id='.$department->id.'&per_page=100',
+        )
+            ->assertOk()
+            ->json('data');
+
+        $ids = collect($response)->pluck('id')->all();
+        $this->assertNotContains($bibleElectronics->id, $ids);
+        $this->assertTrue(
+            collect($response)->every(fn (array $row) => ($row['department_id'] ?? null) === $department->id),
+        );
+    }
+
+    public function test_soft_deleted_category_absent_from_picker_payload(): void
+    {
+        $this->seed(DepartmentSeeder::class);
+        $this->seed(CategorySeeder::class);
+        $this->seed(SubcategorySeeder::class);
+
+        $department = Department::query()->where('slug', 'phones-tablets')->firstOrFail();
+        $chargers = Category::query()
+            ->where('slug', 'phones-tablets-phone-accessories-chargers')
+            ->firstOrFail();
+        $chargers->delete();
+
+        $response = $this->getJson(
+            '/api/v1/admin/categories?origin=china&department_id='.$department->id.'&per_page=100',
+        )
+            ->assertOk()
+            ->json('data');
+
+        $slugs = collect($response)->pluck('slug')->all();
+        $this->assertNotContains('phones-tablets-phone-accessories-chargers', $slugs);
+        $this->assertNotContains('phones-tablets-chargers', $slugs);
     }
 
     public function test_china_department_is_active_filter_still_excludes_inactive_parents(): void

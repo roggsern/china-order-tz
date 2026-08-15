@@ -33,6 +33,8 @@ export type AdminApiCategory = {
   sort_order?: number;
   is_active?: boolean;
   products_count?: number;
+  has_active_children?: boolean;
+  selectable?: boolean;
   department?: {
     id: string;
     name: string;
@@ -357,6 +359,10 @@ export type AdminCategory = Category & {
   image?: string | null;
   sortOrder?: number;
   isActive: boolean;
+  /** True when this category has active, non-deleted children (structural). */
+  hasActiveChildren?: boolean;
+  /** Aligned with CatalogLeafCategoryRules::isLeaf when provided by API. */
+  selectable?: boolean;
   productsCount: number;
   deletedAt?: string | null;
 };
@@ -679,6 +685,12 @@ export function mapAdminApiCategory(category: AdminApiCategory): AdminCategory {
     image: category.image ?? null,
     sortOrder: category.sort_order ?? 0,
     isActive: category.is_active !== false,
+    hasActiveChildren:
+      typeof category.has_active_children === "boolean"
+        ? category.has_active_children
+        : undefined,
+    selectable:
+      typeof category.selectable === "boolean" ? category.selectable : undefined,
     productsCount: category.products_count ?? 0,
     deletedAt: category.deleted_at ?? null,
   };

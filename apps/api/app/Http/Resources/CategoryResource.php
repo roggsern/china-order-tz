@@ -23,6 +23,16 @@ class CategoryResource extends JsonResource
             'image' => $this->image,
             'sort_order' => $this->sort_order,
             'is_active' => $this->is_active,
+            // Picker semantics: structural navigation vs product classification leaf.
+            // Aligns with CatalogLeafCategoryRules::isLeaf (active + no active children).
+            'has_active_children' => $this->when(
+                isset($this->active_children_count),
+                fn () => (int) $this->active_children_count > 0,
+            ),
+            'selectable' => $this->when(
+                isset($this->active_children_count),
+                fn () => (bool) $this->is_active && (int) $this->active_children_count === 0,
+            ),
             'department' => $this->whenLoaded('department', fn () => [
                 'id' => $this->department?->id,
                 'name' => $this->department?->name,
