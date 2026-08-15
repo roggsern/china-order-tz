@@ -14,7 +14,7 @@ final class ChinaStorefrontMenuCache
 {
     public const TTL_SECONDS = 120;
 
-    public const KEY_PREFIX = 'storefront:china:menu:v3:';
+    public const KEY_PREFIX = 'storefront:china:menu:v4:';
 
     public function key(?string $categorySlug): string
     {

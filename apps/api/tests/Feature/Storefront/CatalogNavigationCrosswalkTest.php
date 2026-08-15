@@ -184,6 +184,200 @@ class CatalogNavigationCrosswalkTest extends TestCase
         foreach ($menuRoots as $slug) {
             $this->assertContains($slug, $expectedRoots);
         }
+
+        $homeCare = app(ChinaStorefrontCatalog::class)
+            ->navigationCategories()
+            ->firstWhere('slug', 'home-care');
+        $this->assertNotNull($homeCare);
+        $this->assertContains('pest-control', $homeCare->children->pluck('slug')->all());
+    }
+
+    public function test_home_care_bible_rooted_children_appear_when_populated(): void
+    {
+        $department = Department::query()->updateOrCreate(
+            ['slug' => 'home-care'],
+            [
+                'name' => 'Home Care',
+                'icon' => '🧹',
+                'sort_order' => 99,
+                'is_active' => true,
+            ],
+        );
+
+        $bibleRoot = Category::query()->updateOrCreate(
+            ['slug' => 'home-care'],
+            [
+                'name' => 'Home Care',
+                'origin' => CatalogOrigin::China,
+                'department_id' => null,
+                'parent_id' => null,
+                'store_id' => null,
+                'is_active' => true,
+                'sort_order' => 50,
+            ],
+        );
+
+        $pestControl = Category::query()->updateOrCreate(
+            ['slug' => 'pest-control'],
+            [
+                'name' => 'Pest Control',
+                'origin' => CatalogOrigin::China,
+                'department_id' => $department->id,
+                'parent_id' => $bibleRoot->id,
+                'store_id' => null,
+                'is_active' => true,
+                'sort_order' => 10,
+            ],
+        );
+        $cleaning = Category::query()->updateOrCreate(
+            ['slug' => 'cleaning-hygiene'],
+            [
+                'name' => 'Cleaning & Hygiene',
+                'origin' => CatalogOrigin::China,
+                'department_id' => $department->id,
+                'parent_id' => $bibleRoot->id,
+                'store_id' => null,
+                'is_active' => true,
+                'sort_order' => 20,
+            ],
+        );
+        $household = Category::query()->updateOrCreate(
+            ['slug' => 'household-essentials'],
+            [
+                'name' => 'Household Essentials',
+                'origin' => CatalogOrigin::China,
+                'department_id' => $department->id,
+                'parent_id' => $bibleRoot->id,
+                'store_id' => null,
+                'is_active' => true,
+                'sort_order' => 30,
+            ],
+        );
+        $spray = Category::query()->updateOrCreate(
+            ['slug' => 'pest-control-aerosol-sprays'],
+            [
+                'name' => 'Aerosol Sprays',
+                'origin' => CatalogOrigin::China,
+                'department_id' => $department->id,
+                'parent_id' => $pestControl->id,
+                'store_id' => null,
+                'is_active' => true,
+                'sort_order' => 10,
+            ],
+        );
+        $inactiveLeaf = Category::query()->updateOrCreate(
+            ['slug' => 'smart-home-care'],
+            [
+                'name' => 'Smart Home Care',
+                'origin' => CatalogOrigin::China,
+                'department_id' => $department->id,
+                'parent_id' => $bibleRoot->id,
+                'store_id' => null,
+                'is_active' => false,
+                'sort_order' => 40,
+            ],
+        );
+
+        // Direct child product → Pest Control visible.
+        $this->createNavigationVisibleProduct($pestControl, 'pests-killer-direct', null);
+        // Grandchild product → still surfaces Pest Control (already visible) and not Cleaning.
+        $this->createNavigationVisibleProduct($spray, 'pests-killer-grandchild', null);
+        // Empty Cleaning stays hidden.
+        // Inactive Smart Home Care stays hidden even with a product.
+        $this->createNavigationVisibleProduct($inactiveLeaf, 'smart-home-inactive-product', null);
+        // Draft on Household does not populate.
+        Product::factory()->create([
+            'name' => 'Draft household',
+            'slug' => 'home-care-draft-household',
+            'category_id' => $household->id,
+            'store_id' => null,
+            'commerce_channel_id' => null,
+            'is_active' => true,
+            'is_demo' => false,
+            'lifecycle_status' => ProductLifecycleStatus::Draft,
+            'visibility' => ProductVisibility::Public,
+            'price' => 15000,
+        ]);
+        // Product on Bible root only — does not invent a subcategory.
+        $this->createNavigationVisibleProduct($bibleRoot, 'home-care-root-assigned', null);
+
+        $homeCare = app(ChinaStorefrontCatalog::class)
+            ->navigationCategories()
+            ->firstWhere('slug', 'home-care');
+
+        $this->assertNotNull($homeCare);
+        $childSlugs = $homeCare->children->pluck('slug')->all();
+        $this->assertContains('pest-control', $childSlugs);
+        $this->assertNotContains('cleaning-hygiene', $childSlugs);
+        $this->assertNotContains('household-essentials', $childSlugs);
+        $this->assertNotContains('smart-home-care', $childSlugs);
+        $this->assertNotContains('home-care', $childSlugs);
+        $this->assertNotContains('pest-control-aerosol-sprays', $childSlugs);
+
+        $menu = $this->getJson('/api/v1/storefront/china/menu?category=home-care')
+            ->assertOk()
+            ->json('data');
+        $menuHome = collect($menu['categories'])->firstWhere('slug', 'home-care');
+        $this->assertNotNull($menuHome);
+        $this->assertContains(
+            'pest-control',
+            collect($menuHome['children'] ?? [])->pluck('slug')->all(),
+        );
+    }
+
+    public function test_home_care_soft_deleted_bible_rooted_child_is_omitted(): void
+    {
+        $department = Department::query()->updateOrCreate(
+            ['slug' => 'home-care'],
+            [
+                'name' => 'Home Care',
+                'icon' => '🧹',
+                'sort_order' => 99,
+                'is_active' => true,
+            ],
+        );
+        $bibleRoot = Category::query()->updateOrCreate(
+            ['slug' => 'home-care'],
+            [
+                'name' => 'Home Care',
+                'origin' => CatalogOrigin::China,
+                'department_id' => null,
+                'parent_id' => null,
+                'store_id' => null,
+                'is_active' => true,
+                'sort_order' => 50,
+            ],
+        );
+        $pestControl = Category::query()->updateOrCreate(
+            ['slug' => 'pest-control'],
+            [
+                'name' => 'Pest Control',
+                'origin' => CatalogOrigin::China,
+                'department_id' => $department->id,
+                'parent_id' => $bibleRoot->id,
+                'store_id' => null,
+                'is_active' => true,
+                'sort_order' => 10,
+            ],
+        );
+        $this->createNavigationVisibleProduct($pestControl, 'soft-delete-pest-product', null);
+        $pestControl->delete();
+
+        $homeCare = app(ChinaStorefrontCatalog::class)
+            ->navigationCategories()
+            ->firstWhere('slug', 'home-care');
+
+        // Root may still be visible via soft-deleted category IDs still in department
+        // mapping cache... actually SoftDeletes excludes pest-control from categoryIdsForDepartmentSlug
+        // so root may disappear. Either way Pest Control must not appear as a child.
+        if ($homeCare !== null) {
+            $this->assertNotContains(
+                'pest-control',
+                $homeCare->children->pluck('slug')->all(),
+            );
+        } else {
+            $this->assertFalse($this->resolver->isBibleNodeVisible('home-care'));
+        }
     }
 
     public function test_orphan_category_is_excluded_from_crosswalk_visibility(): void

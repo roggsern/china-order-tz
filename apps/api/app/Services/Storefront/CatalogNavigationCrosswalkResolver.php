@@ -173,13 +173,17 @@ class CatalogNavigationCrosswalkResolver
     /**
      * Product-aware department subcategories for a Bible root mapped via department_slugs.
      *
-     * Top-level department categories (parent_id null) are advertised when their
-     * branch (self + descendants) holds ≥1 navigation-visible China product.
-     * Soft-deleted categories are excluded (SoftDeletes). Structural inactive
-     * parents remain eligible when an active descendant branch is populated —
-     * matching the seeded China department taxonomy pattern.
+     * Navigable children are department categories that sit at the navigation frontier:
+     * - flat department taxonomy: parent_id IS NULL (Women's Fashion / Beauty seed shape), or
+     * - Bible-rooted taxonomy: parent_id = the Catalog Bible root (Home Care restructure shape).
      *
-     * Performance: one department category load + one distinct populated-id query.
+     * A frontier category is advertised when its branch (self + descendants) holds ≥1
+     * navigation-visible China product. Soft-deleted categories are excluded (SoftDeletes).
+     * Structural inactive flat parents remain eligible when an active descendant branch is
+     * populated. Bible-rooted children must be active.
+     *
+     * Performance: one department category load + one bible-root id lookup + one distinct
+     * populated-id query (no per-child product queries).
      *
      * @return Collection<int, Category>
      */
@@ -191,6 +195,14 @@ class CatalogNavigationCrosswalkResolver
         if ($departmentSlugs === []) {
             return collect();
         }
+
+        $bibleRootId = Category::query()
+            ->where('slug', $bibleRootSlug)
+            ->whereNull('store_id')
+            ->where('origin', CatalogOrigin::China)
+            ->whereNull('parent_id')
+            ->value('id');
+        $bibleRootId = $bibleRootId !== null ? (string) $bibleRootId : null;
 
         $categories = Category::query()
             ->whereNull('store_id')
@@ -259,12 +271,23 @@ class CatalogNavigationCrosswalkResolver
         };
 
         return $categories
-            ->filter(function (Category $category) use ($branchHasProduct) {
-                if ($category->parent_id !== null) {
+            ->filter(function (Category $category) use ($branchHasProduct, $bibleRootId) {
+                $categoryId = (string) $category->id;
+                $isFlatDepartmentRoot = $category->parent_id === null;
+                $isBibleRootChild = $bibleRootId !== null
+                    && $category->parent_id !== null
+                    && (string) $category->parent_id === $bibleRootId;
+
+                if (! $isFlatDepartmentRoot && ! $isBibleRootChild) {
                     return false;
                 }
 
-                return $branchHasProduct((string) $category->id);
+                // Bible-rooted department leaves must be active (Home Care shape).
+                if ($isBibleRootChild && ! $category->is_active) {
+                    return false;
+                }
+
+                return $branchHasProduct($categoryId);
             })
             ->values();
     }
