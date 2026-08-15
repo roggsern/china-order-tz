@@ -848,6 +848,8 @@ export type AdminCategoryListParams = {
   origin?: "china" | "tz";
   parentId?: string | null;
   rootsOnly?: boolean;
+  /** When true, exclude Catalog Bible/chrome rows (department_id IS NULL). */
+  departmentBacked?: boolean;
   search?: string;
   isActive?: boolean;
   trashed?: boolean;
@@ -869,6 +871,9 @@ export async function fetchAdminCategories(
   }
   if (params.rootsOnly) {
     query.roots_only = 1;
+  }
+  if (params.departmentBacked) {
+    query.department_backed = 1;
   }
   if (params.parentId === null) {
     query.parent_id = "null";

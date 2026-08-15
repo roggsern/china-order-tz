@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   buildCategoryTreeOptions,
+  filterProductClassificationCategories,
   isSelectableCategoryLeaf,
   mapCategoryTreeSelection,
   resolveBrandLeafCategoryId,
@@ -201,5 +202,30 @@ describe("catalog selector utils", () => {
       categoryId: "",
       subcategoryId: "",
     });
+  });
+
+  it("filters Catalog Bible chrome out of China product classification categories", () => {
+    const bible = category("bible", "Electronics", null, {
+      departmentId: null,
+      isActive: true,
+    });
+    const operational = category("ops", "Networking & Power", null, {
+      departmentId: "computers-office",
+      isActive: false,
+    });
+    const leaf = category("leaf", "DC UPS", "ops", {
+      departmentId: "computers-office",
+      isActive: true,
+    });
+
+    const filtered = filterProductClassificationCategories(
+      [bible, operational, leaf],
+      "china",
+    );
+
+    assert.deepEqual(
+      filtered.map((item) => item.id).sort(),
+      ["leaf", "ops"],
+    );
   });
 });

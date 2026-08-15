@@ -68,6 +68,11 @@ class GetAdminCategoriesAction
             $query->whereNull('parent_id');
         }
 
+        // Product classification lists: exclude Catalog Bible/chrome (department_id null).
+        if (request()->boolean('department_backed')) {
+            $query->whereNotNull('department_id');
+        }
+
         if (request()->has('is_active')) {
             $raw = request()->query('is_active');
             if ($raw === '1' || $raw === 'true' || $raw === true) {

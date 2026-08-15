@@ -18,7 +18,10 @@ import { ImageUploader } from "@/components/admin/ImageUploader";
 import { AdminBrandAsyncSelect } from "@/components/admin/AdminBrandAsyncSelect";
 import { AdminCategoryTreeSelect } from "@/components/admin/AdminCategoryTreeSelect";
 import { ProductConfigurationGrid } from "@/components/admin/ProductConfigurationGrid";
-import { resolveBrandLeafCategoryId } from "@/lib/admin/catalog-selector-utils";
+import {
+  filterProductClassificationCategories,
+  resolveBrandLeafCategoryId,
+} from "@/lib/admin/catalog-selector-utils";
 import { useAdminPermissions } from "@/hooks/use-admin-permissions";
 import { hasAdminPermission } from "@/lib/api/admin-me";
 import { ProductImageDisplay } from "@/components/catalog/ProductImageDisplay";
@@ -125,7 +128,9 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
         const nextRoots = await fetchAdminCategories({
           origin: catalogOrigin,
           rootsOnly: true,
-        });
+          ...(catalogOrigin === "china" ? { departmentBacked: true } : {}),
+          ...(catalogOrigin === "tz" ? { isActive: true } : {}),
+        }).then((rows) => filterProductClassificationCategories(rows, catalogOrigin));
 
         if (cancelled) return;
 
@@ -189,7 +194,11 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
 
     async function loadAllCategories() {
       try {
-        const all = await fetchAdminCategories({ origin: catalogOrigin });
+        const all = await fetchAdminCategories({
+          origin: catalogOrigin,
+          ...(catalogOrigin === "china" ? { departmentBacked: true } : {}),
+          ...(catalogOrigin === "tz" ? { isActive: true } : {}),
+        }).then((rows) => filterProductClassificationCategories(rows, catalogOrigin));
         if (!cancelled) {
           setAllCategories(all);
         }
@@ -218,7 +227,12 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
 
     async function loadSubcategories() {
       try {
-        const children = await fetchAdminCategories({ parentId });
+        const children = await fetchAdminCategories({
+          parentId,
+          origin: catalogOrigin,
+          ...(catalogOrigin === "china" ? { departmentBacked: true } : {}),
+          ...(catalogOrigin === "tz" ? { isActive: true } : {}),
+        }).then((rows) => filterProductClassificationCategories(rows, catalogOrigin));
         if (cancelled) return;
         setSubcategories(children);
 
@@ -261,7 +275,7 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
     return () => {
       cancelled = true;
     };
-  }, [form.parentCategoryId]);
+  }, [form.parentCategoryId, catalogOrigin]);
 
   useEffect(() => {
     let cancelled = false;
@@ -309,7 +323,11 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
 
     async function resolveParent() {
       try {
-        const all = await fetchAdminCategories({ origin: catalogOrigin });
+        const all = await fetchAdminCategories({
+          origin: catalogOrigin,
+          ...(catalogOrigin === "china" ? { departmentBacked: true } : {}),
+          ...(catalogOrigin === "tz" ? { isActive: true } : {}),
+        }).then((rows) => filterProductClassificationCategories(rows, catalogOrigin));
         if (cancelled) return;
         const leaf = all.find((item) => item.id === form.categoryId);
         if (!leaf) return;

@@ -29,6 +29,7 @@ class AdminProductTaxonomyTest extends TestCase
         Sanctum::actingAs(
             Admin::factory()->withPermissions([
                 AdminPermissions::CATALOG_CREATE,
+                AdminPermissions::CATALOG_UPDATE,
                 AdminPermissions::CATALOG_VIEW,
             ])->create(),
         );
@@ -140,6 +141,96 @@ class AdminProductTaxonomyTest extends TestCase
         $this->assertSame(CatalogOrigin::China, $product->category?->resolvedOrigin());
     }
 
+    public function test_draft_create_rejects_structural_non_leaf_category(): void
+    {
+        $china = $this->chinaCatalogFixture();
+
+        $this->postJson('/api/v1/admin/products', [
+            'name' => 'Structural Parent Draft',
+            'category_id' => $china['parentCategory']->id,
+            'commerce_channel_id' => $china['chinaChannelId'],
+            'lifecycle_status' => ProductLifecycleStatus::Draft->value,
+            'price' => 1000,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['category_id']);
+    }
+
+    public function test_draft_create_rejects_catalog_bible_chrome_category(): void
+    {
+        $bibleRoot = Category::factory()->create([
+            'department_id' => null,
+            'store_id' => null,
+            'parent_id' => null,
+            'origin' => CatalogOrigin::China,
+            'name' => 'Electronics Chrome',
+            'slug' => 'electronics-chrome-test',
+            'is_active' => true,
+        ]);
+
+        $this->postJson('/api/v1/admin/products', [
+            'name' => 'Bible Chrome Draft',
+            'category_id' => $bibleRoot->id,
+            'commerce_channel_id' => (string) CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
+            'lifecycle_status' => ProductLifecycleStatus::Draft->value,
+            'price' => 1000,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['category_id']);
+    }
+
+    public function test_draft_update_rejects_moving_to_structural_parent(): void
+    {
+        $china = $this->chinaCatalogFixture();
+
+        $create = $this->postJson('/api/v1/admin/products', [
+            'name' => 'Leaf Draft',
+            'catalog_product_type_id' => $china['catalogType']->id,
+            'commerce_channel_id' => $china['chinaChannelId'],
+            'lifecycle_status' => ProductLifecycleStatus::Draft->value,
+            'price' => 5000,
+        ])->assertCreated();
+
+        $productId = $create->json('data.id');
+
+        $this->putJson('/api/v1/admin/products/'.$productId, [
+            'category_id' => $china['parentCategory']->id,
+            'catalog_product_type_id' => null,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['category_id']);
+    }
+
+    public function test_department_backed_category_list_excludes_bible_chrome(): void
+    {
+        $department = Department::factory()->create();
+        $operational = Category::factory()->forDepartment($department)->china()->create([
+            'parent_id' => null,
+            'name' => 'Operational Root',
+            'slug' => 'operational-root-test',
+        ]);
+        $bible = Category::factory()->create([
+            'department_id' => null,
+            'store_id' => null,
+            'parent_id' => null,
+            'origin' => CatalogOrigin::China,
+            'name' => 'Bible Root',
+            'slug' => 'bible-root-test',
+            'is_active' => true,
+        ]);
+
+        $response = $this->getJson('/api/v1/admin/categories?origin=china&department_backed=1&per_page=100')
+            ->assertOk()
+            ->json('data');
+
+        $ids = collect($response)->pluck('id')->all();
+        $this->assertContains($operational->id, $ids);
+        $this->assertNotContains($bible->id, $ids);
+        $this->assertTrue(
+            collect($response)->every(fn (array $row) => filled($row['department_id'] ?? null)),
+        );
+    }
+
     /**
      * @return array{
      *     store: Store,
@@ -182,6 +273,8 @@ class AdminProductTaxonomyTest extends TestCase
     /**
      * @return array{
      *     catalogType: CatalogProductType,
+     *     parentCategory: Category,
+     *     leafCategory: Category,
      *     chinaChannelId: string
      * }
      */
@@ -197,6 +290,8 @@ class AdminProductTaxonomyTest extends TestCase
 
         return [
             'catalogType' => $catalogType,
+            'parentCategory' => $category,
+            'leafCategory' => $subcategory,
             'chinaChannelId' => (string) CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
         ];
     }

@@ -178,7 +178,7 @@ class UpdateProductAction
                 ? ($productData['store_id'] ?? null)
                 : ($product->store_id ?? null);
 
-            ProductTaxonomyValidator::assertCategoryMatchesChannel(
+            ProductTaxonomyValidator::assertValidProductClassificationCategory(
                 $category,
                 $effectiveChannelCode,
                 $effectiveStoreId,

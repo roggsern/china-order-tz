@@ -10,6 +10,20 @@ use Illuminate\Validation\ValidationException;
 final class ProductTaxonomyValidator
 {
     /**
+     * Channel/origin isolation plus leaf classification authority.
+     *
+     * @throws ValidationException
+     */
+    public static function assertValidProductClassificationCategory(
+        Category $category,
+        CommerceChannelCode $channelCode,
+        ?string $storeId = null,
+    ): void {
+        self::assertCategoryMatchesChannel($category, $channelCode, $storeId);
+        CatalogLeafCategoryRules::assertValidLeafParent((string) $category->id, 'category_id');
+    }
+
+    /**
      * @throws ValidationException
      */
     public static function assertCategoryMatchesChannel(

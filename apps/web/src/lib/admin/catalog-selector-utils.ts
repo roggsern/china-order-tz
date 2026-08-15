@@ -1,4 +1,4 @@
-import type { AdminAsyncOption } from "@/components/admin/AdminAsyncSearchSelect";
+﻿import type { AdminAsyncOption } from "@/components/admin/AdminAsyncSearchSelect";
 import type { AdminCategory } from "@/lib/api/admin-catalog";
 
 export type CategoryTreeSelection = {
@@ -36,7 +36,7 @@ function prefixForDepth(depth: number): string {
   if (depth <= 0) {
     return "";
   }
-  return `${"│  ".repeat(depth - 1)}└── `;
+  return `${"â”‚  ".repeat(depth - 1)}â””â”€â”€ `;
 }
 
 function appendSubtree(
@@ -55,7 +55,7 @@ function appendSubtree(
     options.push({
       id: child.id,
       label: `${prefixForDepth(depth)}${child.name}`,
-      description: selectable ? parentName : `${parentName} · navigate only`,
+      description: selectable ? parentName : `${parentName} Â· navigate only`,
       indent: depth,
       disabled: !selectable,
     });
@@ -90,8 +90,8 @@ export function buildCategoryTreeOptions(
           ? "Subcategory"
           : "Category"
         : isOrphan
-          ? "Subcategory · navigate only"
-          : "Category · navigate only",
+          ? "Subcategory Â· navigate only"
+          : "Category Â· navigate only",
       indent: 0,
       disabled: !selectable,
     });
@@ -160,14 +160,14 @@ export function resolveCategoryTreeLabel(
 
   const path = categoryPathNames(categories, leafId);
   if (path.length > 0) {
-    return path.join(" › ");
+    return path.join(" â€º ");
   }
 
   const parent = categories.find((item) => item.id === categoryId);
   const child = categories.find((item) => item.id === subcategoryId);
 
   if (parent && child) {
-    return `${parent.name} › ${child.name}`;
+    return `${parent.name} â€º ${child.name}`;
   }
   if (child) {
     return child.name;
@@ -176,6 +176,22 @@ export function resolveCategoryTreeLabel(
     return parent.name;
   }
   return "";
+}
+
+/**
+ * Categories eligible for product classification UI.
+ * China: department-backed operational rows only (excludes Catalog Bible/chrome).
+ * TZ: store-scoped rows only.
+ */
+export function filterProductClassificationCategories(
+  categories: AdminCategory[],
+  origin: "china" | "tz",
+): AdminCategory[] {
+  if (origin === "china") {
+    return categories.filter((category) => Boolean(category.departmentId));
+  }
+
+  return categories.filter((category) => Boolean(category.storeId));
 }
 
 export function resolveBrandLeafCategoryId(

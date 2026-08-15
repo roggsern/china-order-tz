@@ -127,7 +127,7 @@ class CreateProductAction
                 $storeId = null;
             }
 
-            ProductTaxonomyValidator::assertCategoryMatchesChannel(
+            ProductTaxonomyValidator::assertValidProductClassificationCategory(
                 $category,
                 $channelCode,
                 $storeId,
