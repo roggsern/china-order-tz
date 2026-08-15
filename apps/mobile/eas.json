@@ -12,7 +12,7 @@
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://api.chinaordertz.com/api/v1",
         "EXPO_PUBLIC_WEB_APP_BASE_URL": "https://chinaordertz.com",
-        "EXPO_PUBLIC_NMB_GATEWAY_URL": "https://test-nmbbank.mtf.gateway.mastercard.com"
+        "EXPO_PUBLIC_ALLOW_NMB_SANDBOX_CHECKOUT": "true"
       }
     },
     "production": {
@@ -22,7 +22,7 @@
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://api.chinaordertz.com/api/v1",
         "EXPO_PUBLIC_WEB_APP_BASE_URL": "https://chinaordertz.com",
-        "EXPO_PUBLIC_NMB_GATEWAY_URL": "https://test-nmbbank.mtf.gateway.mastercard.com"
+        "EXPO_PUBLIC_ALLOW_NMB_SANDBOX_CHECKOUT": "false"
       }
     }
   },

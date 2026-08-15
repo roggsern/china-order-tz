@@ -9,7 +9,7 @@ import type {
   ReconcileNmbReturnPayload,
   StartPaymentPayload,
 } from '../models/types';
-import { env } from '@/src/core/config';
+import { env, NMB_SANDBOX_GATEWAY_HOST } from '@/src/core/config';
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
@@ -151,6 +151,11 @@ export function canOpenCheckoutUrl(checkoutUrl: string | null | undefined): bool
     const host = parsed.hostname.toLowerCase();
     if (!host) return false;
 
+    // Suffix matches would otherwise allow sandbox MPGS hosts in production builds.
+    if (!env.allowNmbSandboxCheckout && host === NMB_SANDBOX_GATEWAY_HOST) {
+      return false;
+    }
+
     if (env.paymentCheckoutAllowedHosts.includes(host)) {
       return true;
     }
@@ -161,6 +166,30 @@ export function canOpenCheckoutUrl(checkoutUrl: string | null | undefined): bool
   } catch {
     return false;
   }
+}
+
+/**
+ * Pure allowlist check for tests — mirrors {@link canOpenCheckoutUrl} host rules.
+ */
+export function isPaymentCheckoutHostAllowed(
+  host: string,
+  options: {
+    allowSandbox: boolean;
+    allowedHosts: string[];
+    allowedSuffixes: string[];
+  },
+): boolean {
+  const normalized = host.trim().toLowerCase();
+  if (!normalized) return false;
+  if (!options.allowSandbox && normalized === NMB_SANDBOX_GATEWAY_HOST) {
+    return false;
+  }
+  if (options.allowedHosts.includes(normalized)) {
+    return true;
+  }
+  return options.allowedSuffixes.some(
+    (suffix) => suffix.startsWith('.') && normalized.endsWith(suffix),
+  );
 }
 
 /**

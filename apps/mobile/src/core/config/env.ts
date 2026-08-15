@@ -3,6 +3,11 @@ import Constants from 'expo-constants';
 /**
  * Typed mobile environment config owner.
  * All feature code must read API base URL from here — never hardcode hosts.
+ *
+ * NMB payment handoff authority:
+ * - Backend creates the payment session and returns checkout_url and/or session id.
+ * - Mobile opens the returned URL (allowlisted) or the merchant web launcher.
+ * - Mobile never constructs MPGS/NMB gateway URLs and does not embed gateway secrets.
  */
 export type MobileEnv = {
   apiBaseUrl: string;
@@ -12,12 +17,15 @@ export type MobileEnv = {
    * (`/payments/{transactionId}/nmb`). Opened in the system browser.
    */
   webAppBaseUrl: string;
-  /** MPGS / NMB gateway origin (redirect checkout_url allowlist / diagnostics). */
-  nmbGatewayBaseUrl: string;
   /** Exact hostnames allowed for NMB / payment hosted checkout. */
   paymentCheckoutAllowedHosts: string[];
   /** Hostname suffixes allowed (e.g. .gateway.mastercard.com). */
   paymentCheckoutAllowedHostSuffixes: string[];
+  /**
+   * When true, sandbox NMB/MPGS hosts may appear on the checkout allowlist.
+   * Production builds must keep this false so sandbox checkout URLs cannot open.
+   */
+  allowNmbSandboxCheckout: boolean;
 };
 
 export const PRODUCTION_API_BASE_URL = 'https://api.chinaordertz.com/api/v1';
@@ -28,9 +36,8 @@ export const MISSING_PRODUCTION_API_URL_MESSAGE =
 /** Default storefront origin — NMB Website Hosted Checkout launcher host. */
 export const DEFAULT_WEB_APP_BASE_URL = 'https://chinaordertz.com';
 
-/** Default MPGS sandbox gateway (redirect checkout_url allowlist). */
-export const DEFAULT_NMB_GATEWAY_BASE_URL =
-  'https://test-nmbbank.mtf.gateway.mastercard.com';
+/** Sandbox MPGS / NMB host — allowlisted only for dev or explicit preview opt-in. */
+export const NMB_SANDBOX_GATEWAY_HOST = 'test-nmbbank.mtf.gateway.mastercard.com';
 
 function readExtra(key: string): string | undefined {
   const extra = Constants.expoConfig?.extra as Record<string, unknown> | undefined;
@@ -96,13 +103,56 @@ function splitCsv(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
+function parseTruthyFlag(value: string | undefined): boolean | null {
+  if (value === undefined) return null;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return null;
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  return null;
+}
+
 /**
- * Default allowlist — Mastercard Hosted Checkout / NMB gateway hosts.
+ * Sandbox checkout hosts are allowed in:
+ * - development runtime (__DEV__)
+ * - explicit EXPO_PUBLIC_ALLOW_NMB_SANDBOX_CHECKOUT=true (EAS preview)
+ *
+ * Production must not opt in — otherwise sandbox gateway URLs could open.
+ */
+export function resolveAllowNmbSandboxCheckout(input?: {
+  fromProcess?: string;
+  fromExtra?: string;
+  isDev?: boolean;
+}): boolean {
+  const isDev = isDevRuntime(input?.isDev);
+  if (isDev) {
+    return true;
+  }
+
+  const fromProcess = parseTruthyFlag(
+    input?.fromProcess ?? process.env.EXPO_PUBLIC_ALLOW_NMB_SANDBOX_CHECKOUT,
+  );
+  if (fromProcess !== null) {
+    return fromProcess;
+  }
+
+  const fromExtra = parseTruthyFlag(
+    input?.fromExtra ?? readExtra('allowNmbSandboxCheckout'),
+  );
+  if (fromExtra !== null) {
+    return fromExtra;
+  }
+
+  return false;
+}
+
+/**
+ * Default allowlist — production Mastercard / NMB gateway hosts.
+ * Sandbox host is added only when {@link resolveAllowNmbSandboxCheckout} is true.
  * Extend via EXPO_PUBLIC_PAYMENT_CHECKOUT_ALLOWED_HOSTS (comma-separated).
  * No secrets — hostnames only.
  */
-const DEFAULT_PAYMENT_CHECKOUT_HOSTS = [
-  'test-nmbbank.mtf.gateway.mastercard.com',
+const PRODUCTION_PAYMENT_CHECKOUT_HOSTS = [
   'nmbbank.mtf.gateway.mastercard.com',
   'ap.gateway.mastercard.com',
   'eu.gateway.mastercard.com',
@@ -121,8 +171,14 @@ export function resolvePaymentCheckoutAllowedHosts(input?: {
   fromProcess?: string;
   fromExtra?: string;
   isDev?: boolean;
+  allowSandbox?: boolean;
 }): string[] {
   const isDev = isDevRuntime(input?.isDev);
+  const allowSandbox =
+    input?.allowSandbox ??
+    resolveAllowNmbSandboxCheckout({
+      isDev,
+    });
   const fromEnv = splitCsv(
     input?.fromProcess ?? process.env.EXPO_PUBLIC_PAYMENT_CHECKOUT_ALLOWED_HOSTS,
   );
@@ -130,7 +186,8 @@ export function resolvePaymentCheckoutAllowedHosts(input?: {
     input?.fromExtra ?? readExtra('paymentCheckoutAllowedHosts'),
   );
   const base = [
-    ...DEFAULT_PAYMENT_CHECKOUT_HOSTS,
+    ...PRODUCTION_PAYMENT_CHECKOUT_HOSTS,
+    ...(allowSandbox ? [NMB_SANDBOX_GATEWAY_HOST] : []),
     ...(isDev ? DEV_ONLY_PAYMENT_CHECKOUT_HOSTS : []),
     ...fromEnv,
     ...fromExtra,
@@ -153,25 +210,6 @@ function resolvePaymentCheckoutAllowedHostSuffixes(): string[] {
 }
 
 /**
- * Gateway origin for redirect checkout_url allowlist / diagnostics.
- * Must be HTTPS and allowlisted when used as a checkout host.
- */
-export function resolveNmbGatewayBaseUrl(input?: {
-  fromProcess?: string;
-  fromExtra?: string;
-}): string {
-  const fromProcess = (
-    input?.fromProcess ?? process.env.EXPO_PUBLIC_NMB_GATEWAY_URL
-  )?.trim();
-  const fromExtra = (input?.fromExtra ?? readExtra('nmbGatewayBaseUrl'))?.trim();
-  const candidate = (fromProcess || fromExtra || DEFAULT_NMB_GATEWAY_BASE_URL).replace(
-    /\/$/,
-    '',
-  );
-  return candidate;
-}
-
-/**
  * Merchant web origin for `/payments/{id}/nmb` launcher (system browser).
  */
 export function resolveWebAppBaseUrl(input?: {
@@ -189,7 +227,7 @@ export const env: MobileEnv = {
   apiBaseUrl: resolveApiBaseUrl(),
   appScheme: Constants.expoConfig?.scheme?.toString() ?? 'chinaordertz',
   webAppBaseUrl: resolveWebAppBaseUrl(),
-  nmbGatewayBaseUrl: resolveNmbGatewayBaseUrl(),
+  allowNmbSandboxCheckout: resolveAllowNmbSandboxCheckout(),
   paymentCheckoutAllowedHosts: resolvePaymentCheckoutAllowedHosts(),
   paymentCheckoutAllowedHostSuffixes: resolvePaymentCheckoutAllowedHostSuffixes(),
 };

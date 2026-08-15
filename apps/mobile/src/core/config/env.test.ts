@@ -1,10 +1,10 @@
 import {
-  DEFAULT_NMB_GATEWAY_BASE_URL,
   DEFAULT_WEB_APP_BASE_URL,
   isLoopbackApiUrl,
   MISSING_PRODUCTION_API_URL_MESSAGE,
+  NMB_SANDBOX_GATEWAY_HOST,
+  resolveAllowNmbSandboxCheckout,
   resolveApiBaseUrl,
-  resolveNmbGatewayBaseUrl,
   resolvePaymentCheckoutAllowedHosts,
   resolveWebAppBaseUrl,
 } from './env';
@@ -83,27 +83,74 @@ describe('resolveWebAppBaseUrl', () => {
   });
 });
 
-describe('resolveNmbGatewayBaseUrl', () => {
-  it('defaults to the NMB Mastercard sandbox gateway', () => {
+describe('resolveAllowNmbSandboxCheckout', () => {
+  it('is true in development without explicit flag', () => {
     expect(
-      resolveNmbGatewayBaseUrl({ fromProcess: undefined, fromExtra: undefined }),
-    ).toBe(DEFAULT_NMB_GATEWAY_BASE_URL);
+      resolveAllowNmbSandboxCheckout({
+        fromProcess: undefined,
+        fromExtra: undefined,
+        isDev: true,
+      }),
+    ).toBe(true);
   });
 
-  it('prefers EXPO_PUBLIC_NMB_GATEWAY_URL when set', () => {
+  it('is false in production without explicit opt-in', () => {
     expect(
-      resolveNmbGatewayBaseUrl({
-        fromProcess: 'https://nmbbank.mtf.gateway.mastercard.com/',
-        fromExtra: 'https://test-nmbbank.mtf.gateway.mastercard.com',
+      resolveAllowNmbSandboxCheckout({
+        fromProcess: undefined,
+        fromExtra: undefined,
+        isDev: false,
       }),
-    ).toBe('https://nmbbank.mtf.gateway.mastercard.com');
+    ).toBe(false);
+  });
+
+  it('allows explicit preview opt-in in non-dev builds', () => {
+    expect(
+      resolveAllowNmbSandboxCheckout({
+        fromProcess: 'true',
+        isDev: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('honors explicit false even if extra says true', () => {
+    expect(
+      resolveAllowNmbSandboxCheckout({
+        fromProcess: 'false',
+        fromExtra: 'true',
+        isDev: false,
+      }),
+    ).toBe(false);
   });
 });
 
 describe('resolvePaymentCheckoutAllowedHosts', () => {
-  it('keeps HTTPS Mastercard hosts and strips mock host outside development', () => {
-    const production = resolvePaymentCheckoutAllowedHosts({ isDev: false });
-    expect(production).toContain('test-nmbbank.mtf.gateway.mastercard.com');
+  it('excludes sandbox and mock hosts from production release allowlist', () => {
+    const production = resolvePaymentCheckoutAllowedHosts({
+      isDev: false,
+      allowSandbox: false,
+    });
+    expect(production).not.toContain(NMB_SANDBOX_GATEWAY_HOST);
     expect(production).not.toContain('checkout.nmb.test');
+    expect(production).toContain('nmbbank.mtf.gateway.mastercard.com');
+    expect(production).toContain('ap.gateway.mastercard.com');
+  });
+
+  it('includes sandbox host when preview opt-in is enabled', () => {
+    const preview = resolvePaymentCheckoutAllowedHosts({
+      isDev: false,
+      allowSandbox: true,
+    });
+    expect(preview).toContain(NMB_SANDBOX_GATEWAY_HOST);
+    expect(preview).not.toContain('checkout.nmb.test');
+  });
+
+  it('allows mock host only in development profiles', () => {
+    const hosts = resolvePaymentCheckoutAllowedHosts({
+      isDev: true,
+      allowSandbox: true,
+    });
+    expect(hosts).toContain('checkout.nmb.test');
+    expect(hosts).toContain(NMB_SANDBOX_GATEWAY_HOST);
   });
 });
