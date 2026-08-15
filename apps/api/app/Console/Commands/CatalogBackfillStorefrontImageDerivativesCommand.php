@@ -9,7 +9,7 @@ class CatalogBackfillStorefrontImageDerivativesCommand extends Command
 {
     protected $signature = 'catalog:backfill-storefront-image-derivatives
                             {--product= : Limit to a single product UUID}
-                            {--limit= : Max media rows to consider}
+                            {--limit= : Max pending media rows (display_url IS NULL) to consider}
                             {--execute : Write derivatives and update display_url (default is dry-run)}';
 
     protected $description = 'Idempotently generate missing storefront display WebP derivatives for product_media images.';

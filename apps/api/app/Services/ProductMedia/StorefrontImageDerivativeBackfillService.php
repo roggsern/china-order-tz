@@ -3,11 +3,16 @@
 namespace App\Services\ProductMedia;
 
 use App\Models\ProductMedia;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 /**
  * Idempotent backfill of storefront display derivatives for existing product_media images.
+ *
+ * Bounded batches (--limit) apply ONLY to pending rows (display_url IS NULL)
+ * that are eligible for local products/ derivative generation.
  */
 final class StorefrontImageDerivativeBackfillService
 {
@@ -40,12 +45,15 @@ final class StorefrontImageDerivativeBackfillService
         $query = ProductMedia::query()
             ->images()
             ->whereNull('deleted_at')
-            ->orderBy('created_at')
-            ->orderBy('id');
+            ->whereNull('display_url');
+
+        $this->constrainToDerivativeEligibleUrls($query);
 
         if ($productId !== null) {
             $query->where('product_id', $productId);
         }
+
+        $query->orderBy('created_at')->orderBy('id');
 
         if ($limit !== null) {
             $query->limit($limit);
@@ -63,7 +71,9 @@ final class StorefrontImageDerivativeBackfillService
             $processed++;
             $originalPath = $this->derivatives->resolvePublicRelativePathFromUrl($media->url);
 
-            if ($originalPath === null || ! str_starts_with($originalPath, 'products/')) {
+            if ($originalPath === null
+                || ! str_starts_with($originalPath, 'products/')
+                || str_starts_with($originalPath, 'products/storefront/')) {
                 $skipped++;
                 $rows[] = [
                     'media_id' => $media->id,
@@ -76,23 +86,10 @@ final class StorefrontImageDerivativeBackfillService
             }
 
             $derivativePath = $this->derivatives->derivativeRelativePath($originalPath);
-            $derivativeUrl = \Illuminate\Support\Facades\Storage::disk('public')->url($derivativePath);
+            $derivativeUrl = Storage::disk('public')->url($derivativePath);
             $hasFile = $this->derivatives->derivativeExistsForOriginal($originalPath);
-            $hasDisplayUrl = filled($media->display_url);
 
-            if ($hasFile && $hasDisplayUrl && (string) $media->display_url === $derivativeUrl) {
-                $skipped++;
-                $rows[] = [
-                    'media_id' => $media->id,
-                    'product_id' => $media->product_id,
-                    'action' => 'skipped',
-                    'detail' => 'derivative already linked',
-                ];
-
-                continue;
-            }
-
-            if ($hasFile && (! $hasDisplayUrl || (string) $media->display_url !== $derivativeUrl)) {
+            if ($hasFile) {
                 if (! $dryRun) {
                     $media->forceFill(['display_url' => $derivativeUrl])->save();
                 }
@@ -165,5 +162,23 @@ final class StorefrontImageDerivativeBackfillService
             'dry_run' => $dryRun,
             'rows' => $rows,
         ];
+    }
+
+    /**
+     * Restrict to URLs that can resolve to public-disk products/{file} originals.
+     * Permanently non-actionable rows (external CDN, demo-products, videos already
+     * excluded by images()) stay display_url NULL but do not occupy --limit batches.
+     *
+     * @param  Builder<\App\Models\ProductMedia>  $query
+     */
+    private function constrainToDerivativeEligibleUrls(Builder $query): void
+    {
+        $query->where(function (Builder $inner): void {
+            $inner->where('url', 'like', '%/storage/products/%')
+                ->orWhere('url', 'like', 'storage/products/%')
+                ->orWhere('url', 'like', 'products/%');
+        })->where('url', 'not like', '%/storage/products/storefront/%')
+            ->where('url', 'not like', 'products/storefront/%')
+            ->where('url', 'not like', '%demo-products%');
     }
 }

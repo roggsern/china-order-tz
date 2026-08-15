@@ -137,8 +137,9 @@ class StorefrontImageDerivativeServiceTest extends TestCase
             'dry_run' => false,
             'product_id' => $product->id,
         ]);
+        $this->assertSame(0, $second['processed']);
         $this->assertSame(0, $second['generated']);
-        $this->assertSame(1, $second['skipped']);
+        $this->assertSame(0, $second['skipped']);
         $this->assertSame($media->display_url, $media->fresh()->display_url);
     }
 
