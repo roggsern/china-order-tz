@@ -1,4 +1,5 @@
 import type { ProductImage } from "@/lib/types/catalog";
+import { preferStorefrontImageSrc } from "@/lib/catalog/prefer-storefront-image-src";
 import { resolveImageUrl } from "@/lib/catalog/product-images";
 
 const warmedPrimaryUrls = new Set<string>();
@@ -17,7 +18,7 @@ export function resolveVariantGalleryPrimaryUrl(
   }
 
   const primary = variantGalleries[configurationId]?.[0];
-  const raw = primary?.url?.trim() || primary?.path?.trim();
+  const raw = preferStorefrontImageSrc(primary);
   if (!raw) {
     return null;
   }

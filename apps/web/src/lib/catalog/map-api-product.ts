@@ -7,6 +7,7 @@ import type {
   ApiCatalogVideo,
 } from "@/lib/api/products";
 import { resolveProductBadges } from "@/lib/catalog/badges";
+import { preferStorefrontImageSrc } from "@/lib/catalog/prefer-storefront-image-src";
 import type {
   ProductAvailabilityStatus,
   ProductUnavailabilityReason,
@@ -115,7 +116,7 @@ function mapApiImage(
   productName: string,
   index = 0,
 ): ProductImage | undefined {
-  const rawSrc = image?.url?.trim() || image?.path?.trim();
+  const rawSrc = preferStorefrontImageSrc(image);
 
   if (!rawSrc || !image?.id) {
     return undefined;

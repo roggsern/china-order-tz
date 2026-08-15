@@ -48,9 +48,33 @@ class CustomerProductMediaResolutionTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.primary_image.id', $media->id)
             ->assertJsonPath('data.primary_image.url', 'https://cdn.example.com/catalog-only.jpg')
+            ->assertJsonPath('data.primary_image.original_url', 'https://cdn.example.com/catalog-only.jpg')
+            ->assertJsonPath('data.primary_image.display_url', null)
             ->assertJsonPath('data.primary_image.alt_text', 'Catalog only image')
             ->assertJsonCount(1, 'data.images')
             ->assertJsonPath('data.images.0.id', $media->id);
+    }
+
+    public function test_customer_media_exposes_display_url_when_derivative_present(): void
+    {
+        $product = $this->createPurchasableProduct([
+            'slug' => 'catalog-with-display',
+        ]);
+
+        $media = ProductMedia::factory()->primary()->create([
+            'product_id' => $product->id,
+            'url' => '/storage/products/master.jpg',
+            'display_url' => '/storage/products/storefront/master.webp',
+            'alt_text' => 'With display',
+        ]);
+
+        $this->getJson('/api/v1/products/catalog-with-display')
+            ->assertOk()
+            ->assertJsonPath('data.primary_image.id', $media->id)
+            ->assertJsonPath('data.primary_image.url', '/storage/products/master.jpg')
+            ->assertJsonPath('data.primary_image.original_url', '/storage/products/master.jpg')
+            ->assertJsonPath('data.primary_image.display_url', '/storage/products/storefront/master.webp')
+            ->assertJsonPath('data.images.0.display_url', '/storage/products/storefront/master.webp');
     }
 
     public function test_legacy_product_images_still_appear_when_no_catalog_media(): void

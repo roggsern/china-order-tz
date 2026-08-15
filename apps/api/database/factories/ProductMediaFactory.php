@@ -22,6 +22,7 @@ class ProductMediaFactory extends Factory
             'type' => ProductMediaType::Image,
             'url' => '/storage/demo-products/phone.jpg',
             'thumbnail_url' => null,
+            'display_url' => null,
             'alt_text' => fake()->sentence(3),
             'title' => fake()->words(3, true),
             'sort_order' => 0,

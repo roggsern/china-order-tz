@@ -24,6 +24,10 @@ use Illuminate\Support\Facades\Storage;
  */
 class ProductImageWriteSyncService
 {
+    public function __construct(
+        private readonly StorefrontImageDerivativeService $storefrontDerivatives,
+    ) {}
+
     /**
      * @param  array{
      *     alt_text?: string|null,
@@ -41,9 +45,11 @@ class ProductImageWriteSyncService
     ): ProductImageWriteSyncResult {
         $path = SecureImageUpload::storePublic($file, 'products');
         $url = Storage::disk('public')->url($path);
+        $derivative = $this->storefrontDerivatives->generateFromPublicPath($path);
+        $displayUrl = $derivative['url'] ?? null;
         $variantId = $metadata['product_variant_id'] ?? null;
 
-        return DB::transaction(function () use ($product, $path, $url, $metadata, $variantId) {
+        return DB::transaction(function () use ($product, $path, $url, $displayUrl, $metadata, $variantId) {
             $sortOrder = (int) ($metadata['sort_order'] ?? (
                 (int) $this->mediaScope($product, $variantId)->max('sort_order') + 1
             ));
@@ -63,6 +69,7 @@ class ProductImageWriteSyncService
                 'type' => ProductMediaType::Image,
                 'url' => $url,
                 'thumbnail_url' => $url,
+                'display_url' => $displayUrl,
                 'alt_text' => $metadata['alt_text'] ?? null,
                 'title' => $metadata['title'] ?? null,
                 'sort_order' => $sortOrder,

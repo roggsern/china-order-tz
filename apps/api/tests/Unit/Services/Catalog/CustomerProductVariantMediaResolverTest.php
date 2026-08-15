@@ -41,6 +41,8 @@ class CustomerProductVariantMediaResolverTest extends TestCase
 
         $this->assertSame($variantMedia->id, $primary['id']);
         $this->assertSame('/storage/variant.jpg', $primary['url']);
+        $this->assertSame('/storage/variant.jpg', $primary['original_url']);
+        $this->assertNull($primary['display_url']);
     }
 
     public function test_resolve_gallery_falls_back_to_product_media_when_variant_has_none(): void
@@ -123,5 +125,31 @@ class CustomerProductVariantMediaResolverTest extends TestCase
             array_column($gallery, 'id'),
         );
         $this->assertSame($ordered[0]->id, $gallery[0]['id']);
+    }
+
+    public function test_variant_gallery_exposes_display_url_when_present(): void
+    {
+        $product = Product::factory()->create();
+        $variant = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'is_active' => true,
+        ]);
+
+        ProductMedia::factory()->primary()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'url' => '/storage/products/variant-original.jpg',
+            'display_url' => '/storage/products/storefront/variant-original.webp',
+        ]);
+
+        $gallery = app(CustomerProductMediaResolver::class)->resolveGallery(
+            $product->fresh(['media']),
+            $variant->fresh(['media']),
+        );
+
+        $this->assertCount(1, $gallery);
+        $this->assertSame('/storage/products/variant-original.jpg', $gallery[0]['url']);
+        $this->assertSame('/storage/products/variant-original.jpg', $gallery[0]['original_url']);
+        $this->assertSame('/storage/products/storefront/variant-original.webp', $gallery[0]['display_url']);
     }
 }

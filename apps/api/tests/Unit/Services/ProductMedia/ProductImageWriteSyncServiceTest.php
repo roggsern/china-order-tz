@@ -23,8 +23,12 @@ class ProductImageWriteSyncServiceTest extends TestCase
         $product = Product::factory()->create();
         $service = app(ProductImageWriteSyncService::class);
 
+        $file = extension_loaded('gd')
+            ? \Illuminate\Http\UploadedFile::fake()->image('catalog.jpg', 400, 300)
+            : MinimalTestImage::jpeg('catalog.jpg');
+
         $result = $service->storeUploadedImage(
-            MinimalTestImage::jpeg('catalog.jpg'),
+            $file,
             $product,
             [
                 'alt_text' => 'Catalog image',
@@ -47,6 +51,14 @@ class ProductImageWriteSyncServiceTest extends TestCase
         $this->assertNotNull($result->storagePath);
         $this->assertTrue(Storage::disk('public')->exists($result->storagePath));
         $this->assertSame(Storage::disk('public')->url($result->storagePath), $media->url);
+
+        if (extension_loaded('gd') && function_exists('imagewebp')) {
+            $this->assertNotNull($media->display_url);
+            $stem = pathinfo($result->storagePath, PATHINFO_FILENAME);
+            $this->assertTrue(
+                Storage::disk('public')->exists('products/storefront/'.$stem.'.webp'),
+            );
+        }
     }
 
     public function test_variant_upload_writes_catalog_media_only(): void

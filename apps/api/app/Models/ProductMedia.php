@@ -24,6 +24,7 @@ class ProductMedia extends Model
         'type',
         'url',
         'thumbnail_url',
+        'display_url',
         'alt_text',
         'title',
         'sort_order',

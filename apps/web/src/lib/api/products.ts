@@ -23,6 +23,10 @@ export type ApiCatalogImage = {
   id: string;
   path: string;
   url?: string | null;
+  /** Original master asset when distinct from display_url. */
+  original_url?: string | null;
+  /** Bounded storefront derivative when available. */
+  display_url?: string | null;
   alt_text: string | null;
 };
 

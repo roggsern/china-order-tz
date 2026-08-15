@@ -8,6 +8,7 @@ use App\Models\CatalogAttributeOption;
 use App\Models\Product;
 use App\Models\ProductMedia;
 use App\Models\ProductVariant;
+use App\Services\ProductMedia\StorefrontImageDerivativeService;
 use App\Support\Security\SecureImageUpload;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +17,10 @@ use Illuminate\Validation\ValidationException;
 
 class ApplyAttributeOptionMediaAction
 {
+    public function __construct(
+        private readonly StorefrontImageDerivativeService $storefrontDerivatives,
+    ) {}
+
     /**
      * Upload (or accept) one image and attach it to every active variant that
      * uses the given catalog attribute option. Variants that already have
@@ -61,7 +66,7 @@ class ApplyAttributeOptionMediaAction
             ]);
         }
 
-        $url = $this->resolveImageUrl($request, $validated);
+        [$url, $displayUrl] = $this->resolveImageUrls($request, $validated);
         $altText = $validated['alt_text'] ?? $option->value;
         $title = $validated['title'] ?? ($option->value.' image');
 
@@ -70,6 +75,7 @@ class ApplyAttributeOptionMediaAction
             $option,
             $variants,
             $url,
+            $displayUrl,
             $altText,
             $title,
         ) {
@@ -101,6 +107,7 @@ class ApplyAttributeOptionMediaAction
                         'type' => ProductMediaType::Image,
                         'url' => $url,
                         'thumbnail_url' => $url,
+                        'display_url' => $displayUrl,
                         'alt_text' => $altText,
                         'title' => $title,
                         'sort_order' => $sortOrder,
@@ -126,15 +133,18 @@ class ApplyAttributeOptionMediaAction
 
     /**
      * @param  array<string, mixed>  $validated
+     * @return array{0: string, 1: string|null}
      */
-    private function resolveImageUrl(ApplyAttributeOptionMediaRequest $request, array $validated): string
+    private function resolveImageUrls(ApplyAttributeOptionMediaRequest $request, array $validated): array
     {
         if ($request->hasFile('file')) {
             $path = SecureImageUpload::storePublic($request->file('file'), 'products');
+            $url = Storage::disk('public')->url($path);
+            $derivative = $this->storefrontDerivatives->generateFromPublicPath($path);
 
-            return Storage::disk('public')->url($path);
+            return [$url, $derivative['url'] ?? null];
         }
 
-        return (string) $validated['url'];
+        return [(string) $validated['url'], null];
     }
 }

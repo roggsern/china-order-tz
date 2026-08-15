@@ -35,7 +35,14 @@ class CustomerProductMediaResolver
     }
 
     /**
-     * @return list<array{id: string, path: string|null, url: string|null, alt_text: string|null}>
+     * @return list<array{
+     *     id: string,
+     *     path: string|null,
+     *     url: string|null,
+     *     original_url: string|null,
+     *     display_url: string|null,
+     *     alt_text: string|null
+     * }>
      */
     public function resolveGallery(Product $product, ?ProductVariant $variant = null): array
     {
@@ -46,7 +53,14 @@ class CustomerProductMediaResolver
     }
 
     /**
-     * @return array{id: string, path: string|null, url: string|null, alt_text: string|null}|null
+     * @return array{
+     *     id: string,
+     *     path: string|null,
+     *     url: string|null,
+     *     original_url: string|null,
+     *     display_url: string|null,
+     *     alt_text: string|null
+     * }|null
      */
     public function resolvePrimary(Product $product, ?ProductVariant $variant = null): ?array
     {
@@ -69,6 +83,7 @@ class CustomerProductMediaResolver
      *     path: string|null,
      *     url: string|null,
      *     thumbnail_url: string|null,
+     *     display_url: string|null,
      *     alt_text: string|null,
      *     sort_order: int,
      *     is_primary: bool
@@ -273,25 +288,41 @@ class CustomerProductMediaResolver
     }
 
     /**
-     * @return array{id: string, path: string|null, url: string|null, alt_text: string|null}
+     * @return array{
+     *     id: string,
+     *     path: string|null,
+     *     url: string|null,
+     *     original_url: string|null,
+     *     display_url: string|null,
+     *     alt_text: string|null
+     * }
      */
     private function toCustomerImageArray(ProductMedia|ProductImage $item): array
     {
         if ($item instanceof ProductMedia) {
+            $url = filled($item->url) ? (string) $item->url : null;
+            $displayUrl = filled($item->display_url) ? (string) $item->display_url : null;
+
             return [
                 'id' => $item->id,
                 'path' => $this->resolveMediaStoragePath($item),
-                'url' => filled($item->url) ? (string) $item->url : null,
+                'url' => $url,
+                'original_url' => $url,
+                'display_url' => $displayUrl,
                 'alt_text' => $item->alt_text,
             ];
         }
 
+        $url = filled($item->path)
+            ? Storage::disk('public')->url((string) $item->path)
+            : null;
+
         return [
             'id' => $item->id,
             'path' => $item->path,
-            'url' => filled($item->path)
-                ? Storage::disk('public')->url((string) $item->path)
-                : null,
+            'url' => $url,
+            'original_url' => $url,
+            'display_url' => null,
             'alt_text' => $item->alt_text,
         ];
     }
@@ -302,6 +333,7 @@ class CustomerProductMediaResolver
      *     path: string|null,
      *     url: string|null,
      *     thumbnail_url: string|null,
+     *     display_url: string|null,
      *     alt_text: string|null,
      *     sort_order: int,
      *     is_primary: bool
@@ -313,12 +345,14 @@ class CustomerProductMediaResolver
             $path = $this->resolveMediaStoragePath($item);
             $url = filled($item->url) ? (string) $item->url : null;
             $thumbnail = filled($item->thumbnail_url) ? (string) $item->thumbnail_url : $url;
+            $displayUrl = filled($item->display_url) ? (string) $item->display_url : null;
 
             return [
                 'id' => $item->id,
                 'path' => $path,
                 'url' => $url,
                 'thumbnail_url' => $thumbnail,
+                'display_url' => $displayUrl,
                 'alt_text' => $item->alt_text,
                 'sort_order' => (int) $item->sort_order,
                 'is_primary' => (bool) $item->is_primary,
@@ -334,6 +368,7 @@ class CustomerProductMediaResolver
             'path' => $item->path,
             'url' => $url,
             'thumbnail_url' => $url,
+            'display_url' => null,
             'alt_text' => $item->alt_text,
             'sort_order' => (int) $item->sort_order,
             'is_primary' => (bool) $item->is_primary,

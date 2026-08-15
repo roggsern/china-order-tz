@@ -305,10 +305,10 @@ class CommerceDataCleanupService
         $rows = 0;
 
         if (Schema::hasTable('product_media')) {
-            $query = DB::table('product_media')->select(['url', 'thumbnail_url']);
+            $query = DB::table('product_media')->select(['url', 'thumbnail_url', 'display_url']);
             foreach ($query->cursor() as $row) {
                 $rows++;
-                foreach ([$row->url ?? null, $row->thumbnail_url ?? null] as $url) {
+                foreach ([$row->url ?? null, $row->thumbnail_url ?? null, $row->display_url ?? null] as $url) {
                     $path = $this->resolvePublicUrlToPath(is_string($url) ? $url : null);
                     if ($path !== null && $this->isSafeProductOwnedPath($path)) {
                         $paths[] = $path;
