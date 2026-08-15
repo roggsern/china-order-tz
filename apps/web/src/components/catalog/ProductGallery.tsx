@@ -190,13 +190,15 @@ export function ProductGallery({
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
-          <AnimatePresence mode="wait">
+          <AnimatePresence initial={false}>
             <motion.div
-              key={`${configurationId ?? mediaPreviewConfigurationId ?? selectedColorSlug ?? "all"}-${activeSlide.key}`}
-              initial={reduceMotion ? false : { opacity: 0, scale: 1.02 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={reduceMotion ? undefined : { opacity: 0, scale: 0.985 }}
-              transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+              // Keep the main stage mounted across variant/color switches so
+              // ProductImageDisplay can hold the previous frame until the next
+              // primary URL loads. Slide identity still updates via props.
+              key="gallery-main-stage"
+              initial={false}
+              animate={{ opacity: 1 }}
+              transition={{ duration: reduceMotion ? 0 : 0.18, ease: [0.22, 1, 0.36, 1] }}
               className="relative aspect-square w-full overflow-hidden sm:aspect-[4/5] lg:aspect-square"
             >
               {activeIsImage ? (
@@ -213,7 +215,9 @@ export function ProductGallery({
                   {renderGallerySlide(activeSlide, { emoji, gradient })}
                 </div>
               ) : (
-                renderGallerySlide(activeSlide, { emoji, gradient })
+                <div key={activeSlide.key} className="h-full w-full">
+                  {renderGallerySlide(activeSlide, { emoji, gradient })}
+                </div>
               )}
             </motion.div>
           </AnimatePresence>

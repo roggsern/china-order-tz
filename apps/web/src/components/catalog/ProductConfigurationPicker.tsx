@@ -428,6 +428,10 @@ export function ProductConfigurationPicker({
                       warmPreviewForValue(attribute.id, value.id);
                       selectValue(attribute.id, value.id);
                     }}
+                    onPointerDown={() => {
+                      if (disabled) return;
+                      warmPreviewForValue(attribute.id, value.id);
+                    }}
                     onPointerEnter={() => {
                       if (disabled) return;
                       warmPreviewForValue(attribute.id, value.id);
