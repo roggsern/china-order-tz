@@ -6,6 +6,12 @@ export type CategoryTreeSelection = {
   subcategoryId: string;
 };
 
+/** ASCII-safe path separator (avoids fragile Unicode mojibake in source encoding). */
+export const CATEGORY_PATH_SEPARATOR = " > ";
+
+/** ASCII-safe metadata separator for navigate-only structural nodes. */
+export const CATEGORY_META_SEPARATOR = " - ";
+
 /**
  * Whether a category is a valid product-classification leaf.
  * Prefers API `selectable` (CatalogLeafCategoryRules-aligned); falls back to
@@ -32,13 +38,6 @@ export function isSelectableCategoryLeaf(
   );
 }
 
-function prefixForDepth(depth: number): string {
-  if (depth <= 0) {
-    return "";
-  }
-  return `${"â”‚  ".repeat(depth - 1)}â””â”€â”€ `;
-}
-
 function appendSubtree(
   categories: AdminCategory[],
   parentId: string,
@@ -54,8 +53,11 @@ function appendSubtree(
     const selectable = isSelectableCategoryLeaf(child, categories);
     options.push({
       id: child.id,
-      label: `${prefixForDepth(depth)}${child.name}`,
-      description: selectable ? parentName : `${parentName} Â· navigate only`,
+      // Hierarchy is conveyed via AdminAsyncSearchSelect indent CSS — no Unicode tree glyphs.
+      label: child.name,
+      description: selectable
+        ? parentName
+        : `${parentName}${CATEGORY_META_SEPARATOR}navigate only`,
       indent: depth,
       disabled: !selectable,
     });
@@ -90,8 +92,8 @@ export function buildCategoryTreeOptions(
           ? "Subcategory"
           : "Category"
         : isOrphan
-          ? "Subcategory Â· navigate only"
-          : "Category Â· navigate only",
+          ? `Subcategory${CATEGORY_META_SEPARATOR}navigate only`
+          : `Category${CATEGORY_META_SEPARATOR}navigate only`,
       indent: 0,
       disabled: !selectable,
     });
@@ -160,14 +162,14 @@ export function resolveCategoryTreeLabel(
 
   const path = categoryPathNames(categories, leafId);
   if (path.length > 0) {
-    return path.join(" â€º ");
+    return path.join(CATEGORY_PATH_SEPARATOR);
   }
 
   const parent = categories.find((item) => item.id === categoryId);
   const child = categories.find((item) => item.id === subcategoryId);
 
   if (parent && child) {
-    return `${parent.name} â€º ${child.name}`;
+    return `${parent.name}${CATEGORY_PATH_SEPARATOR}${child.name}`;
   }
   if (child) {
     return child.name;

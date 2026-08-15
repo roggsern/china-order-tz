@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   buildCategoryTreeOptions,
+  CATEGORY_META_SEPARATOR,
+  CATEGORY_PATH_SEPARATOR,
   filterProductClassificationCategories,
   isSelectableCategoryLeaf,
   mapCategoryTreeSelection,
@@ -9,6 +11,18 @@ import {
   resolveCategoryTreeLabel,
 } from "@/lib/admin/catalog-selector-utils";
 import type { AdminCategory } from "@/lib/api/admin-catalog";
+
+const MOJIBAKE_MARKERS = [/â€/, /Â·/, /â”/, /â‚/, /Ã/];
+
+function assertNoMojibake(value: string): void {
+  for (const marker of MOJIBAKE_MARKERS) {
+    assert.equal(
+      marker.test(value),
+      false,
+      `Unexpected mojibake in: ${JSON.stringify(value)}`,
+    );
+  }
+}
 
 function category(
   id: string,
@@ -45,7 +59,7 @@ describe("catalog selector utils", () => {
         { id: "c3", indent: 1, disabled: false },
       ],
     );
-    assert.match(options.find((option) => option.id === "c2")?.label ?? "", /Blouse/);
+    assert.equal(options.find((option) => option.id === "c2")?.label, "Blouse");
   });
 
   it("maps selection to category and subcategory ids for leaves only", () => {
@@ -59,11 +73,13 @@ describe("catalog selector utils", () => {
     });
   });
 
-  it("resolves selected label and brand leaf category", () => {
+  it("resolves selected label and brand leaf category with ASCII path separators", () => {
+    assert.equal(CATEGORY_PATH_SEPARATOR, " > ");
     assert.equal(
       resolveCategoryTreeLabel([women, blouse], "c1", "c2"),
-      "Women's Fashion › Blouse",
+      "Women's Fashion > Blouse",
     );
+    assertNoMojibake(resolveCategoryTreeLabel([women, blouse], "c1", "c2"));
     assert.equal(resolveBrandLeafCategoryId("c1", "c2"), "c2");
     assert.equal(resolveBrandLeafCategoryId("c1", ""), "c1");
     assert.equal(resolveBrandLeafCategoryId("", ""), null);
@@ -101,12 +117,13 @@ describe("catalog selector utils", () => {
 
     assert.equal(options[0]?.id, "root-1");
     assert.equal(options[0]?.disabled, true);
+    assert.equal(options[0]?.description, `Category${CATEGORY_META_SEPARATOR}navigate only`);
     assert.deepEqual(
       options.slice(1).map((option) => option.id).sort(),
       ["sub-1", "sub-2"],
     );
     assert.ok(options.slice(1).every((option) => option.disabled === false));
-    assert.match(options[0]?.description ?? "", /navigate only/);
+    assertNoMojibake(options[0]?.description ?? "");
   });
 
   it("keeps flat tz store categories unchanged and selectable", () => {
@@ -141,6 +158,7 @@ describe("catalog selector utils", () => {
 
     const options = buildCategoryTreeOptions([parent, ups, dcUps, routers, psu]);
     assert.equal(options.find((o) => o.id === "np")?.disabled, true);
+    assert.equal(options.find((o) => o.id === "dc")?.label, "DC UPS / Router Backup");
     assert.deepEqual(
       options.filter((o) => o.indent === 1).map((o) => o.id).sort(),
       ["dc", "ps", "rt", "ups"],
@@ -154,27 +172,39 @@ describe("catalog selector utils", () => {
       categoryId: "",
       subcategoryId: "",
     });
+    assert.equal(
+      resolveCategoryTreeLabel([parent, ups, dcUps, routers, psu], "np", "dc"),
+      "Networking & Power > DC UPS / Router Backup",
+    );
+    for (const option of options) {
+      assertNoMojibake(option.label);
+      assertNoMojibake(option.description ?? "");
+    }
   });
 
-  it("supports arbitrary depth beyond two levels", () => {
+  it("supports arbitrary depth beyond two levels without unicode tree prefixes", () => {
     const root = category("r", "Root Structural", null, { isActive: false });
     const mid = category("m", "Mid Structural", "r", { isActive: false });
     const leaf = category("l", "Deep Leaf", "m", { isActive: true });
 
     const options = buildCategoryTreeOptions([root, mid, leaf]);
     assert.deepEqual(
-      options.map((o) => ({ id: o.id, indent: o.indent, disabled: o.disabled })),
+      options.map((o) => ({ id: o.id, indent: o.indent, disabled: o.disabled, label: o.label })),
       [
-        { id: "r", indent: 0, disabled: true },
-        { id: "m", indent: 1, disabled: true },
-        { id: "l", indent: 2, disabled: false },
+        { id: "r", indent: 0, disabled: true, label: "Root Structural" },
+        { id: "m", indent: 1, disabled: true, label: "Mid Structural" },
+        { id: "l", indent: 2, disabled: false, label: "Deep Leaf" },
       ],
     );
     assert.deepEqual(mapCategoryTreeSelection([root, mid, leaf], "l"), {
       categoryId: "m",
       subcategoryId: "l",
     });
-    assert.equal(resolveCategoryTreeLabel([root, mid, leaf], "m", "l"), "Root Structural › Mid Structural › Deep Leaf");
+    assert.equal(
+      resolveCategoryTreeLabel([root, mid, leaf], "m", "l"),
+      "Root Structural > Mid Structural > Deep Leaf",
+    );
+    assertNoMojibake(resolveCategoryTreeLabel([root, mid, leaf], "m", "l"));
   });
 
   it("honors API selectable / hasActiveChildren over local inference", () => {
