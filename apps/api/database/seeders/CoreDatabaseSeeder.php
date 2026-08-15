@@ -31,6 +31,7 @@ class CoreDatabaseSeeder extends Seeder
             ProductTypeSeeder::class,
             DepartmentSeeder::class,
             CategorySeeder::class,
+            HomeCareOperationalTaxonomySeeder::class,
             SubcategorySeeder::class,
             CatalogProductTypeSeeder::class,
             CatalogAttributeSeeder::class,

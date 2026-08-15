@@ -21,6 +21,7 @@ class DepartmentSeeder extends Seeder
             ['name' => 'Consumer Electronics', 'icon' => '🎧'],
             ['name' => 'Home Appliances', 'icon' => '🏠'],
             ['name' => 'Home & Furniture', 'icon' => '🛋️'],
+            ['name' => 'Home Care', 'icon' => '🧹'],
             ['name' => 'Beauty & Personal Care', 'icon' => '💄'],
             ['name' => 'Health & Medical', 'icon' => '💊'],
             ['name' => 'Jewelry & Watches', 'icon' => '⌚'],

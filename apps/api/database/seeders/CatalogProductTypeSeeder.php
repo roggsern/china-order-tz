@@ -29,6 +29,7 @@ class CatalogProductTypeSeeder extends Seeder
         'health-medical',
         'home-appliances',
         'home-furniture',
+        'home-care',
         'industrial-tools',
         'jewelry-watches',
         'mens-fashion',
@@ -1081,6 +1082,20 @@ class CatalogProductTypeSeeder extends Seeder
                     'Bird Cage',
                     'Bird Feeder',
                     'Bird Perch',
+                ],
+            ],
+            'home-care' => [
+                'Pest Control' => [
+                    'Insecticide Spray',
+                ],
+                'Cleaning & Hygiene' => [
+                    'Cleaning Product',
+                ],
+                'Household Essentials' => [
+                    'Household Essential',
+                ],
+                'Smart Home Care' => [
+                    'Smart Home Device',
                 ],
             ],
             'groceries' => [

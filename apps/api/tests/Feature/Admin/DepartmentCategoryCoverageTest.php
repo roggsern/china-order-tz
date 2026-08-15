@@ -9,6 +9,7 @@ use App\Models\Department;
 use App\Models\Product;
 use Database\Seeders\CategorySeeder;
 use Database\Seeders\DepartmentSeeder;
+use Database\Seeders\HomeCareOperationalTaxonomySeeder;
 use Database\Seeders\SubcategorySeeder;
 use Database\Support\CatalogBible;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -95,6 +96,7 @@ class DepartmentCategoryCoverageTest extends TestCase
         $slugCountAfterFirst = Category::query()->pluck('slug')->unique()->count();
 
         $this->seed(CategorySeeder::class);
+        $this->seed(HomeCareOperationalTaxonomySeeder::class);
         $this->seed(SubcategorySeeder::class);
 
         $this->assertSame($countAfterFirst, Category::query()->count());
@@ -174,6 +176,7 @@ class DepartmentCategoryCoverageTest extends TestCase
     {
         $this->seed(DepartmentSeeder::class);
         $this->seed(CategorySeeder::class);
+        $this->seed(HomeCareOperationalTaxonomySeeder::class);
         $this->seed(SubcategorySeeder::class);
     }
 }

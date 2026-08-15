@@ -13,6 +13,7 @@ use Database\Seeders\CatalogProductTypeSeeder;
 use Database\Seeders\CategorySeeder;
 use Database\Seeders\CoreDatabaseSeeder;
 use Database\Seeders\DepartmentSeeder;
+use Database\Seeders\HomeCareOperationalTaxonomySeeder;
 use Database\Seeders\SubcategorySeeder;
 use Database\Support\CatalogAttributeDomainMap;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -341,6 +342,7 @@ class ChinaCatalogAttributeReadinessTest extends TestCase
     {
         $this->seed(DepartmentSeeder::class);
         $this->seed(CategorySeeder::class);
+        $this->seed(HomeCareOperationalTaxonomySeeder::class);
         $this->seed(SubcategorySeeder::class);
         $this->seed(CatalogProductTypeSeeder::class);
         $this->seed(CatalogAttributeSeeder::class);

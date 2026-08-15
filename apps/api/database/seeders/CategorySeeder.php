@@ -184,8 +184,8 @@ class CategorySeeder extends Seeder
                 'Feature Phones',
                 'Tablets',
                 'Phone Accessories',
-                'Chargers',
-                'Power Banks',
+                // Flat Chargers / Power Banks removed — canonical leaves live under
+                // Phone Accessories via SubcategorySeeder (phones-tablets-phone-accessories-*).
             ],
             'computers-office' => [
                 'Laptops',
@@ -226,6 +226,10 @@ class CategorySeeder extends Seeder
                 'Bathroom Accessories',
                 'Outdoor Furniture',
             ],
+            // Operational Home Care leaves are seeded by HomeCareOperationalTaxonomySeeder
+            // (unprefixed slugs parented under CatalogBible root). Do not use prefixed
+            // CategorySeeder starters here — they would collide with production shape.
+            'home-care' => [],
             'beauty-personal-care' => [
                 'Hair Care',
                 'Wigs & Hair Extensions',
