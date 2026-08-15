@@ -94,6 +94,25 @@ describe('mapSearchHit / mapSearchProductsResponse', () => {
     });
   });
 
+  it('prefers display_url for search hit images', () => {
+    const hit = mapSearchHit({
+      id: 'p-display',
+      slug: 'gown',
+      name: 'Gown',
+      price: 90000,
+      marketplace: 'china',
+      commerce_channel_code: 'CHINA_IMPORT',
+      primary_image: {
+        url: 'https://cdn.example/original.jpg',
+        path: 'products/original.jpg',
+        display_url: 'https://cdn.example/display.webp',
+      },
+    });
+
+    expect(hit?.imageUrl).toBe('https://cdn.example/display.webp');
+    expect(hit?.commerceChannelCode).toBe('CHINA_IMPORT');
+  });
+
   it('preserves category/store suggestion slugs for Browse deep-links', () => {
     const result = mapSearchSuggestions({
       data: {

@@ -37,6 +37,42 @@ describe('mapProductCard', () => {
     });
   });
 
+  it('prefers display_url for catalog card images', () => {
+    const product = mapProductCard({
+      id: 'p1',
+      slug: 'widget',
+      name: 'Widget',
+      price: '15000',
+      primary_image: {
+        id: 'img1',
+        url: 'https://cdn.example/original.png',
+        path: 'products/original.png',
+        display_url: 'https://cdn.example/storefront.webp',
+        original_url: 'https://cdn.example/original.png',
+      },
+      commerce_channel_code: 'TZ_LOCAL',
+    });
+
+    expect(product?.imageUrl).toBe('https://cdn.example/storefront.webp');
+    expect(product?.commerceChannelCode).toBe('TZ_LOCAL');
+  });
+
+  it('falls back to url when display_url is absent', () => {
+    const product = mapProductCard({
+      id: 'p1',
+      slug: 'widget',
+      name: 'Widget',
+      price: '15000',
+      primary_image: {
+        id: 'img1',
+        url: 'https://cdn.example/original.png',
+      },
+      commerce_channel_code: 'CHINA_IMPORT',
+    });
+
+    expect(product?.imageUrl).toBe('https://cdn.example/original.png');
+  });
+
   it('returns null when required identity fields are missing', () => {
     expect(mapProductCard({ name: 'Only name' })).toBeNull();
     expect(mapProductCard({ id: 'p1' })).toBeNull();
@@ -78,9 +114,90 @@ describe('mapProductDetail', () => {
       primaryImageUrl: 'https://cdn.example/v-primary.jpg',
     });
     expect(detail?.variants[0]?.images).toEqual([
-      { id: 'vi', url: 'https://cdn.example/v1.jpg', altText: 'Var' },
+      {
+        id: 'vi',
+        url: 'https://cdn.example/v1.jpg',
+        originalUrl: 'https://cdn.example/v1.jpg',
+        altText: 'Var',
+      },
     ]);
     expect(detail?.shippingPrices).toEqual({ air: 20, sea: 10 });
+  });
+
+  it('prefers display_url for PDP and variant gallery images without merging variants', () => {
+    const detail = mapProductDetail({
+      id: 'p1',
+      slug: 'widget',
+      name: 'Widget',
+      price: 100,
+      primary_image: {
+        url: 'https://cdn.example/product-original.jpg',
+        display_url: 'https://cdn.example/product-display.webp',
+      },
+      images: [
+        {
+          id: 'i1',
+          url: 'https://cdn.example/gallery-original.jpg',
+          display_url: 'https://cdn.example/gallery-display.webp',
+          alt_text: 'One',
+        },
+      ],
+      variants: [
+        {
+          id: 'v-red',
+          sku: 'W-RED',
+          name: 'Red',
+          price: 110,
+          in_stock: true,
+          primary_image: {
+            url: 'https://cdn.example/red-original.jpg',
+            display_url: 'https://cdn.example/red-display.webp',
+          },
+          images: [
+            {
+              id: 'vi-red',
+              url: 'https://cdn.example/red-g-original.jpg',
+              display_url: 'https://cdn.example/red-g-display.webp',
+              alt_text: 'Red',
+            },
+          ],
+        },
+        {
+          id: 'v-blue',
+          sku: 'W-BLUE',
+          name: 'Blue',
+          price: 120,
+          in_stock: true,
+          primary_image: {
+            url: 'https://cdn.example/blue-original.jpg',
+            display_url: 'https://cdn.example/blue-display.webp',
+          },
+          images: [
+            {
+              id: 'vi-blue',
+              url: 'https://cdn.example/blue-g-original.jpg',
+              display_url: 'https://cdn.example/blue-g-display.webp',
+              alt_text: 'Blue',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(detail?.imageUrl).toBe('https://cdn.example/product-display.webp');
+    expect(detail?.images[0]?.url).toBe('https://cdn.example/gallery-display.webp');
+    expect(detail?.variants).toHaveLength(2);
+    expect(detail?.variants[0]?.id).toBe('v-red');
+    expect(detail?.variants[0]?.primaryImageUrl).toBe(
+      'https://cdn.example/red-display.webp',
+    );
+    expect(detail?.variants[0]?.images[0]?.url).toBe(
+      'https://cdn.example/red-g-display.webp',
+    );
+    expect(detail?.variants[1]?.id).toBe('v-blue');
+    expect(detail?.variants[1]?.primaryImageUrl).toBe(
+      'https://cdn.example/blue-display.webp',
+    );
   });
 
   it('maps supported product videos and drops unsupported urls', () => {

@@ -15,6 +15,7 @@ import type {
   HomepageCommerceContext,
   RenderableHomepageSection,
 } from '../models/types';
+import { preferStorefrontImageSrcFromUnknown } from '@/src/shared/media/preferStorefrontImageSrc';
 
 const PRODUCT_SECTION_TYPES = new Set([
   'FEATURED_PRODUCTS',
@@ -45,8 +46,7 @@ function stringField(data: Record<string, unknown>, key: string): string | null 
 }
 
 function mediaUrl(media: unknown): string | null {
-  const record = asRecord(media);
-  return stringField(record, 'url');
+  return preferStorefrontImageSrcFromUnknown(media);
 }
 
 /** Map a CMS featured PRODUCT item `data` blob into a mobile card (no hardcoded catalog). */
@@ -62,7 +62,7 @@ export function mapProductCard(data: unknown): HomepageProductCard | null {
   const imageUrl =
     mediaUrl(record.primary_image) ??
     stringField(record, 'image_url') ??
-    stringField(primaryImage, 'url');
+    preferStorefrontImageSrcFromUnknown(primaryImage);
 
   const price =
     (typeof record.price === 'string' || typeof record.price === 'number'

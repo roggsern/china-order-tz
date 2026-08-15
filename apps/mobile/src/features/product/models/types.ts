@@ -4,7 +4,10 @@ export type ProductAvailabilityStatus = 'available' | 'out_of_stock' | 'unavaila
 
 export type CatalogImage = {
   id?: string;
+  /** Preferred storefront display source (display_url → url → path). */
   url: string | null;
+  /** Original/master URL when API provides it separately. */
+  originalUrl?: string | null;
   altText?: string | null;
 };
 

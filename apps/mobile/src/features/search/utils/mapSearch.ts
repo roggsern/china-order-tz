@@ -10,6 +10,7 @@ import type {
   SearchSuggestion,
   SearchSuggestionsResult,
 } from '../models/types';
+import { preferStorefrontImageSrcFromUnknown } from '@/src/shared/media/preferStorefrontImageSrc';
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
@@ -23,12 +24,7 @@ function stringId(value: unknown): string {
 }
 
 function mediaUrl(media: unknown): string | null {
-  const record = asRecord(media);
-  const url = record.url;
-  const path = record.path;
-  if (typeof url === 'string' && url.trim() !== '') return url;
-  if (typeof path === 'string' && path.trim() !== '') return path;
-  return null;
+  return preferStorefrontImageSrcFromUnknown(media);
 }
 
 function asBoolean(value: unknown): boolean | null {

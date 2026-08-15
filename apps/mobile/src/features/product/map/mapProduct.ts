@@ -16,6 +16,7 @@ import type {
   ProductQuote,
 } from '../models/types';
 import { isSupportedProductVideoUrl } from '../utils/productVideo';
+import { preferStorefrontImageSrcFromUnknown } from '@/src/shared/media/preferStorefrontImageSrc';
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
@@ -40,8 +41,7 @@ function moneyField(data: Record<string, unknown>, key: string): string | number
 }
 
 function mediaUrl(media: unknown): string | null {
-  const record = asRecord(media);
-  return stringField(record, 'url') ?? stringField(record, 'path');
+  return preferStorefrontImageSrcFromUnknown(media);
 }
 
 export function unwrapResourceList(data: unknown): unknown[] {
@@ -101,6 +101,7 @@ export function mapImage(raw: unknown): CatalogImage | null {
   return {
     id: stringField(data, 'id') ?? undefined,
     url,
+    originalUrl: stringField(data, 'original_url') ?? stringField(data, 'url'),
     altText: stringField(data, 'alt_text'),
   };
 }

@@ -15,6 +15,8 @@ const mediaSchema = z
     id: z.string().optional(),
     url: z.string().nullable().optional(),
     path: z.string().nullable().optional(),
+    display_url: z.string().nullable().optional(),
+    original_url: z.string().nullable().optional(),
     alt_text: z.string().nullable().optional(),
   })
   .passthrough()

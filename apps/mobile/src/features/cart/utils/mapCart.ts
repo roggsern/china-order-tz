@@ -9,6 +9,7 @@ import type {
 } from '../models/types';
 import { formatCustomerMoney } from '@/src/shared/utils/formatCustomerMoney';
 import { journeyLabelFromChannel } from './journeyLabel';
+import { preferStorefrontImageSrcFromUnknown } from '@/src/shared/media/preferStorefrontImageSrc';
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
@@ -33,12 +34,7 @@ function moneyField(data: Record<string, unknown>, key: string): string | number
 }
 
 function mediaUrl(media: unknown): string | null {
-  const record = asRecord(media);
-  const url = record.url;
-  const path = record.path;
-  if (typeof url === 'string' && url.trim() !== '') return url;
-  if (typeof path === 'string' && path.trim() !== '') return path;
-  return null;
+  return preferStorefrontImageSrcFromUnknown(media);
 }
 
 function mapDisplayAttributes(raw: unknown): CartDisplayAttribute[] {

@@ -29,6 +29,9 @@ export type HomepageSectionType = (typeof HOMEPAGE_SECTION_TYPES)[number] | (str
 export type HomepageMedia = {
   id?: string;
   url?: string | null;
+  path?: string | null;
+  display_url?: string | null;
+  original_url?: string | null;
   alt_text?: string | null;
 };
 

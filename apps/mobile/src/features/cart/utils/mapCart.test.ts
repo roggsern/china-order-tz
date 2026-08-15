@@ -114,6 +114,21 @@ describe('mapCart / mapCartItem', () => {
     });
   });
 
+  it('prefers display_url for cart line images', () => {
+    const item = mapCartItem({
+      ...rawItem,
+      product: {
+        ...rawItem.product,
+        primary_image: {
+          url: 'https://cdn.example/original.jpg',
+          display_url: 'https://cdn.example/display.webp',
+        },
+      },
+    });
+
+    expect(item?.imageUrl).toBe('https://cdn.example/display.webp');
+  });
+
   it('maps full cart resource including server totals', () => {
     const cart = mapCart({
       id: 'cart-1',

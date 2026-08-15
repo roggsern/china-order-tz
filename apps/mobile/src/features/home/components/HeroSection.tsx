@@ -12,6 +12,7 @@ import {
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { brandColors, colors, radius, spacing, typography } from '@/src/shared/theme';
+import { preferStorefrontImageSrc } from '@/src/shared/media/preferStorefrontImageSrc';
 import type { HomepageHeroSlide } from '../models/types';
 
 type Props = {
@@ -24,7 +25,10 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 const HERO_HEIGHT = 260;
 
 function slideImageUrl(slide: HomepageHeroSlide): string | null {
-  return slide.mobile_media?.url ?? slide.desktop_media?.url ?? null;
+  return (
+    preferStorefrontImageSrc(slide.mobile_media) ??
+    preferStorefrontImageSrc(slide.desktop_media)
+  );
 }
 
 function journeyFallbackStyle(slideId: string) {

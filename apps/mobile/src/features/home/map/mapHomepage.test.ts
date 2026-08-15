@@ -363,6 +363,21 @@ describe('mapProductCard', () => {
       })?.storeSlug,
     ).toBeNull();
   });
+
+  it('prefers display_url for homepage product cards', () => {
+    expect(
+      mapProductCard({
+        id: 'p1',
+        name: 'Widget',
+        slug: 'widget',
+        primary_image: {
+          url: 'https://cdn.example/original.jpg',
+          display_url: 'https://cdn.example/display.webp',
+        },
+        commerce_channel_code: 'CHINA_IMPORT',
+      })?.imageUrl,
+    ).toBe('https://cdn.example/display.webp');
+  });
 });
 
 describe('journey context switching', () => {
