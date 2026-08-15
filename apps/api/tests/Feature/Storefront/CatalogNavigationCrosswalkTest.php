@@ -214,6 +214,40 @@ class CatalogNavigationCrosswalkTest extends TestCase
         $childSlugs = $electronics->children->pluck('slug')->all();
         $this->assertContains('electronics-laptops', $childSlugs);
         $this->assertContains('electronics-networking-power', $childSlugs);
+
+        $laptopIds = $this->resolver->categoryIdsForBibleSlug('electronics-laptops');
+        $this->assertContains((string) $laptops->id, $laptopIds);
+        $this->assertNotContains((string) $dcUps->id, $laptopIds);
+
+        $networkingIds = $this->resolver->categoryIdsForBibleSlug('electronics-networking-power');
+        $this->assertContains((string) $dcUps->id, $networkingIds);
+        $this->assertNotContains((string) $laptops->id, $networkingIds);
+    }
+
+    public function test_electronics_laptops_excludes_networking_power_and_unrelated_office_branches(): void
+    {
+        $laptops = Category::query()->where('slug', 'computers-office-laptops')->firstOrFail();
+        $dcUps = Category::query()
+            ->where('slug', 'computers-office-networking-power-dc-ups-router-backup')
+            ->firstOrFail();
+        $monitors = Category::query()->where('slug', 'computers-office-monitors')->firstOrFail();
+        $printers = Category::query()->where('slug', 'computers-office-printers')->firstOrFail();
+        $desktops = Category::query()->where('slug', 'computers-office-desktop-computers')->firstOrFail();
+        $accessories = Category::query()->where('slug', 'computers-office-computer-accessories')->firstOrFail();
+
+        $ids = $this->resolver->categoryIdsForBibleSlug('electronics-laptops');
+
+        $this->assertContains((string) $laptops->id, $ids);
+        $this->assertNotContains((string) $dcUps->id, $ids);
+        $this->assertNotContains((string) $monitors->id, $ids);
+        $this->assertNotContains((string) $printers->id, $ids);
+        $this->assertNotContains((string) $desktops->id, $ids);
+        $this->assertNotContains((string) $accessories->id, $ids);
+
+        $networkingParent = Category::query()
+            ->where('slug', 'computers-office-networking-power')
+            ->firstOrFail();
+        $this->assertNotContains((string) $networkingParent->id, $ids);
     }
 
     public function test_womens_products_resolve_despite_slug_collision(): void

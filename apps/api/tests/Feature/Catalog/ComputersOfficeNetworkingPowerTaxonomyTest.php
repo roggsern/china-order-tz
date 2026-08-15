@@ -241,7 +241,7 @@ class ComputersOfficeNetworkingPowerTaxonomyTest extends TestCase
         }
     }
 
-    public function test_dc_ups_product_appears_in_china_discovery_and_electronics_laptops_corpus(): void
+    public function test_dc_ups_product_appears_in_networking_not_laptops_and_in_electronics_aggregate(): void
     {
         $leaf = Category::query()
             ->where('slug', 'computers-office-networking-power-dc-ups-router-backup')
@@ -255,15 +255,22 @@ class ComputersOfficeNetworkingPowerTaxonomyTest extends TestCase
         )->pluck('slug')->all();
         $this->assertContains($product->slug, $byLeaf);
 
-        $byElectronicsLaptops = collect(
+        $byNetworking = collect(
+            $this->getJson('/api/v1/storefront/china/products?category=electronics-networking-power')
+                ->assertOk()
+                ->json('data'),
+        )->pluck('slug')->all();
+        $this->assertContains($product->slug, $byNetworking);
+
+        $byLaptops = collect(
             $this->getJson('/api/v1/storefront/china/products?category=electronics-laptops')
                 ->assertOk()
                 ->json('data'),
         )->pluck('slug')->all();
-        $this->assertContains(
+        $this->assertNotContains(
             $product->slug,
-            $byElectronicsLaptops,
-            'computers-office department products must remain in electronics-laptops crosswalk corpus.',
+            $byLaptops,
+            'DC UPS must not leak into electronics-laptops after precise laptop mapping.',
         );
 
         $byElectronics = collect(
@@ -272,6 +279,43 @@ class ComputersOfficeNetworkingPowerTaxonomyTest extends TestCase
                 ->json('data'),
         )->pluck('slug')->all();
         $this->assertContains($product->slug, $byElectronics);
+    }
+
+    public function test_genuine_laptop_products_resolve_under_electronics_laptops_only_branch(): void
+    {
+        $laptops = Category::query()->where('slug', 'computers-office-laptops')->firstOrFail();
+        $monitors = Category::query()->where('slug', 'computers-office-monitors')->firstOrFail();
+        $printers = Category::query()->where('slug', 'computers-office-printers')->firstOrFail();
+        $accessories = Category::query()->where('slug', 'computers-office-computer-accessories')->firstOrFail();
+        $ups = Category::query()
+            ->where('slug', 'computers-office-networking-power-ups-backup-power')
+            ->firstOrFail();
+
+        $laptopProduct = $this->makeListableChinaProduct($laptops, 'genuine-business-laptop');
+        $monitorProduct = $this->makeListableChinaProduct($monitors, 'office-monitor-leak-guard');
+        $printerProduct = $this->makeListableChinaProduct($printers, 'laser-printer-leak-guard');
+        $accessoryProduct = $this->makeListableChinaProduct($accessories, 'usb-hub-leak-guard');
+        $upsProduct = $this->makeListableChinaProduct($ups, 'ac-ups-leak-guard');
+
+        $byLaptops = collect(
+            $this->getJson('/api/v1/storefront/china/products?category=electronics-laptops')
+                ->assertOk()
+                ->json('data'),
+        )->pluck('slug')->all();
+
+        $this->assertContains($laptopProduct->slug, $byLaptops);
+        $this->assertNotContains($monitorProduct->slug, $byLaptops);
+        $this->assertNotContains($printerProduct->slug, $byLaptops);
+        $this->assertNotContains($accessoryProduct->slug, $byLaptops);
+        $this->assertNotContains($upsProduct->slug, $byLaptops);
+
+        $byElectronics = collect(
+            $this->getJson('/api/v1/storefront/china/products?category=electronics')
+                ->assertOk()
+                ->json('data'),
+        )->pluck('slug')->all();
+        $this->assertContains($laptopProduct->slug, $byElectronics);
+        $this->assertContains($upsProduct->slug, $byElectronics);
     }
 
     public function test_dc_ups_product_is_searchable_by_category_name(): void
@@ -315,8 +359,9 @@ class ComputersOfficeNetworkingPowerTaxonomyTest extends TestCase
         $this->assertNotNull($electronics);
         $childSlugs = collect($electronics['children'] ?? [])->pluck('slug')->all();
 
-        $this->assertContains('electronics-laptops', $childSlugs);
+        // Only Networking & Power is populated — Laptops must stay hidden without laptop corpus.
         $this->assertContains('electronics-networking-power', $childSlugs);
+        $this->assertNotContains('electronics-laptops', $childSlugs);
         $this->assertNotContains(self::PARENT_SLUG, $childSlugs);
         $this->assertNotContains('computers-office-networking-power-dc-ups-router-backup', $childSlugs);
 

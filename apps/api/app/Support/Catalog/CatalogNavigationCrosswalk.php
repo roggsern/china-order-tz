@@ -65,8 +65,12 @@ final class CatalogNavigationCrosswalk
                 ],
             ],
             'electronics-laptops' => [
-                'category_slugs' => ['electronics-laptops'],
-                'department_slugs' => ['computers-office'],
+                // Precise laptop operational branch only — not the whole computers-office department.
+                // Networking & Power / desktops / monitors / printers / accessories are separate.
+                'category_slugs' => [
+                    'electronics-laptops',
+                    'computers-office-laptops',
+                ],
             ],
             'electronics-accessories' => [
                 'category_slugs' => [
