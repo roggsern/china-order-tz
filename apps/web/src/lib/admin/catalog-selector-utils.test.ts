@@ -124,4 +124,23 @@ describe("catalog selector utils", () => {
       ],
     );
   });
+
+  it("exposes Networking & Power leaves as selectable 2-level options", () => {
+    const parent = category("np", "Networking & Power", null, { isActive: false });
+    const ups = category("ups", "UPS & Backup Power", "np");
+    const dcUps = category("dc", "DC UPS / Router Backup", "np");
+    const routers = category("rt", "Routers & Networking", "np");
+    const psu = category("ps", "Power Supplies", "np");
+
+    const options = buildCategoryTreeOptions([parent, ups, dcUps, routers, psu]);
+    assert.equal(options.find((o) => o.id === "np")?.indent, 0);
+    assert.deepEqual(
+      options.filter((o) => o.indent === 1).map((o) => o.id).sort(),
+      ["dc", "ps", "rt", "ups"],
+    );
+    assert.deepEqual(mapCategoryTreeSelection([parent, ups, dcUps, routers, psu], "dc"), {
+      categoryId: "np",
+      subcategoryId: "dc",
+    });
+  });
 });

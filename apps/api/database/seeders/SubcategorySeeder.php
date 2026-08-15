@@ -108,6 +108,14 @@ class SubcategorySeeder extends Seeder
                     'Cables',
                 ],
             ],
+            'computers-office' => [
+                'Networking & Power' => [
+                    'UPS & Backup Power',
+                    'DC UPS / Router Backup',
+                    'Routers & Networking',
+                    'Power Supplies',
+                ],
+            ],
             'home-appliances' => [
                 'Cooking Appliances' => [
                     'Cookers & Ovens',

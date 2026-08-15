@@ -264,6 +264,15 @@ final class CatalogAttributeDomainMap
             return ['brand', 'color', 'model', 'ram', 'storage', 'screen-size'];
         }
 
+        if (
+            str_contains($name, 'UPS')
+            || str_contains($name, 'Power Supply')
+            || str_contains($name, 'Router Backup')
+            || in_array($name, ['Router', 'Network Switch', 'Access Point'], true)
+        ) {
+            return ['brand', 'color', 'model', 'voltage', 'power'];
+        }
+
         return ['brand', 'color', 'model', 'build-material'];
     }
 

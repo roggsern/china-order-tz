@@ -281,6 +281,25 @@ class CatalogProductTypeSeeder extends Seeder
                     'Laptop Stand',
                     'Cooling Pad',
                 ],
+                'UPS & Backup Power' => [
+                    'AC UPS',
+                    'Desktop UPS',
+                    'Network Equipment UPS',
+                ],
+                'DC UPS / Router Backup' => [
+                    'DC UPS',
+                    'Mini DC UPS',
+                    'Router Backup Power Supply',
+                ],
+                'Routers & Networking' => [
+                    'Router',
+                    'Network Switch',
+                    'Access Point',
+                ],
+                'Power Supplies' => [
+                    'Computer Power Supply',
+                    'Network Power Supply',
+                ],
             ],
             'consumer-electronics' => [
                 'TVs' => [

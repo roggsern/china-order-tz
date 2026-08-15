@@ -26,6 +26,11 @@ class CategorySeeder extends Seeder
         'computers-office-laptops',
         'computers-office-monitors',
         'computers-office-printers',
+        // Networking & Power — active leaves (parent stays inactive via SubcategorySeeder)
+        'computers-office-networking-power-ups-backup-power',
+        'computers-office-networking-power-dc-ups-router-backup',
+        'computers-office-networking-power-routers-networking',
+        'computers-office-networking-power-power-supplies',
         'consumer-electronics-audio',
         'consumer-electronics-cameras',
         'consumer-electronics-gaming',
@@ -188,6 +193,7 @@ class CategorySeeder extends Seeder
                 'Monitors',
                 'Printers',
                 'Computer Accessories',
+                'Networking & Power',
             ],
             'consumer-electronics' => [
                 'TVs',
