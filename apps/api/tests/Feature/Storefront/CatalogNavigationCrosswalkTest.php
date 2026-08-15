@@ -68,6 +68,154 @@ class CatalogNavigationCrosswalkTest extends TestCase
         );
     }
 
+    public function test_electronics_shows_networking_power_when_dc_ups_leaf_populated(): void
+    {
+        $dcUps = Category::query()
+            ->where('slug', 'computers-office-networking-power-dc-ups-router-backup')
+            ->firstOrFail();
+
+        $this->createNavigationVisibleProduct($dcUps, 'dc-mini-ups-nav', null);
+
+        $this->assertTrue($this->resolver->isBibleNodeVisible('electronics-networking-power'));
+        $this->assertTrue($this->resolver->isBibleNodeVisible('electronics'));
+
+        $ids = $this->resolver->categoryIdsForBibleSlug('electronics-networking-power');
+        $this->assertContains((string) $dcUps->id, $ids);
+        $parent = Category::query()->where('slug', 'computers-office-networking-power')->firstOrFail();
+        $this->assertContains((string) $parent->id, $ids);
+
+        $electronics = app(ChinaStorefrontCatalog::class)
+            ->navigationCategories()
+            ->firstWhere('slug', 'electronics');
+        $this->assertNotNull($electronics);
+        $childSlugs = $electronics->children->pluck('slug')->all();
+        $this->assertContains('electronics-networking-power', $childSlugs);
+        $this->assertNotContains('computers-office-networking-power-dc-ups-router-backup', $childSlugs);
+
+        $menu = $this->getJson('/api/v1/storefront/china/menu?category=electronics')
+            ->assertOk()
+            ->json('data');
+        $menuElectronics = collect($menu['categories'])->firstWhere('slug', 'electronics');
+        $this->assertContains(
+            'electronics-networking-power',
+            collect($menuElectronics['children'] ?? [])->pluck('slug')->all(),
+        );
+
+        $products = $this->getJson('/api/v1/storefront/china/products?category=electronics-networking-power')
+            ->assertOk()
+            ->json('data');
+        // Nav-visible product may not be sellable; createListable used below for PLP sellable gate.
+        $this->assertIsArray($products);
+    }
+
+    public function test_electronics_networking_power_plp_includes_sellable_dc_ups_descendant(): void
+    {
+        $dcUps = Category::query()
+            ->where('slug', 'computers-office-networking-power-dc-ups-router-backup')
+            ->firstOrFail();
+        $china = CommerceChannel::query()
+            ->where('code', CommerceChannelCode::ChinaImport->value)
+            ->firstOrFail();
+        $this->createListableChinaProduct($dcUps, 'dc-mini-ups-plp', $china);
+
+        $products = collect(
+            $this->getJson('/api/v1/storefront/china/products?category=electronics-networking-power')
+                ->assertOk()
+                ->json('data'),
+        )->pluck('slug')->all();
+
+        $this->assertContains('dc-mini-ups-plp', $products);
+    }
+
+    public function test_electronics_hides_networking_power_when_empty_or_draft_or_tz_only(): void
+    {
+        $electronics = app(ChinaStorefrontCatalog::class)
+            ->navigationCategories()
+            ->firstWhere('slug', 'electronics');
+        $this->assertTrue(
+            $electronics === null
+            || ! $electronics->children->contains('slug', 'electronics-networking-power'),
+        );
+
+        $dcUps = Category::query()
+            ->where('slug', 'computers-office-networking-power-dc-ups-router-backup')
+            ->firstOrFail();
+
+        Product::factory()->create([
+            'name' => 'Draft DC UPS',
+            'slug' => 'draft-dc-ups-nav',
+            'category_id' => $dcUps->id,
+            'store_id' => null,
+            'commerce_channel_id' => null,
+            'is_active' => true,
+            'is_demo' => false,
+            'lifecycle_status' => ProductLifecycleStatus::Draft,
+            'visibility' => ProductVisibility::Public,
+            'price' => 50000,
+        ]);
+
+        $this->assertFalse($this->resolver->isBibleNodeVisible('electronics-networking-power'));
+
+        $this->seed(\Database\Seeders\StoreSeeder::class);
+        $store = \App\Models\Store::query()->where('slug', 'zion-mode')->firstOrFail();
+        $tzCat = Category::factory()->create([
+            'name' => 'TZ UPS Leak',
+            'slug' => 'zion-ups-leak',
+            'origin' => CatalogOrigin::Tz,
+            'store_id' => $store->id,
+            'parent_id' => null,
+            'is_active' => true,
+        ]);
+        Product::factory()->create([
+            'name' => 'TZ UPS',
+            'slug' => 'tz-ups-only',
+            'category_id' => $tzCat->id,
+            'store_id' => $store->id,
+            'commerce_channel_id' => null,
+            'is_active' => true,
+            'is_demo' => false,
+            'lifecycle_status' => ProductLifecycleStatus::Active,
+            'visibility' => ProductVisibility::Public,
+            'price' => 50000,
+        ]);
+        $this->assertFalse($this->resolver->isBibleNodeVisible('electronics-networking-power'));
+    }
+
+    public function test_electronics_hides_networking_power_when_operational_parent_soft_deleted(): void
+    {
+        $dcUps = Category::query()
+            ->where('slug', 'computers-office-networking-power-dc-ups-router-backup')
+            ->firstOrFail();
+        $this->createNavigationVisibleProduct($dcUps, 'soft-del-branch-dc-ups', null);
+
+        $parent = Category::query()->where('slug', 'computers-office-networking-power')->firstOrFail();
+        $parent->delete();
+
+        // Branch IDs for bible chrome node start at soft-deleted operational parent → empty.
+        $this->assertSame([], $this->resolver->categoryIdsForBibleSlug('electronics-networking-power'));
+        $this->assertFalse($this->resolver->isBibleNodeVisible('electronics-networking-power'));
+    }
+
+    public function test_electronics_laptops_still_visible_alongside_networking_power(): void
+    {
+        $dcUps = Category::query()
+            ->where('slug', 'computers-office-networking-power-dc-ups-router-backup')
+            ->firstOrFail();
+        $laptops = Category::query()->where('slug', 'computers-office-laptops')->firstOrFail();
+
+        $this->createNavigationVisibleProduct($dcUps, 'net-power-with-laptops', null);
+        $this->createNavigationVisibleProduct($laptops, 'laptop-with-net-power', null);
+
+        $electronics = app(ChinaStorefrontCatalog::class)
+            ->navigationCategories()
+            ->firstWhere('slug', 'electronics');
+
+        $this->assertNotNull($electronics);
+        $childSlugs = $electronics->children->pluck('slug')->all();
+        $this->assertContains('electronics-laptops', $childSlugs);
+        $this->assertContains('electronics-networking-power', $childSlugs);
+    }
+
     public function test_womens_products_resolve_despite_slug_collision(): void
     {
         $midiDresses = Category::query()

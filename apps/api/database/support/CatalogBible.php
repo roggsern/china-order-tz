@@ -59,6 +59,7 @@ final class CatalogBible
                     ['name' => 'Phones', 'slug' => 'electronics-phones', 'sort_order' => 10],
                     ['name' => 'Laptops', 'slug' => 'electronics-laptops', 'sort_order' => 20],
                     ['name' => 'Accessories', 'slug' => 'electronics-accessories', 'sort_order' => 30],
+                    ['name' => 'Networking & Power', 'slug' => 'electronics-networking-power', 'sort_order' => 40],
                 ],
             ],
             // MASTER_SPECIFICATION homepage grid — roots only until Bible supplies children.

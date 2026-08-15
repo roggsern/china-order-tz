@@ -300,7 +300,7 @@ class ComputersOfficeNetworkingPowerTaxonomyTest extends TestCase
         $this->assertContains($product->slug, $slugs);
     }
 
-    public function test_electronics_mega_menu_children_unchanged(): void
+    public function test_electronics_mega_menu_shows_networking_power_not_leaf_slugs(): void
     {
         $leaf = Category::query()
             ->where('slug', 'computers-office-networking-power-dc-ups-router-backup')
@@ -316,8 +316,12 @@ class ComputersOfficeNetworkingPowerTaxonomyTest extends TestCase
         $childSlugs = collect($electronics['children'] ?? [])->pluck('slug')->all();
 
         $this->assertContains('electronics-laptops', $childSlugs);
+        $this->assertContains('electronics-networking-power', $childSlugs);
         $this->assertNotContains(self::PARENT_SLUG, $childSlugs);
         $this->assertNotContains('computers-office-networking-power-dc-ups-router-backup', $childSlugs);
+
+        $featured = collect($menu['featured_products'] ?? [])->pluck('slug')->all();
+        $this->assertContains('menu-guard-dc-ups', $featured);
     }
 
     private function makeListableChinaProduct(Category $category, string $slug): Product

@@ -101,9 +101,9 @@ class ChinaStorefrontMenuPerformanceTest extends TestCase
         ]);
 
         $cache = app(ChinaStorefrontMenuCache::class);
-        $this->assertSame('storefront:china:menu:v4:electronics', $cache->key('electronics'));
-        $this->assertSame('storefront:china:menu:v4:__root__', $cache->key(null));
-        $this->assertSame('storefront:china:menu:v4:__root__', $cache->key(''));
+        $this->assertSame('storefront:china:menu:v5:electronics', $cache->key('electronics'));
+        $this->assertSame('storefront:china:menu:v5:__root__', $cache->key(null));
+        $this->assertSame('storefront:china:menu:v5:__root__', $cache->key(''));
 
         DB::flushQueryLog();
         DB::enableQueryLog();

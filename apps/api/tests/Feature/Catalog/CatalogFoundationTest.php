@@ -30,7 +30,7 @@ class CatalogFoundationTest extends TestCase
             ->assertJsonPath('data.0.slug', 'mens-fashion')
             ->assertJsonPath('data.0.children.0.slug', 'mens-fashion-shirts')
             ->assertJsonPath('data.2.slug', 'electronics')
-            ->assertJsonCount(3, 'data.2.children');
+            ->assertJsonCount(4, 'data.2.children');
     }
 
     public function test_show_category_by_slug_returns_active_hierarchy(): void
@@ -42,9 +42,13 @@ class CatalogFoundationTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.slug', 'electronics')
             ->assertJsonPath('data.name', 'Electronics')
-            ->assertJsonCount(3, 'data.children')
+            ->assertJsonCount(4, 'data.children')
             ->assertJsonPath('data.children.0.slug', 'electronics-phones');
 
+        $children = collect($this->getJson('/api/v1/categories/electronics')->json('data.children'))
+            ->pluck('slug')
+            ->all();
+        $this->assertContains('electronics-networking-power', $children);
         $this->getJson('/api/v1/categories/does-not-exist')
             ->assertNotFound();
     }

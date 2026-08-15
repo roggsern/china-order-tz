@@ -51,6 +51,7 @@ final class CatalogNavigationCrosswalk
                     'electronics-phones',
                     'electronics-laptops',
                     'electronics-accessories',
+                    'electronics-networking-power',
                     'electronics-consumer',
                     'electronics-audio',
                 ],
@@ -74,6 +75,10 @@ final class CatalogNavigationCrosswalk
                     'consumer-electronics-audio',
                     'consumer-electronics-gaming',
                 ],
+            ],
+            'electronics-networking-power' => [
+                // Customer chrome node → operational Networking & Power branch (self + descendants).
+                'category_slugs' => ['computers-office-networking-power'],
             ],
             'electronics-consumer' => [
                 'department_slugs' => ['consumer-electronics'],
