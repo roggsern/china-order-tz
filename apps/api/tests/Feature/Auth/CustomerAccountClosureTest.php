@@ -11,6 +11,7 @@ use App\Models\ActivityLog;
 use App\Models\Cart;
 use App\Models\CustomerProfile;
 use App\Models\CustomerTimelineEvent;
+use App\Models\DeliveryAddress;
 use App\Models\DevicePushToken;
 use App\Models\Notification;
 use App\Models\NotificationPreference;
@@ -19,6 +20,7 @@ use App\Models\Payment;
 use App\Models\Refund;
 use App\Models\Role;
 use App\Models\Shipment;
+use App\Models\ShippingAddress;
 use App\Models\User;
 use App\Models\UserAddress;
 use App\Models\Wishlist;
@@ -263,5 +265,139 @@ class CustomerAccountClosureTest extends TestCase
             'acknowledge' => false,
         ])->assertUnprocessable()
             ->assertJsonValidationErrors(['acknowledge']);
+    }
+
+    public function test_closure_anonymizes_required_delivery_address_fields_without_null_violations(): void
+    {
+        $user = $this->makeCustomer([
+            'email' => 'delivery.close@example.com',
+            'phone' => '+255700000006',
+        ]);
+        $originalEmail = $user->email;
+
+        $delivery = DeliveryAddress::factory()->create([
+            'user_id' => $user->id,
+            'recipient_name' => 'Zion Mode',
+            'phone' => '+255712345678',
+            'country' => 'Tanzania',
+            'region' => 'Dar es Salaam',
+            'city' => 'Dar es Salaam',
+            'district' => 'Kinondoni',
+            'street' => '123 Samora Avenue',
+            'landmark' => 'Near the market',
+            'postal_code' => '14110',
+        ]);
+
+        $addressBook = UserAddress::factory()->create([
+            'user_id' => $user->id,
+            'recipient_name' => 'Zion Mode',
+            'phone' => '+255712345678',
+            'region' => 'Dar es Salaam',
+            'address_line_2' => 'Block B',
+        ]);
+
+        $orderLinkedShipping = ShippingAddress::factory()->create([
+            'user_id' => $user->id,
+            'order_id' => Order::factory()->create(['user_id' => $user->id])->id,
+            'first_name' => 'Zion',
+            'last_name' => 'Mode',
+            'phone' => '+255712345678',
+            'address_line_1' => 'Order snapshot street',
+            'city' => 'Dar es Salaam',
+            'region' => 'Dar es Salaam',
+        ]);
+
+        $orderBookShipping = ShippingAddress::factory()->create([
+            'user_id' => $user->id,
+            'order_id' => null,
+            'first_name' => 'Zion',
+            'last_name' => 'Mode',
+            'phone' => '+255712345678',
+            'email' => 'zion@example.com',
+            'address_line_1' => 'Saved shipping street',
+            'city' => 'Arusha',
+            'region' => 'Arusha',
+        ]);
+
+        $order = Order::factory()->create(['user_id' => $user->id]);
+        $payment = Payment::factory()->create(['user_id' => $user->id, 'order_id' => $order->id]);
+        DevicePushToken::factory()->create(['user_id' => $user->id, 'is_active' => true]);
+        $token = $user->createToken('customer-api')->plainTextToken;
+
+        $this->withToken($token)
+            ->postJson('/api/v1/account/close', [
+                'current_password' => 'password123',
+                'acknowledge' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $closed = User::withTrashed()->whereKey($user->id)->firstOrFail();
+        $this->assertNotNull($closed->deleted_at);
+        $this->assertFalse((bool) $closed->is_active);
+        $this->assertSame(
+            'deleted+'.strtolower(str_replace('-', '', $closed->id)).'@invalid.local',
+            $closed->email,
+        );
+        $this->assertNotSame($originalEmail, $closed->email);
+        $this->assertSame(0, $closed->tokens()->count());
+        $this->assertSame(
+            0,
+            DevicePushToken::query()->where('user_id', $closed->id)->where('is_active', true)->count(),
+        );
+
+        // Delivery addresses have no SoftDeletes — hard-deleted after anonymize.
+        $this->assertDatabaseMissing('delivery_addresses', ['id' => $delivery->id]);
+        $this->assertSoftDeleted('user_addresses', ['id' => $addressBook->id]);
+        $this->assertSoftDeleted('shipping_addresses', ['id' => $orderBookShipping->id]);
+
+        // Order-linked shipping snapshots must remain intact.
+        $this->assertDatabaseHas('shipping_addresses', [
+            'id' => $orderLinkedShipping->id,
+            'first_name' => 'Zion',
+            'last_name' => 'Mode',
+            'address_line_1' => 'Order snapshot street',
+            'deleted_at' => null,
+        ]);
+        $this->assertDatabaseHas('orders', ['id' => $order->id, 'user_id' => $closed->id]);
+        $this->assertDatabaseHas('payments', ['id' => $payment->id, 'user_id' => $closed->id]);
+    }
+
+    public function test_wrong_password_rolls_back_and_leaves_delivery_address_intact(): void
+    {
+        $user = $this->makeCustomer([
+            'email' => 'rollback.delivery@example.com',
+            'phone' => '+255700000007',
+        ]);
+
+        $delivery = DeliveryAddress::factory()->create([
+            'user_id' => $user->id,
+            'recipient_name' => 'Keep Me',
+            'region' => 'Mwanza',
+            'district' => 'Nyamagana',
+            'street' => 'Keep Street',
+        ]);
+
+        $token = $user->createToken('customer-api')->plainTextToken;
+
+        $this->withToken($token)
+            ->postJson('/api/v1/account/close', [
+                'current_password' => 'wrong-password',
+                'acknowledge' => true,
+            ])
+            ->assertUnprocessable();
+
+        $user->refresh();
+        $this->assertTrue($user->is_active);
+        $this->assertNull($user->deleted_at);
+        $this->assertSame('rollback.delivery@example.com', $user->email);
+        $this->assertDatabaseHas('delivery_addresses', [
+            'id' => $delivery->id,
+            'recipient_name' => 'Keep Me',
+            'region' => 'Mwanza',
+            'district' => 'Nyamagana',
+            'street' => 'Keep Street',
+        ]);
+        $this->assertSame(1, $user->tokens()->count());
     }
 }

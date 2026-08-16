@@ -179,6 +179,7 @@ final class CustomerAccountClosureService
                 $address->delete();
             });
 
+        // delivery_addresses.region/district/street/city/country/phone/recipient_name are NOT NULL.
         DeliveryAddress::query()
             ->where('user_id', $user->id)
             ->each(function (DeliveryAddress $address): void {
@@ -186,9 +187,9 @@ final class CustomerAccountClosureService
                     'recipient_name' => 'Removed',
                     'phone' => '0000000000',
                     'country' => 'TZ',
-                    'region' => null,
+                    'region' => 'Removed',
                     'city' => 'Removed',
-                    'district' => null,
+                    'district' => 'Removed',
                     'street' => 'Removed',
                     'landmark' => null,
                     'postal_code' => null,
