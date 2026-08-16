@@ -29,8 +29,13 @@ class AdminOrderController extends Controller
         IndexAdminOrdersRequest $request,
         GetAdminOrdersAction $action,
     ): AnonymousResourceCollection {
-        return OrderResource::collection($action->handle($request->validated('status')))
-            ->additional(['success' => true]);
+        $validated = $request->validated();
+
+        return OrderResource::collection($action->handle([
+            'status' => $validated['status'] ?? null,
+            'q' => $validated['q'] ?? null,
+            'commerce_channel' => $validated['commerce_channel'] ?? null,
+        ]))->additional(['success' => true]);
     }
 
     public function store(StoreOrderRequest $request, CreateOrderAction $action): JsonResponse

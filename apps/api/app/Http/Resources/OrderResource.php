@@ -15,10 +15,15 @@ class OrderResource extends JsonResource
             ? $this->status
             : OrderStatus::tryFrom((string) $this->status);
 
+        $channelCode = $this->resolveCommerceChannelCode();
+
         return [
             'id' => $this->id,
             'order_number' => $this->order_number,
             'checkout_session_id' => $this->checkout_session_id,
+            'commerce_channel_id' => $this->commerce_channel_id,
+            'commerce_channel_code' => $channelCode,
+            'commerce_channel' => new CommerceChannelResource($this->whenLoaded('commerceChannel')),
             'status' => $status?->value ?? (string) $this->status,
             'status_label' => $status?->label() ?? 'Unknown status',
             'customer_status_label' => $status?->customerLabel() ?? 'Status unavailable',
@@ -48,5 +53,27 @@ class OrderResource extends JsonResource
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];
+    }
+
+    /**
+     * Canonical journey code: CHINA_IMPORT | TZ_LOCAL.
+     * Prefer loaded relation, then persisted snapshot — never invent a second vocabulary.
+     */
+    private function resolveCommerceChannelCode(): ?string
+    {
+        if ($this->relationLoaded('commerceChannel') && $this->commerceChannel !== null) {
+            $code = trim((string) $this->commerceChannel->code);
+
+            return $code !== '' ? $code : null;
+        }
+
+        $snapshot = $this->commerce_channel_snapshot;
+        if (is_array($snapshot)) {
+            $code = isset($snapshot['code']) ? trim((string) $snapshot['code']) : '';
+
+            return $code !== '' ? $code : null;
+        }
+
+        return null;
     }
 }

@@ -2,9 +2,11 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Enums\CommerceChannelCode;
 use App\Http\Requests\Concerns\AuthorizesAdminPermission;
 use App\Support\Admin\AdminPermissions;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class IndexAdminOrdersRequest extends FormRequest
 {
@@ -23,6 +25,16 @@ class IndexAdminOrdersRequest extends FormRequest
         return [
             'page' => ['sometimes', 'integer', 'min:1'],
             'status' => ['sometimes', 'nullable', 'string', 'max:64'],
+            'q' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'commerce_channel' => [
+                'sometimes',
+                'nullable',
+                'string',
+                Rule::in([
+                    CommerceChannelCode::ChinaImport->value,
+                    CommerceChannelCode::TzLocal->value,
+                ]),
+            ],
         ];
     }
 }

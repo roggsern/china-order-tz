@@ -1,0 +1,17 @@
+{
+  "cli": {
+    "version": ">= 16.0.0"
+  },
+  "build": {
+    "preview": {
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.chinaordertz.com/api/v1"
+      }
+    },
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.chinaordertz.com/api/v1"
+      }
+    }
+  }
+}

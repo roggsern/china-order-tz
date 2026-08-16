@@ -10,10 +10,14 @@ class ShowOrderAction
     {
         return $order->load([
             'user',
+            'commerceChannel',
             'coupon',
             'items.product',
             'items.variant',
             'payments',
+            'fulfillment',
+            'refundTransactions',
+            'statusHistory',
             'shippingAddress',
         ]);
     }

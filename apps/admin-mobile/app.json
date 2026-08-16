@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "CHINA ORDER TZ Admin",
+    "slug": "china-order-tz-admin",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/branding/app-icon.png",
+    "scheme": "chinaordertzadmin",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.chinaordertz.admin",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0f2744",
+        "foregroundImage": "./assets/branding/app-icon.png"
+      },
+      "package": "com.chinaordertz.admin",
+      "versionCode": 1,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/branding/splash-brand.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "backgroundColor": "#0f2744"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "apiBaseUrl": "https://api.chinaordertz.com/api/v1",
+      "router": {
+        "origin": false
+      }
+    },
+    "owner": "roggy-tech"
+  }
+}
