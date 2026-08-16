@@ -17,3 +17,6 @@ yarn-error.*
 .env
 .env.*
 !.env.example
+
+# Firebase Android client config — local only; inject via EAS file env in production.
+google-services.json

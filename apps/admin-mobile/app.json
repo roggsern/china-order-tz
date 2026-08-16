@@ -21,6 +21,7 @@
         "foregroundImage": "./assets/branding/app-icon.png"
       },
       "package": "com.chinaordertz.admin",
+      "googleServicesFile": "./google-services.json",
       "versionCode": 1,
       "predictiveBackGestureEnabled": false
     },
@@ -57,6 +58,9 @@
       "apiBaseUrl": "https://api.chinaordertz.com/api/v1",
       "router": {
         "origin": false
+      },
+      "eas": {
+        "projectId": "3aea24fe-c53b-4af2-bba3-0f44ed66d9c6"
       }
     },
     "owner": "roggy-tech"
