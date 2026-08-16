@@ -472,6 +472,18 @@ export function RegisterForm() {
           </p>
         ) : null}
 
+        <p className="text-center text-xs leading-relaxed text-zinc-500">
+          By creating an account, you agree to our{" "}
+          <Link href="/terms" className="text-zinc-300 underline-offset-2 hover:text-[#e8c547] hover:underline">
+            Terms of Service
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" className="text-zinc-300 underline-offset-2 hover:text-[#e8c547] hover:underline">
+            Privacy Policy
+          </Link>
+          .
+        </p>
+
         <button type="submit" disabled={isSubmitting} className={AUTH_PRIMARY_BUTTON_CLASS}>
           {isSubmitting ? (
             <>

@@ -1,14 +1,14 @@
 import { Linking } from 'react-native';
-import { env } from '@/src/core/config/env';
+import { DEFAULT_WEB_APP_BASE_URL, env } from '@/src/core/config/env';
 
 /**
- * Customer account deep links on the merchant web storefront.
- * Used only for capabilities without a safe authenticated mobile API.
+ * Customer-facing storefront URLs opened from the mobile account hub.
+ * Legal pages stay on the web origin — do not duplicate policy text in-app.
  */
-export type AccountWebPath = '/account';
+export type AccountWebPath = '/account' | '/privacy' | '/terms';
 
 export function buildAccountWebUrl(path: AccountWebPath): string {
-  const base = env.webAppBaseUrl.replace(/\/$/, '');
+  const base = (env.webAppBaseUrl || DEFAULT_WEB_APP_BASE_URL).replace(/\/$/, '');
   return `${base}${path}`;
 }
 
@@ -16,7 +16,7 @@ export async function openAccountWebPage(path: AccountWebPath): Promise<void> {
   const url = buildAccountWebUrl(path);
   const canOpen = await Linking.canOpenURL(url);
   if (!canOpen) {
-    throw new Error('Unable to open the storefront account page.');
+    throw new Error('Unable to open the storefront page.');
   }
   await Linking.openURL(url);
 }

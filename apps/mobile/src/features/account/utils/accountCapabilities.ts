@@ -10,6 +10,8 @@ export type AccountCapabilityId =
   | 'notifications'
   | 'support'
   | 'settings'
+  | 'privacy'
+  | 'terms'
   | 'logout';
 
 export type AccountCapabilityDecision = 'native' | 'website' | 'action';
@@ -22,7 +24,7 @@ export type AccountCapability = {
   /** Expo route when decision is native. */
   nativeHref?: string;
   /** Website path when decision is website. */
-  webPath?: '/account';
+  webPath?: '/account' | '/privacy' | '/terms';
   reason: string;
 };
 
@@ -83,6 +85,22 @@ export const ACCOUNT_CAPABILITIES: AccountCapability[] = [
     webPath: '/account',
     reason:
       'No dedicated mobile settings/preferences API (notification prefs, email change flows remain on web)',
+  },
+  {
+    id: 'privacy',
+    label: 'Privacy Policy',
+    apiExists: false,
+    decision: 'website',
+    webPath: '/privacy',
+    reason: 'Canonical public policy on chinaordertz.com/privacy',
+  },
+  {
+    id: 'terms',
+    label: 'Terms of Service',
+    apiExists: false,
+    decision: 'website',
+    webPath: '/terms',
+    reason: 'Canonical public terms on chinaordertz.com/terms',
   },
   {
     id: 'logout',

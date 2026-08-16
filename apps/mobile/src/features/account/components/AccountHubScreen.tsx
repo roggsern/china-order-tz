@@ -20,13 +20,13 @@ import {
 } from '../utils/accountWebLinks';
 import { resolveAccountCapability } from '../utils/accountCapabilities';
 
-async function openSettingsWebOrAlert() {
+async function openWebPathOrAlert(path: '/account' | '/privacy' | '/terms') {
   try {
-    await openAccountWebPage('/account');
+    await openAccountWebPage(path);
   } catch {
     Alert.alert(
       'Unable to open',
-      `Visit ${buildAccountWebUrl('/account')} in your browser to continue.`,
+      `Visit ${buildAccountWebUrl(path)} in your browser to continue.`,
     );
   }
 }
@@ -50,6 +50,15 @@ export function AccountHubScreen() {
     const capability = resolveAccountCapability(capabilityId);
     if (capability.decision === 'native' && capability.nativeHref) {
       router.push(capability.nativeHref as never);
+    }
+  }
+
+  function openWebsiteCapability(
+    capabilityId: 'settings' | 'privacy' | 'terms',
+  ) {
+    const capability = resolveAccountCapability(capabilityId);
+    if (capability.decision === 'website' && capability.webPath) {
+      void openWebPathOrAlert(capability.webPath);
     }
   }
 
@@ -120,7 +129,23 @@ export function AccountHubScreen() {
           description="Additional account preferences on chinaordertz.com."
           badge="Website"
           secondary
-          onPress={() => void openSettingsWebOrAlert()}
+          onPress={() => openWebsiteCapability('settings')}
+        />
+
+        <Text style={styles.sectionLabel}>Legal</Text>
+        <AccountMenuCard
+          title="Privacy Policy"
+          description="How we handle account, order, and device information."
+          badge="Website"
+          secondary
+          onPress={() => openWebsiteCapability('privacy')}
+        />
+        <AccountMenuCard
+          title="Terms of Service"
+          description="Rules for using CHINA ORDER TZ shopping journeys."
+          badge="Website"
+          secondary
+          onPress={() => openWebsiteCapability('terms')}
         />
 
         <TrustStrip

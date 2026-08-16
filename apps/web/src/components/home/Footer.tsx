@@ -165,13 +165,13 @@ export function Footer() {
           </div>
 
           <div className="flex justify-center gap-6 text-xs text-zinc-600 sm:justify-end">
-            <Link href="#" className="transition hover:text-[#c9a227]">
+            <Link href="/terms" className="transition hover:text-[#c9a227]">
               Terms of Service
             </Link>
-            <Link href="#" className="transition hover:text-[#c9a227]">
+            <Link href="/privacy" className="transition hover:text-[#c9a227]">
               Privacy Policy
             </Link>
-            <Link href="#" className="transition hover:text-[#c9a227]">
+            <Link href="/privacy#cookies" className="transition hover:text-[#c9a227]">
               Cookies
             </Link>
           </div>
