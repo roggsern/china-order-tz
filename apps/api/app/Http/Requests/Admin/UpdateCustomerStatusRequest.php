@@ -29,7 +29,14 @@ class UpdateCustomerStatusRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'lifecycle_status' => ['required', Rule::enum(CustomerLifecycleStatus::class)],
+            'lifecycle_status' => [
+                'required',
+                Rule::in([
+                    CustomerLifecycleStatus::Active->value,
+                    CustomerLifecycleStatus::Dormant->value,
+                    CustomerLifecycleStatus::Blocked->value,
+                ]),
+            ],
             'block_reason' => [
                 'nullable',
                 'string',

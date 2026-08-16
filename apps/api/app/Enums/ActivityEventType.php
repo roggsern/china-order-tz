@@ -175,6 +175,7 @@ enum ActivityEventType: string
     case CustomerEmailVerificationRequested = 'customer_email_verification_requested';
     case CustomerEmailVerified = 'customer_email_verified';
     case CustomerLogout = 'customer_logout';
+    case CustomerAccountClosed = 'customer_account_closed';
 
     public function label(): string
     {
@@ -350,6 +351,7 @@ enum ActivityEventType: string
             self::CustomerEmailVerificationRequested => 'Customer Email Verification Requested',
             self::CustomerEmailVerified => 'Customer Email Verified',
             self::CustomerLogout => 'Customer Logout',
+            self::CustomerAccountClosed => 'Customer Account Closed',
         };
     }
 
@@ -527,6 +529,7 @@ enum ActivityEventType: string
             self::CustomerEmailVerificationRequested => 'requested',
             self::CustomerEmailVerified => 'verified',
             self::CustomerLogout => 'logout',
+            self::CustomerAccountClosed => 'closed',
         };
     }
 }

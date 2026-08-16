@@ -2,7 +2,7 @@ import { DEFAULT_WEB_APP_BASE_URL } from '@/src/core/config/env';
 import { buildAccountWebUrl } from './accountWebLinks';
 
 describe('accountWebLinks', () => {
-  it('builds storefront account path from configured web origin', () => {
+  it('builds account settings URL from the configured web origin', () => {
     expect(buildAccountWebUrl('/account')).toBe(
       `${DEFAULT_WEB_APP_BASE_URL}/account`,
     );
@@ -14,6 +14,9 @@ describe('accountWebLinks', () => {
     );
     expect(buildAccountWebUrl('/terms')).toBe(
       `${DEFAULT_WEB_APP_BASE_URL}/terms`,
+    );
+    expect(buildAccountWebUrl('/delete-account')).toBe(
+      `${DEFAULT_WEB_APP_BASE_URL}/delete-account`,
     );
   });
 });

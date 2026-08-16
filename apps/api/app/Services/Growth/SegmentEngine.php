@@ -203,7 +203,8 @@ class SegmentEngine
             'category_id' => $this->purchasedCategory($profile, (string) $value),
             'store_id' => $this->orderedAtStore($profile, (string) ($value ?: $storeId)),
             'marketing_opt_in' => ((bool) $profile->marketing_opt_in) === (bool) $value,
-            'not_blocked' => $profile->lifecycle_status !== CustomerLifecycleStatus::Blocked,
+            'not_blocked' => $profile->lifecycle_status !== CustomerLifecycleStatus::Blocked
+                && $profile->lifecycle_status !== CustomerLifecycleStatus::Closed,
             default => true,
         };
     }

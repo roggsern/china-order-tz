@@ -103,8 +103,11 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
     title: "10. Account and privacy requests",
     paragraphs: [
       "You can update certain profile and address information through your account settings where those features are available.",
-      "Self-service in-app account deletion controls are being prepared for the platform. Until those controls are available in your account settings, you may contact support regarding privacy or account-closure requests.",
-      "Depending on the request and applicable requirements, we may need to verify identity, retain transactional records as described above, and take reasonable time to process the request.",
+      "You can close your customer account yourself while signed in: in the mobile app use Account → Close account, or on the website use Account → Security → Close account. Both flows require your current password and an explicit confirmation.",
+      "Closing your account ends signed-in access, revokes active sessions/tokens, deactivates push tokens for the account, anonymizes login identity, and removes or anonymizes disposable personal data such as address-book entries, active carts, wishlists, and notification preferences.",
+      "Order, payment, refund, shipment, and similar transactional records may still be retained where needed for legitimate operational, accounting, dispute, audit, or legal purposes. Fixed retention periods are not stated here.",
+      "If you cannot use self-service closure, contact support regarding privacy or account-closure requests. We may need to verify identity and take reasonable time to process the request.",
+      "Public instructions for store listings and customers who need a no-login overview are available at /delete-account.",
     ],
   },
   {

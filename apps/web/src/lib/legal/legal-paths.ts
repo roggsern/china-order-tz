@@ -5,6 +5,7 @@
 export const LEGAL_PATHS = {
   privacy: "/privacy",
   terms: "/terms",
+  deleteAccount: "/delete-account",
   cookiesAnchor: "/privacy#cookies",
 } as const;
 

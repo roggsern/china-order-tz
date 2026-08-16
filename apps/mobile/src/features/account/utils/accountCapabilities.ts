@@ -12,6 +12,7 @@ export type AccountCapabilityId =
   | 'settings'
   | 'privacy'
   | 'terms'
+  | 'close_account'
   | 'logout';
 
 export type AccountCapabilityDecision = 'native' | 'website' | 'action';
@@ -24,7 +25,7 @@ export type AccountCapability = {
   /** Expo route when decision is native. */
   nativeHref?: string;
   /** Website path when decision is website. */
-  webPath?: '/account' | '/privacy' | '/terms';
+  webPath?: '/account' | '/privacy' | '/terms' | '/delete-account';
   reason: string;
 };
 
@@ -101,6 +102,14 @@ export const ACCOUNT_CAPABILITIES: AccountCapability[] = [
     decision: 'website',
     webPath: '/terms',
     reason: 'Canonical public terms on chinaordertz.com/terms',
+  },
+  {
+    id: 'close_account',
+    label: 'Close account',
+    apiExists: true,
+    decision: 'native',
+    nativeHref: '/(app)/account/close-account',
+    reason: 'POST /account/close',
   },
   {
     id: 'logout',

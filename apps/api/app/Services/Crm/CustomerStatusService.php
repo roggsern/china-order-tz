@@ -35,6 +35,9 @@ class CustomerStatusService
             ),
             CustomerLifecycleStatus::Active => $this->activate($profile, $admin),
             CustomerLifecycleStatus::Dormant => $this->markDormant($profile, $admin),
+            CustomerLifecycleStatus::Closed => throw ValidationException::withMessages([
+                'lifecycle_status' => ['Customer-initiated closure cannot be set through CRM status controls.'],
+            ]),
         };
     }
 
@@ -50,6 +53,11 @@ class CustomerStatusService
         return DB::transaction(function () use ($profile, $reason, $admin) {
             /** @var CustomerProfile $locked */
             $locked = CustomerProfile::query()->whereKey($profile->id)->lockForUpdate()->firstOrFail();
+            if ($locked->lifecycle_status === CustomerLifecycleStatus::Closed) {
+                throw ValidationException::withMessages([
+                    'lifecycle_status' => ['Closed accounts cannot be blocked through CRM status controls.'],
+                ]);
+            }
             $before = $locked->lifecycle_status;
 
             $locked->update([
@@ -97,6 +105,11 @@ class CustomerStatusService
         return DB::transaction(function () use ($profile, $admin) {
             /** @var CustomerProfile $locked */
             $locked = CustomerProfile::query()->whereKey($profile->id)->lockForUpdate()->firstOrFail();
+            if ($locked->lifecycle_status === CustomerLifecycleStatus::Closed) {
+                throw ValidationException::withMessages([
+                    'lifecycle_status' => ['Closed accounts cannot be reactivated through CRM status controls.'],
+                ]);
+            }
             $before = $locked->lifecycle_status;
             $wasBlocked = $before === CustomerLifecycleStatus::Blocked;
 
@@ -155,6 +168,11 @@ class CustomerStatusService
             if ($locked->lifecycle_status === CustomerLifecycleStatus::Blocked) {
                 throw ValidationException::withMessages([
                     'lifecycle_status' => ['Unblock the customer before marking dormant.'],
+                ]);
+            }
+            if ($locked->lifecycle_status === CustomerLifecycleStatus::Closed) {
+                throw ValidationException::withMessages([
+                    'lifecycle_status' => ['Closed accounts cannot be marked dormant.'],
                 ]);
             }
 

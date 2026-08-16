@@ -20,7 +20,9 @@ import {
 } from '../utils/accountWebLinks';
 import { resolveAccountCapability } from '../utils/accountCapabilities';
 
-async function openWebPathOrAlert(path: '/account' | '/privacy' | '/terms') {
+async function openWebPathOrAlert(
+  path: '/account' | '/privacy' | '/terms' | '/delete-account',
+) {
   try {
     await openAccountWebPage(path);
   } catch {
@@ -146,6 +148,14 @@ export function AccountHubScreen() {
           badge="Website"
           secondary
           onPress={() => openWebsiteCapability('terms')}
+        />
+
+        <Text style={styles.sectionLabel}>Danger zone</Text>
+        <AccountMenuCard
+          title="Close account"
+          description="End access permanently. Some transaction records may be retained for operational or legal reasons."
+          destructive
+          onPress={() => openNative('close_account')}
         />
 
         <TrustStrip

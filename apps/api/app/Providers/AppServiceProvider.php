@@ -92,6 +92,10 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(5)->by(self::throttleKey($request));
         });
 
+        RateLimiter::for('customer-account-close', function (Request $request) {
+            return Limit::perMinute(3)->by(self::throttleKey($request));
+        });
+
         RateLimiter::for('customer-email-change', function (Request $request) {
             return Limit::perMinute(5)->by(self::throttleKey($request));
         });

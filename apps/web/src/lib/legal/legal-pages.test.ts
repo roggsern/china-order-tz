@@ -16,11 +16,16 @@ import {
   TERMS_PAGE_TITLE,
   TERMS_SECTIONS,
 } from "./terms-content";
+import {
+  DELETE_ACCOUNT_PAGE_TITLE,
+  DELETE_ACCOUNT_SECTIONS,
+} from "./delete-account-content";
 
 describe("legal public pages foundation", () => {
-  it("defines canonical privacy and terms paths", () => {
+  it("defines canonical privacy, terms, and delete-account paths", () => {
     assert.equal(LEGAL_PATHS.privacy, "/privacy");
     assert.equal(LEGAL_PATHS.terms, "/terms");
+    assert.equal(LEGAL_PATHS.deleteAccount, "/delete-account");
     assert.equal(LEGAL_PATHS.cookiesAnchor, "/privacy#cookies");
   });
 
@@ -40,12 +45,25 @@ describe("legal public pages foundation", () => {
     assert.ok(ids.includes("retention"));
   });
 
-  it("does not claim an in-app delete-account button exists yet", () => {
+  it("documents live self-service account closure without false delete-button claims", () => {
     const accountSection = PRIVACY_SECTIONS.find((s) => s.id === "account-requests");
     assert.ok(accountSection);
     const text = accountSection!.paragraphs.join(" ");
-    assert.match(text, /being prepared|contact support/i);
+    assert.match(text, /Close account/i);
+    assert.doesNotMatch(text, /being prepared/i);
     assert.doesNotMatch(text, /Delete Account button/i);
+    assert.match(text, /\/delete-account/);
+  });
+
+  it("exposes public delete-account instructions without unauthenticated deletion", () => {
+    assert.match(DELETE_ACCOUNT_PAGE_TITLE, /Delete account/i);
+    const blob = DELETE_ACCOUNT_SECTIONS.flatMap((s) => [
+      ...s.paragraphs,
+      ...(s.bullets ?? []),
+    ]).join("\n");
+    assert.match(blob, /signed in/i);
+    assert.match(blob, /current password/i);
+    assert.doesNotMatch(blob, /enter your email to delete/i);
   });
 
   it("exposes terms metadata and journey coverage", () => {
@@ -60,6 +78,7 @@ describe("legal public pages foundation", () => {
     const blob = [
       ...PRIVACY_SECTIONS.flatMap((s) => [...s.paragraphs, ...(s.bullets ?? [])]),
       ...TERMS_SECTIONS.flatMap((s) => [...s.paragraphs, ...(s.bullets ?? [])]),
+      ...DELETE_ACCOUNT_SECTIONS.flatMap((s) => [...s.paragraphs, ...(s.bullets ?? [])]),
     ].join("\n");
 
     assert.doesNotMatch(blob, /\bGDPR compliant\b/i);
@@ -84,7 +103,7 @@ describe("legal public pages foundation", () => {
     );
   });
 
-  it("registers public Next.js routes for privacy and terms", () => {
+  it("registers public Next.js routes for privacy, terms, and delete-account", () => {
     const privacyPage = readFileSync(
       join(process.cwd(), "src/app/(storefront)/privacy/page.tsx"),
       "utf8",
@@ -93,8 +112,28 @@ describe("legal public pages foundation", () => {
       join(process.cwd(), "src/app/(storefront)/terms/page.tsx"),
       "utf8",
     );
+    const deleteAccountPage = readFileSync(
+      join(process.cwd(), "src/app/(storefront)/delete-account/page.tsx"),
+      "utf8",
+    );
     assert.match(privacyPage, /PRIVACY_PAGE_TITLE/);
     assert.match(termsPage, /TERMS_PAGE_TITLE/);
+    assert.match(deleteAccountPage, /DELETE_ACCOUNT_PAGE_TITLE/);
     assert.doesNotMatch(privacyPage, /auth|login required/i);
+    assert.doesNotMatch(deleteAccountPage, /getCustomerApiToken|auth:sanctum/i);
+  });
+
+  it("wires authenticated web close-account UI to the shared API path", () => {
+    const security = readFileSync(
+      join(process.cwd(), "src/components/account/AccountSecurityContent.tsx"),
+      "utf8",
+    );
+    const bff = readFileSync(
+      join(process.cwd(), "src/app/api/account/close/route.ts"),
+      "utf8",
+    );
+    assert.match(security, /closeCustomerAccount/);
+    assert.match(security, /Close account/);
+    assert.match(bff, /\/account\/close/);
   });
 });

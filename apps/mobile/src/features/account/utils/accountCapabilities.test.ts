@@ -6,7 +6,7 @@ import {
 } from './accountCapabilities';
 
 describe('accountCapabilities', () => {
-  it('routes profile/password/notifications/support to native APIs', () => {
+  it('routes profile/password/notifications/support/close to native APIs', () => {
     for (const id of [
       'profile',
       'addresses',
@@ -14,6 +14,7 @@ describe('accountCapabilities', () => {
       'security_password',
       'notifications',
       'support',
+      'close_account',
     ] as const) {
       const capability = resolveAccountCapability(id);
       expect(capability.decision).toBe('native');
@@ -44,11 +45,10 @@ describe('accountCapabilities', () => {
     );
   });
 
-  it('does not introduce account deletion capability in this phase', () => {
-    expect(
-      ACCOUNT_CAPABILITIES.some((row) =>
-        /delete|close account|deactivate/i.test(row.id + row.label),
-      ),
-    ).toBe(false);
+  it('exposes shared close-account capability without platform forks', () => {
+    const close = resolveAccountCapability('close_account');
+    expect(close.nativeHref).toBe('/(app)/account/close-account');
+    expect(close.decision).toBe('native');
+    expect(close.reason).toMatch(/POST \/account\/close/);
   });
 });

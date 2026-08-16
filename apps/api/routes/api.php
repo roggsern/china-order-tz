@@ -94,6 +94,7 @@ use App\Http\Controllers\Storefront\TzStorefrontController;
 use App\Http\Controllers\Storefront\ChinaStorefrontController;
 use App\Http\Controllers\Account\CustomerAddressController;
 use App\Http\Controllers\Account\CustomerSupportTicketController;
+use App\Http\Controllers\Account\CustomerAccountClosureController;
 use App\Http\Controllers\Account\CustomerChangePasswordController;
 use App\Http\Controllers\Account\CustomerEmailChangeController;
 use App\Http\Controllers\Account\CustomerEmailVerificationController;
@@ -349,6 +350,9 @@ Route::middleware(['auth:sanctum', 'ensure.user', 'user.active'])->group(functio
 
     Route::post('/account/change-password', CustomerChangePasswordController::class)
         ->middleware('throttle:customer-change-password');
+
+    Route::post('/account/close', CustomerAccountClosureController::class)
+        ->middleware('throttle:customer-account-close');
 
     Route::post('/account/email-change', [CustomerEmailChangeController::class, 'request'])
         ->middleware('throttle:customer-email-change');

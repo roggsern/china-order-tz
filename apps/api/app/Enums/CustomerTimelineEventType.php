@@ -18,6 +18,7 @@ enum CustomerTimelineEventType: string
     case StatusChanged = 'status_changed';
     case CustomerBlocked = 'customer_blocked';
     case CustomerUnblocked = 'customer_unblocked';
+    case AccountClosed = 'account_closed';
     case LoyaltyPointsEarned = 'loyalty_points_earned';
     case LoyaltyPointsRedeemed = 'loyalty_points_redeemed';
     case LoyaltyTierChanged = 'loyalty_tier_changed';
@@ -39,6 +40,7 @@ enum CustomerTimelineEventType: string
             self::StatusChanged => 'Status Changed',
             self::CustomerBlocked => 'Customer Blocked',
             self::CustomerUnblocked => 'Customer Unblocked',
+            self::AccountClosed => 'Account Closed',
             self::LoyaltyPointsEarned => 'Loyalty Points Earned',
             self::LoyaltyPointsRedeemed => 'Loyalty Points Redeemed',
             self::LoyaltyTierChanged => 'Loyalty Tier Changed',

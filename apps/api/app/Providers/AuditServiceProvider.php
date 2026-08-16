@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Events\Audit\AdminLogin;
 use App\Events\Audit\AdminLogout;
+use App\Events\Audit\CustomerAccountClosedAudit;
 use App\Events\Audit\CustomerEmailChangedAudit;
 use App\Events\Audit\CustomerEmailChangeRequestedAudit;
 use App\Events\Audit\CustomerEmailVerificationRequestedAudit;
@@ -57,6 +58,7 @@ class AuditServiceProvider extends ServiceProvider
         CustomerEmailVerifiedAudit::class,
         CustomerPasswordResetRequestedAudit::class,
         CustomerPasswordResetCompletedAudit::class,
+        CustomerAccountClosedAudit::class,
     ];
 
     public function register(): void

@@ -7,6 +7,15 @@ import { AccountPageSkeleton } from "@/components/ui/PageSkeletons";
 import { useCustomerSession } from "@/lib/customer/use-customer-session";
 import { getCustomerApiToken } from "@/lib/api/customer-auth";
 import {
+  CustomerAccountCloseError,
+  closeCustomerAccount,
+} from "@/lib/api/customer-account-close";
+import {
+  mapCloseAccountError,
+  mapCloseAccountSuccess,
+  validateCloseAccountForm,
+} from "@/lib/account/customer-account-close";
+import {
   CustomerChangePasswordError,
   changeCustomerPassword,
 } from "@/lib/api/customer-change-password";
@@ -53,6 +62,12 @@ export function AccountSecurityContent() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
+
+  const [closePassword, setClosePassword] = useState("");
+  const [closeAcknowledge, setCloseAcknowledge] = useState(false);
+  const [closeError, setCloseError] = useState<string | null>(null);
+  const [closeSuccess, setCloseSuccess] = useState<string | null>(null);
+  const [closeSubmitting, setCloseSubmitting] = useState(false);
 
   const [newEmail, setNewEmail] = useState("");
   const [emailPassword, setEmailPassword] = useState("");
@@ -185,6 +200,45 @@ export function AccountSecurityContent() {
       );
     } finally {
       setPasswordSubmitting(false);
+    }
+  };
+
+  const handleCloseSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    setCloseError(null);
+
+    const validationError = validateCloseAccountForm({
+      currentPassword: closePassword,
+      acknowledge: closeAcknowledge,
+    });
+    if (validationError) {
+      setCloseError(validationError);
+      return;
+    }
+
+    setCloseSubmitting(true);
+    try {
+      const result = await closeCustomerAccount({
+        currentPassword: closePassword,
+        acknowledge: closeAcknowledge,
+      });
+      setCloseSuccess(mapCloseAccountSuccess(result.message));
+      setClosePassword("");
+      setCloseAcknowledge(false);
+      await logoutCustomer({ showToast: false });
+      window.setTimeout(() => {
+        router.push("/");
+      }, 1400);
+    } catch (err) {
+      setCloseError(
+        mapCloseAccountError(
+          err instanceof CustomerAccountCloseError
+            ? err.message
+            : "Unable to close your account. Please try again.",
+        ),
+      );
+    } finally {
+      setCloseSubmitting(false);
     }
   };
 
@@ -431,6 +485,77 @@ export function AccountSecurityContent() {
             className="rounded-lg bg-[#8b6914] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#6f5410] disabled:opacity-50"
           >
             {passwordSubmitting ? "Updating…" : "Update password"}
+          </button>
+        </form>
+      ) : null}
+
+      {closeSuccess ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-5 text-sm text-emerald-800">
+          <p className="font-semibold">{closeSuccess}</p>
+          <p className="mt-1">Redirecting you to the storefront…</p>
+        </div>
+      ) : null}
+
+      {isReady && !passwordSuccess && !closeSuccess ? (
+        <form
+          onSubmit={handleCloseSubmit}
+          className="space-y-4 rounded-2xl border border-red-200 bg-red-50/40 p-5 shadow-sm"
+        >
+          <h2 className="text-lg font-semibold text-red-800">Close account</h2>
+          <p className="text-sm text-zinc-600">
+            Closing your account ends signed-in access immediately. Some order,
+            payment, refund, and fulfillment records may be retained for legitimate
+            operational, accounting, or legal purposes. See our{" "}
+            <Link href="/privacy" className="underline underline-offset-2">
+              Privacy Policy
+            </Link>{" "}
+            and{" "}
+            <Link href="/delete-account" className="underline underline-offset-2">
+              account deletion instructions
+            </Link>
+            .
+          </p>
+          {closeError ? (
+            <div
+              role="alert"
+              className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+            >
+              {closeError}
+            </div>
+          ) : null}
+
+          <label className="block text-sm">
+            <span className="font-medium text-zinc-700">Current password</span>
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={closePassword}
+              onChange={(e) => setClosePassword(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2"
+              required
+            />
+          </label>
+
+          <label className="flex items-start gap-2 text-sm text-zinc-700">
+            <input
+              type="checkbox"
+              checked={closeAcknowledge}
+              onChange={(e) => setCloseAcknowledge(e.target.checked)}
+              className="mt-1"
+              required
+            />
+            <span>
+              I understand that closing my account cannot be undone from this screen
+              and that I will need to create a new account to shop again.
+            </span>
+          </label>
+
+          <button
+            type="submit"
+            disabled={closeSubmitting}
+            className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-800 disabled:opacity-50"
+          >
+            {closeSubmitting ? "Closing…" : "Close my account"}
           </button>
         </form>
       ) : null}

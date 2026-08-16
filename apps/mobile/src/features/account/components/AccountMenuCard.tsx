@@ -10,6 +10,8 @@ type Props = {
   onPress: () => void;
   /** Visually de-emphasize website handoffs vs native capabilities. */
   secondary?: boolean;
+  /** Destructive styling for irreversible actions such as account closure. */
+  destructive?: boolean;
 };
 
 /** Premium menu row for the account hub. */
@@ -19,6 +21,7 @@ export function AccountMenuCard({
   badge,
   onPress,
   secondary = false,
+  destructive = false,
 }: Props) {
   return (
     <Pressable
@@ -27,18 +30,29 @@ export function AccountMenuCard({
       style={({ pressed }) => [pressed ? styles.pressed : null]}
     >
       <Card
-        elevated={!secondary}
-        style={[styles.card, secondary ? styles.secondaryCard : null]}
+        elevated={!secondary && !destructive}
+        style={[
+          styles.card,
+          secondary ? styles.secondaryCard : null,
+          destructive ? styles.destructiveCard : null,
+        ]}
       >
         <View style={styles.row}>
           <View style={styles.copy}>
-            <Text style={[styles.title, secondary ? styles.secondaryTitle : null]}>
+            <Text
+              style={[
+                styles.title,
+                secondary ? styles.secondaryTitle : null,
+                destructive ? styles.destructiveTitle : null,
+              ]}
+            >
               {title}
             </Text>
             <Text
               style={[
                 styles.description,
                 secondary ? styles.secondaryDescription : null,
+                destructive ? styles.destructiveDescription : null,
               ]}
             >
               {description}
@@ -63,6 +77,10 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     opacity: 0.92,
   },
+  destructiveCard: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#fecaca',
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -78,11 +96,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textSecondary,
   },
+  destructiveTitle: {
+    color: colors.error,
+    fontWeight: '700',
+  },
   description: {
     ...typography.caption,
     marginTop: spacing.xxs,
   },
   secondaryDescription: {
     color: colors.textMuted,
+  },
+  destructiveDescription: {
+    color: '#7f1d1d',
   },
 });
