@@ -7,6 +7,7 @@ use App\Actions\AdminAuth\LoginAdminAction;
 use App\Actions\AdminAuth\LogoutAdminAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\LoginRequest;
+use App\Http\Requests\Admin\LogoutAdminRequest;
 use App\Http\Resources\AdminResource;
 use Illuminate\Http\JsonResponse;
 
@@ -33,9 +34,9 @@ class AuthController extends Controller
         ]);
     }
 
-    public function logout(LogoutAdminAction $action): JsonResponse
+    public function logout(LogoutAdminRequest $request, LogoutAdminAction $action): JsonResponse
     {
-        $action->handle();
+        $action->handle($request->validated());
 
         return response()->json([
             'success' => true,

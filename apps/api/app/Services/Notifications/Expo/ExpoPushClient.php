@@ -130,6 +130,7 @@ class ExpoPushClient
                             Log::info('notification.push.expo.device_revoked', [
                                 'device_push_token_id' => $device->id,
                                 'user_id' => $device->user_id,
+                                'admin_id' => $device->admin_id,
                             ]);
                         }
                     }

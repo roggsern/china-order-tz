@@ -17,6 +17,7 @@ use Throwable;
 /**
  * Push channel — Expo Push Service delivery (Wave 6B).
  * Fail-closed when not configured. Does not poll receipts (Wave 6F).
+ * Resolves customer OR admin tokens from notification ownership fields.
  */
 class PushNotificationProvider implements NotificationChannelInterface
 {
@@ -59,16 +60,10 @@ class PushNotificationProvider implements NotificationChannelInterface
                 return $this->failure('Unsupported push driver');
             }
 
-            $customerId = $notification->customer_id ?? $notification->user_id;
-            if (! filled($customerId)) {
-                return $this->failure('Customer missing');
+            $devices = $this->resolveDevices($notification);
+            if ($devices === null) {
+                return $this->failure('Recipient missing');
             }
-
-            $devices = $this->resolveTokens->forUserId((string) $customerId)
-                ->filter(fn (DevicePushToken $device): bool => $this->messages->looksLikeExpoToken(
-                    trim((string) $device->push_token),
-                ))
-                ->values();
 
             if ($devices->isEmpty()) {
                 // Nothing to deliver — not a transport failure.
@@ -99,6 +94,35 @@ class PushNotificationProvider implements NotificationChannelInterface
 
             return $this->failure(Str::limit($e->getMessage(), 480, '…'));
         }
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, DevicePushToken>|null
+     */
+    private function resolveDevices(Notification $notification)
+    {
+        $adminId = $notification->admin_id;
+        $customerId = $notification->customer_id ?? $notification->user_id;
+
+        // Admin-only notification rows (no customer) → admin tokens.
+        if (filled($adminId) && ! filled($customerId)) {
+            return $this->resolveTokens->forAdminId((string) $adminId)
+                ->filter(fn (DevicePushToken $device): bool => $this->messages->looksLikeExpoToken(
+                    trim((string) $device->push_token),
+                ))
+                ->values();
+        }
+
+        // Customer path unchanged (customer_id / legacy user_id).
+        if (filled($customerId)) {
+            return $this->resolveTokens->forUserId((string) $customerId)
+                ->filter(fn (DevicePushToken $device): bool => $this->messages->looksLikeExpoToken(
+                    trim((string) $device->push_token),
+                ))
+                ->values();
+        }
+
+        return null;
     }
 
     /**

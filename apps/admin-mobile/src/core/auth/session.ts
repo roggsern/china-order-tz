@@ -1,4 +1,9 @@
 import { fetchCurrentAdmin, loginAdmin, logoutAdmin } from '@/src/features/auth/api/adminAuthApi';
+import {
+  deactivateAdminPushBestEffort,
+  getOrCreateInstallationId,
+  resetPushRegistrationState,
+} from '@/src/features/notifications';
 import { secureTokenStorage } from '@/src/core/storage';
 
 import { useAdminAuthStore } from './adminAuthStore';
@@ -29,12 +34,22 @@ export async function login(email: string, password: string): Promise<void> {
 }
 
 export async function logout(): Promise<void> {
+  let installationId: string | undefined;
   try {
-    await logoutAdmin();
+    installationId = await getOrCreateInstallationId();
+  } catch {
+    installationId = undefined;
+  }
+
+  try {
+    await logoutAdmin(installationId ? { installation_id: installationId } : undefined);
   } catch {
     // Best-effort server logout; always clear local session.
-  } finally {
-    await secureTokenStorage.clearToken();
-    useAdminAuthStore.getState().setUnauthenticated();
   }
+
+  await deactivateAdminPushBestEffort();
+  resetPushRegistrationState();
+
+  await secureTokenStorage.clearToken();
+  useAdminAuthStore.getState().setUnauthenticated();
 }

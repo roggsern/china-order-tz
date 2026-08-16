@@ -83,6 +83,10 @@ export async function fetchCurrentAdmin(): Promise<AdminIdentity> {
   return mapAdminResource(envelope.data);
 }
 
-export async function logoutAdmin(): Promise<void> {
-  await apiClient.post('/admin/logout');
+export async function logoutAdmin(options?: { installation_id?: string }): Promise<void> {
+  const body =
+    options?.installation_id && options.installation_id.trim()
+      ? { installation_id: options.installation_id.trim() }
+      : undefined;
+  await apiClient.post('/admin/logout', body);
 }

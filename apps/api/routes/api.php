@@ -86,6 +86,7 @@ use App\Http\Controllers\Admin\AdminProductVariantController;
 use App\Http\Controllers\Admin\AdminVariantPriceController;
 use App\Http\Controllers\Admin\AdminVariantInventoryController;
 use App\Http\Controllers\Admin\AdminChinaCommercialStockController;
+use App\Http\Controllers\Admin\AdminDevicePushTokenController;
 use App\Http\Controllers\Admin\AuthController as AdminAuthController;
 use App\Http\Controllers\Admin\AdminAlertsController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
@@ -890,4 +891,9 @@ Route::middleware(['auth:sanctum', 'ensure.admin', 'admin.active'])->prefix('adm
     Route::get('/me', [AdminAuthController::class, 'me'])
         ->middleware('throttle:admin-profile');
     Route::post('/logout', [AdminAuthController::class, 'logout']);
+
+    Route::post('/devices/push-tokens', [AdminDevicePushTokenController::class, 'store'])
+        ->middleware('throttle:admin-profile');
+    Route::delete('/devices/push-tokens', [AdminDevicePushTokenController::class, 'destroy'])
+        ->middleware('throttle:admin-profile');
 });

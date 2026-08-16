@@ -17,6 +17,7 @@ class DevicePushToken extends Model
 
     protected $fillable = [
         'user_id',
+        'admin_id',
         'push_token',
         'provider',
         'platform',
@@ -42,6 +43,21 @@ class DevicePushToken extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function admin(): BelongsTo
+    {
+        return $this->belongsTo(Admin::class);
+    }
+
+    public function isCustomerOwned(): bool
+    {
+        return $this->user_id !== null && $this->admin_id === null;
+    }
+
+    public function isAdminOwned(): bool
+    {
+        return $this->admin_id !== null && $this->user_id === null;
     }
 
     public function isActive(): bool

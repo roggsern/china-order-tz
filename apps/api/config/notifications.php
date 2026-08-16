@@ -65,6 +65,7 @@ return [
         'review_rejected' => ['in_app'],
         // Support events previously relied on config fallback ['in_app'] only.
         'support_ticket_created' => ['in_app'],
+        // Customer assign notice stays in_app by default; admin assignee gets push explicitly.
         'support_ticket_assigned' => ['in_app'],
         'support_reply_received' => ['in_app', 'push'],
         'support_ticket_resolved' => ['in_app'],

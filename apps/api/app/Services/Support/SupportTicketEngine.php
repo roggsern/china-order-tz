@@ -2,6 +2,7 @@
 
 namespace App\Services\Support;
 
+use App\Enums\NotificationChannel;
 use App\Enums\NotificationEventType;
 use App\Enums\SupportMessageSenderType;
 use App\Enums\SupportTicketCategory;
@@ -19,6 +20,7 @@ use App\Models\User;
 use App\Services\Notifications\NotificationPlatform;
 use App\Services\Stores\ActiveStoreContext;
 use App\Support\Admin\AdminPermissions;
+use App\Support\Admin\AdminPushDestinations;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -183,7 +185,8 @@ class SupportTicketEngine
         $this->notifications->notifyAdmin(
             NotificationEventType::SupportTicketAssigned,
             $assignee,
-            $this->notificationPayload($ticket->fresh(['customer', 'order'])),
+            $this->adminPushSafePayload($ticket->fresh(['order'])),
+            channels: [NotificationChannel::InApp, NotificationChannel::Push],
             idempotencyKey: 'support_ticket_assigned:'.$ticket->id.':'.$assignee->id,
         );
 
@@ -380,6 +383,27 @@ class SupportTicketEngine
             'category' => $ticket->category?->value,
             'order_number' => $ticket->order?->order_number,
             'customer_name' => $ticket->customer?->name,
+        ];
+    }
+
+    /**
+     * Admin push/in-app data — stable destination + operational ids only.
+     * Omits customer PII (name/email/phone) from the push data bag.
+     *
+     * @return array<string, mixed>
+     */
+    private function adminPushSafePayload(SupportTicket $ticket): array
+    {
+        $ticket->loadMissing(['order']);
+
+        return [
+            'destination' => AdminPushDestinations::SUPPORT_TICKET,
+            'ticket_id' => $ticket->id,
+            'ticket_number' => $ticket->ticket_number,
+            'subject' => $ticket->subject,
+            'status' => $ticket->status?->value,
+            'category' => $ticket->category?->value,
+            'order_number' => $ticket->order?->order_number,
         ];
     }
 

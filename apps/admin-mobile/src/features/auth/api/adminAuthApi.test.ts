@@ -94,4 +94,23 @@ describe('adminAuthApi endpoints', () => {
       expect.objectContaining({ method: 'POST' }),
     );
   });
+
+  it('logout includes installation_id when provided', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ success: true, message: 'Logged out successfully' }),
+    });
+
+    await logoutAdmin({ installation_id: '11111111-1111-4111-8111-111111111111' });
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/admin/logout'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          installation_id: '11111111-1111-4111-8111-111111111111',
+        }),
+      }),
+    );
+  });
 });

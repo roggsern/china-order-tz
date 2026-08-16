@@ -4,6 +4,7 @@ namespace App\Services\Devices;
 
 use App\Enums\PushTokenPlatform;
 use App\Enums\PushTokenProvider;
+use App\Models\Admin;
 use App\Models\DevicePushToken;
 use App\Models\User;
 use Illuminate\Database\QueryException;
@@ -12,7 +13,7 @@ use InvalidArgumentException;
 use Throwable;
 
 /**
- * Canonical ownership for mobile push tokens (Wave 6A).
+ * Canonical ownership for mobile push tokens (customer User XOR Admin).
  * Does not send push — registration / detach only.
  */
 class DevicePushTokenService
@@ -31,6 +32,48 @@ class DevicePushTokenService
      */
     public function register(User $user, array $payload): DevicePushToken
     {
+        return $this->registerOwned(
+            userId: $user->id,
+            adminId: null,
+            payload: $payload,
+        );
+    }
+
+    /**
+     * @param  array{
+     *   push_token: string,
+     *   provider: string,
+     *   platform: string,
+     *   installation_id: string,
+     *   app_version?: string|null,
+     *   device_name?: string|null
+     * }  $payload
+     */
+    public function registerForAdmin(Admin $admin, array $payload): DevicePushToken
+    {
+        return $this->registerOwned(
+            userId: null,
+            adminId: $admin->id,
+            payload: $payload,
+        );
+    }
+
+    /**
+     * @param  array{
+     *   push_token: string,
+     *   provider: string,
+     *   platform: string,
+     *   installation_id: string,
+     *   app_version?: string|null,
+     *   device_name?: string|null
+     * }  $payload
+     */
+    private function registerOwned(?string $userId, ?string $adminId, array $payload): DevicePushToken
+    {
+        if (($userId === null) === ($adminId === null)) {
+            throw new InvalidArgumentException('Exactly one of user_id or admin_id is required.');
+        }
+
         $pushToken = trim((string) $payload['push_token']);
         $installationId = strtolower(trim((string) $payload['installation_id']));
         $provider = PushTokenProvider::from((string) $payload['provider']);
@@ -50,7 +93,8 @@ class DevicePushTokenService
         for ($attempt = 0; $attempt <= self::DEADLOCK_RETRIES; $attempt++) {
             try {
                 return $this->registerOnce(
-                    $user,
+                    $userId,
+                    $adminId,
                     $pushToken,
                     $installationId,
                     $provider,
@@ -71,7 +115,8 @@ class DevicePushTokenService
     }
 
     private function registerOnce(
-        User $user,
+        ?string $userId,
+        ?string $adminId,
         string $pushToken,
         string $installationId,
         PushTokenProvider $provider,
@@ -80,7 +125,8 @@ class DevicePushTokenService
         ?string $deviceName,
     ): DevicePushToken {
         return DB::transaction(function () use (
-            $user,
+            $userId,
+            $adminId,
             $pushToken,
             $installationId,
             $provider,
@@ -126,8 +172,11 @@ class DevicePushTokenService
                 $byInstallation = null;
             }
 
+            // Global unique(push_token|installation_id): reassignment overwrites ownership.
+            // Customer↔admin collision intentionally transfers the single physical row.
             $attributes = [
-                'user_id' => $user->id,
+                'user_id' => $userId,
+                'admin_id' => $adminId,
                 'push_token' => $pushToken,
                 'provider' => $provider,
                 'platform' => $platform,
@@ -166,7 +215,6 @@ class DevicePushTokenService
             return true;
         }
 
-        // Unique race after concurrent create — retry resolves via lock + update path.
         $sqlState = (string) ($e->errorInfo[0] ?? '');
         $driverCode = (int) ($e->errorInfo[1] ?? 0);
 
@@ -174,7 +222,7 @@ class DevicePushTokenService
     }
 
     /**
-     * Deactivate the current installation and/or token for this user only.
+     * Deactivate the current installation and/or token for this customer only.
      *
      * @return int Number of rows deactivated
      */
@@ -182,6 +230,38 @@ class DevicePushTokenService
         User $user,
         ?string $installationId = null,
         ?string $pushToken = null,
+    ): int {
+        return $this->deactivateCurrentOwned(
+            userId: $user->id,
+            adminId: null,
+            installationId: $installationId,
+            pushToken: $pushToken,
+        );
+    }
+
+    /**
+     * Deactivate the current installation and/or token for this admin only.
+     *
+     * @return int Number of rows deactivated
+     */
+    public function deactivateCurrentForAdmin(
+        Admin $admin,
+        ?string $installationId = null,
+        ?string $pushToken = null,
+    ): int {
+        return $this->deactivateCurrentOwned(
+            userId: null,
+            adminId: $admin->id,
+            installationId: $installationId,
+            pushToken: $pushToken,
+        );
+    }
+
+    private function deactivateCurrentOwned(
+        ?string $userId,
+        ?string $adminId,
+        ?string $installationId,
+        ?string $pushToken,
     ): int {
         $installationId = $installationId !== null ? strtolower(trim($installationId)) : null;
         $pushToken = $pushToken !== null ? trim($pushToken) : null;
@@ -191,9 +271,13 @@ class DevicePushTokenService
             return 0;
         }
 
-        return DB::transaction(function () use ($user, $installationId, $pushToken): int {
+        return DB::transaction(function () use ($userId, $adminId, $installationId, $pushToken): int {
             $query = DevicePushToken::query()
-                ->where('user_id', $user->id)
+                ->when(
+                    $userId !== null,
+                    fn ($q) => $q->where('user_id', $userId)->whereNull('admin_id'),
+                    fn ($q) => $q->where('admin_id', $adminId)->whereNull('user_id'),
+                )
                 ->where('is_active', true)
                 ->orderBy('id')
                 ->lockForUpdate();
@@ -221,9 +305,26 @@ class DevicePushTokenService
      */
     public function deactivateAllForUser(User $user): int
     {
-        return DB::transaction(function () use ($user): int {
+        return $this->deactivateAllOwned(userId: $user->id, adminId: null);
+    }
+
+    /**
+     * Revoke every active token for an admin (deactivation / password change).
+     */
+    public function deactivateAllForAdmin(Admin $admin): int
+    {
+        return $this->deactivateAllOwned(userId: null, adminId: $admin->id);
+    }
+
+    private function deactivateAllOwned(?string $userId, ?string $adminId): int
+    {
+        return DB::transaction(function () use ($userId, $adminId): int {
             $tokens = DevicePushToken::query()
-                ->where('user_id', $user->id)
+                ->when(
+                    $userId !== null,
+                    fn ($q) => $q->where('user_id', $userId)->whereNull('admin_id'),
+                    fn ($q) => $q->where('admin_id', $adminId)->whereNull('user_id'),
+                )
                 ->where('is_active', true)
                 ->orderBy('id')
                 ->lockForUpdate()

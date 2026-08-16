@@ -160,4 +160,6 @@ export const apiClient = {
     apiRequest<T>({ method: 'GET', path, query, token }),
   post: <T = unknown>(path: string, body?: unknown, token?: string | null) =>
     apiRequest<T>({ method: 'POST', path, body, token }),
+  delete: <T = unknown>(path: string, body?: unknown, token?: string | null) =>
+    apiRequest<T>({ method: 'DELETE', path, body, token }),
 };

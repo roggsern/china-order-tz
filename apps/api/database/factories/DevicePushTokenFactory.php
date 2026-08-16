@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Enums\PushTokenPlatform;
 use App\Enums\PushTokenProvider;
+use App\Models\Admin;
 use App\Models\DevicePushToken;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -23,6 +24,7 @@ class DevicePushTokenFactory extends Factory
     {
         return [
             'user_id' => User::factory(),
+            'admin_id' => null,
             'push_token' => 'ExponentPushToken['.Str::random(22).']',
             'provider' => PushTokenProvider::Expo,
             'platform' => PushTokenPlatform::Android,
@@ -33,6 +35,14 @@ class DevicePushTokenFactory extends Factory
             'last_seen_at' => now(),
             'revoked_at' => null,
         ];
+    }
+
+    public function forAdmin(?Admin $admin = null): static
+    {
+        return $this->state(fn () => [
+            'user_id' => null,
+            'admin_id' => $admin?->id ?? Admin::factory(),
+        ]);
     }
 
     public function revoked(): static

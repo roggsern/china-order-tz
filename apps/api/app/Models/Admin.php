@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasUuidPrimaryKey;
+use App\Services\Devices\DevicePushTokenService;
 use App\Support\Admin\AdminPermissions;
 use Database\Factories\AdminFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -50,14 +51,26 @@ class Admin extends Authenticatable
         static::updated(function (Admin $admin): void {
             if ($admin->wasChanged('password')) {
                 $admin->tokens()->delete();
+                $admin->revokeActivePushTokens();
 
                 return;
             }
 
             if ($admin->wasChanged('is_active') && ! $admin->is_active) {
                 $admin->tokens()->delete();
+                $admin->revokeActivePushTokens();
             }
         });
+    }
+
+    public function revokeActivePushTokens(): void
+    {
+        app(DevicePushTokenService::class)->deactivateAllForAdmin($this);
+    }
+
+    public function devicePushTokens(): HasMany
+    {
+        return $this->hasMany(DevicePushToken::class);
     }
 
     public function role(): BelongsTo
