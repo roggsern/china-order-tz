@@ -329,6 +329,41 @@ class EmailChannelCompletionTest extends TestCase
         Mail::assertNothingSent();
     }
 
+    public function test_provider_key_follows_notification_email_driver_resend(): void
+    {
+        config([
+            'notifications.email.configured' => true,
+            'notifications.email.driver' => 'resend',
+            'mail.from.address' => 'orders@chinaordertz.com',
+        ]);
+
+        $this->assertSame('resend', app(EmailNotificationProvider::class)->providerKey());
+    }
+
+    public function test_resend_api_key_is_redacted_from_delivery_error(): void
+    {
+        $secret = 're_test_secret_key_do_not_persist';
+        config([
+            'notifications.email.configured' => true,
+            'notifications.email.driver' => 'resend',
+            'mail.default' => 'array',
+            'mail.from.address' => 'orders@chinaordertz.com',
+            'services.resend.key' => $secret,
+        ]);
+
+        Mail::shouldReceive('to')
+            ->once()
+            ->andThrow(new \RuntimeException('Resend rejected Authorization '.$secret.' for request'));
+
+        $user = User::factory()->create(['email' => 'asha@example.com']);
+        $result = app(EmailNotificationProvider::class)->send($this->makeEmailNotification($user));
+
+        $this->assertFalse($result['success']);
+        $this->assertNotNull($result['error']);
+        $this->assertStringNotContainsString($secret, (string) $result['error']);
+        $this->assertStringContainsString('[redacted]', (string) $result['error']);
+    }
+
     private function configureEmail(): void
     {
         config([

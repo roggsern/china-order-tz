@@ -152,18 +152,33 @@ php artisan nmb:validate-config
 
 ## 4. Mail configuration
 
-### Required variables
+Outbound application email uses Laravel Mail via the Notification Platform.
+On DigitalOcean, prefer **Resend HTTPS** (`MAIL_MAILER=resend`) because outbound SMTP ports 465/587 are blocked.
+
+### Required variables (Resend — recommended production)
 
 | Variable | Purpose |
 |----------|---------|
-| `MAIL_MAILER` | `smtp` |
-| `MAIL_HOST` | SMTP server |
-| `MAIL_PORT` | Usually `587` (TLS) or `465` (SSL) |
-| `MAIL_USERNAME` | SMTP auth user |
-| `MAIL_PASSWORD` | SMTP auth password |
-| `MAIL_FROM_ADDRESS` | Sender address |
+| `MAIL_MAILER` | `resend` |
+| `RESEND_API_KEY` | Resend API key (`config/services.php` → `services.resend.key`) |
+| `MAIL_FROM_ADDRESS` | Sender address (e.g. `orders@chinaordertz.com`) — domain must be verified in Resend |
 | `MAIL_FROM_NAME` | Sender display name |
 | `NOTIFICATION_EMAIL_CONFIGURED` | `true` — enables Notification Platform email channel |
+| `NOTIFICATION_EMAIL_DRIVER` | Label stored on notification rows (use `resend`) |
+
+### Rollback / alternate SMTP variables
+
+Keep these set for emergency rollback (`MAIL_MAILER=smtp`). They are unused while `MAIL_MAILER=resend`.
+
+| Variable | Purpose |
+|----------|---------|
+| `MAIL_SCHEME` | `tls` / `ssl` |
+| `MAIL_HOST` | SMTP server |
+| `MAIL_PORT` | Usually `587` (TLS) or `465` (SSL) — often blocked on DigitalOcean |
+| `MAIL_USERNAME` | SMTP auth user |
+| `MAIL_PASSWORD` | SMTP auth password |
+
+Also set `NOTIFICATION_EMAIL_DRIVER=smtp` when rolling back to SMTP.
 
 ### Email flows that require mail
 
@@ -176,6 +191,8 @@ php artisan nmb:validate-config
 
 In-app notifications still deliver when email is unconfigured; **email links will not send**.
 
+Admin setting `notifications.email_enabled` must also be `true` or the email channel is filtered out.
+
 ### Mail test checklist
 
 - [ ] `php artisan ops:production-env-check` reports `mail_configured: yes`
@@ -184,7 +201,8 @@ In-app notifications still deliver when email is unconfigured; **email links wil
 - [ ] Trigger email verification — email received with valid link
 - [ ] Request email change — notification to current address
 - [ ] Confirm templates render (no broken placeholders)
-- [ ] Check spam folder / SPF/DKIM on sending domain
+- [ ] Confirm Resend dashboard delivery (when using Resend)
+- [ ] Check spam folder / SPF/DKIM on sending domain (Resend domain verification)
 
 ---
 

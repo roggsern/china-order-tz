@@ -58,17 +58,12 @@ final class ProductionEnvironmentValidator
         }
 
         $issues = [];
-        $mailer = (string) config('mail.default');
-        $host = trim((string) config('mail.mailers.smtp.host'));
+        $mailer = strtolower(trim((string) config('mail.default')));
         $from = trim((string) config('mail.from.address'));
         $notificationConfigured = (bool) config('notifications.email.configured', false);
 
-        if (in_array($mailer, ['log', 'array'], true)) {
+        if (in_array($mailer, ['log', 'array', ''], true)) {
             $issues[] = 'MAIL_MAILER must not be log/array in production.';
-        }
-
-        if ($host === '') {
-            $issues[] = 'MAIL_HOST is required for production email delivery.';
         }
 
         if ($from === '' || $from === 'hello@example.com') {
@@ -77,6 +72,23 @@ final class ProductionEnvironmentValidator
 
         if (! $notificationConfigured) {
             $issues[] = 'NOTIFICATION_EMAIL_CONFIGURED must be true for password reset, verification, and email-change notifications.';
+        }
+
+        if ($mailer === 'smtp') {
+            $host = trim((string) config('mail.mailers.smtp.host'));
+            if ($host === '' || $host === '127.0.0.1' || $host === 'localhost') {
+                $issues[] = 'MAIL_HOST is required for production SMTP email delivery.';
+            }
+
+            $port = (int) config('mail.mailers.smtp.port');
+            if ($port <= 0) {
+                $issues[] = 'MAIL_PORT is required for production SMTP email delivery.';
+            }
+        } elseif ($mailer === 'resend') {
+            $key = trim((string) config('services.resend.key', ''));
+            if ($key === '') {
+                $issues[] = 'RESEND_API_KEY (services.resend.key) must be set when MAIL_MAILER=resend.';
+            }
         }
 
         return $issues;

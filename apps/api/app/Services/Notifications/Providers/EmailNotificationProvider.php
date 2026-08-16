@@ -13,7 +13,7 @@ use Illuminate\Support\Str;
 use Throwable;
 
 /**
- * Email channel — delivers via Laravel Mail (SMTP / configured mailer).
+ * Email channel — delivers via Laravel Mail (Resend / SMTP / configured mailer).
  * Subject/body are already rendered by NotificationDispatcher from DB templates.
  */
 class EmailNotificationProvider implements NotificationChannelInterface
@@ -153,6 +153,14 @@ class EmailNotificationProvider implements NotificationChannelInterface
         if ($username !== '' && strlen($username) > 3) {
             $message = str_replace($username, '[redacted]', $message);
         }
+
+        $resendKey = trim((string) config('services.resend.key', ''));
+        if ($resendKey !== '' && strlen($resendKey) > 3) {
+            $message = str_replace($resendKey, '[redacted]', $message);
+        }
+
+        // Defense-in-depth for Resend-style keys leaked into exception text.
+        $message = (string) preg_replace('/\bre_[A-Za-z0-9_]{8,}\b/', '[redacted]', $message);
 
         return Str::limit($message, 480, '…');
     }
