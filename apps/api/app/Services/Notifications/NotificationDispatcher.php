@@ -7,9 +7,11 @@ use App\Enums\NotificationDeliveryStatus;
 use App\Events\Audit\NotificationSent;
 use App\Models\Notification;
 use App\Models\NotificationPreference;
+use App\Models\User;
 use App\Services\Notifications\DTOs\NotificationEvent;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * Orchestrates template resolution, rendering, provider delivery, and logging.
@@ -64,23 +66,36 @@ class NotificationDispatcher
         }
 
         $template = $this->templates->resolveForEvent($event->type, $channel);
-        $variables = $this->normalizeVariables($event->data);
+        $variables = $this->enrichVariables($event, $this->normalizeVariables($event->data));
+        $persistedData = array_merge($event->data, array_filter(
+            ['customer_name' => $variables['customer_name'] ?? null],
+            static fn ($value) => $value !== null,
+        ));
 
         $title = $event->title;
         $message = '';
         $templateKey = null;
+        $unresolvedTokens = [];
 
         if ($template !== null) {
             $templateKey = $template->key;
             $rendered = $this->templates->preview($template, $variables, $this->renderer);
             $title = $title ?? $rendered['title'];
             $message = $rendered['body'];
+            $subjectForCheck = (string) ($rendered['subject'] ?? $title ?? '');
+            $unresolvedTokens = $this->renderer->unresolvedVariableNames(
+                $subjectForCheck."\n".$message,
+            );
         } else {
             $title = $title ?? $event->type->label();
             $message = (string) ($variables['message'] ?? $event->type->label());
         }
 
         $provider = $this->providers->resolve($channel);
+
+        // Customer-facing email must not send with leftover {{token}} placeholders.
+        $blockEmailForUnresolved = $channel === NotificationChannel::Email
+            && $unresolvedTokens !== [];
 
         $notification = Notification::query()->create([
             'user_id' => $event->customerId,
@@ -92,13 +107,32 @@ class NotificationDispatcher
             'title' => $title,
             'message' => $message,
             'channel' => $channel->value,
-            'status' => NotificationDeliveryStatus::Processing->value,
+            'status' => $blockEmailForUnresolved
+                ? NotificationDeliveryStatus::Failed->value
+                : NotificationDeliveryStatus::Processing->value,
             'provider' => $provider->providerKey(),
-            'data' => $event->data,
+            'data' => $persistedData,
             'idempotency_key' => $channelKey ?? $event->idempotencyKey,
             'correlation_key' => $event->correlationKey ?? $event->idempotencyKey,
-            'retry_count' => 0,
+            'retry_count' => $blockEmailForUnresolved ? 1 : 0,
+            'error_message' => $blockEmailForUnresolved
+                ? $this->unresolvedTemplateError($templateKey, $unresolvedTokens)
+                : null,
         ]);
+
+        if ($blockEmailForUnresolved) {
+            Log::warning('notification.email.unresolved_template_variables', [
+                'notification_id' => $notification->id,
+                'event_type' => $event->type->value,
+                'template_key' => $templateKey,
+                'unresolved' => $unresolvedTokens,
+            ]);
+
+            $fresh = $notification->fresh() ?? $notification;
+            event(NotificationSent::fromNotification($fresh));
+
+            return $fresh;
+        }
 
         try {
             $result = $provider->send($notification);
@@ -187,5 +221,63 @@ class NotificationDispatcher
         }
 
         return $flat;
+    }
+
+    /**
+     * Fill platform-owned customer_name when absent/blank for customer-scoped events.
+     * Explicit non-empty customer_name from publishers is preserved.
+     *
+     * @param  array<string, mixed>  $variables
+     * @return array<string, mixed>
+     */
+    private function enrichVariables(NotificationEvent $event, array $variables): array
+    {
+        if ($event->customerId === null) {
+            return $variables;
+        }
+
+        $existing = $variables['customer_name'] ?? null;
+        if (is_string($existing) && trim($existing) !== '') {
+            return $variables;
+        }
+
+        $user = User::query()->find($event->customerId);
+        if ($user === null) {
+            if (! array_key_exists('customer_name', $variables) || $variables['customer_name'] === null || $variables['customer_name'] === '') {
+                $variables['customer_name'] = 'Customer';
+            }
+
+            return $variables;
+        }
+
+        $name = trim((string) ($user->name ?? ''));
+        if ($name === '') {
+            $name = trim((string) ($user->first_name ?? ''));
+        }
+        if ($name === '') {
+            $name = 'Customer';
+        }
+
+        $variables['customer_name'] = $name;
+
+        return $variables;
+    }
+
+    /**
+     * @param  list<string>  $tokens
+     */
+    private function unresolvedTemplateError(?string $templateKey, array $tokens): string
+    {
+        $unique = array_values(array_unique($tokens));
+        $listed = implode(', ', array_map(
+            static fn (string $token): string => '{{'.$token.'}}',
+            $unique,
+        ));
+
+        $prefix = $templateKey !== null && $templateKey !== ''
+            ? 'Unresolved template variables in ['.$templateKey.']: '
+            : 'Unresolved template variables: ';
+
+        return Str::limit($prefix.$listed, 480, '…');
     }
 }

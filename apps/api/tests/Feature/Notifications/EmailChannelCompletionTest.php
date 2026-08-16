@@ -381,7 +381,7 @@ class EmailChannelCompletionTest extends TestCase
             'key' => $event->value.'.email',
             'channel' => NotificationChannel::Email,
             'subject' => 'Subject {{order_number}}',
-            'body' => 'Hello {{customer_name}}, order {{order_number}} total {{order_total}} {{currency}} at {{location}}.',
+            'body' => 'Hello {{customer_name}}, order {{order_number}} total {{order_total}} {{currency}}.',
             'is_active' => true,
         ]);
     }
