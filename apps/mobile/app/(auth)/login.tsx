@@ -106,10 +106,20 @@ export default function LoginScreen() {
           <View style={styles.fieldSpacer} />
         )}
 
+        <View style={styles.linkRow}>
+          <Link href="/(auth)/forgot-password" asChild>
+            <Pressable disabled={submitting} accessibilityRole="link">
+              <Text style={styles.linkText}>Forgot password?</Text>
+            </Pressable>
+          </Link>
+        </View>
+
         <Pressable
           style={[styles.button, submitting ? styles.buttonDisabled : null]}
           onPress={() => void onSubmit()}
           disabled={submitting}
+          accessibilityRole="button"
+          accessibilityLabel="Sign in"
         >
           {submitting ? (
             <ActivityIndicator color="#fff" />
@@ -120,7 +130,7 @@ export default function LoginScreen() {
 
         <View style={styles.linkRow}>
           <Link href={buildRegisterHref(returnTo) as never} asChild>
-            <Pressable disabled={submitting}>
+            <Pressable disabled={submitting} accessibilityRole="link">
               <Text style={styles.linkText}>Create an account</Text>
             </Pressable>
           </Link>

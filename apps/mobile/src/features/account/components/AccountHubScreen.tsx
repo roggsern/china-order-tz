@@ -2,7 +2,11 @@ import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthStore, useJourneyStore } from '@/src/core/auth';
-import { logout } from '@/src/features/auth';
+import {
+  logout,
+  refreshAuthenticatedUser,
+  resendEmailVerification,
+} from '@/src/features/auth';
 import { journeyLabelFromChannel } from '@/src/features/cart/utils/journeyLabel';
 import { buildOrdersListHref } from '@/src/features/orders/utils/orderRoutes';
 import { BRAND_NAME } from '@/src/shared/branding';
@@ -35,8 +39,12 @@ async function openWebPathOrAlert(
 
 export function AccountHubScreen() {
   const user = useAuthStore((s) => s.user);
+  const setAuthenticated = useAuthStore((s) => s.setAuthenticated);
   const journey = useJourneyStore((s) => s.journey);
   const [busy, setBusy] = useState(false);
+  const [resendBusy, setResendBusy] = useState(false);
+  const [refreshBusy, setRefreshBusy] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
 
   async function onLogout() {
     setBusy(true);
@@ -45,6 +53,48 @@ export function AccountHubScreen() {
       router.replace('/(auth)/login');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function onResendVerification() {
+    setResendBusy(true);
+    setResendMessage(null);
+    try {
+      const result = await resendEmailVerification();
+      setResendMessage(result.message);
+      if (result.alreadyVerified) {
+        const refreshed = await refreshAuthenticatedUser();
+        setAuthenticated(refreshed);
+      }
+    } catch (error) {
+      Alert.alert(
+        'Could not send verification',
+        error instanceof Error ? error.message : 'Please try again.',
+      );
+    } finally {
+      setResendBusy(false);
+    }
+  }
+
+  async function onRefreshVerification() {
+    setRefreshBusy(true);
+    try {
+      const refreshed = await refreshAuthenticatedUser();
+      setAuthenticated(refreshed);
+      if (refreshed.email_verified_at) {
+        setResendMessage('Your email is verified.');
+      } else {
+        setResendMessage(
+          'Still unverified. Open the link from your email, then refresh again.',
+        );
+      }
+    } catch (error) {
+      Alert.alert(
+        'Could not refresh',
+        error instanceof Error ? error.message : 'Please try again.',
+      );
+    } finally {
+      setRefreshBusy(false);
     }
   }
 
@@ -73,7 +123,14 @@ export function AccountHubScreen() {
           Manage your {BRAND_NAME} shopping experience.
         </Text>
 
-        <CustomerIdentityCard user={user} />
+        <CustomerIdentityCard
+          user={user}
+          onResendVerification={() => void onResendVerification()}
+          resendBusy={resendBusy}
+          resendMessage={resendMessage}
+          onRefreshVerification={() => void onRefreshVerification()}
+          refreshBusy={refreshBusy}
+        />
 
         <Card elevated style={styles.ordersShortcut}>
           <Text style={styles.sectionLabel}>Quick actions</Text>

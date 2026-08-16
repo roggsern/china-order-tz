@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { BRAND_NAME } from '@/src/shared/branding';
 import { Badge } from '@/src/shared/ui/Badge';
 import { Card } from '@/src/shared/ui/Card';
@@ -7,6 +7,12 @@ import type { User } from '@/src/shared/types/user';
 
 type Props = {
   user: User | null;
+  /** Resend verification email when unverified. */
+  onResendVerification?: () => void;
+  resendBusy?: boolean;
+  resendMessage?: string | null;
+  onRefreshVerification?: () => void;
+  refreshBusy?: boolean;
 };
 
 function initialsFromUser(user: User | null): string {
@@ -24,10 +30,18 @@ function initialsFromUser(user: User | null): string {
   return '?';
 }
 
-/** Branded customer identity card — display only. */
-export function CustomerIdentityCard({ user }: Props) {
+/** Branded customer identity card with email verification status/actions. */
+export function CustomerIdentityCard({
+  user,
+  onResendVerification,
+  resendBusy = false,
+  resendMessage = null,
+  onRefreshVerification,
+  refreshBusy = false,
+}: Props) {
   const initials = initialsFromUser(user);
   const verified = Boolean(user?.email_verified_at);
+  const busy = resendBusy || refreshBusy;
 
   return (
     <Card elevated style={styles.card}>
@@ -50,12 +64,63 @@ export function CustomerIdentityCard({ user }: Props) {
           ) : null}
           <View style={styles.badges}>
             <Badge
-              label={verified ? 'Verified email' : 'Account'}
-              tone={verified ? 'success' : 'brand'}
+              label={verified ? 'Email verified' : 'Email not verified'}
+              tone={verified ? 'success' : 'warning'}
             />
           </View>
         </View>
       </View>
+
+      {!verified && user ? (
+        <View style={styles.verifyBlock}>
+          <Text style={styles.verifyCopy}>
+            Verify your email to secure account recovery. We will send a secure
+            link to your inbox (opens on chinaordertz.com).
+          </Text>
+          {resendMessage ? (
+            <Text
+              style={styles.verifyMessage}
+              accessibilityLiveRegion="polite"
+            >
+              {resendMessage}
+            </Text>
+          ) : null}
+          <View style={styles.verifyActions}>
+            {onResendVerification ? (
+              <Pressable
+                style={[styles.verifyButton, busy ? styles.verifyButtonDisabled : null]}
+                onPress={onResendVerification}
+                disabled={busy}
+                accessibilityRole="button"
+                accessibilityLabel="Resend verification email"
+              >
+                {resendBusy ? (
+                  <ActivityIndicator color={colors.onPrimary} />
+                ) : (
+                  <Text style={styles.verifyButtonText}>Resend verification email</Text>
+                )}
+              </Pressable>
+            ) : null}
+            {onRefreshVerification ? (
+              <Pressable
+                style={styles.refreshLink}
+                onPress={onRefreshVerification}
+                disabled={busy}
+                accessibilityRole="button"
+                accessibilityLabel="I already verified — refresh status"
+              >
+                {refreshBusy ? (
+                  <ActivityIndicator color={colors.primaryPressed} />
+                ) : (
+                  <Text style={styles.refreshLinkText}>
+                    I already verified — refresh status
+                  </Text>
+                )}
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
     </Card>
   );
 }
@@ -111,5 +176,52 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.xs,
     marginTop: spacing.sm,
+  },
+  verifyBlock: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  verifyCopy: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  verifyMessage: {
+    ...typography.caption,
+    color: colors.success,
+    marginBottom: spacing.sm,
+  },
+  verifyActions: {
+    gap: spacing.sm,
+  },
+  verifyButton: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  verifyButtonDisabled: {
+    opacity: 0.6,
+  },
+  verifyButtonText: {
+    ...typography.bodyStrong,
+    color: colors.onPrimary,
+    fontWeight: '700',
+  },
+  refreshLink: {
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  refreshLinkText: {
+    ...typography.caption,
+    color: colors.primaryPressed,
+    fontWeight: '600',
   },
 });
