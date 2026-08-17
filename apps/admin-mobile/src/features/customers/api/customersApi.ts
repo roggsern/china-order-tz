@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { apiClient } from '@/src/core/api';
+import { optionalMoneySchema } from '@/src/core/api/money';
 import type { PaginatedResponse, PaginationMeta } from '@/src/core/api/types';
 
 const customerSchema = z
@@ -15,7 +16,7 @@ const customerSchema = z
     metrics: z
       .object({
         total_orders: z.number().optional(),
-        total_spend: z.number().optional(),
+        total_spend: optionalMoneySchema,
         last_order_at: z.string().nullable().optional(),
       })
       .optional(),
@@ -32,6 +33,26 @@ export function mapCustomers(raw: unknown[]): AdminCustomer[] {
   return raw.map(mapCustomer);
 }
 
+export type CustomerListFilters = {
+  search?: string;
+  page?: number;
+  per_page?: number;
+};
+
+/**
+ * Backend CustomerProfileService filters on `search` (not `q`).
+ * @see apps/api/app/Services/Crm/CustomerProfileService.php
+ */
+export function buildCustomersQuery(filters: CustomerListFilters): Record<string, string | number> {
+  const page = filters.page ?? 1;
+  const perPage = filters.per_page ?? 20;
+  const query: Record<string, string | number> = { page, per_page: perPage };
+  if (filters.search?.trim()) {
+    query.search = filters.search.trim();
+  }
+  return query;
+}
+
 function extractMeta(body: unknown): PaginationMeta {
   const meta = (body as { meta?: PaginationMeta }).meta;
   return {
@@ -42,9 +63,11 @@ function extractMeta(body: unknown): PaginationMeta {
   };
 }
 
-export async function fetchCustomers(q?: string, page = 1): Promise<PaginatedResponse<AdminCustomer>> {
-  const query: Record<string, string | number> = { page, per_page: 20 };
-  if (q?.trim()) query.q = q.trim();
+export async function fetchCustomers(
+  search?: string,
+  page = 1,
+): Promise<PaginatedResponse<AdminCustomer>> {
+  const query = buildCustomersQuery({ search, page, per_page: 20 });
 
   const response = await apiClient.get<AdminCustomer[]>('/admin/customers', query);
   return {

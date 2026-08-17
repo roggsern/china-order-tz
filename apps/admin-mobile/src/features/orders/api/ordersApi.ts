@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { apiClient } from '@/src/core/api';
+import { nullishMoneySchema, optionalMoneySchema } from '@/src/core/api/money';
 import type { PaginatedResponse, PaginationMeta } from '@/src/core/api/types';
 
 export type CommerceChannelCode = 'CHINA_IMPORT' | 'TZ_LOCAL';
@@ -44,8 +45,8 @@ const orderItemSchema = z
     id: z.string().optional(),
     product_name: z.string().nullable().optional(),
     quantity: z.number().optional(),
-    unit_price: z.number().optional(),
-    line_total: z.number().optional(),
+    unit_price: nullishMoneySchema,
+    line_total: nullishMoneySchema,
   })
   .passthrough();
 
@@ -53,7 +54,7 @@ const paymentSchema = z
   .object({
     id: z.string().optional(),
     status: z.string().optional(),
-    amount: z.number().optional(),
+    amount: nullishMoneySchema,
     method: z.string().nullable().optional(),
   })
   .passthrough();
@@ -65,8 +66,8 @@ const orderSchema = z
     commerce_channel_code: z.string().nullable().optional(),
     status: z.string(),
     status_label: z.string().optional(),
-    total: z.number().optional(),
-    grand_total: z.number().optional(),
+    total: optionalMoneySchema,
+    grand_total: optionalMoneySchema,
     currency: z.string().optional(),
     user: orderUserSchema,
     items: z.array(orderItemSchema).optional(),
