@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasUuidPrimaryKey;
+use App\Models\Concerns\InvalidatesChinaStorefrontDiscovery;
 use Database\Factories\DepartmentFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,7 +13,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Department extends Model
 {
     /** @use HasFactory<DepartmentFactory> */
-    use HasFactory, HasUuidPrimaryKey, SoftDeletes;
+    use HasFactory, HasUuidPrimaryKey, InvalidatesChinaStorefrontDiscovery, SoftDeletes;
 
     protected $fillable = [
         'name',

@@ -3,12 +3,13 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasUuidPrimaryKey;
+use App\Models\Concerns\InvalidatesChinaStorefrontDiscovery;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ChinaCommercialStock extends Model
 {
-    use HasUuidPrimaryKey;
+    use HasUuidPrimaryKey, InvalidatesChinaStorefrontDiscovery;
 
     protected $fillable = [
         'product_id',

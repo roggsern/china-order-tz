@@ -8,6 +8,7 @@ use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductVisibility;
 use App\Models\Category;
 use App\Models\Product;
+use App\Services\Search\ChinaSellableProductQuery;
 use App\Support\Catalog\CatalogNavigationCrosswalk;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -20,6 +21,13 @@ class CatalogNavigationCrosswalkResolver
 {
     /** @var array<string, list<string>> */
     private array $categoryIdCache = [];
+
+    /** @var list<string>|null */
+    private ?array $representedDepartmentSlugCache = null;
+
+    public function __construct(
+        private readonly ChinaSellableProductQuery $chinaSellable,
+    ) {}
 
     /**
      * Category IDs in the discovery scope for a Bible navigation slug.
@@ -104,6 +112,73 @@ class CatalogNavigationCrosswalkResolver
         }
 
         return $this->hasNavigationVisibleProductInCategories($categoryIds);
+    }
+
+    /**
+     * Departments already claimed by Catalog Bible / crosswalk (direct department_slugs
+     * plus departments that own mapped category_slugs). Dynamic discovery must skip these.
+     *
+     * @return list<string>
+     */
+    public function representedDepartmentSlugs(): array
+    {
+        if ($this->representedDepartmentSlugCache !== null) {
+            return $this->representedDepartmentSlugCache;
+        }
+
+        $slugs = CatalogNavigationCrosswalk::mappedDepartmentSlugs();
+        $categorySlugs = CatalogNavigationCrosswalk::mappedCategorySlugs();
+
+        if ($categorySlugs !== []) {
+            $fromCategories = Category::query()
+                ->whereIn('slug', $categorySlugs)
+                ->whereNotNull('department_id')
+                ->whereHas('department')
+                ->with('department:id,slug')
+                ->get()
+                ->pluck('department.slug')
+                ->filter()
+                ->all();
+
+            $slugs = array_merge($slugs, $fromCategories);
+        }
+
+        return $this->representedDepartmentSlugCache = array_values(array_unique($slugs));
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function chinaCategoryIdsForDepartmentSlug(string $departmentSlug): array
+    {
+        return $this->categoryIdsForDepartmentSlug($departmentSlug);
+    }
+
+    /**
+     * Product-aware department frontier using ChinaSellable (Search/PLP authority).
+     *
+     * Batched: one category load + one sellable populated-id query for all requested
+     * departments (no per-department N+1).
+     *
+     * @param  list<string>  $departmentSlugs
+     * @return Collection<int, Category>
+     */
+    public function visibleSellableFrontierCategoriesForDepartments(array $departmentSlugs): Collection
+    {
+        $departmentSlugs = array_values(array_unique(array_filter($departmentSlugs)));
+
+        if ($departmentSlugs === []) {
+            return collect();
+        }
+
+        return $this->frontierCategoriesForDepartmentSlugs(
+            $departmentSlugs,
+            bibleRootSlug: null,
+            populateWith: fn (Builder $query) => $this->chinaSellable
+                ->apply($query)
+                ->where('is_demo', false)
+                ->whereNull('store_id'),
+        );
     }
 
     /**
@@ -196,13 +271,33 @@ class CatalogNavigationCrosswalkResolver
             return collect();
         }
 
-        $bibleRootId = Category::query()
-            ->where('slug', $bibleRootSlug)
-            ->whereNull('store_id')
-            ->where('origin', CatalogOrigin::China)
-            ->whereNull('parent_id')
-            ->value('id');
-        $bibleRootId = $bibleRootId !== null ? (string) $bibleRootId : null;
+        return $this->frontierCategoriesForDepartmentSlugs(
+            $departmentSlugs,
+            $bibleRootSlug,
+            fn (Builder $query) => $this->navigationVisibleProductQuery($query),
+        );
+    }
+
+    /**
+     * @param  list<string>  $departmentSlugs
+     * @param  callable(Builder): Builder  $populateWith
+     * @return Collection<int, Category>
+     */
+    private function frontierCategoriesForDepartmentSlugs(
+        array $departmentSlugs,
+        ?string $bibleRootSlug,
+        callable $populateWith,
+    ): Collection {
+        $bibleRootId = null;
+        if ($bibleRootSlug !== null) {
+            $bibleRootId = Category::query()
+                ->where('slug', $bibleRootSlug)
+                ->whereNull('store_id')
+                ->where('origin', CatalogOrigin::China)
+                ->whereNull('parent_id')
+                ->value('id');
+            $bibleRootId = $bibleRootId !== null ? (string) $bibleRootId : null;
+        }
 
         $categories = Category::query()
             ->whereNull('store_id')
@@ -229,7 +324,7 @@ class CatalogNavigationCrosswalkResolver
         );
 
         $allIds = $categories->map(fn (Category $c) => (string) $c->id)->all();
-        $populated = $this->navigationVisibleProductQuery(Product::query())
+        $populated = $populateWith(Product::query())
             ->whereIn('category_id', $allIds)
             ->whereNotNull('category_id')
             ->distinct()

@@ -161,4 +161,38 @@ final class CatalogNavigationCrosswalk
     {
         return array_keys(self::mappings());
     }
+
+    /**
+     * Department slugs explicitly listed on crosswalk entries.
+     *
+     * @return list<string>
+     */
+    public static function mappedDepartmentSlugs(): array
+    {
+        $slugs = [];
+        foreach (self::mappings() as $mapping) {
+            foreach ($mapping['department_slugs'] ?? [] as $slug) {
+                $slugs[] = $slug;
+            }
+        }
+
+        return array_values(array_unique($slugs));
+    }
+
+    /**
+     * Category slugs listed on crosswalk entries (operational branches).
+     *
+     * @return list<string>
+     */
+    public static function mappedCategorySlugs(): array
+    {
+        $slugs = [];
+        foreach (self::mappings() as $mapping) {
+            foreach ($mapping['category_slugs'] ?? [] as $slug) {
+                $slugs[] = $slug;
+            }
+        }
+
+        return array_values(array_unique($slugs));
+    }
 }

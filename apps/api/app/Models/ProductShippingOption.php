@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\ShippingMethod;
 use App\Models\Concerns\HasUuidPrimaryKey;
+use App\Models\Concerns\InvalidatesChinaStorefrontDiscovery;
 use Database\Factories\ProductShippingOptionFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -14,7 +15,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class ProductShippingOption extends Model
 {
     /** @use HasFactory<ProductShippingOptionFactory> */
-    use HasFactory, HasUuidPrimaryKey, SoftDeletes;
+    use HasFactory, HasUuidPrimaryKey, InvalidatesChinaStorefrontDiscovery, SoftDeletes;
 
     protected $fillable = [
         'product_id',

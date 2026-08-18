@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\VariantPriceType;
 use App\Models\Concerns\HasUuidPrimaryKey;
+use App\Models\Concerns\InvalidatesChinaStorefrontDiscovery;
 use Database\Factories\ProductVariantFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,7 +18,7 @@ use Illuminate\Support\Collection;
 class ProductVariant extends Model
 {
     /** @use HasFactory<ProductVariantFactory> */
-    use HasFactory, HasUuidPrimaryKey, SoftDeletes;
+    use HasFactory, HasUuidPrimaryKey, InvalidatesChinaStorefrontDiscovery, SoftDeletes;
 
     protected $fillable = [
         'product_id',

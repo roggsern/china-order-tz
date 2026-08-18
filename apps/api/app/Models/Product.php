@@ -8,6 +8,7 @@ use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductPricingModel;
 use App\Enums\ProductVisibility;
 use App\Models\Concerns\HasUuidPrimaryKey;
+use App\Models\Concerns\InvalidatesChinaStorefrontDiscovery;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -20,7 +21,7 @@ use Illuminate\Database\Eloquent\Model;
 class Product extends Model
 {
     /** @use HasFactory<ProductFactory> */
-    use HasFactory, HasUuidPrimaryKey, SoftDeletes;
+    use HasFactory, HasUuidPrimaryKey, InvalidatesChinaStorefrontDiscovery, SoftDeletes;
 
     protected $fillable = [
         'commerce_channel_id',

@@ -45,7 +45,9 @@ class StorefrontHomeRailsCacheTest extends TestCase
         $this->makeListableChinaProduct($phones, $brand, 'rail-featured-phone');
 
         $cache = app(StorefrontPublicResponseCache::class);
-        $this->assertStringStartsWith('storefront:public:v1:china-featured-collections:', $cache->key('china-featured-collections', 'default'));
+        $featuredKey = $cache->key('china-featured-collections', 'default');
+        $this->assertStringStartsWith('storefront:public:v2:g', $featuredKey);
+        $this->assertStringContainsString('china-featured-collections:', $featuredKey);
 
         DB::flushQueryLog();
         DB::enableQueryLog();

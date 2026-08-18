@@ -6,6 +6,7 @@ use App\Enums\CatalogOrigin;
 use App\Http\Resources\CustomerProductCardResource;
 use App\Models\Brand;
 use App\Models\Category;
+use App\Models\Department;
 use App\Models\Product;
 use App\Services\Search\ChinaSellableProductQuery;
 use App\Services\Search\SearchRelevance;
@@ -34,6 +35,10 @@ class ChinaStorefrontCatalog
      * Homepage featured collection roots — same navigation taxonomy as the mega menu,
      * limited to categories with at least one purchasable China-import product.
      *
+     * Policy: Catalog Bible order first, then dynamically discovered unmapped
+     * departments. Homepage remains curated (default cap 6). Mega menu lists all
+     * eligible roots; extra dynamic departments beyond the cap stay navigable there.
+     *
      * @return Collection<int, Category>
      */
     public function featuredCollectionCategories(int $limit = 6): Collection
@@ -56,16 +61,33 @@ class ChinaStorefrontCatalog
     /**
      * Navigation category tree for the ORDER FROM CHINA mega menu.
      *
-     * Roots remain Catalog Bible ∩ active China roots.
+     * Roots:
+     * 1. Catalog Bible ∩ active China roots (curated order, crosswalk children)
+     * 2. Unmapped active China departments that have ≥1 ChinaSellable product
+     *
      * Children:
      * - aggregate_of roots (e.g. Electronics) → product-aware Bible children
      * - department_slugs roots (e.g. fashion / beauty / home-care) → product-aware
      *   top-level department categories (self + descendants)
+     * - dynamic department roots → sellable frontier categories
      * - otherwise → product-aware Bible children when defined
      *
      * @return Collection<int, Category>
      */
     public function navigationCategories(): Collection
+    {
+        $bibleRoots = $this->bibleNavigationRoots();
+        $dynamicRoots = $this->unmappedDepartmentNavigationRoots(
+            $bibleRoots->pluck('slug')->all(),
+        );
+
+        return $bibleRoots->concat($dynamicRoots)->values();
+    }
+
+    /**
+     * @return Collection<int, Category>
+     */
+    private function bibleNavigationRoots(): Collection
     {
         $bibleRoots = collect(CatalogBible::categories());
 
@@ -110,6 +132,85 @@ class ChinaStorefrontCatalog
                     || $root->children->isNotEmpty();
             })
             ->values();
+    }
+
+    /**
+     * @param  list<string>  $occupiedSlugs
+     * @return Collection<int, Category>
+     */
+    private function unmappedDepartmentNavigationRoots(array $occupiedSlugs): Collection
+    {
+        $represented = $this->crosswalkResolver->representedDepartmentSlugs();
+        $skipSlugs = array_values(array_unique(array_merge($represented, $occupiedSlugs)));
+
+        $sellableCategoryIds = $this->chinaPublishedProductQuery(Product::query())
+            ->real()
+            ->whereNull('store_id')
+            ->whereNotNull('category_id')
+            ->distinct()
+            ->pluck('category_id')
+            ->map(fn ($id) => (string) $id)
+            ->all();
+
+        if ($sellableCategoryIds === []) {
+            return new Collection;
+        }
+
+        $departments = Department::query()
+            ->where('is_active', true)
+            ->when($skipSlugs !== [], fn (Builder $q) => $q->whereNotIn('slug', $skipSlugs))
+            ->whereHas('categories', function (Builder $categories) use ($sellableCategoryIds) {
+                $categories
+                    ->whereNull('store_id')
+                    ->where('origin', CatalogOrigin::China)
+                    ->whereIn('id', $sellableCategoryIds);
+            })
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get(['id', 'name', 'slug', 'sort_order', 'is_active']);
+
+        if ($departments->isEmpty()) {
+            return new Collection;
+        }
+
+        $frontiers = $this->crosswalkResolver
+            ->visibleSellableFrontierCategoriesForDepartments(
+                $departments->pluck('slug')->all(),
+            );
+        $childrenByDepartmentId = $frontiers->groupBy(
+            fn (Category $category) => (string) $category->department_id,
+        );
+
+        $roots = new Collection;
+        foreach ($departments as $department) {
+            $children = new Collection(
+                $childrenByDepartmentId->get((string) $department->id, collect())->all(),
+            );
+            $roots->push($this->departmentAsNavigationRoot($department, $children));
+        }
+
+        return $roots->values();
+    }
+
+    /**
+     * @param  Collection<int, Category>  $children
+     */
+    private function departmentAsNavigationRoot(Department $department, Collection $children): Category
+    {
+        $root = new Category([
+            'name' => $department->name,
+            'slug' => $department->slug,
+            'origin' => CatalogOrigin::China,
+            'sort_order' => $department->sort_order,
+            'is_active' => true,
+            'parent_id' => null,
+            'store_id' => null,
+            'department_id' => $department->id,
+        ]);
+        $root->id = $department->id;
+        $root->setRelation('children', $children);
+
+        return $root;
     }
 
     /**
@@ -223,6 +324,11 @@ class ChinaStorefrontCatalog
             }
 
             return $query->whereIn('category_id', $categoryIds);
+        }
+
+        $departmentIds = $this->crosswalkResolver->chinaCategoryIdsForDepartmentSlug($category);
+        if ($departmentIds !== []) {
+            return $query->whereIn('category_id', $departmentIds);
         }
 
         // Department / nested China category deep-links: full branch (self + descendants).

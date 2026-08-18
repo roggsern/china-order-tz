@@ -9,7 +9,8 @@ use Illuminate\Support\Facades\Cache;
  * Shared short-TTL cache for public, non-personalized storefront list responses.
  *
  * Safe for homepage rails and anonymous catalog browse — never include auth/customer data.
- * Invalidation: TTL expiry (default 120s).
+ * Invalidation: TTL expiry (default 120s). China buckets also include a discovery
+ * generation so product publish/unpublish retires stale keys without a Redis flush.
  */
 final class StorefrontPublicResponseCache
 {
@@ -17,9 +18,18 @@ final class StorefrontPublicResponseCache
 
     public const KEY_PREFIX = 'storefront:public:v2:';
 
+    public function __construct(
+        private readonly ChinaStorefrontDiscoveryCache $discoveryCache,
+    ) {}
+
     public function key(string $bucket, string $variant): string
     {
-        return self::KEY_PREFIX.$bucket.':'.hash('xxh3', $variant);
+        $prefix = self::KEY_PREFIX;
+        if (str_starts_with($bucket, 'china-')) {
+            $prefix .= 'g'.$this->discoveryCache->generation().':';
+        }
+
+        return $prefix.$bucket.':'.hash('xxh3', $variant);
     }
 
     /**
