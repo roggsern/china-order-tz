@@ -66,7 +66,9 @@ class ChinaStorefrontCatalog
      * 2. Unmapped active China departments that have ≥1 ChinaSellable product
      *
      * Children:
-     * - aggregate_of roots (e.g. Electronics) → product-aware Bible children
+     * - aggregate_of roots (e.g. Electronics) → curated Bible children first, then
+     *   remaining sellable aggregate_of members (synthetic department adapter when
+     *   no Category row exists for the crosswalk alias)
      * - department_slugs roots (e.g. fashion / beauty / home-care) → product-aware
      *   top-level department categories (self + descendants)
      * - dynamic department roots → sellable frontier categories
@@ -108,9 +110,10 @@ class ChinaStorefrontCatalog
                 $mapping = CatalogNavigationCrosswalk::forBibleSlug($root->slug) ?? [];
 
                 if (! empty($mapping['aggregate_of'])) {
-                    $visibleChildren = $this->crosswalkResolver->visibleBibleChildCategories(
+                    $visibleChildren = $this->crosswalkResolver->visibleAggregateChildCategories(
                         $root->slug,
                         $childDefinitions,
+                        (string) $root->id,
                     );
                 } elseif (! empty($mapping['department_slugs'])) {
                     $visibleChildren = $this->crosswalkResolver->visibleDepartmentChildCategories(

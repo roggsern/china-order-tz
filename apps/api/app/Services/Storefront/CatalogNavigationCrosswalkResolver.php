@@ -7,6 +7,7 @@ use App\Enums\CommerceChannelCode;
 use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductVisibility;
 use App\Models\Category;
+use App\Models\Department;
 use App\Models\Product;
 use App\Services\Search\ChinaSellableProductQuery;
 use App\Support\Catalog\CatalogNavigationCrosswalk;
@@ -243,6 +244,212 @@ class CatalogNavigationCrosswalkResolver
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
+    }
+
+    /**
+     * Aggregate-root children: curated Catalog Bible children first, then remaining
+     * visible aggregate_of members (ChinaSellable). Does not flatten operational leaves.
+     *
+     * Canonical href slug for appended members is the crosswalk alias (already a
+     * Bible filter key for GET /storefront/china/products?category=).
+     *
+     * @param  list<array{name: string, slug: string, sort_order: int}>  $childDefinitions
+     * @return Collection<int, Category>
+     */
+    public function visibleAggregateChildCategories(
+        string $rootSlug,
+        array $childDefinitions,
+        ?string $parentId = null,
+    ): Collection {
+        $curated = $this->visibleBibleChildCategories($rootSlug, $childDefinitions);
+        $mapping = CatalogNavigationCrosswalk::forBibleSlug($rootSlug) ?? [];
+        $aggregateOf = $mapping['aggregate_of'] ?? [];
+
+        if ($aggregateOf === []) {
+            return $curated;
+        }
+
+        $occupied = array_fill_keys(
+            array_merge(
+                $curated->pluck('slug')->all(),
+                collect($childDefinitions)->pluck('slug')->all(),
+            ),
+            true,
+        );
+
+        $remaining = [];
+        foreach ($aggregateOf as $memberSlug) {
+            if (! isset($occupied[$memberSlug])) {
+                $remaining[] = $memberSlug;
+            }
+        }
+
+        $visibleRemaining = $this->sellableAggregateMemberSlugs($remaining);
+        if ($visibleRemaining === []) {
+            return $curated;
+        }
+
+        $appended = $this->resolveAggregateMemberNavigationNodes($visibleRemaining, $parentId);
+        $seen = array_fill_keys($curated->pluck('slug')->all(), true);
+
+        foreach ($appended as $node) {
+            if (isset($seen[$node->slug])) {
+                continue;
+            }
+            $seen[$node->slug] = true;
+            $curated->push($node);
+        }
+
+        return $curated->values();
+    }
+
+    /**
+     * Remaining aggregate_of aliases that have ≥1 ChinaSellable product.
+     * One distinct populated-id query for all members (no per-member product N+1).
+     *
+     * @param  list<string>  $memberSlugs
+     * @return list<string>
+     */
+    private function sellableAggregateMemberSlugs(array $memberSlugs): array
+    {
+        if ($memberSlugs === []) {
+            return [];
+        }
+
+        $idsByMember = [];
+        $allIds = [];
+        foreach ($memberSlugs as $slug) {
+            $ids = $this->categoryIdsForBibleSlug($slug);
+            $idsByMember[$slug] = $ids;
+            foreach ($ids as $id) {
+                $allIds[] = (string) $id;
+            }
+        }
+
+        $allIds = array_values(array_unique($allIds));
+        if ($allIds === []) {
+            return [];
+        }
+
+        $populated = $this->chinaSellable
+            ->apply(Product::query())
+            ->where('is_demo', false)
+            ->whereNull('store_id')
+            ->whereIn('category_id', $allIds)
+            ->whereNotNull('category_id')
+            ->distinct()
+            ->pluck('category_id')
+            ->mapWithKeys(fn ($id) => [(string) $id => true])
+            ->all();
+
+        if ($populated === []) {
+            return [];
+        }
+
+        $visible = [];
+        foreach ($memberSlugs as $slug) {
+            foreach ($idsByMember[$slug] as $id) {
+                if (isset($populated[(string) $id])) {
+                    $visible[] = $slug;
+                    break;
+                }
+            }
+        }
+
+        return $visible;
+    }
+
+    /**
+     * @param  list<string>  $memberSlugs
+     * @return Collection<int, Category>
+     */
+    private function resolveAggregateMemberNavigationNodes(array $memberSlugs, ?string $parentId): Collection
+    {
+        if ($memberSlugs === []) {
+            return collect();
+        }
+
+        $categories = Category::query()
+            ->whereIn('slug', $memberSlugs)
+            ->whereNull('store_id')
+            ->where('origin', CatalogOrigin::China)
+            ->where('is_active', true)
+            ->get()
+            ->keyBy('slug');
+
+        $departmentSlugsByAlias = [];
+        $departmentSlugs = [];
+        foreach ($memberSlugs as $alias) {
+            if ($categories->has($alias)) {
+                continue;
+            }
+            $mapping = CatalogNavigationCrosswalk::forBibleSlug($alias) ?? [];
+            foreach ($mapping['department_slugs'] ?? [] as $departmentSlug) {
+                $departmentSlugsByAlias[$alias][] = $departmentSlug;
+                $departmentSlugs[] = $departmentSlug;
+            }
+        }
+
+        $departments = $departmentSlugs === []
+            ? collect()
+            : Department::query()
+                ->where('is_active', true)
+                ->whereIn('slug', array_values(array_unique($departmentSlugs)))
+                ->get(['id', 'name', 'slug', 'sort_order', 'is_active'])
+                ->keyBy('slug');
+
+        $nodes = collect();
+        foreach ($memberSlugs as $alias) {
+            $existing = $categories->get($alias);
+            if ($existing instanceof Category) {
+                $existing->setRelation('children', collect());
+                $nodes->push($existing);
+
+                continue;
+            }
+
+            $department = null;
+            foreach ($departmentSlugsByAlias[$alias] ?? [] as $departmentSlug) {
+                $candidate = $departments->get($departmentSlug);
+                if ($candidate instanceof Department) {
+                    $department = $candidate;
+                    break;
+                }
+            }
+
+            if ($department === null) {
+                continue;
+            }
+
+            $nodes->push($this->departmentAsAggregateChild($department, $alias, $parentId));
+        }
+
+        return $nodes->values();
+    }
+
+    /**
+     * Unsaved navigation node: merchandising alias slug + department label.
+     * Not persisted. Href uses the crosswalk alias (Bible filter key).
+     */
+    private function departmentAsAggregateChild(
+        Department $department,
+        string $aliasSlug,
+        ?string $parentId,
+    ): Category {
+        $node = new Category([
+            'name' => $department->name,
+            'slug' => $aliasSlug,
+            'origin' => CatalogOrigin::China,
+            'sort_order' => $department->sort_order,
+            'is_active' => true,
+            'parent_id' => $parentId,
+            'store_id' => null,
+            'department_id' => $department->id,
+        ]);
+        $node->id = $department->id;
+        $node->setRelation('children', collect());
+
+        return $node;
     }
 
     /**
