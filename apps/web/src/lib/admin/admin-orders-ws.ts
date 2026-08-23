@@ -3,6 +3,10 @@ import { normalizeOrder } from "@/lib/types/order";
 import { paymentService } from "@/lib/payment/PaymentService";
 import { isAdminLocalOrderAuthorityEnabled } from "@/lib/config/env";
 import {
+  isAdminOrdersAuthFailureStatus,
+  type AdminOrdersFetchResult,
+} from "@/lib/admin/admin-orders-fetch";
+import {
   ADMIN_ORDERS_WS_INITIAL_RECONNECT_MS,
   ADMIN_ORDERS_WS_MAX_RECONNECT_MS,
 } from "@/lib/admin/constants";
@@ -22,6 +26,8 @@ export type AdminOrdersWsHandlers = {
   onOrderPatch: (orderId: string, patch: AdminOrderWsEvent & { type: "order_patch" }) => void;
   onAnalyticsUpdate?: () => void;
   onDeliveryUpdate?: (event: Extract<AdminOrderWsEvent, { type: "delivery_update" }>) => void;
+  /** First successful poll snapshot — used when the initial bootstrap missed auth. */
+  onInitialSnapshot?: (orders: Order[]) => void;
 };
 
 export type AdminOrdersWsController = {
@@ -282,7 +288,7 @@ export function mergeOrderLists(serverOrders: Order[], localOrders: Order[]): Or
   return [...merged.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-export async function fetchInitialAdminOrders(): Promise<Order[]> {
+export async function fetchAdminOrdersSnapshot(): Promise<AdminOrdersFetchResult> {
   const localAuthority = isAdminLocalOrderAuthorityEnabled();
   const localOrders =
     localAuthority && typeof window !== "undefined" ? paymentService.listOrders() : [];
@@ -290,7 +296,21 @@ export async function fetchInitialAdminOrders(): Promise<Order[]> {
   try {
     const response = await fetch("/api/admin/orders", { cache: "no-store" });
     if (!response.ok) {
-      return localAuthority ? localOrders : [];
+      if (localAuthority) {
+        return {
+          ok: true,
+          status: response.status,
+          unauthenticated: false,
+          orders: localOrders,
+        };
+      }
+
+      return {
+        ok: false,
+        status: response.status,
+        unauthenticated: isAdminOrdersAuthFailureStatus(response.status),
+        orders: [],
+      };
     }
 
     const payload = (await response.json()) as {
@@ -299,14 +319,40 @@ export async function fetchInitialAdminOrders(): Promise<Order[]> {
     };
     const serverOrders = payload.orders ?? [];
 
-    if (payload.authority === "laravel" || !localAuthority) {
-      return serverOrders.map((order) => normalizeOrder(order));
+    const orders =
+      payload.authority === "laravel" || !localAuthority
+        ? serverOrders.map((order) => normalizeOrder(order))
+        : mergeOrderLists(serverOrders, localOrders);
+
+    return {
+      ok: true,
+      status: response.status,
+      unauthenticated: false,
+      orders,
+    };
+  } catch {
+    if (localAuthority) {
+      return {
+        ok: true,
+        status: null,
+        unauthenticated: false,
+        orders: localOrders,
+      };
     }
 
-    return mergeOrderLists(serverOrders, localOrders);
-  } catch {
-    return localAuthority ? localOrders : [];
+    return {
+      ok: false,
+      status: null,
+      unauthenticated: false,
+      orders: [],
+    };
   }
+}
+
+/** @deprecated Prefer fetchAdminOrdersSnapshot so auth failures are not treated as empty lists. */
+export async function fetchInitialAdminOrders(): Promise<Order[]> {
+  const result = await fetchAdminOrdersSnapshot();
+  return result.ok ? result.orders : [];
 }
 
 export function upsertOrderInList(orders: Order[], order: Order): { next: Order[]; changed: boolean } {

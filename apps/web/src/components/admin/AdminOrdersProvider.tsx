@@ -15,8 +15,13 @@ import { ORDER_STATUS } from "@/lib/types/order";
 import type { BulkOrderStatus } from "@/lib/admin/bulk-order-status";
 import { mapBulkOrderStatus } from "@/lib/admin/bulk-order-status";
 import { bulkUpdateOrderStatus as bulkUpdateOrderStatusApi } from "@/lib/admin/bulk-order-update-client";
+import { useAdminAuth } from "@/components/admin/AdminAuthProvider";
 import {
-  fetchInitialAdminOrders,
+  applyAdminOrdersFetchResult,
+  shouldBootstrapAdminOrders,
+} from "@/lib/admin/admin-orders-fetch";
+import {
+  fetchAdminOrdersSnapshot,
   patchOrderInList,
   upsertOrderInList,
 } from "@/lib/admin/admin-orders-ws";
@@ -66,6 +71,7 @@ function findOrderById(orders: Order[], orderId: string): Order | undefined {
 }
 
 export function AdminOrdersProvider({ children }: { children: ReactNode }) {
+  const { isAuthenticated, isReady } = useAdminAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
@@ -174,21 +180,51 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
   const handleOrderPatchRef = useRef(handleOrderPatch);
   handleOrderPatchRef.current = handleOrderPatch;
 
-  const bootstrapOrdersRef = useRef<() => Promise<void>>(async () => {});
-  bootstrapOrdersRef.current = async () => {
-    const initial = await fetchInitialAdminOrders();
-    prevOrderIdsRef.current = new Set(initial.map((order) => order.id));
-    ordersRef.current = initial;
-    setOrders(initial);
+  const applySnapshot = useCallback((nextOrders: Order[]) => {
+    prevOrderIdsRef.current = new Set(nextOrders.map((order) => order.id));
+    ordersRef.current = nextOrders;
+    setOrders(nextOrders);
     setLastSyncedAt(new Date());
 
     if (!hydratedRef.current) {
       hydratedRef.current = true;
       setIsHydrated(true);
     }
+  }, []);
+
+  const resetOrdersSession = useCallback(() => {
+    hydratedRef.current = false;
+    prevOrderIdsRef.current = new Set();
+    ordersRef.current = [];
+    setOrders([]);
+    setIsHydrated(false);
+    setLastSyncedAt(null);
+    setWsConnectedIfChanged(false);
+  }, [setWsConnectedIfChanged]);
+
+  const bootstrapOrdersRef = useRef<() => Promise<void>>(async () => {});
+  bootstrapOrdersRef.current = async () => {
+    const result = await fetchAdminOrdersSnapshot();
+    const next = applyAdminOrdersFetchResult(
+      { hydrated: hydratedRef.current, orders: ordersRef.current },
+      result,
+    );
+
+    if (!next.applied) {
+      return;
+    }
+
+    applySnapshot(next.orders);
   };
 
   useEffect(() => {
+    if (!shouldBootstrapAdminOrders({ isReady, isAuthenticated })) {
+      if (isReady && !isAuthenticated) {
+        resetOrdersSession();
+      }
+      return;
+    }
+
     let cancelled = false;
 
     void bootstrapOrdersRef.current().then(() => {
@@ -203,6 +239,12 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
       onOrderCreated: (order) => handleOrderUpsertRef.current(order, true),
       onOrderUpdated: (order) => handleOrderUpsertRef.current(order, false),
       onOrderPatch: (orderId, message) => handleOrderPatchRef.current(orderId, message.patch),
+      onInitialSnapshot: (snapshot) => {
+        if (hydratedRef.current && ordersRef.current.length > 0) {
+          return;
+        }
+        applySnapshot(snapshot);
+      },
       onAnalyticsUpdate: () => {
         void bootstrapOrdersRef.current();
       },
@@ -237,9 +279,7 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
       }
       highlightTimers.clear();
     };
-    // Mount-only: WebSocket + initial fetch must not re-run on render/state changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional single init
-  }, []);
+  }, [applySnapshot, isAuthenticated, isReady, resetOrdersSession, setWsConnectedIfChanged]);
 
   const refreshOrders = useCallback(() => {
     void bootstrapOrdersRef.current();

@@ -59,6 +59,7 @@ export function subscribeAdminOrdersRealtime(
     onOrderPatch: handlers.onOrderPatch,
     onAnalyticsUpdate: handlers.onAnalyticsUpdate,
     onDeliveryUpdate: handlers.onDeliveryUpdate,
+    onInitialSnapshot: handlers.onInitialSnapshot,
   };
 
   const wsUnsubscribe = subscribeAdminOrdersWebSocket(wrappedHandlers);

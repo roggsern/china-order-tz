@@ -1,6 +1,10 @@
 import type { Order } from "@/lib/types/order";
 import { normalizeOrder } from "@/lib/types/order";
 import type { AdminOrdersWsHandlers } from "@/lib/admin/admin-orders-ws";
+import {
+  applyAdminOrdersPollResult,
+  createAdminOrdersPollCycleState,
+} from "@/lib/admin/admin-orders-poll-cycle";
 import { getAdminOrdersPollIntervalMs } from "@/lib/admin/realtime-config";
 
 async function fetchServerOrders(): Promise<{ orders: Order[]; ok: boolean }> {
@@ -17,10 +21,6 @@ async function fetchServerOrders(): Promise<{ orders: Order[]; ok: boolean }> {
   }
 }
 
-function orderSignature(order: Order): string {
-  return `${order.updatedAt}|${order.paymentStatus}|${order.status}`;
-}
-
 export function subscribeAdminOrdersPolling(handlers: AdminOrdersWsHandlers): () => void {
   if (typeof window === "undefined") {
     return () => {};
@@ -28,9 +28,7 @@ export function subscribeAdminOrdersPolling(handlers: AdminOrdersWsHandlers): ()
 
   let disposed = false;
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
-  let knownOrders = new Map<string, string>();
-  let seeded = false;
-  let consecutiveFailures = 0;
+  let cycle = createAdminOrdersPollCycleState();
 
   const clearPollTimer = () => {
     if (pollTimer) {
@@ -56,47 +54,13 @@ export function subscribeAdminOrdersPolling(handlers: AdminOrdersWsHandlers): ()
       return;
     }
 
-    const { orders, ok } = await fetchServerOrders();
+    const result = await fetchServerOrders();
 
     if (disposed) {
       return;
     }
 
-    if (!ok) {
-      consecutiveFailures += 1;
-      if (consecutiveFailures >= 3) {
-        handlers.onDisconnected();
-      }
-      scheduleNextPoll();
-      return;
-    }
-
-    consecutiveFailures = 0;
-    handlers.onConnected();
-
-    const nextKnown = new Map<string, string>();
-
-    for (const order of orders) {
-      const signature = orderSignature(order);
-      nextKnown.set(order.id, signature);
-
-      if (!seeded) {
-        continue;
-      }
-
-      const previousSignature = knownOrders.get(order.id);
-      if (!previousSignature) {
-        handlers.onOrderCreated(order);
-        continue;
-      }
-
-      if (previousSignature !== signature) {
-        handlers.onOrderUpdated(order);
-      }
-    }
-
-    knownOrders = nextKnown;
-    seeded = true;
+    cycle = applyAdminOrdersPollResult(cycle, result, handlers);
     scheduleNextPoll();
   };
 
