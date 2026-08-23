@@ -4,7 +4,9 @@ namespace Tests\Feature\Catalog;
 
 use App\Models\CatalogProductType;
 use App\Models\Category;
+use App\Models\Department;
 use App\Support\Catalog\CatalogLeafCategoryRules;
+use App\Support\Catalog\MobileAccessoriesTaxonomy;
 use App\Enums\CatalogOrigin;
 use Database\Seeders\CatalogProductTypeSeeder;
 use Database\Seeders\CategorySeeder;
@@ -142,5 +144,75 @@ class PhonesTabletsChargerPowerBankTaxonomyTest extends TestCase
         $this->assertSame($before, Category::query()->count());
         $this->assertNull(Category::query()->where('slug', self::LEGACY_FLAT_CHARGERS)->first());
         $this->assertNull(Category::query()->where('slug', self::LEGACY_FLAT_POWER_BANKS)->first());
+    }
+
+    public function test_consumer_electronics_never_receives_power_banks_from_seeders(): void
+    {
+        $consumerNames = CategorySeeder::departmentCategories()['consumer-electronics'] ?? [];
+        $this->assertNotContains('Power Banks', $consumerNames);
+        $this->assertNotContains('Phone Accessories', $consumerNames);
+        $this->assertNotContains('Mobile Accessories', $consumerNames);
+
+        $consumerId = Department::query()
+            ->where('slug', MobileAccessoriesTaxonomy::CONSUMER_ELECTRONICS_DEPARTMENT_SLUG)
+            ->value('id');
+
+        $this->assertNotNull($consumerId);
+        $this->assertNull(
+            Category::query()
+                ->where('department_id', $consumerId)
+                ->where('name', 'Power Banks')
+                ->first(),
+        );
+        foreach (MobileAccessoriesTaxonomy::FORBIDDEN_POWER_BANK_SLUGS as $slug) {
+            $this->assertNull(Category::query()->where('slug', $slug)->first(), $slug);
+        }
+
+        $before = Category::query()
+            ->where('department_id', $consumerId)
+            ->where('name', 'Power Banks')
+            ->count();
+
+        $this->seed(CategorySeeder::class);
+        $this->seed(SubcategorySeeder::class);
+        $this->seed(CatalogProductTypeSeeder::class);
+
+        $this->assertSame(
+            $before,
+            Category::query()
+                ->where('department_id', $consumerId)
+                ->where('name', 'Power Banks')
+                ->count(),
+        );
+        $this->assertNotNull(
+            Category::query()->where('slug', MobileAccessoriesTaxonomy::CANONICAL_POWER_BANKS_SLUG)->first(),
+        );
+        $this->assertTrue(MobileAccessoriesTaxonomy::isForbiddenDepartmentCategory(
+            'consumer-electronics',
+            'Power Banks',
+        ));
+    }
+
+    public function test_phone_accessories_leaves_cover_core_mobile_families(): void
+    {
+        $accessories = Category::query()
+            ->where('slug', MobileAccessoriesTaxonomy::CANONICAL_ACCESSORIES_SLUG)
+            ->firstOrFail();
+
+        $childNames = Category::query()
+            ->where('parent_id', $accessories->id)
+            ->pluck('name')
+            ->all();
+
+        $this->assertEqualsCanonicalizing(
+            ['Phone Cases', 'Chargers', 'Power Banks', 'Screen Protectors', 'Cables'],
+            $childNames,
+        );
+
+        $this->assertNotNull(
+            CatalogProductType::query()
+                ->where('slug', MobileAccessoriesTaxonomy::CANONICAL_CHARGERS_SLUG.'-wireless-charger')
+                ->first(),
+        );
     }
 }

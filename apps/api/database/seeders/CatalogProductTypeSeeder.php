@@ -226,6 +226,7 @@ class CatalogProductTypeSeeder extends Seeder
                 ],
                 'Chargers' => [
                     'Charger',
+                    'Wireless Charger',
                 ],
                 'Power Banks' => [
                     'Power Bank',

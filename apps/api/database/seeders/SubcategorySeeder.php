@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Enums\CatalogOrigin;
 use App\Models\Category;
+use App\Support\Catalog\MobileAccessoriesTaxonomy;
 use App\Models\Department;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
@@ -239,7 +240,14 @@ class SubcategorySeeder extends Seeder
                 }
 
                 foreach ($subcategoryNames as $index => $name) {
+                    if (MobileAccessoriesTaxonomy::isForbiddenDepartmentCategory($departmentSlug, $name)) {
+                        continue;
+                    }
+
                     $slug = $categorySlug.'-'.Str::slug($name);
+                    if (MobileAccessoriesTaxonomy::isForbiddenPowerBankSlug($slug)) {
+                        continue;
+                    }
 
                     Category::query()->updateOrCreate(
                         ['slug' => $slug],

@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Enums\CatalogOrigin;
 use App\Models\Category;
+use App\Support\Catalog\MobileAccessoriesTaxonomy;
 use App\Models\Department;
 use Database\Support\CatalogBible;
 use Illuminate\Database\Seeder;
@@ -201,6 +202,8 @@ class CategorySeeder extends Seeder
                 'Cameras',
                 'Smart Devices',
                 'Gaming',
+                // Power Banks / mobile accessories stay under Phones & Tablets
+                // → Phone Accessories. Do not add them here.
             ],
             'home-appliances' => [
                 'Refrigerators & Freezers',
@@ -402,7 +405,14 @@ class CategorySeeder extends Seeder
             }
 
             foreach ($categoryNames as $index => $name) {
+                if (MobileAccessoriesTaxonomy::isForbiddenDepartmentCategory($departmentSlug, $name)) {
+                    continue;
+                }
+
                 $slug = $departmentSlug.'-'.Str::slug($name);
+                if (MobileAccessoriesTaxonomy::isForbiddenPowerBankSlug($slug)) {
+                    continue;
+                }
 
                 Category::query()->updateOrCreate(
                     ['slug' => $slug],
