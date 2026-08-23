@@ -15,6 +15,7 @@ import {
   reconcilePaymentStates,
   resolvePaymentOutcome,
   isGatewayPaymentMethod,
+  isDeferredCheckoutPaymentMethod,
 } from "@/lib/payment/payment-outcome";
 import {
   getOrderIdForDraft,
@@ -232,7 +233,7 @@ export class PaymentService {
           ) {
             const updated = applyOrderUpdate(existing, { paymentMethod: input.paymentMethod });
             saveOrder(updated);
-            if (isGatewayPaymentMethod(input.paymentMethod)) {
+            if (isDeferredCheckoutPaymentMethod(input.paymentMethod)) {
               return this.hydrateOrder(updated);
             }
             const finalized = finalizeNonMpesaOrder(updated, input.paymentMethod);
@@ -279,7 +280,7 @@ export class PaymentService {
     saveOrder(order);
     lockCartForOrderInStorage(orderId);
 
-    if (isGatewayPaymentMethod(input.paymentMethod)) {
+    if (isDeferredCheckoutPaymentMethod(input.paymentMethod)) {
       return this.hydrateOrder(order);
     }
 
@@ -301,7 +302,7 @@ export class PaymentService {
     saveOrder(reset);
     lockCartForOrderInStorage(existing.id);
 
-    if (isGatewayPaymentMethod(input.paymentMethod)) {
+    if (isDeferredCheckoutPaymentMethod(input.paymentMethod)) {
       return this.hydrateOrder(reset);
     }
 

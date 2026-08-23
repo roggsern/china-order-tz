@@ -6,30 +6,16 @@ import { useAdminPermissions } from "@/hooks/use-admin-permissions";
 import {
   AdminPaymentConfigApiError,
   PAYMENT_METHOD_LABELS,
+  PAYMENT_METHOD_ORDER,
   canManagePaymentConfig,
   canViewPaymentConfig,
+  defaultPaymentEnabledMethods,
   fetchAdminPaymentConfig,
+  mergePaymentEnabledMethods,
+  paymentEnabledMethodsPayload,
   updateAdminPaymentConfig,
   type PaymentEnabledMethods,
 } from "@/lib/api/admin-payment-config";
-
-const METHOD_ORDER: (keyof PaymentEnabledMethods)[] = [
-  "nmb",
-  "mpesa",
-  "card",
-  "cash",
-  "bank_transfer",
-];
-
-function defaultMethods(): PaymentEnabledMethods {
-  return {
-    nmb: true,
-    mpesa: false,
-    card: false,
-    cash: false,
-    bank_transfer: false,
-  };
-}
 
 export function AdminPaymentSettingsPanel() {
   const { permissions, loading: permissionsLoading } = useAdminPermissions();
@@ -37,7 +23,7 @@ export function AdminPaymentSettingsPanel() {
   const canManage = canManagePaymentConfig(permissions);
 
   const [defaultProvider, setDefaultProvider] = useState("nmb");
-  const [methods, setMethods] = useState<PaymentEnabledMethods>(defaultMethods);
+  const [methods, setMethods] = useState<PaymentEnabledMethods>(defaultPaymentEnabledMethods);
   const [providerStatus, setProviderStatus] = useState<
     Record<string, { enabled: boolean; available: boolean }>
   >({});
@@ -47,7 +33,7 @@ export function AdminPaymentSettingsPanel() {
   const [success, setSuccess] = useState<string | null>(null);
 
   const enabledChoices = useMemo(
-    () => METHOD_ORDER.filter((method) => methods[method]),
+    () => PAYMENT_METHOD_ORDER.filter((method) => methods[method]),
     [methods],
   );
 
@@ -62,7 +48,7 @@ export function AdminPaymentSettingsPanel() {
     try {
       const config = await fetchAdminPaymentConfig();
       setDefaultProvider(config.default_provider || "nmb");
-      setMethods({ ...defaultMethods(), ...config.enabled_methods });
+      setMethods(mergePaymentEnabledMethods(config.enabled_methods));
       setProviderStatus(config.provider_status ?? {});
     } catch (err) {
       setError(
@@ -86,7 +72,7 @@ export function AdminPaymentSettingsPanel() {
     setMethods((prev) => {
       const next = { ...prev, [method]: enabled };
       if (!enabled && defaultProvider === method) {
-        const fallback = METHOD_ORDER.find((key) => key !== method && next[key]);
+        const fallback = PAYMENT_METHOD_ORDER.find((key) => key !== method && next[key]);
         if (fallback) {
           setDefaultProvider(fallback);
         }
@@ -107,10 +93,10 @@ export function AdminPaymentSettingsPanel() {
     try {
       const updated = await updateAdminPaymentConfig({
         default_provider: defaultProvider,
-        enabled_methods: methods,
+        enabled_methods: paymentEnabledMethodsPayload(methods),
       });
       setDefaultProvider(updated.default_provider || "nmb");
-      setMethods({ ...defaultMethods(), ...updated.enabled_methods });
+      setMethods(mergePaymentEnabledMethods(updated.enabled_methods));
       setProviderStatus(updated.provider_status ?? {});
       setSuccess("Payment configuration saved.");
     } catch (err) {
@@ -198,7 +184,7 @@ export function AdminPaymentSettingsPanel() {
               Disabled methods cannot be selected as the default provider.
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {METHOD_ORDER.map((method) => {
+              {PAYMENT_METHOD_ORDER.map((method) => {
                 const status = providerStatus[method];
                 return (
                   <label
@@ -221,6 +207,8 @@ export function AdminPaymentSettingsPanel() {
                           ? "Provider available"
                           : method === "nmb"
                             ? "NMB credentials not configured in ENV"
+                            : method === "snippe"
+                              ? "Snippe credentials not configured in ENV"
                             : method === "cash" || method === "bank_transfer"
                               ? "Local method"
                               : "External provider not configured"}

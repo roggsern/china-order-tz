@@ -21,6 +21,7 @@ export type PaymentTransactionPayload = {
   success_indicator?: string | null;
   request_payload?: Record<string, unknown> | null;
   response_payload?: Record<string, unknown> | null;
+  verification_payload?: Record<string, unknown> | null;
   initiated_at?: string | null;
   callback_received_at?: string | null;
   completed_at?: string | null;
@@ -89,17 +90,40 @@ export function parsePaymentAmount(value: string | number | null | undefined): n
   return 0;
 }
 
+export type StartPaymentTransactionOptions = {
+  provider?: string;
+  phoneNumber?: string;
+};
+
 export async function startPaymentTransaction(
   orderId: string,
-  provider?: string,
+  providerOrOptions?: string | StartPaymentTransactionOptions | null,
   token?: string | null,
 ): Promise<PaymentTransactionPayload> {
+  let provider: string | undefined;
+  let phoneNumber: string | undefined;
+
+  if (typeof providerOrOptions === "string") {
+    provider = providerOrOptions;
+  } else if (providerOrOptions) {
+    provider = providerOrOptions.provider;
+    phoneNumber = providerOrOptions.phoneNumber;
+  }
+
+  const body: Record<string, string> = {};
+  if (provider) {
+    body.provider = provider;
+  }
+  if (phoneNumber?.trim()) {
+    body.phone_number = phoneNumber.trim();
+  }
+
   return apiFetch<PaymentTransactionPayload>(
     `/api/payments/start/${encodeURIComponent(orderId)}`,
     {
       method: "POST",
       headers: getAuthHeaders(token),
-      body: JSON.stringify(provider ? { provider } : {}),
+      body: JSON.stringify(body),
     },
     "Unable to start payment.",
   );

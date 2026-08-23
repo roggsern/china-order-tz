@@ -180,6 +180,17 @@ class ProductionComposeDefinitionTest extends TestCase
 
         $this->assertStringContainsString('NEXT_PUBLIC_APP_URL=https://www.chinaordertz.com', $template);
         $this->assertStringContainsString('NEXT_PUBLIC_API_URL=https://api.chinaordertz.com', $template);
+        $this->assertStringContainsString('SNIPPE_ENABLED=false', $template);
+        $this->assertStringContainsString('SNIPPE_BASE_URL=https://api.snippe.sh', $template);
+        $this->assertStringContainsString('SNIPPE_API_KEY=', $template);
+        $this->assertStringContainsString('SNIPPE_WEBHOOK_SECRET=', $template);
+        $this->assertStringContainsString('SNIPPE_WEBHOOK_URL=', $template);
+        $this->assertStringContainsString('SNIPPE_HTTP_TIMEOUT=', $template);
+        $this->assertStringContainsString('SNIPPE_HTTP_CONNECT_TIMEOUT=', $template);
+        $this->assertStringContainsString('SNIPPE_HTTP_RETRY_TIMES=', $template);
+        $this->assertStringContainsString('SNIPPE_WEBHOOK_REPLAY_TTL_SECONDS=', $template);
+        $this->assertStringContainsString('SNIPPE_WEBHOOK_MAX_AGE_SECONDS=', $template);
+        $this->assertStringContainsString('SNIPPE_WEBHOOK_MAX_FUTURE_SKEW_SECONDS=', $template);
     }
 
     public function test_production_env_template_declares_mysql_credentials_as_source_of_truth(): void

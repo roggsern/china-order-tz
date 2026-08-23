@@ -9,4 +9,5 @@ enum PaymentMethod: string
     case Card = 'card';
     case Cash = 'cash';
     case BankTransfer = 'bank_transfer';
+    case Snippe = 'snippe';
 }

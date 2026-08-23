@@ -20,6 +20,7 @@ class StartPaymentTransactionRequest extends FormRequest
     {
         return [
             'provider' => ['sometimes', 'nullable', 'string', Rule::enum(PaymentProvider::class)],
+            'phone_number' => ['sometimes', 'nullable', 'string', 'max:20'],
         ];
     }
 }

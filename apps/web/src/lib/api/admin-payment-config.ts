@@ -12,11 +12,64 @@ export class AdminPaymentConfigApiError extends Error {
 
 export type PaymentEnabledMethods = {
   nmb: boolean;
+  snippe: boolean;
   mpesa: boolean;
   card: boolean;
   cash: boolean;
   bank_transfer: boolean;
 };
+
+export const PAYMENT_METHOD_ORDER: (keyof PaymentEnabledMethods)[] = [
+  "nmb",
+  "snippe",
+  "mpesa",
+  "card",
+  "cash",
+  "bank_transfer",
+];
+
+export function defaultPaymentEnabledMethods(): PaymentEnabledMethods {
+  return {
+    nmb: true,
+    snippe: false,
+    mpesa: false,
+    card: false,
+    cash: false,
+    bank_transfer: false,
+  };
+}
+
+export function mergePaymentEnabledMethods(
+  incoming?: Partial<PaymentEnabledMethods> | null,
+  current: PaymentEnabledMethods = defaultPaymentEnabledMethods(),
+): PaymentEnabledMethods {
+  return {
+    ...defaultPaymentEnabledMethods(),
+    ...current,
+    ...(incoming ?? {}),
+  };
+}
+
+/** Complete enabled_methods payload expected by the payments config API. */
+export function paymentEnabledMethodsPayload(
+  methods: PaymentEnabledMethods,
+): PaymentEnabledMethods {
+  return {
+    nmb: Boolean(methods.nmb),
+    snippe: Boolean(methods.snippe),
+    mpesa: Boolean(methods.mpesa),
+    card: Boolean(methods.card),
+    cash: Boolean(methods.cash),
+    bank_transfer: Boolean(methods.bank_transfer),
+  };
+}
+
+export function isPaymentMethodEnabled(
+  methods: PaymentEnabledMethods,
+  method: keyof PaymentEnabledMethods,
+): boolean {
+  return Boolean(methods[method]);
+}
 
 export type AdminPaymentConfig = {
   default_provider: string;
@@ -111,6 +164,7 @@ export async function updateAdminPaymentConfig(
 
 export const PAYMENT_METHOD_LABELS: Record<keyof PaymentEnabledMethods, string> = {
   nmb: "NMB",
+  snippe: "Mobile Money (Snippe)",
   mpesa: "M-Pesa",
   card: "Card",
   cash: "Cash",

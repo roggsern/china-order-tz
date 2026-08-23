@@ -133,7 +133,7 @@ final class PaymentConfigurationService
             ]);
         }
 
-        $normalized = $this->resolver->defaultEnabledMethods();
+        $normalized = $this->resolver->resolveEnabledMethods();
 
         foreach ($methods as $method => $enabled) {
             if (! is_string($method)) {

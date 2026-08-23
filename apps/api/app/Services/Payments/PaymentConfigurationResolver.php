@@ -3,6 +3,7 @@
 namespace App\Services\Payments;
 
 use App\Enums\PaymentMethod;
+use App\Payments\Gateways\Snippe\SnippeConfig;
 use App\Services\Settings\SettingsService;
 use App\Support\Http\ApiResponse;
 use Throwable;
@@ -24,6 +25,7 @@ final class PaymentConfigurationResolver
     /** @var list<string> */
     public const MANAGED_METHODS = [
         PaymentMethod::Nmb->value,
+        PaymentMethod::Snippe->value,
         PaymentMethod::Mpesa->value,
         PaymentMethod::Card->value,
         PaymentMethod::Cash->value,
@@ -120,6 +122,7 @@ final class PaymentConfigurationResolver
 
         return match ($method) {
             PaymentMethod::Nmb->value => $this->isNmbAvailable(),
+            PaymentMethod::Snippe->value => $this->isSnippeAvailable(),
             PaymentMethod::Cash->value, PaymentMethod::BankTransfer->value => true,
             PaymentMethod::Mpesa->value, PaymentMethod::Card->value => false,
             default => false,
@@ -257,11 +260,17 @@ final class PaymentConfigurationResolver
     {
         return [
             PaymentMethod::Nmb->value => true,
+            PaymentMethod::Snippe->value => false,
             PaymentMethod::Mpesa->value => false,
             PaymentMethod::Card->value => false,
             PaymentMethod::Cash->value => false,
             PaymentMethod::BankTransfer->value => false,
         ];
+    }
+
+    private function isSnippeAvailable(): bool
+    {
+        return SnippeConfig::isConfigured();
     }
 
     private function isNmbAvailable(): bool

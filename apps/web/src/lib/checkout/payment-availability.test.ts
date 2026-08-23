@@ -70,6 +70,7 @@ describe("checkout payment availability", () => {
 
   it("maps cash default to storefront cod", () => {
     assert.equal(backendMethodToStorefrontCode("cash"), "cod");
+    assert.equal(backendMethodToStorefrontCode("snippe"), "snippe");
 
     const options = buildCheckoutPaymentOptions(
       availability({

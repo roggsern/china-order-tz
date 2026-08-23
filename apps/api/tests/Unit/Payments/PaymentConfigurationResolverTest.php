@@ -28,6 +28,7 @@ class PaymentConfigurationResolverTest extends TestCase
         $this->assertSame('nmb', $this->resolver->resolveDefaultProvider());
         $this->assertSame([
             'nmb' => true,
+            'snippe' => false,
             'mpesa' => false,
             'card' => false,
             'cash' => false,
@@ -105,5 +106,125 @@ class PaymentConfigurationResolverTest extends TestCase
         ]);
 
         $this->assertFalse($this->resolver->isProviderAvailable('nmb'));
+    }
+
+    public function test_snippe_availability_fails_closed_without_configuration(): void
+    {
+        config([
+            'payments.snippe.enabled' => false,
+            'payments.snippe.api_key' => '',
+            'payments.snippe.base_url' => '',
+            'payments.snippe.webhook_secret' => '',
+            'payments.snippe.webhook_url' => '',
+        ]);
+
+        $this->assertFalse($this->resolver->isProviderAvailable('snippe'));
+    }
+
+    public function test_snippe_is_not_available_without_webhook_secret(): void
+    {
+        $this->configureCompleteSnippe();
+        config(['payments.snippe.webhook_secret' => '']);
+
+        $this->assertFalse($this->resolver->isProviderAvailable('snippe'));
+    }
+
+    public function test_snippe_is_not_available_without_webhook_url(): void
+    {
+        $this->configureCompleteSnippe();
+        config(['payments.snippe.webhook_url' => '']);
+
+        $this->assertFalse($this->resolver->isProviderAvailable('snippe'));
+    }
+
+    public function test_snippe_is_not_available_with_invalid_production_webhook_url(): void
+    {
+        $this->app['env'] = 'production';
+        $this->configureCompleteSnippe();
+        config([
+            'app.env' => 'production',
+            'payments.snippe.webhook_url' => 'http://localhost/api/v1/payments/snippe/webhook',
+        ]);
+
+        $this->assertFalse($this->resolver->isProviderAvailable('snippe'));
+    }
+
+    public function test_complete_snippe_configuration_is_available(): void
+    {
+        $this->configureCompleteSnippe();
+
+        $this->assertTrue($this->resolver->isProviderAvailable('snippe'));
+    }
+
+    public function test_snippe_is_not_selectable_when_admin_enabled_but_webhook_missing(): void
+    {
+        app(SettingsService::class)->set('payments.enabled_methods', [
+            'nmb' => true,
+            'snippe' => true,
+            'mpesa' => false,
+            'card' => false,
+            'cash' => false,
+            'bank_transfer' => false,
+        ]);
+        Cache::flush();
+
+        $this->configureCompleteSnippe();
+        config(['payments.snippe.webhook_secret' => '']);
+
+        $payload = $this->resolver->presentCheckoutAvailability();
+        $snippe = collect($payload['methods'])->firstWhere('code', 'snippe');
+
+        $this->assertTrue($snippe['enabled']);
+        $this->assertFalse($snippe['available']);
+        $this->assertFalse($snippe['selectable']);
+    }
+
+    public function test_complete_configuration_is_selectable_when_admin_enabled(): void
+    {
+        app(SettingsService::class)->set('payments.enabled_methods', [
+            'nmb' => true,
+            'snippe' => true,
+            'mpesa' => false,
+            'card' => false,
+            'cash' => false,
+            'bank_transfer' => false,
+        ]);
+        Cache::flush();
+
+        $this->configureCompleteSnippe();
+
+        $payload = $this->resolver->presentCheckoutAvailability();
+        $snippe = collect($payload['methods'])->firstWhere('code', 'snippe');
+
+        $this->assertTrue($snippe['enabled']);
+        $this->assertTrue($snippe['available']);
+        $this->assertTrue($snippe['selectable']);
+    }
+
+    public function test_nmb_availability_is_independent_of_snippe_webhook_rules(): void
+    {
+        config([
+            'payments.nmb.enabled' => true,
+            'payments.nmb.merchant_id' => 'MID-1',
+            'payments.nmb.base_url' => 'https://nmb.example',
+            'payments.snippe.enabled' => true,
+            'payments.snippe.api_key' => '',
+            'payments.snippe.webhook_secret' => '',
+            'payments.snippe.webhook_url' => '',
+        ]);
+
+        $this->assertTrue($this->resolver->isProviderAvailable('nmb'));
+        $this->assertFalse($this->resolver->isProviderAvailable('snippe'));
+    }
+
+    private function configureCompleteSnippe(): void
+    {
+        config([
+            'payments.snippe.enabled' => true,
+            'payments.snippe.api_key' => 'test-key',
+            'payments.snippe.base_url' => 'https://api.snippe.test',
+            'payments.snippe.webhook_secret' => 'whsec_test',
+            'payments.snippe.webhook_url' => 'https://example.test/api/v1/payments/snippe/webhook',
+        ]);
     }
 }

@@ -238,6 +238,7 @@ class PaymentOrchestratorTest extends TestCase
         $orchestrator = app(PaymentOrchestrator::class);
 
         $this->assertContains('nmb', $orchestrator->registeredProviders());
+        $this->assertContains('snippe', $orchestrator->registeredProviders());
         $this->assertInstanceOf(NmbPaymentProvider::class, $orchestrator->resolveProvider('nmb'));
     }
 

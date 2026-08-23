@@ -2,7 +2,7 @@ import type { OrderStatus } from "@/lib/types/order";
 import { ORDER_STATUS } from "@/lib/types/order";
 import type { PaymentMethodCode, PaymentStatus } from "@/lib/types/payment";
 import { PAYMENT_METHOD_CODES, PAYMENT_STATUS } from "@/lib/types/payment";
-import { GATEWAY_PAYMENT_METHODS } from "@/lib/payment/constants";
+import { GATEWAY_PAYMENT_METHODS, ORCHESTRATOR_PAYMENT_METHODS } from "@/lib/payment/constants";
 
 export function isGatewayPaymentMethod(
   method: PaymentMethodCode | null | undefined,
@@ -11,6 +11,26 @@ export function isGatewayPaymentMethod(
     return false;
   }
   return (GATEWAY_PAYMENT_METHODS as readonly string[]).includes(method);
+}
+
+export function isOrchestratorPaymentMethod(
+  method: PaymentMethodCode | null | undefined,
+): method is PaymentMethodCode {
+  if (!method) {
+    return false;
+  }
+  return (ORCHESTRATOR_PAYMENT_METHODS as readonly string[]).includes(method);
+}
+
+/** Checkout methods that remain unpaid until provider confirmation. */
+export function isDeferredCheckoutPaymentMethod(
+  method: PaymentMethodCode | null | undefined,
+): boolean {
+  if (!method) {
+    return false;
+  }
+
+  return isGatewayPaymentMethod(method) || isOrchestratorPaymentMethod(method);
 }
 
 export type PaymentOutcome = {
@@ -26,6 +46,7 @@ export function resolvePaymentOutcome(
   switch (method) {
     case PAYMENT_METHOD_CODES.MPESA:
     case PAYMENT_METHOD_CODES.NMB:
+    case PAYMENT_METHOD_CODES.SNIPPE:
     case PAYMENT_METHOD_CODES.SELCOM:
       return {
         paymentStatus: PAYMENT_STATUS.PAID,

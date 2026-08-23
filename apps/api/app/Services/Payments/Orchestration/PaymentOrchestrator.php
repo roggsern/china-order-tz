@@ -40,7 +40,7 @@ class PaymentOrchestrator
         }
     }
 
-    public function start(User $user, Order $order, ?string $providerKey = null): PaymentTransaction
+    public function start(User $user, Order $order, ?string $providerKey = null, ?string $phoneNumber = null): PaymentTransaction
     {
         $this->authorizeOrder($user, $order);
         $this->assertOrderPayable($order);
@@ -54,7 +54,7 @@ class PaymentOrchestrator
         $amount = (string) ($order->grand_total ?? $order->total);
         $currency = strtoupper((string) ($order->currency ?: 'TZS'));
 
-        return DB::transaction(function () use ($order, $provider, $providerKey, $amount, $currency): PaymentTransaction {
+        return DB::transaction(function () use ($order, $provider, $providerKey, $amount, $currency, $phoneNumber): PaymentTransaction {
             /** @var Order $lockedOrder */
             $lockedOrder = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
 
@@ -102,6 +102,7 @@ class PaymentOrchestrator
                 currency: $currency,
                 provider: $providerKey,
                 paymentTransactionId: $transaction->id,
+                phoneNumber: $phoneNumber,
             ));
 
             $transaction->fill([
@@ -312,6 +313,7 @@ class PaymentOrchestrator
                 currency: $context['currency'],
                 provider: PaymentProvider::Nmb->value,
                 paymentTransactionId: $context['transaction_id'],
+                phoneNumber: null,
             ));
 
             if (! $result->ok || ! filled($result->providerReference)) {

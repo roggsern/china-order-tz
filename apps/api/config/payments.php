@@ -71,4 +71,25 @@ return [
         'merchant_reference_padding' => (int) env('PAYMENT_ORCHESTRATOR_MERCHANT_PADDING', 6),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Snippe Mobile Money (Payment Orchestrator)
+    |--------------------------------------------------------------------------
+    */
+
+    'snippe' => [
+        'enabled' => env('SNIPPE_ENABLED', false),
+        'base_url' => env('SNIPPE_BASE_URL', 'https://api.snippe.sh'),
+        'api_key' => env('SNIPPE_API_KEY'),
+        'webhook_secret' => env('SNIPPE_WEBHOOK_SECRET'),
+        'webhook_url' => env('SNIPPE_WEBHOOK_URL'),
+        'http_timeout' => (int) env('SNIPPE_HTTP_TIMEOUT', 30),
+        'http_connect_timeout' => (int) env('SNIPPE_HTTP_CONNECT_TIMEOUT', 10),
+        'http_retry_times' => (int) env('SNIPPE_HTTP_RETRY_TIMES', 2),
+        'log_channel' => env('SNIPPE_LOG_CHANNEL', 'stack'),
+        'webhook_replay_ttl_seconds' => (int) env('SNIPPE_WEBHOOK_REPLAY_TTL_SECONDS', 86400),
+        'webhook_max_age_seconds' => (int) env('SNIPPE_WEBHOOK_MAX_AGE_SECONDS', 300),
+        'webhook_max_future_skew_seconds' => (int) env('SNIPPE_WEBHOOK_MAX_FUTURE_SKEW_SECONDS', 60),
+    ],
+
 ];

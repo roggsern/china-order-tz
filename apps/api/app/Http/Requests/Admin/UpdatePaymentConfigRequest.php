@@ -24,6 +24,7 @@ class UpdatePaymentConfigRequest extends FormRequest
             'default_provider' => ['sometimes', 'string'],
             'enabled_methods' => ['sometimes', 'array'],
             'enabled_methods.nmb' => ['sometimes', 'boolean'],
+            'enabled_methods.snippe' => ['sometimes', 'boolean'],
             'enabled_methods.mpesa' => ['sometimes', 'boolean'],
             'enabled_methods.card' => ['sometimes', 'boolean'],
             'enabled_methods.cash' => ['sometimes', 'boolean'],

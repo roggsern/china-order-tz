@@ -185,4 +185,45 @@ class AdminPaymentConfigurationTest extends TestCase
         $this->assertFalse($resolver->isProviderAvailable('mpesa'));
         $this->assertFalse($resolver->isKnownMethod('paypal'));
     }
+
+    public function test_partial_enabled_methods_update_preserves_snippe_state(): void
+    {
+        Sanctum::actingAs(
+            Admin::factory()->withPermissions([
+                AdminPermissions::PAYMENTS_CONFIG_VIEW,
+                AdminPermissions::PAYMENTS_CONFIG_MANAGE,
+            ])->create(),
+        );
+
+        $this->putJson('/api/v1/admin/payments/config', [
+            'default_provider' => 'nmb',
+            'enabled_methods' => [
+                'nmb' => true,
+                'snippe' => true,
+                'mpesa' => false,
+                'card' => false,
+                'cash' => false,
+                'bank_transfer' => false,
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.enabled_methods.snippe', true)
+            ->assertJsonPath('data.enabled_methods.nmb', true);
+
+        $this->putJson('/api/v1/admin/payments/config', [
+            'enabled_methods' => [
+                'cash' => true,
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.enabled_methods.snippe', true)
+            ->assertJsonPath('data.enabled_methods.nmb', true)
+            ->assertJsonPath('data.enabled_methods.cash', true);
+
+        $this->putJson('/api/v1/admin/payments/config', [
+            'enabled_methods' => [
+                'snippe' => false,
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.enabled_methods.snippe', false)
+            ->assertJsonPath('data.enabled_methods.nmb', true);
+    }
 }

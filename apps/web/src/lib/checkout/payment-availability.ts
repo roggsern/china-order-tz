@@ -15,6 +15,8 @@ export function backendMethodToStorefrontCode(backendCode: string): PaymentMetho
   switch (backendCode) {
     case "nmb":
       return "nmb";
+    case "snippe":
+      return "snippe";
     case "mpesa":
       return "mpesa";
     case "card":
@@ -33,6 +35,8 @@ export function storefrontCodeToBackendMethod(code: string): string | null {
   switch (code) {
     case "nmb":
       return "nmb";
+    case "snippe":
+      return "snippe";
     case "mpesa":
       return "mpesa";
     case "card":

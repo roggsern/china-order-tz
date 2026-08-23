@@ -37,15 +37,24 @@ import {
   type CheckoutPaymentOption,
 } from "@/lib/checkout/payment-availability";
 import { getOrderById as getStoredOrderById } from "@/lib/payment/order-storage";
-import { getPaymentTransaction } from "@/lib/payment/payment-session";
+import { getPaymentTransaction, savePaymentTransaction } from "@/lib/payment/payment-session";
 import { redirectToPaymentProcessing } from "@/lib/payment/stk-flow";
 import { shouldRedirectToOrderSuccess, isAwaitingPaymentSelection } from "@/lib/order/placement";
-import { isGatewayPaymentMethod } from "@/lib/payment/payment-outcome";
+import {
+  isGatewayPaymentMethod,
+  isOrchestratorPaymentMethod,
+} from "@/lib/payment/payment-outcome";
+import {
+  resolveSnippeStartFailureMessage,
+  validateSnippePhoneInput,
+} from "@/lib/payment/snippe";
+import { updateOrderById } from "@/lib/payment/order-storage";
 import { CheckoutSection } from "./CheckoutSection";
 import { CheckoutOrderSummary } from "./CheckoutOrderSummary";
 import { CheckoutStepIndicator } from "./CheckoutStepIndicator";
 import { CheckoutMobileStickyBar } from "./CheckoutMobileStickyBar";
 import { SimplifiedPaymentMethodSelector } from "@/components/payment/SimplifiedPaymentMethodSelector";
+import { SnippeMobileMoneyPhoneField } from "@/components/payment/SnippeMobileMoneyPhoneField";
 import { CheckoutPageSkeleton } from "@/components/ui/PageSkeletons";
 import { useStorefrontTracking } from "@/components/storefront/StorefrontTrackingProvider";
 
@@ -70,12 +79,16 @@ function submitLabelForMethod(
 ): string {
   if (isProcessing) {
     if (method === PAYMENT_METHOD_CODES.NMB) return "Redirecting to secure checkout…";
+    if (method === PAYMENT_METHOD_CODES.SNIPPE) return "Sending payment request…";
     return "Placing order…";
   }
   if (hasFailedOrder) {
-    return method === PAYMENT_METHOD_CODES.NMB ? "Retry payment" : "Retry order payment";
+    if (method === PAYMENT_METHOD_CODES.NMB) return "Retry payment";
+    if (method === PAYMENT_METHOD_CODES.SNIPPE) return "Retry Mobile Money payment";
+    return "Retry order payment";
   }
   if (method === PAYMENT_METHOD_CODES.NMB) return "Pay securely";
+  if (method === PAYMENT_METHOD_CODES.SNIPPE) return "Pay with Mobile Money";
   if (method === PAYMENT_METHOD_CODES.COD) return "Place order (pay on delivery)";
   if (method === PAYMENT_METHOD_CODES.BANK_TRANSFER) return "Place order (bank transfer)";
   return "Continue to payment";
@@ -97,6 +110,8 @@ export function PaymentPageContent() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode | null>(null);
   const [methodsLoading, setMethodsLoading] = useState(true);
   const [methodsError, setMethodsError] = useState<string | undefined>();
+  const [snippePhone, setSnippePhone] = useState("");
+  const [snippePhoneError, setSnippePhoneError] = useState<string | undefined>();
 
   useEffect(() => {
     if (paymentTrackedRef.current) {
@@ -167,12 +182,18 @@ export function PaymentPageContent() {
 
         if (
           !waitingForPayment &&
-          isGatewayPaymentMethod(existing.paymentMethod) &&
           existing.paymentStatus === PAYMENT_STATUS.PENDING
         ) {
           const transactionId =
             existing.paymentTransactionId ?? getPaymentTransaction(existing.id);
-          if (transactionId) {
+
+          if (transactionId && isOrchestratorPaymentMethod(existing.paymentMethod)) {
+            clearCheckoutDraft();
+            router.replace(`/payments/${encodeURIComponent(transactionId)}`);
+            return;
+          }
+
+          if (transactionId && isGatewayPaymentMethod(existing.paymentMethod)) {
             clearCheckoutDraft();
             redirectToPaymentProcessing(router, existing.id, transactionId);
             return;
@@ -187,8 +208,15 @@ export function PaymentPageContent() {
     }
 
     setDraft(savedDraft);
+    setSnippePhone(savedDraft.customer.phone?.trim() ?? "");
     setIsReady(true);
   }, [clearPurchasedItems, router]);
+
+  useEffect(() => {
+    if (paymentMethod !== PAYMENT_METHOD_CODES.SNIPPE) {
+      setSnippePhoneError(undefined);
+    }
+  }, [paymentMethod]);
 
   const selectorOptions = useMemo(
     () =>
@@ -241,6 +269,17 @@ export function PaymentPageContent() {
       return;
     }
 
+    if (paymentMethod === PAYMENT_METHOD_CODES.SNIPPE) {
+      const phoneValidationError = validateSnippePhoneInput(snippePhone);
+      if (phoneValidationError) {
+        setSnippePhoneError(phoneValidationError);
+        releaseDraftSubmissionLock(draft.draftId);
+        paymentLockRef.current = false;
+        setIsProcessingPayment(false);
+        return;
+      }
+    }
+
     setFailedOrder(null);
     paymentLockRef.current = true;
     setIsProcessingPayment(true);
@@ -270,6 +309,29 @@ export function PaymentPageContent() {
           backendOrderId,
           backendMethod ?? undefined,
         );
+        clearCheckoutDraft();
+        navigateAfterPaymentStart(router, transaction, {
+          localOrderId: order.id,
+          replace: false,
+        });
+        return;
+      }
+
+      if (paymentMethod === PAYMENT_METHOD_CODES.SNIPPE) {
+        const transaction = await startPaymentTransaction(backendOrderId, {
+          provider: backendMethod ?? PAYMENT_METHOD_CODES.SNIPPE,
+          phoneNumber: snippePhone.trim(),
+        });
+
+        if (transaction.status === "failed") {
+          throw new PaymentOrchestratorApiError(resolveSnippeStartFailureMessage(transaction));
+        }
+
+        savePaymentTransaction(order.id, transaction.id);
+        updateOrderById(order.id, (existing) => ({
+          ...existing,
+          paymentTransactionId: transaction.id,
+        }));
         clearCheckoutDraft();
         navigateAfterPaymentStart(router, transaction, {
           localOrderId: order.id,
@@ -330,7 +392,7 @@ export function PaymentPageContent() {
       setSubmitError(message);
       setIsProcessingPayment(false);
     }
-  }, [clearPurchasedItems, draft, isProcessingPayment, paymentMethod, router]);
+  }, [clearPurchasedItems, draft, isProcessingPayment, paymentMethod, router, snippePhone]);
 
   if (!isReady || !draft) {
     return <CheckoutPageSkeleton />;
@@ -402,6 +464,25 @@ export function PaymentPageContent() {
               />
             )}
           </CheckoutSection>
+
+          {paymentMethod === PAYMENT_METHOD_CODES.SNIPPE ? (
+            <CheckoutSection
+              title="Mobile Money number"
+              description="We'll send the payment request to this number."
+            >
+              <SnippeMobileMoneyPhoneField
+                value={snippePhone}
+                onChange={(value) => {
+                  setSnippePhone(value);
+                  if (snippePhoneError) {
+                    setSnippePhoneError(undefined);
+                  }
+                }}
+                disabled={isProcessingPayment}
+                error={snippePhoneError}
+              />
+            </CheckoutSection>
+          ) : null}
 
           {submitError ? (
             <p

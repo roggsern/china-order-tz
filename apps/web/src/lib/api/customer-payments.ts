@@ -30,7 +30,7 @@ export class CustomerPaymentApiError extends Error {
 }
 
 /** Laravel payment_method values accepted by POST /orders/{order}/payments. */
-export type BackendPaymentMethod = "mpesa" | "nmb" | "card" | "cash" | "bank_transfer";
+export type BackendPaymentMethod = "mpesa" | "nmb" | "snippe" | "card" | "cash" | "bank_transfer";
 
 /**
  * Maps storefront payment codes to Laravel PaymentMethod enum values.
@@ -44,6 +44,8 @@ export function toBackendPaymentMethod(
       return "mpesa";
     case "nmb":
       return "nmb";
+    case "snippe":
+      return "snippe";
     case "bank_transfer":
       return "bank_transfer";
     case "cod":

@@ -89,6 +89,12 @@ export const SIMPLIFIED_PAYMENT_OPTIONS = [
     icon: "🏦",
   },
   {
+    code: "snippe" as const,
+    label: "Mobile Money",
+    description: "Powered by Snippe",
+    icon: "📱",
+  },
+  {
     code: "selcom" as const,
     label: "Selcom",
     description: "Pay via Selcom mobile checkout",
@@ -108,6 +114,11 @@ export const SIMPLIFIED_PAYMENT_OPTIONS = [
   },
 ];
 
+/** Payment orchestrator methods that stay pending until backend verification. */
+export const ORCHESTRATOR_PAYMENT_METHODS = ["nmb", "snippe"] as const;
+
+export type OrchestratorPaymentMethod = (typeof ORCHESTRATOR_PAYMENT_METHODS)[number];
+
 /** Gateway methods that require provider initiation + processing page. */
 export const GATEWAY_PAYMENT_METHODS = ["mpesa", "nmb", "selcom"] as const;
 
@@ -116,6 +127,7 @@ export type GatewayPaymentMethod = (typeof GATEWAY_PAYMENT_METHODS)[number];
 export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   mpesa: "M-Pesa",
   nmb: "NMB Bank",
+  snippe: "Mobile Money",
   selcom: "Selcom",
   cod: "Cash on Delivery",
   airtel_money: "Airtel Money",

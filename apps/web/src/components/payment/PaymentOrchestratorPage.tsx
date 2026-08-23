@@ -19,6 +19,20 @@ import {
   navigateAfterPaymentStart,
   prepareNmbHostedCheckoutLaunch,
 } from "@/lib/nmb/orchestrator-checkout";
+import {
+  ORCHESTRATOR_POLL_INTERVAL_MS,
+  isOrchestratorWaitingStatus,
+} from "@/lib/payment/orchestrator-polling";
+import { PAYMENT_SUCCESS_REDIRECT_MS } from "@/lib/payment/constants";
+import {
+  SNIPPE_MOBILE_MONEY_LABEL,
+  SNIPPE_POWERED_BY,
+  SNIPPE_TRANSIENT_STATUS_MESSAGE,
+  SNIPPE_WAITING_BODY,
+  SNIPPE_WAITING_TITLE,
+  isSnippeTransaction,
+  resolveSnippeTerminalFailureMessage,
+} from "@/lib/payment/snippe";
 import { AuthInvitationCard } from "@/components/auth/AuthInvitationCard";
 
 const STATUS_STYLES: Record<string, string> = {
@@ -29,12 +43,47 @@ const STATUS_STYLES: Record<string, string> = {
   cancelled: "bg-zinc-100 text-zinc-700 ring-zinc-300/40",
 };
 
-const WAITING_STATUSES = new Set(["pending", "processing"]);
-const POLL_INTERVAL_MS = 4000;
-
 interface PaymentOrchestratorPageProps {
   transactionId?: string;
   orderId?: string;
+}
+
+function providerHeading(transaction: PaymentTransactionPayload): string {
+  if (isSnippeTransaction(transaction)) {
+    return SNIPPE_MOBILE_MONEY_LABEL;
+  }
+
+  if (transaction.provider === "nmb") {
+    return "NMB Payment";
+  }
+
+  return "Payment";
+}
+
+function providerSubheading(
+  transaction: PaymentTransactionPayload,
+  isSuccess: boolean,
+  isFailed: boolean,
+): string {
+  if (isSnippeTransaction(transaction)) {
+    if (isSuccess) {
+      return "Your Mobile Money payment was confirmed.";
+    }
+    if (isFailed) {
+      return "The Mobile Money payment did not complete.";
+    }
+    return SNIPPE_POWERED_BY;
+  }
+
+  if (isSuccess) {
+    return "Your order is marked as paid. Fulfillment will follow in a later step.";
+  }
+
+  if (isFailed) {
+    return "The payment did not complete. You can try again from this order.";
+  }
+
+  return "Follow the checkout instructions below. We will update this page when payment is confirmed.";
 }
 
 export function PaymentOrchestratorPage({
@@ -44,11 +93,14 @@ export function PaymentOrchestratorPage({
   const router = useRouter();
   const [transaction, setTransaction] = useState<PaymentTransactionPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [transientStatusMessage, setTransientStatusMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [needsAuth, setNeedsAuth] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const refreshInFlightRef = useRef(false);
   const launcherRedirectRef = useRef(false);
+  const successRedirectRef = useRef(false);
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -56,6 +108,28 @@ export function PaymentOrchestratorPage({
       pollRef.current = null;
     }
   }, []);
+
+  const refreshTransaction = useCallback(
+    async (id: string, token: string): Promise<PaymentTransactionPayload | null> => {
+      if (refreshInFlightRef.current) {
+        return null;
+      }
+
+      refreshInFlightRef.current = true;
+      try {
+        const next = await refreshPaymentTransaction(id, token);
+        setTransientStatusMessage(null);
+        setTransaction(next);
+        return next;
+      } catch {
+        setTransientStatusMessage(SNIPPE_TRANSIENT_STATUS_MESSAGE);
+        return null;
+      } finally {
+        refreshInFlightRef.current = false;
+      }
+    },
+    [],
+  );
 
   const load = useCallback(async () => {
     const token = getCustomerApiToken();
@@ -103,42 +177,53 @@ export function PaymentOrchestratorPage({
       return;
     }
 
-    if (isNmbWebsiteHostedCheckout(transaction) && WAITING_STATUSES.has(transaction.status)) {
+    if (isNmbWebsiteHostedCheckout(transaction) && isOrchestratorWaitingStatus(transaction.status)) {
       launcherRedirectRef.current = true;
       prepareNmbHostedCheckoutLaunch(transaction);
       router.replace(buildNmbHostedCheckoutLauncherPath(transaction.id));
     }
   }, [router, transaction, transactionId]);
 
-  // Poll while waiting for NMB callback / verification.
   useEffect(() => {
     stopPolling();
 
     const token = getCustomerApiToken();
-    if (!token || !transaction || !WAITING_STATUSES.has(transaction.status)) {
+    if (!token || !transaction || !isOrchestratorWaitingStatus(transaction.status)) {
       return;
     }
 
     pollRef.current = setInterval(() => {
-      void (async () => {
-        try {
-          const next = await refreshPaymentTransaction(transaction.id, token);
-          setTransaction(next);
-          if (!WAITING_STATUSES.has(next.status)) {
-            stopPolling();
-          }
-        } catch {
-          // Keep waiting UI; user can refresh manually.
+      void refreshTransaction(transaction.id, token).then((next) => {
+        if (next && !isOrchestratorWaitingStatus(next.status)) {
+          stopPolling();
         }
-      })();
-    }, POLL_INTERVAL_MS);
+      });
+    }, ORCHESTRATOR_POLL_INTERVAL_MS);
 
     return stopPolling;
-  }, [stopPolling, transaction]);
+  }, [refreshTransaction, stopPolling, transaction]);
+
+  useEffect(() => {
+    if (!transaction || transaction.status !== "successful" || successRedirectRef.current) {
+      return;
+    }
+
+    successRedirectRef.current = true;
+    const timeoutId = setTimeout(() => {
+      router.replace(`/order-success/${transaction.order_id}`);
+    }, PAYMENT_SUCCESS_REDIRECT_MS);
+
+    return () => clearTimeout(timeoutId);
+  }, [router, transaction]);
 
   const handleRetry = async () => {
     const token = getCustomerApiToken();
     if (!token || !transaction || busy) return;
+
+    if (isSnippeTransaction(transaction)) {
+      router.push("/checkout/payment");
+      return;
+    }
 
     setBusy(true);
     setError(null);
@@ -149,8 +234,10 @@ export function PaymentOrchestratorPage({
         setTransaction(next);
         navigateAfterPaymentStart(router, next);
       } else {
-        const next = await refreshPaymentTransaction(transaction.id, token);
-        setTransaction(next);
+        const next = await refreshTransaction(transaction.id, token);
+        if (!next) {
+          setTransientStatusMessage(SNIPPE_TRANSIENT_STATUS_MESSAGE);
+        }
       }
     } catch (err) {
       setError(
@@ -200,24 +287,22 @@ export function PaymentOrchestratorPage({
   const amount = parsePaymentAmount(transaction.amount);
   const status = transaction.status;
   const orderNumber = transaction.order?.order_number ?? "—";
-  const isWaiting = WAITING_STATUSES.has(status);
+  const isWaiting = isOrchestratorWaitingStatus(status);
   const isSuccess = status === "successful";
   const isFailed = status === "failed" || status === "cancelled";
+  const isSnippe = isSnippeTransaction(transaction);
+  const failureMessage = isFailed ? resolveSnippeTerminalFailureMessage(transaction) : null;
 
   return (
     <div className="mx-auto max-w-lg px-4 py-10 sm:px-6">
       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8b6914]">
-        NMB Payment
+        {providerHeading(transaction)}
       </p>
       <h1 className="mt-1 text-3xl font-bold tracking-tight text-zinc-900">
         {isSuccess ? "Payment successful" : isFailed ? "Payment unsuccessful" : "Complete payment"}
       </h1>
       <p className="mt-2 text-sm text-zinc-500">
-        {isSuccess
-          ? "Your order is marked as paid. Fulfillment will follow in a later step."
-          : isFailed
-            ? "The payment did not complete. You can try again from this order."
-            : "Follow the NMB checkout instructions below. We will update this page when payment is confirmed."}
+        {providerSubheading(transaction, isSuccess, isFailed)}
       </p>
 
       <section className="mt-8 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm sm:p-6">
@@ -233,8 +318,10 @@ export function PaymentOrchestratorPage({
             </dd>
           </div>
           <div className="flex justify-between gap-4">
-            <dt className="text-zinc-500">Provider</dt>
-            <dd className="font-semibold uppercase text-zinc-900">{transaction.provider}</dd>
+            <dt className="text-zinc-500">Payment method</dt>
+            <dd className="font-semibold text-zinc-900">
+              {isSnippe ? SNIPPE_MOBILE_MONEY_LABEL : transaction.provider.toUpperCase()}
+            </dd>
           </div>
           <div className="flex justify-between gap-4">
             <dt className="text-zinc-500">Merchant reference</dt>
@@ -242,7 +329,7 @@ export function PaymentOrchestratorPage({
           </div>
           {transaction.provider_reference ? (
             <div className="flex justify-between gap-4">
-              <dt className="text-zinc-500">NMB session</dt>
+              <dt className="text-zinc-500">{isSnippe ? "Payment reference" : "NMB session"}</dt>
               <dd className="font-mono text-xs text-zinc-700">{transaction.provider_reference}</dd>
             </div>
           ) : null}
@@ -260,7 +347,17 @@ export function PaymentOrchestratorPage({
           </div>
         </dl>
 
-        {isWaiting ? (
+        {isWaiting && isSnippe ? (
+          <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3">
+            <p className="text-sm font-semibold text-blue-900">{SNIPPE_WAITING_TITLE}</p>
+            <p className="mt-1 text-sm text-blue-800">{SNIPPE_WAITING_BODY}</p>
+            <p className="mt-2 text-xs text-blue-700">
+              This page refreshes automatically while we confirm your payment.
+            </p>
+          </div>
+        ) : null}
+
+        {isWaiting && !isSnippe ? (
           <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3">
             <p className="text-sm font-semibold text-blue-900">Waiting for NMB confirmation…</p>
             <p className="mt-1 text-sm text-blue-800">
@@ -292,15 +389,16 @@ export function PaymentOrchestratorPage({
           </div>
         ) : null}
 
+        {transientStatusMessage && isWaiting ? (
+          <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3" role="status">
+            <p className="text-sm text-amber-900">{transientStatusMessage}</p>
+          </div>
+        ) : null}
+
         {isSuccess ? (
           <div className="mt-5 rounded-2xl border border-green-200 bg-green-50 px-4 py-3">
             <p className="text-sm font-semibold text-green-900">Payment verified</p>
-            <p className="mt-1 text-sm text-green-800">
-              {transaction.external_transaction_id
-                ? `NMB transaction ${transaction.external_transaction_id}. `
-                : ""}
-              Your order status is now paid.
-            </p>
+            <p className="mt-1 text-sm text-green-800">Your order status is now paid.</p>
           </div>
         ) : null}
 
@@ -308,7 +406,10 @@ export function PaymentOrchestratorPage({
           <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
             <p className="text-sm font-semibold text-red-900">Payment failed</p>
             <p className="mt-1 text-sm text-red-800">
-              No charge was completed for this attempt. Retry to start a new NMB session.
+              {failureMessage ??
+                (isSnippe
+                  ? "No charge was completed for this attempt."
+                  : "No charge was completed for this attempt. Retry to start a new NMB session.")}
             </p>
           </div>
         ) : null}
@@ -330,7 +431,9 @@ export function PaymentOrchestratorPage({
               {busy
                 ? "Working…"
                 : isFailed
-                  ? "Retry payment"
+                  ? isSnippe
+                    ? "Choose payment method"
+                    : "Retry payment"
                   : "Check payment status"}
             </button>
           ) : null}

@@ -119,6 +119,32 @@ class MaintenanceModeEnforcementTest extends TestCase
             ->assertJsonPath('data.message', 'Probe message.');
     }
 
+    public function test_snippe_webhook_is_not_blocked_during_maintenance(): void
+    {
+        $this->enableMaintenance('Store closed.');
+
+        $response = $this->postJson('/api/v1/payments/snippe/webhook', [
+            'id' => 'evt_maintenance',
+            'type' => 'payment.completed',
+            'data' => ['reference' => 'pi_maintenance'],
+        ]);
+
+        $this->assertNotSame(503, $response->status());
+        $this->assertStringNotContainsString('maintenance_mode', $response->getContent());
+        $this->assertStringNotContainsString('"maintenance":true', $response->getContent());
+    }
+
+    public function test_other_payment_routes_remain_blocked_during_maintenance(): void
+    {
+        $this->enableMaintenance('Store closed.');
+
+        Sanctum::actingAs(User::factory()->create());
+
+        $this->getJson('/api/v1/payments/methods')
+            ->assertStatus(503)
+            ->assertJsonPath('maintenance', true);
+    }
+
     private function enableMaintenance(string $message): void
     {
         $settings = app(SettingsService::class);

@@ -47,7 +47,7 @@ final class SettingsDefinitions
                 'type' => SettingType::String,
                 'default' => 'nmb',
                 // mock retained for settings-foundation / local testing only.
-                'rules' => ['required', 'string', 'in:nmb,mpesa,card,cash,bank_transfer,mock'],
+                'rules' => ['required', 'string', 'in:nmb,snippe,mpesa,card,cash,bank_transfer,mock'],
             ],
             'payments.enabled_methods' => [
                 'group' => 'payments',
@@ -55,6 +55,7 @@ final class SettingsDefinitions
                 'type' => SettingType::Json,
                 'default' => [
                     'nmb' => true,
+                    'snippe' => false,
                     'mpesa' => false,
                     'card' => false,
                     'cash' => false,

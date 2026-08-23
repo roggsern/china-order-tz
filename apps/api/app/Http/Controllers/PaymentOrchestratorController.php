@@ -32,6 +32,7 @@ class PaymentOrchestratorController extends Controller
             $user,
             $order,
             $request->validated('provider'),
+            $request->validated('phone_number'),
         );
 
         return ApiResponse::success(

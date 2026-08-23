@@ -40,6 +40,7 @@ class EnforceMaintenanceMode
             'api/v1/admin/*',
             'api/v1/webhooks/*',
             'api/v1/payments/nmb/callback',
+            'api/v1/payments/snippe/webhook',
             'api/v1/storefront/maintenance',
         );
     }

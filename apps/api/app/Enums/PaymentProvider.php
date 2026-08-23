@@ -13,4 +13,5 @@ enum PaymentProvider: string
     case MixByYas = 'mix_by_yas';
     case Mpesa = 'mpesa';
     case AirtelMoney = 'airtel_money';
+    case Snippe = 'snippe';
 }

@@ -117,6 +117,7 @@ use App\Http\Controllers\DeliveryOptionController;
 use App\Http\Controllers\DevicePushTokenController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\NmbPaymentCallbackController;
+use App\Http\Controllers\SnippePaymentWebhookController;
 use App\Http\Controllers\CheckoutPaymentMethodsController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PaymentOrchestratorController;
@@ -165,6 +166,9 @@ Route::post('/webhooks/nmb', [NmbWebhookController::class, 'receive'])
     ->middleware('throttle:webhooks');
 
 Route::post('/payments/nmb/callback', NmbPaymentCallbackController::class)
+    ->middleware('throttle:webhooks');
+
+Route::post('/payments/snippe/webhook', SnippePaymentWebhookController::class)
     ->middleware('throttle:webhooks');
 
 Route::post('/payments/nmb/return-reconcile', [PaymentOrchestratorController::class, 'reconcileNmbBrowserReturn'])

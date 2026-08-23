@@ -13,5 +13,6 @@ final class PaymentInitiationRequest
         public readonly string $currency,
         public readonly string $provider,
         public readonly ?string $paymentTransactionId = null,
+        public readonly ?string $phoneNumber = null,
     ) {}
 }

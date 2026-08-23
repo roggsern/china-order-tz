@@ -179,12 +179,15 @@ class PaymentRuntimeEnforcementTest extends TestCase
             ->assertJsonPath('data.methods.0.code', 'nmb')
             ->assertJsonPath('data.methods.0.enabled', true)
             ->assertJsonPath('data.methods.0.selectable', true)
-            ->assertJsonPath('data.methods.1.code', 'mpesa')
+            ->assertJsonPath('data.methods.1.code', 'snippe')
             ->assertJsonPath('data.methods.1.enabled', false)
             ->assertJsonPath('data.methods.1.selectable', false)
-            ->assertJsonPath('data.methods.3.code', 'cash')
-            ->assertJsonPath('data.methods.3.enabled', true)
-            ->assertJsonPath('data.methods.3.selectable', true);
+            ->assertJsonPath('data.methods.2.code', 'mpesa')
+            ->assertJsonPath('data.methods.2.enabled', false)
+            ->assertJsonPath('data.methods.2.selectable', false)
+            ->assertJsonPath('data.methods.4.code', 'cash')
+            ->assertJsonPath('data.methods.4.enabled', true)
+            ->assertJsonPath('data.methods.4.selectable', true);
     }
 
     public function test_guest_cannot_list_checkout_methods(): void
