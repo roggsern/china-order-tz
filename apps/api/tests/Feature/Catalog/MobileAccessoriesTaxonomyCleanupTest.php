@@ -215,6 +215,21 @@ class MobileAccessoriesTaxonomyCleanupTest extends TestCase
         $this->assertTrue($canonicalType->fresh()->is_active);
         $this->assertSame($canonicalUpdatedAt, $canonical->fresh()->updated_at?->toJSON());
         $this->assertSame($canonicalTypeUpdatedAt, $canonicalType->fresh()->updated_at?->toJSON());
+
+        $secondDryRun = app(MobileAccessoriesTaxonomyCleanupService::class)->cleanup(dryRun: true);
+
+        $this->assertTrue($secondDryRun['dry_run']);
+        $this->assertCount(0, $secondDryRun['competing_product_types']);
+        $this->assertCount(0, $secondDryRun['anomalous_product_types']);
+        $this->assertCount(0, $secondDryRun['planned_migrations']);
+        $this->assertSame([], $secondDryRun['deactivated_product_type_ids']);
+        $this->assertFalse(
+            collect($secondDryRun['steps'])->contains(
+                fn (string $step) => str_contains($step, 'Would deactivate empty competing Power Banks CPT'),
+            ),
+        );
+        $this->assertSame($canonical->id, $canonical->fresh()->id);
+        $this->assertSame($canonicalType->id, $canonicalType->fresh()->id);
     }
 
     public function test_cpt_level_dry_run_reports_migrations_and_changes_nothing(): void
@@ -224,6 +239,9 @@ class MobileAccessoriesTaxonomyCleanupTest extends TestCase
         $result = app(MobileAccessoriesTaxonomyCleanupService::class)->cleanup(dryRun: true);
 
         $this->assertTrue($result['dry_run']);
+        $this->assertCount(1, $result['competing_product_types']);
+        $this->assertSame('actionable', $result['competing_product_types'][0]['discovery_status']);
+        $this->assertSame([], $result['anomalous_product_types']);
         $this->assertSame([], $result['migrated_product_ids']);
         $this->assertSame([], $result['deactivated_product_type_ids']);
         $this->assertCount(4, $result['planned_migrations']);
@@ -231,6 +249,105 @@ class MobileAccessoriesTaxonomyCleanupTest extends TestCase
         $this->assertSame($competingType->id, $products[0]->fresh()->catalog_product_type_id);
         $this->assertTrue($competingType->fresh()->is_active);
         $this->assertNull($parent->fresh()->deleted_at);
+    }
+
+    public function test_active_empty_competing_cpt_is_still_actionable(): void
+    {
+        [$parent, $competingType] = $this->createMobileAccessoriesPowerBanksCpt(0);
+
+        $result = app(MobileAccessoriesTaxonomyCleanupService::class)->cleanup(dryRun: true);
+
+        $this->assertCount(1, $result['competing_product_types']);
+        $this->assertSame($competingType->id, $result['competing_product_types'][0]['id']);
+        $this->assertSame(0, $result['competing_product_types'][0]['product_count']);
+        $this->assertCount(0, $result['planned_migrations']);
+        $this->assertTrue(
+            collect($result['steps'])->contains(
+                fn (string $step) => str_contains($step, 'Would deactivate empty competing Power Banks CPT'),
+            ),
+        );
+        $this->assertTrue($competingType->fresh()->is_active);
+        $this->assertNull($parent->fresh()->deleted_at);
+    }
+
+    public function test_inactive_empty_competing_cpt_is_ignored_as_completed(): void
+    {
+        $canonical = Category::query()
+            ->where('slug', MobileAccessoriesTaxonomy::CANONICAL_POWER_BANKS_SLUG)
+            ->firstOrFail();
+        $canonicalType = CatalogProductType::query()
+            ->where('slug', MobileAccessoriesTaxonomy::CANONICAL_POWER_BANK_TYPE_SLUG)
+            ->firstOrFail();
+        $canonicalUpdatedAt = $canonical->updated_at?->toJSON();
+        $canonicalTypeUpdatedAt = $canonicalType->updated_at?->toJSON();
+
+        [$parent, $competingType] = $this->createMobileAccessoriesPowerBanksCpt(0);
+        $competingType->is_active = false;
+        $competingType->save();
+
+        $result = app(MobileAccessoriesTaxonomyCleanupService::class)->cleanup(dryRun: true);
+
+        $this->assertCount(0, $result['competing_product_types']);
+        $this->assertCount(0, $result['anomalous_product_types']);
+        $this->assertCount(0, $result['planned_migrations']);
+        $this->assertSame([], $result['deactivated_product_type_ids']);
+        $this->assertSame([], $result['skipped_product_type_ids']);
+        $this->assertFalse(
+            collect($result['steps'])->contains(
+                fn (string $step) => str_contains($step, 'Would deactivate empty competing Power Banks CPT'),
+            ),
+        );
+        $this->assertFalse((bool) $competingType->fresh()->is_active);
+        $this->assertNull($parent->fresh()->deleted_at);
+        $this->assertTrue($parent->fresh()->is_active);
+        $this->assertSame($canonical->id, $canonical->fresh()->id);
+        $this->assertSame($canonicalType->id, $canonicalType->fresh()->id);
+        $this->assertSame($canonicalUpdatedAt, $canonical->fresh()->updated_at?->toJSON());
+        $this->assertSame($canonicalTypeUpdatedAt, $canonicalType->fresh()->updated_at?->toJSON());
+    }
+
+    public function test_inactive_competing_cpt_with_products_is_reported_as_anomaly(): void
+    {
+        $canonical = Category::query()
+            ->where('slug', MobileAccessoriesTaxonomy::CANONICAL_POWER_BANKS_SLUG)
+            ->firstOrFail();
+        $canonicalType = CatalogProductType::query()
+            ->where('slug', MobileAccessoriesTaxonomy::CANONICAL_POWER_BANK_TYPE_SLUG)
+            ->firstOrFail();
+
+        [$parent, $competingType, $products] = $this->createMobileAccessoriesPowerBanksCpt(2);
+        $competingType->is_active = false;
+        $competingType->save();
+
+        $result = app(MobileAccessoriesTaxonomyCleanupService::class)->cleanup(dryRun: false);
+
+        $this->assertCount(0, $result['competing_product_types']);
+        $this->assertCount(1, $result['anomalous_product_types']);
+        $this->assertSame('anomaly', $result['anomalous_product_types'][0]['discovery_status']);
+        $this->assertSame($competingType->id, $result['anomalous_product_types'][0]['id']);
+        $this->assertSame(2, $result['anomalous_product_types'][0]['product_count']);
+        $this->assertContains($competingType->id, $result['skipped_product_type_ids']);
+        $this->assertCount(0, $result['planned_migrations']);
+        $this->assertSame([], $result['migrated_product_ids']);
+        $this->assertSame([], $result['deactivated_product_type_ids']);
+        $this->assertTrue(
+            collect($result['steps'])->contains(
+                fn (string $step) => str_contains($step, 'Anomaly: inactive Power Banks CPT'),
+            ),
+        );
+
+        foreach ($products as $product) {
+            $fresh = $product->fresh();
+            $this->assertSame($parent->id, $fresh->category_id);
+            $this->assertSame($competingType->id, $fresh->catalog_product_type_id);
+        }
+
+        $this->assertFalse((bool) $competingType->fresh()->is_active);
+        $this->assertNull($parent->fresh()->deleted_at);
+        $this->assertTrue($canonical->fresh()->is_active);
+        $this->assertTrue($canonicalType->fresh()->is_active);
+        $this->assertSame($canonical->id, $canonical->fresh()->id);
+        $this->assertSame($canonicalType->id, $canonicalType->fresh()->id);
     }
 
     public function test_conflicting_required_attributes_skip_cpt_migration(): void

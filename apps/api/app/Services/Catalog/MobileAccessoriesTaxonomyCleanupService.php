@@ -26,6 +26,7 @@ class MobileAccessoriesTaxonomyCleanupService
      *     canonical_product_type_id: string|null,
      *     competing: list<array<string, mixed>>,
      *     competing_product_types: list<array<string, mixed>>,
+     *     anomalous_product_types: list<array<string, mixed>>,
      *     planned_migrations: list<array<string, mixed>>,
      *     migrated_product_ids: list<string>,
      *     deactivated_category_ids: list<string>,
@@ -51,6 +52,7 @@ class MobileAccessoriesTaxonomyCleanupService
      *     canonical_product_type_id: string|null,
      *     competing: list<array<string, mixed>>,
      *     competing_product_types: list<array<string, mixed>>,
+     *     anomalous_product_types: list<array<string, mixed>>,
      *     planned_migrations: list<array<string, mixed>>,
      *     migrated_product_ids: list<string>,
      *     deactivated_category_ids: list<string>,
@@ -95,6 +97,7 @@ class MobileAccessoriesTaxonomyCleanupService
         $skippedTypeIds = [];
         $categoryReports = [];
         $typeReports = [];
+        $anomalyReports = [];
         $plannedMigrations = [];
 
         foreach ($competingCategories as $category) {
@@ -123,7 +126,22 @@ class MobileAccessoriesTaxonomyCleanupService
         }
 
         foreach ($competingTypes as $type) {
+            $status = $this->classifyCompetingProductType($type);
+
+            if ($status === 'completed') {
+                continue;
+            }
+
             $report = $this->inspectCompetingProductType($type, $canonical, $canonicalType);
+            $report['discovery_status'] = $status;
+
+            if ($status === 'anomaly') {
+                $anomalyReports[] = $report;
+                $skippedTypeIds[] = $type->id;
+                $steps[] = "Anomaly: inactive Power Banks CPT [{$type->slug}] still has {$report['product_count']} product(s); skipped automatic migration.";
+                continue;
+            }
+
             $typeReports[] = $report;
             $plannedMigrations = [...$plannedMigrations, ...$report['planned_migrations']];
 
@@ -153,7 +171,7 @@ class MobileAccessoriesTaxonomyCleanupService
             }
         }
 
-        if ($competingCategories->isEmpty() && $competingTypes->isEmpty()) {
+        if ($competingCategories->isEmpty() && $typeReports === [] && $anomalyReports === []) {
             $steps[] = 'No competing Power Banks categories or CPTs found.';
         }
 
@@ -163,6 +181,7 @@ class MobileAccessoriesTaxonomyCleanupService
             'canonical_product_type_id' => $canonicalType->id,
             'competing' => $categoryReports,
             'competing_product_types' => $typeReports,
+            'anomalous_product_types' => $anomalyReports,
             'planned_migrations' => $plannedMigrations,
             'migrated_product_ids' => $migratedProductIds,
             'deactivated_category_ids' => $deactivatedCategoryIds,
@@ -239,6 +258,26 @@ class MobileAccessoriesTaxonomyCleanupService
             })
             ->with(['subcategory.department'])
             ->get();
+    }
+
+    /**
+     * @return 'actionable'|'completed'|'anomaly'
+     */
+    private function classifyCompetingProductType(CatalogProductType $type): string
+    {
+        $productCount = Product::query()
+            ->where('catalog_product_type_id', $type->id)
+            ->count();
+
+        if ($type->is_active) {
+            return 'actionable';
+        }
+
+        if ($productCount === 0) {
+            return 'completed';
+        }
+
+        return 'anomaly';
     }
 
     /**

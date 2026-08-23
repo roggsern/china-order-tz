@@ -93,6 +93,17 @@ class CatalogCleanupMobileAccessoriesPowerBanksCommand extends Command
         }
 
         $this->newLine();
+        $this->line('Anomalous inactive CPTs: '.count($result['anomalous_product_types'] ?? []));
+        foreach ($result['anomalous_product_types'] ?? [] as $type) {
+            $this->warn(sprintf(
+                '  ANOMALY skip %s id=%s products=%d (inactive but still has products; not counted as a CPT duplicate)',
+                $type['slug'],
+                $type['id'],
+                $type['product_count'],
+            ));
+        }
+
+        $this->newLine();
         $this->line('Planned product migrations: '.count($result['planned_migrations']));
         foreach ($result['planned_migrations'] as $migration) {
             $this->line(sprintf(
