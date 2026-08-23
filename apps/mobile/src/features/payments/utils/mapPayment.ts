@@ -157,11 +157,33 @@ export function buildReconcileNmbPayload(
   return payload;
 }
 
-/** Extract NMB return query params for server proof — never treat as local paid. */
-export function extractNmbReturnParams(url: string): NmbBrowserReturnParams {
+const PAYMENT_RETURN_AUTH_QUERY_KEYS = [
+  'token',
+  'access_token',
+  'accessToken',
+  'authorization',
+  'auth_token',
+  'sanctum_token',
+  'bearer',
+] as const;
+
+export type PaymentReturnUrlParams = NmbBrowserReturnParams & {
+  /** True when a session/auth secret was incorrectly placed on the URL. */
+  embedsAuthToken: boolean;
+};
+
+function readPaymentReturnSearch(url: string): URLSearchParams {
   const queryIndex = url.indexOf('?');
   const query = queryIndex >= 0 ? url.slice(queryIndex + 1).split('#')[0] : '';
-  const params = new URLSearchParams(query);
+  return new URLSearchParams(query);
+}
+
+/**
+ * Shared payment-return parser — provider-agnostic.
+ * Never treats URL params as paid. Never expects auth tokens in the URL.
+ */
+export function parsePaymentReturnUrl(url: string): PaymentReturnUrlParams {
+  const params = readPaymentReturnSearch(url);
   const get = (...keys: string[]) => {
     for (const key of keys) {
       const value = params.get(key);
@@ -175,7 +197,26 @@ export function extractNmbReturnParams(url: string): NmbBrowserReturnParams {
     orderId: get('order_id', 'orderId'),
     merchantReference: get('merchant_reference', 'merchantReference'),
     paymentTransactionId: get('payment_transaction_id', 'paymentTransactionId'),
+    embedsAuthToken: PAYMENT_RETURN_AUTH_QUERY_KEYS.some((key) => {
+      const value = params.get(key);
+      return typeof value === 'string' && value.trim() !== '';
+    }),
   };
+}
+
+/** Extract NMB return query params for server proof — never treat as local paid. */
+export function extractNmbReturnParams(url: string): NmbBrowserReturnParams {
+  const parsed = parsePaymentReturnUrl(url);
+  return {
+    resultIndicator: parsed.resultIndicator,
+    orderId: parsed.orderId,
+    merchantReference: parsed.merchantReference,
+    paymentTransactionId: parsed.paymentTransactionId,
+  };
+}
+
+export function paymentReturnUrlEmbedsAuthToken(url: string): boolean {
+  return parsePaymentReturnUrl(url).embedsAuthToken;
 }
 
 export function canOpenCheckoutUrl(checkoutUrl: string | null | undefined): boolean {

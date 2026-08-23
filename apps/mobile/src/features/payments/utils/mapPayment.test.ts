@@ -3,6 +3,8 @@ import {
   buildStartPaymentPayload,
   canOpenCheckoutUrl,
   extractNmbReturnParams,
+  parsePaymentReturnUrl,
+  paymentReturnUrlEmbedsAuthToken,
   isNmbWebsiteHostedCheckout,
   isSuccessfulPaymentStatus,
   isTerminalPaymentStatus,
@@ -166,6 +168,33 @@ describe('browser return + reconcile payload', () => {
     expect(params.orderId).toBe('ord-1');
     expect(params.merchantReference).toBe('COTZ-PAY-1');
     expect(isSuccessfulPaymentStatus(undefined)).toBe(false);
+    expect(
+      paymentReturnUrlEmbedsAuthToken(
+        'chinaordertz://payment-return?resultIndicator=ri-9&order_id=ord-1',
+      ),
+    ).toBe(false);
+  });
+
+  it('parses a generic payment-return URL without NMB-only assumptions', () => {
+    expect(
+      parsePaymentReturnUrl(
+        'chinaordertz://payment-return?order_id=ord-snippe&paymentTransactionId=txn-snippe-1',
+      ),
+    ).toEqual({
+      resultIndicator: null,
+      orderId: 'ord-snippe',
+      merchantReference: null,
+      paymentTransactionId: 'txn-snippe-1',
+      embedsAuthToken: false,
+    });
+  });
+
+  it('flags an auth token incorrectly embedded in a deep link', () => {
+    expect(
+      paymentReturnUrlEmbedsAuthToken(
+        'chinaordertz://payment-return?token=secret-sanctum&order_id=ord-1',
+      ),
+    ).toBe(true);
   });
 
   it('builds reconcile payload for server proof', () => {

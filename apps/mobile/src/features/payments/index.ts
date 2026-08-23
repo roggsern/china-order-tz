@@ -30,6 +30,8 @@ export {
   buildStartPaymentPayload,
   buildReconcileNmbPayload,
   extractNmbReturnParams,
+  parsePaymentReturnUrl,
+  paymentReturnUrlEmbedsAuthToken,
   canOpenCheckoutUrl,
   isNmbWebsiteHostedCheckout,
   isSuccessfulPaymentStatus,
@@ -46,7 +48,10 @@ export {
   canOpenNmbWebLauncherUrl,
 } from './utils/nmbBrowser';
 export { payOrderWithNmb } from './utils/payWithNmb';
-export { handleNmbPaymentReturn } from './utils/handlePaymentReturn';
+export {
+  handlePaymentReturn,
+  handleNmbPaymentReturn,
+} from './utils/handlePaymentReturn';
 export { buildPaymentHref, parsePaymentHrefParams } from './utils/paymentRoutes';
 export { pendingPaymentContextStorage } from './storage/pendingPaymentContextStorage';
 export type { PendingPaymentContext } from './storage/pendingPaymentContextStorage';

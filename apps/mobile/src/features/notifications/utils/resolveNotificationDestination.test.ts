@@ -13,7 +13,12 @@ const QA_ORDER_ID = '019fee4a-f110-7072-9f86-9fb15923793a';
 
 describe('resolveNotificationDestination', () => {
   it('maps known order events to order detail', () => {
-    for (const event of ['order_created', 'order_cancelled', 'payment_confirmed']) {
+    for (const event of [
+      'order_created',
+      'order_cancelled',
+      'payment_confirmed',
+      'order_delivered',
+    ]) {
       expect(
         resolveNotificationDestination({
           event_type: event,
@@ -40,7 +45,6 @@ describe('resolveNotificationDestination', () => {
     for (const event of [
       'shipment_created',
       'shipment_arrived_tanzania',
-      'order_delivered',
     ]) {
       expect(
         resolveNotificationDestination({

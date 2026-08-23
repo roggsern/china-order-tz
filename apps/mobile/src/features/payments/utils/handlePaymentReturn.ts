@@ -5,7 +5,7 @@ import {
 } from '../api/paymentsApi';
 import type { PaymentTransaction } from '../models/types';
 import { pendingPaymentContextStorage } from '../storage/pendingPaymentContextStorage';
-import { extractNmbReturnParams } from './mapPayment';
+import { parsePaymentReturnUrl } from './mapPayment';
 
 export type HandlePaymentReturnInput = {
   /** Full deep-link / auth-session return URL, if available. */
@@ -42,22 +42,23 @@ function pick(
 }
 
 /**
- * Cold/warm NMB return handler.
- * Never marks paid from URL params — reconcile (proof) + refresh (auth) only.
- * Uses TTL-valid pending context only.
+ * Shared payment-return handler.
+ * Never marks paid from URL params. NMB reconcile runs only when NMB proof
+ * fields are present. Other providers refresh authoritative transaction state.
  */
-export async function handleNmbPaymentReturn(
+export async function handlePaymentReturn(
   input: HandlePaymentReturnInput = {},
 ): Promise<HandlePaymentReturnResult> {
   const storage = input.storage ?? pendingPaymentContextStorage;
   const persisted = await storage.readValid();
   const fromUrl = input.returnUrl?.trim()
-    ? extractNmbReturnParams(input.returnUrl)
+    ? parsePaymentReturnUrl(input.returnUrl)
     : {
         resultIndicator: null,
         orderId: null,
         merchantReference: null,
         paymentTransactionId: null,
+        embedsAuthToken: false,
       };
 
   let orderId = pick(
@@ -165,3 +166,6 @@ export async function handleNmbPaymentReturn(
 function isSuccessfulPaymentStatusSafe(status: string | null | undefined): boolean {
   return status === 'successful';
 }
+
+/** Wave 1 NMB entry — same shared handler, NMB reconcile only when proof fields exist. */
+export const handleNmbPaymentReturn = handlePaymentReturn;

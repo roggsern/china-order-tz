@@ -32,6 +32,7 @@ jest.mock('expo-constants', () => ({
 }));
 
 const mockRegisterDevicePushToken = jest.fn();
+const mockDeactivateDevicePushToken = jest.fn();
 const mockGetOrCreateInstallationId = jest.fn();
 
 jest.mock('@/src/features/devices', () => ({
@@ -39,11 +40,15 @@ jest.mock('@/src/features/devices', () => ({
     mockGetOrCreateInstallationId(...args),
   registerDevicePushToken: (...args: unknown[]) =>
     mockRegisterDevicePushToken(...args),
+  deactivateDevicePushToken: (...args: unknown[]) =>
+    mockDeactivateDevicePushToken(...args),
 }));
 
 import { Platform } from 'react-native';
 import { ApiError } from '@/src/core/errors';
 import {
+  classifyNotificationPermission,
+  deactivatePushOnLogout,
   handleExpoPushTokenRotation,
   registerPushForCurrentUser,
   resetPushRegistrationState,
@@ -69,6 +74,7 @@ describe('registerPushForCurrentUser', () => {
     mockGetExpoPushTokenAsync.mockReset();
     mockSetNotificationChannelAsync.mockReset();
     mockRegisterDevicePushToken.mockReset();
+    mockDeactivateDevicePushToken.mockReset();
     mockGetOrCreateInstallationId.mockReset();
     mockGetOrCreateInstallationId.mockResolvedValue(
       '11111111-1111-4111-8111-111111111111',
@@ -229,5 +235,92 @@ describe('registerPushForCurrentUser', () => {
     expect(mockRegisterDevicePushToken.mock.calls[0][0].installationId).toBe(
       mockRegisterDevicePushToken.mock.calls[1][0].installationId,
     );
+  });
+
+  it('does not re-prompt after a prior denial', async () => {
+    mockGetPermissionsAsync.mockResolvedValue({
+      granted: false,
+      canAskAgain: true,
+      status: 'denied',
+    });
+
+    const result = await registerPushForCurrentUser();
+    expect(result).toEqual({ status: 'permission_denied' });
+    expect(mockRequestPermissionsAsync).not.toHaveBeenCalled();
+    expect(mockRegisterDevicePushToken).not.toHaveBeenCalled();
+  });
+});
+
+describe('classifyNotificationPermission', () => {
+  it('classifies granted, denied, and permanently denied without crashing', () => {
+    expect(classifyNotificationPermission({ granted: true, status: 'granted' })).toBe(
+      'granted',
+    );
+    expect(
+      classifyNotificationPermission({
+        granted: false,
+        canAskAgain: true,
+        status: 'denied',
+      }),
+    ).toBe('denied');
+    expect(
+      classifyNotificationPermission({
+        granted: false,
+        canAskAgain: false,
+        status: 'denied',
+      }),
+    ).toBe('permanently_denied');
+    expect(
+      classifyNotificationPermission({
+        granted: false,
+        status: 'undetermined',
+      }),
+    ).toBe('undetermined');
+  });
+});
+
+describe('deactivatePushOnLogout', () => {
+  const originalOs = Platform.OS;
+
+  beforeEach(() => {
+    resetPushRegistrationState();
+    mockDeactivateDevicePushToken.mockReset();
+    mockGetOrCreateInstallationId.mockReset();
+    mockGetOrCreateInstallationId.mockResolvedValue(
+      '11111111-1111-4111-8111-111111111111',
+    );
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+  });
+
+  afterAll(() => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: originalOs });
+  });
+
+  it('calls DELETE /devices/push-tokens for the current installation', async () => {
+    grantPermissionAndToken();
+    await registerPushForCurrentUser({ userId: 'user-1' });
+    mockDeactivateDevicePushToken.mockResolvedValue(1);
+
+    const result = await deactivatePushOnLogout();
+
+    expect(mockDeactivateDevicePushToken).toHaveBeenCalledWith({
+      installationId: '11111111-1111-4111-8111-111111111111',
+      pushToken: 'ExponentPushToken[abc123]',
+    });
+    expect(result).toEqual({
+      deactivated: true,
+      installationId: '11111111-1111-4111-8111-111111111111',
+      hadPushToken: true,
+    });
+  });
+
+  it('handles deactivate failure without throwing', async () => {
+    mockDeactivateDevicePushToken.mockRejectedValue(new Error('offline'));
+
+    await expect(deactivatePushOnLogout()).resolves.toEqual({
+      deactivated: false,
+      installationId: '11111111-1111-4111-8111-111111111111',
+      hadPushToken: false,
+    });
   });
 });

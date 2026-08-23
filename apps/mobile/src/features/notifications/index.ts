@@ -20,11 +20,15 @@ export {
   registerPushForCurrentUser,
   handleExpoPushTokenRotation,
   requestNotificationPermission,
+  classifyNotificationPermission,
+  deactivatePushOnLogout,
   getLastRegisteredPushToken,
   resetPushRegistrationState,
   resetPushRegistrationStateForTests,
   type PushRegistrationResult,
   type RegisterPushOptions,
+  type NotificationPermissionDecision,
+  type DeactivatePushOnLogoutResult,
 } from './services/pushRegistration';
 export {
   consumeNotificationResponse,

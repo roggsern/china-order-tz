@@ -10,7 +10,7 @@ import { invalidateAfterPaymentSuccess } from '@/src/features/orders/hooks/useOr
 import { ScreenLoadingState } from '@/src/shared/ui/ScreenLoadingState';
 import { colors, spacing, typography } from '@/src/shared/theme';
 import { pendingPaymentContextStorage } from '../storage/pendingPaymentContextStorage';
-import { handleNmbPaymentReturn } from '../utils/handlePaymentReturn';
+import { handlePaymentReturn } from '../utils/handlePaymentReturn';
 import { isSuccessfulPaymentStatus } from '../utils/mapPayment';
 import { buildPaymentHref } from '../utils/paymentRoutes';
 import { getPaymentErrorMessage } from '../utils/paymentErrorMessage';
@@ -111,7 +111,7 @@ export function PaymentReturnScreen() {
         reconcileDoneRef.current = true;
         setMessage('Confirming payment…');
 
-        const result = await handleNmbPaymentReturn({
+        const result = await handlePaymentReturn({
           returnUrl: initialUrl,
           resultIndicator,
           orderId,
@@ -154,7 +154,7 @@ export function PaymentReturnScreen() {
     <View style={styles.wrap}>
       <ScreenLoadingState label={statusMessage} />
       <Text style={styles.hint}>
-        Returning from NMB Hosted Checkout. Paid status is confirmed by the server.
+        Returning from payment. Paid status is confirmed by the server, never by this link.
       </Text>
     </View>
   );

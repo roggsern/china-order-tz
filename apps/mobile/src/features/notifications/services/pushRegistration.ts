@@ -3,6 +3,7 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { ApiError } from '@/src/core/errors';
 import {
+  deactivateDevicePushToken,
   getOrCreateInstallationId,
   registerDevicePushToken,
   type PushTokenPlatform,
@@ -123,15 +124,46 @@ function classifyRegisterFailure(error: unknown): {
   return { reason: message, retryable: true };
 }
 
+export type NotificationPermissionDecision =
+  | 'granted'
+  | 'undetermined'
+  | 'denied'
+  | 'permanently_denied';
+
+/**
+ * Classify OS permission without prompting. Denied is never fatal for commerce.
+ */
+export function classifyNotificationPermission(current: {
+  granted?: boolean;
+  canAskAgain?: boolean;
+  status?: string;
+  ios?: { status?: number } | null;
+}): NotificationPermissionDecision {
+  if (
+    current.granted === true ||
+    current.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL
+  ) {
+    return 'granted';
+  }
+  if (current.status === 'denied' && current.canAskAgain === false) {
+    return 'permanently_denied';
+  }
+  if (current.status === 'denied') {
+    return 'denied';
+  }
+  return 'undetermined';
+}
+
 /**
  * Request permission once per call site — does not re-prompt if already decided.
  */
 export async function requestNotificationPermission(): Promise<boolean> {
   const current = await Notifications.getPermissionsAsync();
-  if (current.granted || current.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL) {
+  const decision = classifyNotificationPermission(current);
+  if (decision === 'granted') {
     return true;
   }
-  if (!current.canAskAgain && current.status === 'denied') {
+  if (decision === 'permanently_denied' || decision === 'denied') {
     return false;
   }
   const requested = await Notifications.requestPermissionsAsync();
@@ -299,4 +331,41 @@ export async function handleExpoPushTokenRotation(
   // Do not reset in-flight; registerPushForCurrentUser coalesces concurrent calls.
   // force=false still re-fetches Expo token; cache short-circuits if tuple unchanged.
   return registerPushForCurrentUser({ userId, force: false });
+}
+
+export type DeactivatePushOnLogoutResult = {
+  deactivated: boolean;
+  installationId: string | null;
+  /** Present only as a boolean so callers never log the raw token. */
+  hadPushToken: boolean;
+};
+
+/**
+ * Detach this installation from the authenticated user via DELETE /devices/push-tokens.
+ * Failures are swallowed so logout can still clear the local session.
+ */
+export async function deactivatePushOnLogout(): Promise<DeactivatePushOnLogoutResult> {
+  const hadPushToken = Boolean(lastRegisteredToken);
+  let installationId: string | null = null;
+
+  try {
+    installationId = await getOrCreateInstallationId();
+    await deactivateDevicePushToken({
+      installationId,
+      ...(lastRegisteredToken ? { pushToken: lastRegisteredToken } : {}),
+    });
+    resetPushRegistrationState();
+    return {
+      deactivated: true,
+      installationId,
+      hadPushToken,
+    };
+  } catch {
+    resetPushRegistrationState();
+    return {
+      deactivated: false,
+      installationId,
+      hadPushToken,
+    };
+  }
 }

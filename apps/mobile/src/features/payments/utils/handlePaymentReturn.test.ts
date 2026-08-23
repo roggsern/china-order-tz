@@ -1,6 +1,6 @@
 import type { PendingPaymentContext } from '../storage/pendingPaymentContextStorage';
 import type { PaymentTransaction } from '../models/types';
-import { handleNmbPaymentReturn } from './handlePaymentReturn';
+import { handleNmbPaymentReturn, handlePaymentReturn } from './handlePaymentReturn';
 
 const mockResolvePaymentReturnContext = jest.fn();
 const mockReconcileNmbBrowserReturn = jest.fn();
@@ -250,5 +250,54 @@ describe('handleNmbPaymentReturn', () => {
 
     expect(result.refreshed).toBe(true);
     expect(storage.readValid).toHaveBeenCalled();
+  });
+
+  it('does not mark paid from the return URL itself', async () => {
+    mockRefreshPaymentTransaction.mockResolvedValue(
+      baseTxn({ status: 'processing' }),
+    );
+
+    const result = await handlePaymentReturn({
+      returnUrl:
+        'chinaordertz://payment-return?resultIndicator=ri-1&paymentTransactionId=txn-1&order_id=ord-1',
+      paymentTransactionId: 'txn-1',
+      storage: storage as never,
+    });
+
+    expect(result.transaction?.status).toBe('processing');
+    expect(result.refreshed).toBe(true);
+  });
+
+  it('does not apply NMB reconcile to a Snippe-style return without resultIndicator', async () => {
+    storageState.value = {
+      userId: 'user-a',
+      orderId: 'ord-snippe',
+      paymentTransactionId: 'txn-snippe-1',
+      merchantReference: null,
+      successIndicator: null,
+      resultIndicator: null,
+      checkoutSessionId: null,
+      updatedAt: '2026-08-10T00:00:00Z',
+    };
+    mockRefreshPaymentTransaction.mockResolvedValue(
+      baseTxn({
+        id: 'txn-snippe-1',
+        orderId: 'ord-snippe',
+        provider: 'snippe',
+        status: 'processing',
+      }),
+    );
+
+    const result = await handlePaymentReturn({
+      returnUrl:
+        'chinaordertz://payment-return?order_id=ord-snippe&paymentTransactionId=txn-snippe-1',
+      storage: storage as never,
+    });
+
+    expect(mockReconcileNmbBrowserReturn).not.toHaveBeenCalled();
+    expect(mockRefreshPaymentTransaction).toHaveBeenCalledWith('txn-snippe-1');
+    expect(result.reconciled).toBe(false);
+    expect(result.refreshed).toBe(true);
+    expect(result.transaction?.provider).toBe('snippe');
   });
 });

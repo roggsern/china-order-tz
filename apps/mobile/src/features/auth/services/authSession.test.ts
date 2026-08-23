@@ -59,8 +59,21 @@ jest.mock('@/src/features/devices', () => ({
     .mockResolvedValue('11111111-1111-4111-8111-111111111111'),
 }));
 
+const mockDeactivatePushOnLogout = jest.fn().mockResolvedValue({
+  deactivated: true,
+  installationId: '11111111-1111-4111-8111-111111111111',
+  hadPushToken: false,
+});
+const mockGetLastRegisteredPushToken = jest.fn().mockReturnValue(null);
+const mockResetPushRegistrationState = jest.fn();
+
 jest.mock('@/src/features/notifications', () => ({
-  resetPushRegistrationState: jest.fn(),
+  resetPushRegistrationState: (...args: unknown[]) =>
+    mockResetPushRegistrationState(...args),
+  deactivatePushOnLogout: (...args: unknown[]) =>
+    mockDeactivatePushOnLogout(...args),
+  getLastRegisteredPushToken: (...args: unknown[]) =>
+    mockGetLastRegisteredPushToken(...args),
 }));
 
 const mockSaveToken = secureTokenStorage.saveToken as jest.Mock;
@@ -165,6 +178,15 @@ describe('logout', () => {
     mockClearToken.mockReset();
     mockApiPost.mockReset();
     mockClearSessionImpl.mockClear();
+    mockDeactivatePushOnLogout.mockReset();
+    mockDeactivatePushOnLogout.mockResolvedValue({
+      deactivated: true,
+      installationId: '11111111-1111-4111-8111-111111111111',
+      hadPushToken: false,
+    });
+    mockGetLastRegisteredPushToken.mockReset();
+    mockGetLastRegisteredPushToken.mockReturnValue(null);
+    mockResetPushRegistrationState.mockReset();
     useAuthStore.setState({
       status: 'authenticated',
       user: validUser,
@@ -194,8 +216,19 @@ describe('logout', () => {
 
     await logout();
 
+    expect(mockDeactivatePushOnLogout).toHaveBeenCalled();
     expect(mockApiPost).toHaveBeenCalledWith('/logout', {
       installation_id: '11111111-1111-4111-8111-111111111111',
     });
+  });
+
+  it('still logs out when dedicated push deactivate fails', async () => {
+    mockDeactivatePushOnLogout.mockRejectedValue(new Error('network'));
+    mockApiPost.mockResolvedValue({ success: true });
+
+    await logout();
+
+    expect(mockClearSessionImpl).toHaveBeenCalled();
+    expect(useAuthStore.getState().status).toBe('unauthenticated');
   });
 });

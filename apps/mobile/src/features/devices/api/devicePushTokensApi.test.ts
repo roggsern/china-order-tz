@@ -1,9 +1,23 @@
+import { apiClient } from '@/src/core/api';
 import {
+  deactivateDevicePushToken,
   mapDevicePushTokenRegistration,
   type RegisterDevicePushTokenInput,
 } from './devicePushTokensApi';
 
+jest.mock('@/src/core/api', () => ({
+  apiClient: {
+    delete: jest.fn(),
+  },
+}));
+
+const mockDelete = apiClient.delete as jest.MockedFunction<typeof apiClient.delete>;
+
 describe('devicePushTokensApi', () => {
+  beforeEach(() => {
+    mockDelete.mockReset();
+  });
+
   it('maps sanitized registration resource without requiring push_token in response', () => {
     const mapped = mapDevicePushTokenRegistration({
       id: 'tok-1',
@@ -40,5 +54,19 @@ describe('devicePushTokensApi', () => {
       installationId: '11111111-1111-4111-8111-111111111111',
     };
     expect(input.provider).toBe('expo');
+  });
+
+  it('deactivates via DELETE /devices/push-tokens', async () => {
+    mockDelete.mockResolvedValue({ data: { deactivated: 1 } } as never);
+
+    const deactivated = await deactivateDevicePushToken({
+      installationId: '11111111-1111-4111-8111-111111111111',
+    });
+
+    expect(mockDelete).toHaveBeenCalledWith('/devices/push-tokens', {
+      installation_id: '11111111-1111-4111-8111-111111111111',
+      push_token: undefined,
+    });
+    expect(deactivated).toBe(1);
   });
 });

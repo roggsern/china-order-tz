@@ -14,7 +14,6 @@ export const ACCOUNT_CHANGE_PASSWORD_HREF = '/(app)/account/change-password';
 const TRACKING_EVENTS = new Set([
   'shipment_created',
   'shipment_arrived_tanzania',
-  'order_delivered',
   'tracking_updated',
   'shipment_status_updated',
 ]);
@@ -23,6 +22,7 @@ const ORDER_DETAIL_EVENTS = new Set([
   'order_created',
   'order_cancelled',
   'payment_confirmed',
+  'order_delivered',
 ]);
 
 const SUPPORT_EVENTS = new Set([

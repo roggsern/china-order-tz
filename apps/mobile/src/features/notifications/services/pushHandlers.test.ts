@@ -51,6 +51,55 @@ describe('pushHandlers', () => {
     });
   });
 
+  it('routes the Wave 4 customer event matrix', () => {
+    expect(
+      handleNotificationResponseNavigation(
+        makeResponse('created', { event_type: 'order_created', order_id: ORDER_ID }),
+      ),
+    ).toBe(`/(app)/orders/${ORDER_ID}`);
+    expect(
+      handleNotificationResponseNavigation(
+        makeResponse('cancelled', {
+          event_type: 'order_cancelled',
+          order_id: ORDER_ID,
+        }),
+      ),
+    ).toBe(`/(app)/orders/${ORDER_ID}`);
+    expect(
+      handleNotificationResponseNavigation(
+        makeResponse('paid', {
+          event_type: 'payment_confirmed',
+          order_id: ORDER_ID,
+        }),
+      ),
+    ).toBe(`/(app)/orders/${ORDER_ID}`);
+    expect(
+      handleNotificationResponseNavigation(
+        makeResponse('shipped', {
+          event_type: 'shipment_created',
+          order_id: ORDER_ID,
+        }),
+      ),
+    ).toBe(`/(app)/orders/${ORDER_ID}/tracking`);
+    expect(
+      handleNotificationResponseNavigation(
+        makeResponse('arrived', {
+          event_type: 'shipment_arrived_tanzania',
+          order_id: ORDER_ID,
+        }),
+      ),
+    ).toBe(`/(app)/orders/${ORDER_ID}/tracking`);
+    expect(
+      handleNotificationResponseNavigation(
+        makeResponse('delivered', {
+          event_type: 'order_delivered',
+          order_id: ORDER_ID,
+        }),
+      ),
+    ).toBe(`/(app)/orders/${ORDER_ID}`);
+    expect(mockPush).toHaveBeenCalledTimes(6);
+  });
+
   it('navigates on notification tap when authenticated', () => {
     const href = handleNotificationResponseNavigation(
       makeResponse('tap-1', {
