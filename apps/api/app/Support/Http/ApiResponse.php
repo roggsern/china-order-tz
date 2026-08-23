@@ -93,11 +93,13 @@ final class ApiResponse
      * Preserves Laravel field `errors` and HTTP status; code is additive.
      *
      * @param  array<string, list<string>|string>  $messages
+     * @param  array<string, mixed>  $extra  Additional top-level keys (e.g. payment_transaction_id).
      */
     public static function throwCodedValidation(
         array $messages,
         string $code = 'business_rule_violated',
         int $status = 422,
+        array $extra = [],
     ): never {
         $exception = ValidationException::withMessages($messages);
         $errors = $exception->errors();
@@ -107,7 +109,7 @@ final class ApiResponse
             message: is_string($first) && $first !== '' ? $first : $exception->getMessage(),
             code: $code,
             status: $status,
-            extra: ['errors' => $errors],
+            extra: array_merge($extra, ['errors' => $errors]),
         );
 
         throw $exception;

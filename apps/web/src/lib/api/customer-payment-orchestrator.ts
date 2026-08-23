@@ -3,8 +3,12 @@ import { getCustomerApiToken } from "@/lib/api/customer-auth";
 type ApiSuccessResponse<T> = {
   success?: boolean;
   message?: string;
+  code?: string;
   data?: T;
   errors?: Record<string, string[]>;
+  payment_transaction_id?: string;
+  payment_transaction_status?: string;
+  provider?: string;
 };
 
 export type PaymentTransactionPayload = {
@@ -38,6 +42,10 @@ export class PaymentOrchestratorApiError extends Error {
   constructor(
     message: string,
     public readonly statusCode?: number,
+    public readonly code?: string,
+    public readonly paymentTransactionId?: string | null,
+    public readonly paymentTransactionStatus?: string | null,
+    public readonly provider?: string | null,
   ) {
     super(message);
     this.name = "PaymentOrchestratorApiError";
@@ -76,6 +84,10 @@ async function apiFetch<T>(
     throw new PaymentOrchestratorApiError(
       formatError(payload, fallback),
       response.status,
+      payload.code,
+      payload.payment_transaction_id ?? null,
+      payload.payment_transaction_status ?? null,
+      payload.provider ?? null,
     );
   }
   return payload.data as T;

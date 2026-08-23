@@ -73,6 +73,49 @@ describe("checkout payment availability", () => {
     assert.equal(options.some((option) => option.code === "nmb"), false);
   });
 
+  it("shows NMB and Snippe when both are selectable", () => {
+    const options = buildCheckoutPaymentOptions(
+      availability({
+        enabled_methods: ["nmb", "snippe"],
+        methods: [
+          { code: "nmb", enabled: true, available: true, selectable: true },
+          { code: "snippe", enabled: true, available: true, selectable: true },
+          { code: "mpesa", enabled: false, available: false, selectable: false },
+          { code: "card", enabled: false, available: false, selectable: false },
+          { code: "cash", enabled: false, available: true, selectable: false },
+          { code: "bank_transfer", enabled: false, available: true, selectable: false },
+        ],
+      }),
+    );
+
+    assert.deepEqual(
+      options.map((option) => option.code),
+      ["nmb", "snippe"],
+    );
+    assert.equal(options.find((option) => option.code === "snippe")?.label, "Mobile Money");
+  });
+
+  it("hides Pay at Office until backend enables cash", () => {
+    const disabled = buildCheckoutPaymentOptions(availability());
+    assert.equal(disabled.some((option) => option.code === "cod"), false);
+
+    const enabled = buildCheckoutPaymentOptions(
+      availability({
+        enabled_methods: ["nmb", "cash"],
+        methods: [
+          { code: "nmb", enabled: true, available: true, selectable: true },
+          { code: "mpesa", enabled: false, available: false, selectable: false },
+          { code: "card", enabled: false, available: false, selectable: false },
+          { code: "cash", enabled: true, available: true, selectable: true },
+          { code: "bank_transfer", enabled: false, available: true, selectable: false },
+        ],
+      }),
+    );
+
+    assert.equal(enabled.some((option) => option.code === "cod"), true);
+    assert.equal(enabled.find((option) => option.code === "cod")?.label, "Pay at Office");
+  });
+
   it("maps cash default to storefront cod", () => {
     assert.equal(backendMethodToStorefrontCode("cash"), "cod");
     assert.equal(backendMethodToStorefrontCode("snippe"), "snippe");

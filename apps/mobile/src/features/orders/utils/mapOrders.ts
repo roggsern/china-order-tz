@@ -131,6 +131,7 @@ export function mapOrderListItem(raw: unknown): OrderListItem | null {
     preview: mapListPreview(data.preview),
     progress: mapOrderProgress(data.progress),
     canCancel: boolField(data, 'can_cancel'),
+    canPay: boolField(data, 'can_pay'),
   };
 }
 
@@ -319,6 +320,7 @@ export function mapOrderDetail(raw: unknown): OrderDetail {
       stringField(data, 'currency') ??
       'TZS',
     canCancel: boolField(data, 'can_cancel'),
+    canPay: boolField(data, 'can_pay'),
   };
 }
 

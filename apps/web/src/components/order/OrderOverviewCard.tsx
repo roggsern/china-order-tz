@@ -8,6 +8,7 @@ import type { OrderStatus } from "@/lib/types/order";
 import { ORDER_STATUS } from "@/lib/types/order";
 import type { PaymentStatus } from "@/lib/types/payment";
 import { PaymentStatusBadge } from "@/components/payment/PaymentStatusBadge";
+import { isCustomerOrderPayable } from "@/lib/order/is-order-payable";
 import { OrderStatusBadge } from "./OrderStatusBadge";
 
 const TRACKABLE_STATUSES = new Set<OrderStatus>([
@@ -38,6 +39,7 @@ export type OrderOverviewCardData = {
   imageUrl?: string | null;
   imageEmoji?: string;
   imageGradient?: string;
+  canPay?: boolean;
 };
 
 interface OrderOverviewCardProps {
@@ -48,7 +50,13 @@ interface OrderOverviewCardProps {
 export function OrderOverviewCard({ order, className = "" }: OrderOverviewCardProps) {
   const trackHref = `/track/${encodeURIComponent(order.id)}`;
   const detailsHref = `/orders/${encodeURIComponent(order.orderNumber)}`;
+  const payHref = `/orders/${encodeURIComponent(order.orderNumber)}/pay`;
   const canTrack = TRACKABLE_STATUSES.has(order.status);
+  const canPay = isCustomerOrderPayable({
+    canPay: order.canPay,
+    status: order.status,
+    paymentStatus: order.paymentStatus,
+  });
 
   return (
     <article
@@ -101,9 +109,21 @@ export function OrderOverviewCard({ order, className = "" }: OrderOverviewCardPr
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
+            {canPay ? (
+              <Link
+                href={payHref}
+                className="inline-flex min-h-9 items-center justify-center rounded-xl bg-zinc-900 px-3.5 text-xs font-bold text-white transition hover:bg-zinc-800"
+              >
+                Pay now
+              </Link>
+            ) : null}
             <Link
               href={detailsHref}
-              className="inline-flex min-h-9 items-center justify-center rounded-xl bg-zinc-900 px-3.5 text-xs font-bold text-white transition hover:bg-zinc-800"
+              className={`inline-flex min-h-9 items-center justify-center rounded-xl px-3.5 text-xs font-bold transition ${
+                canPay
+                  ? "border border-zinc-200 bg-white text-zinc-800 hover:border-[#c9a227]/40 hover:bg-[#c9a227]/5"
+                  : "bg-zinc-900 text-white hover:bg-zinc-800"
+              }`}
             >
               View details
             </Link>

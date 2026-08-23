@@ -69,6 +69,7 @@ describe('mapOrderListItem', () => {
     );
     expect(order?.progress?.currentLabel).toBe('Order confirmed');
     expect(order?.canCancel).toBeNull();
+    expect(order?.canPay).toBeNull();
   });
 
   it('absolutizes production-shaped relative storage image_url for list cards', () => {
@@ -101,6 +102,16 @@ describe('mapOrderListItem', () => {
         can_cancel: true,
         status: 'processing',
       })?.canCancel,
+    ).toBe(true);
+  });
+
+  it('reads can_pay only when the server provides it', () => {
+    expect(
+      mapOrderListItem({
+        id: 'ord-pay',
+        can_pay: true,
+        status: 'pending_payment',
+      })?.canPay,
     ).toBe(true);
   });
 });

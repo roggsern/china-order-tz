@@ -9,6 +9,12 @@ describe('unpaid order payment resume', () => {
     expect(isOrderPayableFromServer({ status: 'processing' })).toBe(false);
     expect(isOrderPayableFromServer({ status: 'cancelled' })).toBe(false);
     expect(isOrderPayableFromServer({ status: null })).toBe(false);
+    expect(
+      isOrderPayableFromServer({ status: 'pending_payment', canPay: true }),
+    ).toBe(true);
+    expect(
+      isOrderPayableFromServer({ status: 'pending_payment', canPay: false }),
+    ).toBe(false);
   });
 
   it('opens payment screen with orderId only (reuses existing flow)', () => {

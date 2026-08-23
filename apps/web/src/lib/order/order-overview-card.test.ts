@@ -16,10 +16,12 @@ describe("mapCustomerOrderToOverviewCard", () => {
       itemCount: 1,
       imageUrl: "https://example.com/wig.jpg",
       source: "china",
+      canPay: true,
     });
 
     assert.equal(card.displayStatusLabel, "Delivered");
     assert.equal(card.productName, "Silk Wig");
     assert.equal(card.orderNumber, "COT-1001");
+    assert.equal(card.canPay, true);
   });
 });

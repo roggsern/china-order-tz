@@ -13,7 +13,8 @@ class CustomerOrderDetailResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $payment = app(CustomerOrderPaymentSnapshotBuilder::class)->build($this->resource);
+        $paymentSnapshot = app(CustomerOrderPaymentSnapshotBuilder::class);
+        $payment = $paymentSnapshot->build($this->resource);
 
         $progress = app(CustomerOrderProgressResolver::class)->resolve($this->resource);
         $receivingChoice = $request->user() !== null
@@ -73,6 +74,8 @@ class CustomerOrderDetailResource extends JsonResource
                 'grand_total' => $this->grand_total,
                 'total' => $this->grand_total,
             ],
+            'can_pay' => $paymentSnapshot->canPay($this->resource),
+            'active_payment_transaction' => $paymentSnapshot->activeTransactionPayload($this->resource),
             'payment' => $payment,
             'shipping_address' => $this->when(
                 $this->relationLoaded('shippingAddress'),

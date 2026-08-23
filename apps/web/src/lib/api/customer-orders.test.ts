@@ -36,6 +36,23 @@ test("mapApiCustomerOrderToListItem builds card preview from list payload only",
   assert.equal(item.itemCount, 3);
   assert.ok(item.imageUrl);
   assert.equal(item.paymentStatus, PAYMENT_STATUS.PENDING);
+  assert.equal(item.canPay, undefined);
+});
+
+test("list mapper surfaces backend can_pay without session fields", () => {
+  const item = mapApiCustomerOrderToListItem({
+    ...BASE_ORDER,
+    created_at: "2026-08-13T08:00:00+00:00",
+    can_pay: true,
+    active_payment_transaction: {
+      id: "txn-1",
+      status: "processing",
+      provider: "snippe",
+    },
+  });
+
+  assert.equal(item.canPay, true);
+  assert.equal(item.status, "pending_payment");
 });
 
 test("mapApiPaymentStatus prefers payment record over order status", () => {
@@ -189,4 +206,26 @@ test("mapApiCustomerOrderDetailToOrder maps legacy payment method and reference"
   assert.equal(order.paymentMethod, "mpesa");
   assert.equal(order.paymentReference, "PAY-LEGACY-001");
   assert.equal(order.paymentPaidAt, "2026-07-30T09:30:00+00:00");
+});
+
+test("detail mapper restores payment transaction from backend without sessionStorage", () => {
+  const order = mapApiCustomerOrderDetailToOrder({
+    ...BASE_DETAIL,
+    can_pay: true,
+    active_payment_transaction: {
+      id: "txn-restore-1",
+      status: "processing",
+      provider: "snippe",
+    },
+    payment: {
+      payment_status: "initiated",
+      payment_method: "snippe",
+      payment_transaction_id: "txn-restore-1",
+    },
+  });
+
+  assert.equal(order.canPay, true);
+  assert.equal(order.paymentTransactionId, "txn-restore-1");
+  assert.equal(order.activePaymentTransaction?.id, "txn-restore-1");
+  assert.equal(order.activePaymentTransaction?.provider, "snippe");
 });

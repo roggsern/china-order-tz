@@ -2,12 +2,15 @@
 
 namespace App\Services\Orders;
 
+use App\Enums\OrderStatus;
 use App\Enums\PaymentProvider;
+use App\Enums\PaymentStatus;
 use App\Enums\PaymentTransactionStatus;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\PaymentTransaction;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * Builds a unified customer-facing payment snapshot for order detail surfaces.
@@ -28,15 +31,66 @@ class CustomerOrderPaymentSnapshotBuilder
      *     currency: string,
      *     paid_at: Carbon|null,
      *     initiated_at: Carbon|null,
+     *     payment_transaction_id: string|null,
      * }
      */
     public function build(Order $order): array
     {
         $fields = $this->resolveFields($order);
+        $active = $this->resolveLatestActiveTransaction($order);
+        $successful = $this->resolveLatestSuccessfulTransaction($order);
 
         return [
             'payment_status' => $this->paymentStatusResolver->resolve($order),
             ...$fields,
+            'payment_transaction_id' => $active?->id ?? $successful?->id,
+        ];
+    }
+
+    public function canPay(Order $order): bool
+    {
+        $status = $order->status instanceof OrderStatus
+            ? $order->status
+            : OrderStatus::tryFrom((string) $order->status);
+
+        if ($status === null || ! $status->isPayable()) {
+            return false;
+        }
+
+        if ($order->paid_at !== null) {
+            return false;
+        }
+
+        $paymentStatus = $this->paymentStatusResolver->resolve($order);
+
+        return ! in_array($paymentStatus, [
+            PaymentStatus::Paid->value,
+            PaymentStatus::Refunded->value,
+        ], true);
+    }
+
+    /**
+     * @return array{id: string, status: string, provider: string|null}|null
+     */
+    public function activeTransactionPayload(Order $order): ?array
+    {
+        $transaction = $this->resolveLatestActiveTransaction($order);
+        if ($transaction === null) {
+            return null;
+        }
+
+        $status = $transaction->status instanceof PaymentTransactionStatus
+            ? $transaction->status->value
+            : (string) $transaction->status;
+
+        $provider = $transaction->provider instanceof PaymentProvider
+            ? $transaction->provider->value
+            : (filled($transaction->provider) ? (string) $transaction->provider : null);
+
+        return [
+            'id' => $transaction->id,
+            'status' => $status,
+            'provider' => $provider,
         ];
     }
 
@@ -68,22 +122,27 @@ class CustomerOrderPaymentSnapshotBuilder
         return $this->fromOrderFallback($order);
     }
 
+    /**
+     * @return Collection<int, PaymentTransaction>
+     */
+    private function transactions(Order $order): Collection
+    {
+        if ($order->relationLoaded('paymentTransactions')) {
+            return $order->paymentTransactions;
+        }
+
+        return $order->paymentTransactions()->get();
+    }
+
     private function resolveLatestActiveTransaction(Order $order): ?PaymentTransaction
     {
-        $transactions = $order->relationLoaded('paymentTransactions')
-            ? $order->paymentTransactions
-            : collect();
-
-        return $transactions
+        return $this->transactions($order)
             ->filter(function (PaymentTransaction $transaction): bool {
                 $status = $transaction->status instanceof PaymentTransactionStatus
                     ? $transaction->status
                     : PaymentTransactionStatus::tryFrom((string) ($transaction->status ?? ''));
 
-                return in_array($status, [
-                    PaymentTransactionStatus::Pending,
-                    PaymentTransactionStatus::Processing,
-                ], true);
+                return $status instanceof PaymentTransactionStatus && $status->isActive();
             })
             ->sortByDesc('created_at')
             ->first();
@@ -91,11 +150,7 @@ class CustomerOrderPaymentSnapshotBuilder
 
     private function resolveLatestSuccessfulTransaction(Order $order): ?PaymentTransaction
     {
-        $transactions = $order->relationLoaded('paymentTransactions')
-            ? $order->paymentTransactions
-            : collect();
-
-        return $transactions
+        return $this->transactions($order)
             ->filter(function (PaymentTransaction $transaction): bool {
                 $status = $transaction->status instanceof PaymentTransactionStatus
                     ? $transaction->status

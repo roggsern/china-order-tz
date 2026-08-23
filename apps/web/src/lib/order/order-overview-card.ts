@@ -16,5 +16,6 @@ export function mapCustomerOrderToOverviewCard(order: CustomerOrderListItem): Or
     imageUrl: order.imageUrl,
     imageEmoji: "📦",
     imageGradient: "from-[#c9a227]/15 to-zinc-100",
+    canPay: order.canPay,
   };
 }

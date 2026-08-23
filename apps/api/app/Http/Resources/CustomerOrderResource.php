@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use App\Enums\OrderStatus;
 use App\Services\Orders\CompanyShippingReceivingChoiceService;
 use App\Services\Orders\CustomerOrderListPreviewBuilder;
+use App\Services\Orders\CustomerOrderPaymentSnapshotBuilder;
 use App\Services\Orders\CustomerOrderPaymentStatusResolver;
 use App\Services\Orders\CustomerOrderProgressResolver;
 use Illuminate\Http\Request;
@@ -20,6 +21,7 @@ class CustomerOrderResource extends JsonResource
             : OrderStatus::tryFrom((string) $this->status);
 
         $progress = app(CustomerOrderProgressResolver::class)->resolve($this->resource);
+        $paymentSnapshot = app(CustomerOrderPaymentSnapshotBuilder::class);
         $receivingChoice = $request->user() !== null
             ? app(CompanyShippingReceivingChoiceService::class)->snapshot($this->resource, $request->user())
             : null;
@@ -31,6 +33,8 @@ class CustomerOrderResource extends JsonResource
             'status' => $status?->value ?? (string) $this->status,
             'status_label' => $status?->customerLabel() ?? 'Status unavailable',
             'payment_status' => app(CustomerOrderPaymentStatusResolver::class)->resolve($this->resource),
+            'can_pay' => $paymentSnapshot->canPay($this->resource),
+            'active_payment_transaction' => $paymentSnapshot->activeTransactionPayload($this->resource),
             'currency' => $this->currency,
             'subtotal' => $this->subtotal,
             'grand_total' => $this->grand_total,

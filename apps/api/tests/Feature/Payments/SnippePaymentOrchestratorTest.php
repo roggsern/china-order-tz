@@ -230,6 +230,14 @@ class SnippePaymentOrchestratorTest extends TestCase
     public function test_same_transaction_retry_reuses_same_idempotency_key(): void
     {
         Http::fake([
+            'api.snippe.test/v1/payments/pi_snippe_ref_retry' => Http::response([
+                'status' => 'success',
+                'code' => 200,
+                'data' => [
+                    'reference' => 'pi_snippe_ref_retry',
+                    'status' => 'pending',
+                ],
+            ]),
             'api.snippe.test/v1/payments' => Http::response([
                 'status' => 'success',
                 'code' => 201,
@@ -256,7 +264,18 @@ class SnippePaymentOrchestratorTest extends TestCase
         ])->assertCreated();
 
         $this->assertSame($first->json('data.id'), $second->json('data.id'));
-        $this->assertCount(1, Http::recorded());
+
+        $createPosts = collect(Http::recorded())->filter(
+            function (array $pair): bool {
+                /** @var \Illuminate\Http\Client\Request $request */
+                $request = $pair[0];
+
+                return $request->method() === 'POST'
+                    && rtrim($request->url(), '/') === 'https://api.snippe.test/v1/payments';
+            },
+        );
+
+        $this->assertCount(1, $createPosts);
     }
 
     public function test_different_transactions_produce_different_idempotency_keys(): void

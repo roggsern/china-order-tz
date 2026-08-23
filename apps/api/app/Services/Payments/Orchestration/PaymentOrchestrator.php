@@ -54,31 +54,36 @@ class PaymentOrchestrator
         $amount = (string) ($order->grand_total ?? $order->total);
         $currency = strtoupper((string) ($order->currency ?: 'TZS'));
 
+        $existing = $this->findLatestActiveTransaction($order->id);
+
+        if ($existing !== null) {
+            $existing = $this->refreshVerified($existing);
+            $status = $this->transactionStatus($existing);
+
+            if ($status === PaymentTransactionStatus::Successful) {
+                return $existing->fresh(['order']) ?? $existing;
+            }
+
+            if ($status?->isActive()) {
+                if ($this->providerKeyOf($existing) !== $providerKey) {
+                    $this->throwPaymentInProgress($existing);
+                }
+
+                return $existing->fresh(['order']) ?? $existing;
+            }
+        }
+
         return DB::transaction(function () use ($order, $provider, $providerKey, $amount, $currency, $phoneNumber): PaymentTransaction {
             /** @var Order $lockedOrder */
             $lockedOrder = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
 
             $this->assertOrderPayable($lockedOrder);
 
-            $existing = PaymentTransaction::query()
-                ->where('order_id', $lockedOrder->id)
-                ->whereIn('status', [
-                    PaymentTransactionStatus::Pending,
-                    PaymentTransactionStatus::Processing,
-                ])
-                ->orderByDesc('created_at')
-                ->lockForUpdate()
-                ->first();
+            $existing = $this->findLatestActiveTransaction($lockedOrder->id, lock: true);
 
             if ($existing !== null) {
-                $existingProvider = $existing->provider instanceof PaymentProvider
-                    ? $existing->provider->value
-                    : strtolower((string) $existing->provider);
-
-                if ($existingProvider !== $providerKey) {
-                    ApiResponse::throwCodedValidation([
-                        'provider' => ['An active payment is already in progress for this order.'],
-                    ]);
+                if ($this->providerKeyOf($existing) !== $providerKey) {
+                    $this->throwPaymentInProgress($existing);
                 }
 
                 return $existing->fresh(['order']) ?? $existing;
@@ -382,6 +387,52 @@ class PaymentOrchestrator
     public function registeredProviders(): array
     {
         return array_keys($this->providers);
+    }
+
+    private function findLatestActiveTransaction(string $orderId, bool $lock = false): ?PaymentTransaction
+    {
+        $query = PaymentTransaction::query()
+            ->where('order_id', $orderId)
+            ->whereIn('status', [
+                PaymentTransactionStatus::Pending,
+                PaymentTransactionStatus::Processing,
+            ])
+            ->orderByDesc('created_at');
+
+        if ($lock) {
+            $query->lockForUpdate();
+        }
+
+        return $query->first();
+    }
+
+    private function providerKeyOf(PaymentTransaction $transaction): string
+    {
+        return $transaction->provider instanceof PaymentProvider
+            ? $transaction->provider->value
+            : strtolower((string) $transaction->provider);
+    }
+
+    private function transactionStatus(PaymentTransaction $transaction): ?PaymentTransactionStatus
+    {
+        return $transaction->status instanceof PaymentTransactionStatus
+            ? $transaction->status
+            : PaymentTransactionStatus::tryFrom((string) $transaction->status);
+    }
+
+    private function throwPaymentInProgress(PaymentTransaction $transaction): never
+    {
+        $status = $this->transactionStatus($transaction);
+
+        ApiResponse::throwCodedValidation(
+            ['provider' => ['An active payment is already in progress for this order.']],
+            'payment_in_progress',
+            extra: [
+                'payment_transaction_id' => $transaction->id,
+                'payment_transaction_status' => $status?->value,
+                'provider' => $this->providerKeyOf($transaction),
+            ],
+        );
     }
 
     private function authorizeOrder(User $user, Order $order): void

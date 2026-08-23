@@ -46,6 +46,8 @@ export type OrderListItem = {
   progress: OrderProgress | null;
   /** Present only when API includes it — never invent eligibility. */
   canCancel: boolean | null;
+  /** Present only when API includes it — never invent eligibility. */
+  canPay: boolean | null;
 };
 
 export type OrdersListPage = {
@@ -128,6 +130,8 @@ export type OrderDetail = {
   currency: string;
   /** Present only when API includes it. */
   canCancel: boolean | null;
+  /** Present only when API includes it — never invent eligibility. */
+  canPay: boolean | null;
 };
 
 export type OrderTimelineEvent = {

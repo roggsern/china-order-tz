@@ -24,6 +24,7 @@ import {
   toFriendlyAuthMessage,
 } from "@/lib/auth/friendly-auth-messages";
 import { getCustomerApiToken } from "@/lib/api/customer-auth";
+import { isCustomerOrderPayable } from "@/lib/order/is-order-payable";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -222,7 +223,12 @@ export function OrderDetailsContent({ orderNumber }: OrderDetailsContentProps) {
         </div>
 
         <div className="relative mt-5 flex flex-wrap gap-2">
-          {(order.status === "pending_payment" || order.status === "pending") && (
+          {isCustomerOrderPayable({
+            canPay: order.canPay,
+            status: order.status,
+            paymentStatus: order.paymentStatus,
+            paidAt: order.paymentPaidAt,
+          }) && (
             <Link
               href={`/orders/${encodeURIComponent(order.orderNumber)}/pay`}
               className="inline-flex min-h-10 items-center justify-center rounded-xl bg-zinc-900 px-4 text-sm font-bold text-white transition hover:bg-zinc-800"

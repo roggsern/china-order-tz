@@ -149,6 +149,13 @@ export type Order = {
   paymentCurrency?: string | null;
   /** Active gateway transaction while M-Pesa STK push is pending */
   paymentTransactionId?: string | null;
+  /** Backend Pay Now eligibility. Authoritative when present. */
+  canPay?: boolean;
+  activePaymentTransaction?: {
+    id: string;
+    status: string;
+    provider: string | null;
+  } | null;
   status: OrderStatus;
   createdAt: string;
   updatedAt: string;
@@ -301,6 +308,8 @@ export function normalizeOrder(raw: Partial<Order> & Pick<Order, "orderNumber">)
     paymentAmount: raw.paymentAmount ?? null,
     paymentCurrency: raw.paymentCurrency ?? null,
     paymentTransactionId: raw.paymentTransactionId ?? null,
+    canPay: raw.canPay,
+    activePaymentTransaction: raw.activePaymentTransaction ?? null,
     status: raw.status ?? ORDER_STATUS.PENDING,
     createdAt: raw.createdAt ?? new Date().toISOString(),
     updatedAt: raw.updatedAt ?? raw.createdAt ?? new Date().toISOString(),

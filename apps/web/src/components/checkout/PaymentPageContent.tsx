@@ -27,6 +27,10 @@ import {
   startPaymentTransaction,
 } from "@/lib/api/customer-payment-orchestrator";
 import {
+  isPaymentInProgressError,
+  paymentInProgressCustomerMessage,
+} from "@/lib/order/pay-now-recovery";
+import {
   CheckoutPaymentMethodsApiError,
   fetchCheckoutPaymentMethods,
   prefetchCheckoutPaymentMethods,
@@ -377,10 +381,11 @@ export function PaymentPageContent() {
         }
       }
 
-      const message =
-        error instanceof CustomerPaymentApiError ||
-        error instanceof PaymentOrchestratorApiError ||
-        error instanceof CheckoutPaymentMethodsApiError
+      const message = isPaymentInProgressError(error)
+        ? paymentInProgressCustomerMessage()
+        : error instanceof CustomerPaymentApiError ||
+            error instanceof PaymentOrchestratorApiError ||
+            error instanceof CheckoutPaymentMethodsApiError
           ? error.message
           : error instanceof Error
             ? error.message

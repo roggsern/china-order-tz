@@ -32,6 +32,12 @@ export type ApiCustomerOrderPreview = {
   extra_items: number;
 };
 
+export type ApiActivePaymentTransaction = {
+  id: string;
+  status: string;
+  provider?: string | null;
+};
+
 export type ApiCustomerOrder = {
   id: string;
   order_number: string;
@@ -39,6 +45,8 @@ export type ApiCustomerOrder = {
   source: string;
   status: string;
   payment_status?: string | null;
+  can_pay?: boolean;
+  active_payment_transaction?: ApiActivePaymentTransaction | null;
   total: number | string;
   created_at: string;
   preview?: ApiCustomerOrderPreview;
@@ -64,6 +72,7 @@ export type CustomerOrderListItem = {
   status: OrderStatus;
   displayStatusLabel: string;
   paymentStatus: PaymentStatus;
+  canPay?: boolean;
   createdAt: string;
   grandTotal: number;
   itemPreview: string;
@@ -155,6 +164,7 @@ export type ApiCustomerOrderPayment = {
   currency?: string | null;
   paid_at?: string | null;
   initiated_at?: string | null;
+  payment_transaction_id?: string | null;
 };
 
 export type ApiCustomerOrderDetail = {
@@ -174,6 +184,8 @@ export type ApiCustomerOrderDetail = {
     grand_total?: number | string;
     total: number | string;
   };
+  can_pay?: boolean;
+  active_payment_transaction?: ApiActivePaymentTransaction | null;
   payment: ApiCustomerOrderPayment;
   shipping_address?: ApiCustomerOrderShippingAddress | null;
   shipment: {
@@ -411,6 +423,18 @@ export function mapApiCustomerOrderDetailToOrder(detail: ApiCustomerOrderDetail)
     paymentMethod: mapDetailPaymentMethod(detail.payment),
     paymentReference: detail.payment?.reference?.trim() || null,
     paymentPaidAt: detail.payment?.paid_at ?? null,
+    paymentTransactionId:
+      detail.active_payment_transaction?.id ??
+      detail.payment?.payment_transaction_id ??
+      null,
+    canPay: detail.can_pay,
+    activePaymentTransaction: detail.active_payment_transaction
+      ? {
+          id: detail.active_payment_transaction.id,
+          status: detail.active_payment_transaction.status,
+          provider: detail.active_payment_transaction.provider ?? null,
+        }
+      : null,
     paymentProvider: detail.payment?.provider?.trim() || null,
     paymentAmount:
       detail.payment?.amount != null && detail.payment.amount !== ""
@@ -499,6 +523,7 @@ export function mapApiCustomerOrderToListItem(order: ApiCustomerOrder): Customer
     status: orderStatus,
     displayStatusLabel,
     paymentStatus,
+    canPay: order.can_pay,
     createdAt: order.created_at,
     grandTotal: parseAmount(order.total),
     itemPreview: previewFields.itemPreview,
