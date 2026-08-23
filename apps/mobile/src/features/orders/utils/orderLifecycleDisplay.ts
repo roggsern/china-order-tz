@@ -1,0 +1,358 @@
+import { paymentMethodLabel } from '@/src/features/payments/utils/paymentAvailability';
+import type { OrderProgress, OrderShipmentSummary } from '../models/types';
+
+const TERMINAL_ORDER_STATUSES = new Set([
+  'cancelled',
+  'refunded',
+  'refund_pending',
+]);
+
+const ORDER_DISPLAY_LABELS: Record<string, string> = {
+  pending: 'Awaiting payment',
+  pending_payment: 'Awaiting payment',
+  paid: 'Paid',
+  confirmed: 'Paid',
+  processing: 'Processing',
+  shipped: 'Shipped',
+  delivered: 'Delivered',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+  refund_pending: 'Refund in progress',
+  refunded: 'Refunded',
+};
+
+const PENDING_PAYMENT_STATUSES = new Set([
+  'pending',
+  'initiated',
+  'processing',
+  'pending_payment',
+]);
+
+const PAID_PAYMENT_STATUSES = new Set(['paid', 'successful', 'confirmed']);
+
+const AWAITING_FULFILLMENT_KEYS = new Set(['AWAITING_PAYMENT', 'ORDER_CONFIRMED']);
+
+const STARTED_FULFILLMENT_KEYS = new Set([
+  'PREPARING',
+  'READY_TO_SHIP',
+  'SHIPPED',
+  'ARRIVED_TANZANIA',
+  'CHOOSE_RECEIVING_METHOD',
+  'SENT_TO_AGENT',
+  'DELIVERED_TO_AGENT',
+  'DELIVERED',
+]);
+
+const TERMINAL_PROGRESS_KEYS = new Set([
+  'CANCELLED',
+  'REFUND_PENDING',
+  'REFUNDED',
+]);
+
+export type OrderDisplayStatus = {
+  key: string;
+  label: string;
+};
+
+export type PaymentDisplayStatus = {
+  key: string;
+  label: string;
+  methodLabel: string | null;
+};
+
+export type FulfillmentDisplayStatus = {
+  key: string;
+  label: string;
+  isActive: boolean;
+  showProgression: boolean;
+};
+
+export type OrderLifecyclePresentation = {
+  order: OrderDisplayStatus;
+  payment: PaymentDisplayStatus;
+  fulfillment: FulfillmentDisplayStatus;
+};
+
+export type OrderLifecycleInput = {
+  status: string | null;
+  statusLabel?: string | null;
+  paymentStatus?: string | null;
+  paymentMethod?: string | null;
+  paymentProvider?: string | null;
+  transactionStatus?: string | null;
+  progress?: OrderProgress | null;
+  shipment?: Pick<OrderShipmentSummary, 'status' | 'statusLabel'> | null;
+};
+
+function normalize(value: string | null | undefined): string {
+  return value?.trim().toLowerCase() ?? '';
+}
+
+export function isTerminalOrderStatus(status: string | null | undefined): boolean {
+  return TERMINAL_ORDER_STATUSES.has(normalize(status));
+}
+
+/**
+ * Order-layer label from backend order.status.
+ * Terminal statuses always win over stale status_label or payment txn state.
+ */
+export function resolveOrderDisplayStatus(input: {
+  status: string | null;
+  statusLabel?: string | null;
+}): OrderDisplayStatus {
+  const status = normalize(input.status);
+
+  if (status === 'cancelled') {
+    return { key: 'cancelled', label: 'Cancelled' };
+  }
+  if (status === 'refunded') {
+    return { key: 'refunded', label: 'Refunded' };
+  }
+  if (status === 'refund_pending') {
+    return { key: 'refund_pending', label: 'Refund in progress' };
+  }
+
+  const known = ORDER_DISPLAY_LABELS[status];
+  if (known) {
+    return { key: status, label: known };
+  }
+
+  const fallback = input.statusLabel?.trim();
+  if (fallback) {
+    return { key: status || 'unknown', label: fallback };
+  }
+  if (status) {
+    return { key: status, label: status.replace(/_/g, ' ') };
+  }
+  return { key: 'unknown', label: 'Status unavailable' };
+}
+
+export function resolvePaymentMethodDisplayLabel(
+  method?: string | null,
+  provider?: string | null,
+): string | null {
+  const code = (method ?? provider ?? '').trim().toLowerCase();
+  if (!code) return null;
+  if (code === 'cod') {
+    return paymentMethodLabel('cash');
+  }
+  return paymentMethodLabel(code);
+}
+
+/**
+ * Payment-layer label from customer payment_status.
+ * Stale processing txns cannot reopen a cancelled/refunded order.
+ * A late successful txn on a cancelled order may show Paid for reconciliation.
+ */
+export function resolvePaymentDisplayStatus(input: {
+  orderStatus: string | null;
+  paymentStatus?: string | null;
+  transactionStatus?: string | null;
+  paymentMethod?: string | null;
+  paymentProvider?: string | null;
+}): PaymentDisplayStatus {
+  const orderStatus = normalize(input.orderStatus);
+  const paymentStatus = normalize(input.paymentStatus);
+  const transactionStatus = normalize(input.transactionStatus);
+  const methodLabel = resolvePaymentMethodDisplayLabel(
+    input.paymentMethod,
+    input.paymentProvider,
+  );
+
+  if (orderStatus === 'refunded' || paymentStatus === 'refunded') {
+    return { key: 'refunded', label: 'Refunded', methodLabel };
+  }
+
+  if (orderStatus === 'cancelled') {
+    if (PAID_PAYMENT_STATUSES.has(paymentStatus)) {
+      return { key: 'paid', label: 'Paid', methodLabel };
+    }
+    return { key: 'not_completed', label: 'Payment not completed', methodLabel };
+  }
+
+  if (PAID_PAYMENT_STATUSES.has(paymentStatus)) {
+    return { key: 'paid', label: 'Paid', methodLabel };
+  }
+
+  if (paymentStatus === 'failed' || paymentStatus === 'expired') {
+    return { key: 'failed', label: 'Payment not completed', methodLabel };
+  }
+
+  if (paymentStatus === 'cancelled') {
+    return { key: 'not_completed', label: 'Payment not completed', methodLabel };
+  }
+
+  if (
+    PENDING_PAYMENT_STATUSES.has(paymentStatus) ||
+    transactionStatus === 'pending' ||
+    transactionStatus === 'processing' ||
+    orderStatus === 'pending' ||
+    orderStatus === 'pending_payment'
+  ) {
+    return { key: 'pending', label: 'Awaiting payment', methodLabel };
+  }
+
+  if (paymentStatus) {
+    return {
+      key: paymentStatus,
+      label: paymentStatus.replace(/_/g, ' '),
+      methodLabel,
+    };
+  }
+
+  return { key: 'unknown', label: 'Awaiting payment', methodLabel };
+}
+
+/**
+ * Fulfillment-layer label from backend progress/shipment — never from order.status alone.
+ */
+export function resolveFulfillmentDisplayStatus(input: {
+  orderStatus: string | null;
+  progress?: OrderProgress | null;
+  shipment?: Pick<OrderShipmentSummary, 'status' | 'statusLabel'> | null;
+}): FulfillmentDisplayStatus {
+  const orderStatus = normalize(input.orderStatus);
+  const progress = input.progress ?? null;
+  const currentKey = progress?.currentKey?.trim() ?? '';
+
+  if (isTerminalOrderStatus(orderStatus)) {
+    if (currentKey && TERMINAL_PROGRESS_KEYS.has(currentKey) && progress?.currentLabel) {
+      return {
+        key: currentKey,
+        label: progress.currentLabel,
+        isActive: false,
+        showProgression: false,
+      };
+    }
+    return {
+      key: orderStatus,
+      label: 'Not started',
+      isActive: false,
+      showProgression: false,
+    };
+  }
+
+  if (
+    orderStatus === 'pending' ||
+    orderStatus === 'pending_payment' ||
+    !currentKey ||
+    AWAITING_FULFILLMENT_KEYS.has(currentKey) ||
+    !STARTED_FULFILLMENT_KEYS.has(currentKey)
+  ) {
+    return {
+      key: 'not_started',
+      label: 'Not started',
+      isActive: false,
+      showProgression: false,
+    };
+  }
+
+  const label = progress?.currentLabel?.trim() || currentKey.replace(/_/g, ' ');
+  return {
+    key: currentKey,
+    label,
+    isActive: currentKey !== 'DELIVERED',
+    showProgression: true,
+  };
+}
+
+export function buildOrderLifecyclePresentation(
+  input: OrderLifecycleInput,
+): OrderLifecyclePresentation {
+  return {
+    order: resolveOrderDisplayStatus({
+      status: input.status,
+      statusLabel: input.statusLabel,
+    }),
+    payment: resolvePaymentDisplayStatus({
+      orderStatus: input.status,
+      paymentStatus: input.paymentStatus,
+      transactionStatus: input.transactionStatus,
+      paymentMethod: input.paymentMethod,
+      paymentProvider: input.paymentProvider,
+    }),
+    fulfillment: resolveFulfillmentDisplayStatus({
+      orderStatus: input.status,
+      progress: input.progress,
+      shipment: input.shipment,
+    }),
+  };
+}
+
+/** Timeline shown to customers — hide fake shipping steps on terminal / unpaid orders. */
+export function resolveProgressForDisplay(
+  orderStatus: string | null,
+  progress: OrderProgress | null,
+): OrderProgress | null {
+  const fulfillment = resolveFulfillmentDisplayStatus({ orderStatus, progress });
+  if (fulfillment.showProgression) {
+    return progress;
+  }
+
+  if (isTerminalOrderStatus(orderStatus) && progress?.currentKey && TERMINAL_PROGRESS_KEYS.has(progress.currentKey)) {
+    return {
+      currentKey: progress.currentKey,
+      currentLabel: progress.currentLabel,
+      steps: progress.steps.filter((step) => step.key === progress.currentKey),
+    };
+  }
+
+  return null;
+}
+
+export function resolveTrackingHeroLabel(input: {
+  orderStatus: string | null;
+  trackingCurrentLabel?: string | null;
+  trackingCurrentStatus?: string | null;
+  progress?: OrderProgress | null;
+}): string {
+  const lifecycle = buildOrderLifecyclePresentation({
+    status: input.orderStatus,
+    progress: input.progress,
+  });
+
+  if (isTerminalOrderStatus(input.orderStatus)) {
+    return lifecycle.order.label;
+  }
+
+  if (!lifecycle.fulfillment.showProgression) {
+    return lifecycle.order.label;
+  }
+
+  return (
+    input.trackingCurrentLabel?.trim() ||
+    input.trackingCurrentStatus?.trim() ||
+    lifecycle.fulfillment.label
+  );
+}
+
+export function orderDisplayTone(
+  key: string,
+): 'success' | 'error' | 'warning' | 'info' | 'neutral' {
+  switch (key) {
+    case 'cancelled':
+    case 'refunded':
+    case 'failed':
+    case 'not_completed':
+      return 'error';
+    case 'refund_pending':
+    case 'pending':
+    case 'awaiting_payment':
+    case 'pending_payment':
+      return 'warning';
+    case 'paid':
+    case 'delivered':
+    case 'completed':
+    case 'refunded_complete':
+      return 'success';
+    case 'processing':
+    case 'shipped':
+    case 'PREPARING':
+    case 'READY_TO_SHIP':
+    case 'SHIPPED':
+    case 'ARRIVED_TANZANIA':
+      return 'info';
+    default:
+      return 'neutral';
+  }
+}

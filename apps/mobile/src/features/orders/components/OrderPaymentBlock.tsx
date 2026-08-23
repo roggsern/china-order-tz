@@ -4,21 +4,35 @@ import { Card } from '@/src/shared/ui/Card';
 import { PriceText } from '@/src/shared/ui/PriceText';
 import { colors, spacing, typography } from '@/src/shared/theme';
 import type { OrderPaymentSnapshot } from '../models/types';
+import type { PaymentDisplayStatus } from '../utils/orderLifecycleDisplay';
+import { orderDisplayTone } from '../utils/orderLifecycleDisplay';
 
 type Props = {
   payment: OrderPaymentSnapshot;
+  display: PaymentDisplayStatus;
+  orderStatus?: string | null;
 };
 
-export function OrderPaymentBlock({ payment }: Props) {
+export function OrderPaymentBlock({ payment, display, orderStatus }: Props) {
   const currency = payment.currency ?? 'TZS';
+  const methodPrefix =
+    orderStatus === 'cancelled' && display.methodLabel
+      ? 'Previous method'
+      : 'Method';
 
   return (
     <Card elevated={false} style={styles.block}>
       <Text style={styles.title}>Payment</Text>
-      {payment.paymentStatus ? (
-        <Badge label={payment.paymentStatus} tone="info" style={styles.badge} />
-      ) : null}
-      {payment.paymentMethod || payment.provider ? (
+      <Badge
+        label={display.label}
+        tone={orderDisplayTone(display.key)}
+        style={styles.badge}
+      />
+      {display.methodLabel ? (
+        <Text style={styles.line}>
+          {methodPrefix}: {display.methodLabel}
+        </Text>
+      ) : payment.paymentMethod || payment.provider ? (
         <Text style={styles.line}>
           Method: {payment.paymentMethod ?? payment.provider}
         </Text>

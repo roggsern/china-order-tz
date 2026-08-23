@@ -50,7 +50,10 @@ export function OrderListCard({ order, onPress }: Props) {
             </Text>
 
             <View style={styles.badgeRow}>
-              <Badge label={presentation.statusLabel} tone="neutral" />
+              <Badge
+                label={presentation.statusLabel}
+                tone={presentation.statusTone}
+              />
               {presentation.journeyLabel ? (
                 <Badge
                   label={presentation.journeyLabel}
@@ -73,6 +76,12 @@ export function OrderListCard({ order, onPress }: Props) {
             {presentation.paymentStatus ? (
               <Text style={styles.meta}>
                 Payment: {presentation.paymentStatus}
+              </Text>
+            ) : null}
+
+            {presentation.fulfillmentLabel ? (
+              <Text style={styles.meta}>
+                Fulfillment: {presentation.fulfillmentLabel}
               </Text>
             ) : null}
 

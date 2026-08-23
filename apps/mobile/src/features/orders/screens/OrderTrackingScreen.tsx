@@ -18,6 +18,11 @@ import { useOrderDetail, useOrderTracking } from '../hooks/useOrders';
 import { collectOrderItemImageUrls } from '../utils/orderCardPresentation';
 import { getOrderErrorMessage } from '../utils/orderErrorMessage';
 import { buildOrderTrackingHref } from '../utils/orderRoutes';
+import {
+  buildOrderLifecyclePresentation,
+  resolveProgressForDisplay,
+  resolveTrackingHeroLabel,
+} from '../utils/orderLifecycleDisplay';
 
 type Props = {
   orderId: string;
@@ -69,14 +74,40 @@ export function OrderTrackingScreen({ orderId }: Props) {
     );
   }
 
-  const events =
-    tracking.unifiedTimeline.length > 0
+  const detail = detailQuery.data;
+  const lifecycle = buildOrderLifecyclePresentation({
+    status: detail?.status ?? null,
+    statusLabel: detail?.statusLabel,
+    paymentStatus: detail?.payment?.paymentStatus,
+    paymentMethod: detail?.payment?.paymentMethod,
+    paymentProvider: detail?.payment?.provider,
+    progress: tracking.progress ?? detail?.progress,
+    shipment: tracking.shipment
+      ? {
+          status: tracking.shipment.status,
+          statusLabel: tracking.shipment.statusLabel,
+        }
+      : detail?.shipment,
+  });
+  const displayProgress = resolveProgressForDisplay(
+    detail?.status ?? null,
+    tracking.progress ?? detail?.progress ?? null,
+  );
+  const events = lifecycle.fulfillment.showProgression
+    ? tracking.unifiedTimeline.length > 0
       ? tracking.unifiedTimeline
-      : tracking.timeline;
+      : tracking.timeline
+    : [];
 
-  const hasTimeline = events.length > 0 || Boolean(tracking.progress?.steps?.length);
-  const itemImages = collectOrderItemImageUrls(detailQuery.data?.items);
-  const detailItems = detailQuery.data?.items ?? [];
+  const hasTimeline = events.length > 0 || Boolean(displayProgress?.steps?.length);
+  const itemImages = collectOrderItemImageUrls(detail?.items);
+  const detailItems = detail?.items ?? [];
+  const heroStatus = resolveTrackingHeroLabel({
+    orderStatus: detail?.status ?? null,
+    trackingCurrentLabel: tracking.currentStatusLabel,
+    trackingCurrentStatus: tracking.currentStatus,
+    progress: tracking.progress ?? detail?.progress,
+  });
 
   return (
     <ScrollView
@@ -103,11 +134,7 @@ export function OrderTrackingScreen({ orderId }: Props) {
           : 'Shipment progress'}
       </Text>
 
-      <Text style={styles.status}>
-        {tracking.currentStatusLabel ??
-          tracking.currentStatus ??
-          'Status unavailable'}
-      </Text>
+      <Text style={styles.status}>{heroStatus}</Text>
 
       {detailItems.length > 0 ? (
         <Card elevated={false} style={styles.box}>
@@ -135,7 +162,7 @@ export function OrderTrackingScreen({ orderId }: Props) {
         </Card>
       ) : null}
 
-      {tracking.shipment ? (
+      {lifecycle.fulfillment.showProgression && tracking.shipment ? (
         <Card elevated={false} style={styles.box}>
           <Text style={styles.section}>Shipment</Text>
           {tracking.shipment.statusLabel || tracking.shipment.status ? (
@@ -164,7 +191,11 @@ export function OrderTrackingScreen({ orderId }: Props) {
         <Card elevated={false} style={styles.box}>
           <Text style={styles.section}>Shipment</Text>
           <Text style={styles.line}>
-            No shipment tracking has been published for this order yet.
+            {lifecycle.fulfillment.showProgression
+              ? 'No shipment tracking has been published for this order yet.'
+              : lifecycle.order.key === 'cancelled'
+                ? 'Shipment is not active for this cancelled order.'
+                : 'Shipment has not started.'}
           </Text>
         </Card>
       )}
@@ -172,7 +203,7 @@ export function OrderTrackingScreen({ orderId }: Props) {
       {hasTimeline ? (
         <OrderTimeline
           title="Timeline"
-          progress={tracking.progress}
+          progress={displayProgress}
           events={events}
         />
       ) : (

@@ -19,5 +19,11 @@ describe('tabBadges', () => {
       ]),
     ).toBe(2);
     expect(countPayableOrders([])).toBe(0);
+    expect(
+      countPayableOrders([
+        { status: 'cancelled', canPay: true, paymentStatus: 'initiated' },
+        { status: 'pending_payment', canPay: false },
+      ]),
+    ).toBe(0);
   });
 });

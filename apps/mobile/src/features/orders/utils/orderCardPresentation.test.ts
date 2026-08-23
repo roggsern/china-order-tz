@@ -37,6 +37,9 @@ describe('orderCardPresentation', () => {
     expect(presentation.isMultiItem).toBe(true);
     expect(presentation.extraItems).toBe(1);
     expect(formatOrderListProductTitle(presentation)).toBe('Gown +1 more');
+    expect(presentation.statusLabel).toBe('Paid');
+    expect(presentation.paymentStatus).toBe('Paid');
+    expect(presentation.fulfillmentLabel).toBe('Not started');
   });
 
   it('keeps resolved absolute image urls from relative storage mapping', () => {
@@ -76,6 +79,8 @@ describe('orderCardPresentation', () => {
     const presentation = buildOrderListCardPresentation(order!);
     expect(presentation.imageUrl).toBe('https://cdn.example/shirt.jpg');
     expect(presentation.extraItems).toBe(2);
+    expect(presentation.statusLabel).toBe('Awaiting payment');
+    expect(presentation.fulfillmentLabel).toBe('Not started');
   });
 
   it('collects detail item images without inventing urls', () => {

@@ -1,4 +1,8 @@
 import type { OrderDetailItem, OrderListItem } from '../models/types';
+import {
+  buildOrderLifecyclePresentation,
+  orderDisplayTone,
+} from './orderLifecycleDisplay';
 
 /**
  * Display model for order list cards — uses only server-mapped preview fields.
@@ -12,11 +16,13 @@ export type OrderListCardPresentation = {
   quantity: number | null;
   orderNumber: string | null;
   statusLabel: string;
+  statusTone: 'success' | 'error' | 'warning' | 'info' | 'neutral';
   createdAt: string | null;
   grandTotal: string | number | null;
   currency: string;
   journeyLabel: string | null;
   paymentStatus: string | null;
+  fulfillmentLabel: string | null;
 };
 
 export function buildOrderListCardPresentation(
@@ -26,6 +32,13 @@ export function buildOrderListCardPresentation(
   const primary = preview?.primaryItem ?? null;
   const extraItems = preview?.extraItems ?? 0;
   const itemCount = preview?.itemCount ?? (primary ? 1 + extraItems : 0);
+  const lifecycle = buildOrderLifecyclePresentation({
+    status: order.status,
+    statusLabel: order.statusLabel,
+    paymentStatus: order.paymentStatus,
+    transactionStatus: order.activePaymentTransaction?.status,
+    progress: order.progress,
+  });
 
   return {
     imageUrl: primary?.imageUrl ?? null,
@@ -34,12 +47,14 @@ export function buildOrderListCardPresentation(
     isMultiItem: itemCount > 1 || extraItems > 0,
     quantity: primary?.quantity ?? preview?.totalQuantity ?? null,
     orderNumber: order.orderNumber ?? order.id,
-    statusLabel: order.statusLabel ?? order.status ?? 'Status unavailable',
+    statusLabel: lifecycle.order.label,
+    statusTone: orderDisplayTone(lifecycle.order.key),
     createdAt: order.createdAt,
     grandTotal: order.grandTotal,
     currency: order.currency ?? 'TZS',
     journeyLabel: order.journeyLabel,
-    paymentStatus: order.paymentStatus,
+    paymentStatus: lifecycle.payment.label,
+    fulfillmentLabel: lifecycle.fulfillment.label,
   };
 }
 

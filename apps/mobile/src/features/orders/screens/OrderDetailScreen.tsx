@@ -18,6 +18,7 @@ import { SecondaryButton } from '@/src/shared/ui/SecondaryButton';
 import { colors, spacing, typography } from '@/src/shared/theme';
 import { CancelOrderButton } from '../components/CancelOrderButton';
 import { ContinuePaymentButton } from '../components/ContinuePaymentButton';
+import { OrderFulfillmentBlock } from '../components/OrderFulfillmentBlock';
 import { OrderItemRow } from '../components/OrderItemRow';
 import { OrderPaymentBlock } from '../components/OrderPaymentBlock';
 import { OrderSummaryBlock } from '../components/OrderSummaryBlock';
@@ -26,6 +27,11 @@ import { useOrderDetail } from '../hooks/useOrders';
 import { isOrderPayableFromServer } from '../utils/isOrderPayable';
 import { hasOrderTrackingEntry } from '../utils/hasOrderTrackingEntry';
 import { shouldOfferCancel } from '../utils/mapOrders';
+import {
+  buildOrderLifecyclePresentation,
+  orderDisplayTone,
+  resolveProgressForDisplay,
+} from '../utils/orderLifecycleDisplay';
 import { getOrderErrorMessage } from '../utils/orderErrorMessage';
 import {
   buildOrderDetailHref,
@@ -89,7 +95,22 @@ export function OrderDetailScreen({ orderId }: Props) {
       status: order.status,
       canCancel: order.canCancel,
     });
-  const offerContinuePayment = isOrderPayableFromServer(order);
+  const offerContinuePayment = isOrderPayableFromServer({
+    status: order.status,
+    canPay: order.canPay,
+    paymentStatus: order.payment?.paymentStatus,
+  });
+  const lifecycle = buildOrderLifecyclePresentation({
+    status: order.status,
+    statusLabel: order.statusLabel,
+    paymentStatus: order.payment?.paymentStatus,
+    paymentMethod: order.payment?.paymentMethod,
+    paymentProvider: order.payment?.provider,
+    transactionStatus: order.activePaymentTransaction?.status,
+    progress: order.progress,
+    shipment: order.shipment,
+  });
+  const displayProgress = resolveProgressForDisplay(order.status, order.progress);
 
   return (
     <ScrollView
@@ -111,8 +132,8 @@ export function OrderDetailScreen({ orderId }: Props) {
           <Badge label={order.journeyLabel} tone="brand" />
         ) : null}
         <Badge
-          label={order.statusLabel ?? order.status ?? 'Status unavailable'}
-          tone="neutral"
+          label={lifecycle.order.label}
+          tone={orderDisplayTone(lifecycle.order.key)}
         />
       </View>
       {order.createdAt ? (
@@ -134,16 +155,25 @@ export function OrderDetailScreen({ orderId }: Props) {
 
       <OrderSummaryBlock summary={order.summary} currency={order.currency} />
 
-      {order.payment ? <OrderPaymentBlock payment={order.payment} /> : null}
+      {order.payment ? (
+        <OrderPaymentBlock
+          payment={order.payment}
+          display={lifecycle.payment}
+          orderStatus={order.status}
+        />
+      ) : null}
 
       <ContinuePaymentButton
         orderId={orderId}
         enabled={offerContinuePayment}
       />
 
-      <OrderTimeline progress={order.progress} />
+      <OrderFulfillmentBlock fulfillment={lifecycle.fulfillment} />
 
-      {order.shipment &&
+      <OrderTimeline progress={displayProgress} />
+
+      {lifecycle.fulfillment.showProgression &&
+      order.shipment &&
       (order.shipment.status ||
         order.shipment.statusLabel ||
         order.shipment.trackingReference ||

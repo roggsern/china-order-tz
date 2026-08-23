@@ -25,6 +25,7 @@ export { OrderListCard } from './components/OrderListCard';
 export { OrderItemRow } from './components/OrderItemRow';
 export { OrderSummaryBlock } from './components/OrderSummaryBlock';
 export { OrderPaymentBlock } from './components/OrderPaymentBlock';
+export { OrderFulfillmentBlock } from './components/OrderFulfillmentBlock';
 export { OrderTimeline } from './components/OrderTimeline';
 export { CancelOrderButton } from './components/CancelOrderButton';
 export { ContinuePaymentButton } from './components/ContinuePaymentButton';
@@ -43,6 +44,12 @@ export {
   normalizeOrdersFilter,
 } from './utils/mapOrders';
 export { isOrderPayableFromServer } from './utils/isOrderPayable';
+export {
+  buildOrderLifecyclePresentation,
+  resolveOrderDisplayStatus,
+  resolvePaymentDisplayStatus,
+  resolveFulfillmentDisplayStatus,
+} from './utils/orderLifecycleDisplay';
 export { hasOrderTrackingEntry } from './utils/hasOrderTrackingEntry';
 export {
   getOrderErrorMessage,

@@ -1,3 +1,5 @@
+import { isOrderPayableFromServer } from '@/src/features/orders/utils/isOrderPayable';
+
 /**
  * Pure helpers for tab bar badge labels — no React / API imports.
  */
@@ -13,12 +15,19 @@ export function formatTabBadgeCount(count: number | null | undefined): string | 
 }
 
 export function countPayableOrders(
-  orders: { status: string | null }[] | null | undefined,
+  orders:
+    | {
+        status: string | null;
+        canPay?: boolean | null;
+        paymentStatus?: string | null;
+      }[]
+    | null
+    | undefined,
 ): number {
   if (!orders?.length) return 0;
   let count = 0;
   for (const order of orders) {
-    if (order.status === 'pending' || order.status === 'pending_payment') {
+    if (isOrderPayableFromServer(order)) {
       count += 1;
     }
   }
