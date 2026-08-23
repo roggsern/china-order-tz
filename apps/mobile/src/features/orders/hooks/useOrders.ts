@@ -18,8 +18,9 @@ import {
   fetchOrderDetail,
   fetchOrderTracking,
   fetchOrders,
+  selectReceivingMethod,
 } from '../api/ordersApi';
-import type { CancelOrderInput, OrdersListFilter } from '../models/types';
+import type { CancelOrderInput, OrdersListFilter, SelectReceivingMethodInput } from '../models/types';
 import { isOrderUnauthenticatedError } from '../utils/orderErrorMessage';
 import { buildOrdersListHref } from '../utils/orderRoutes';
 import {
@@ -137,6 +138,20 @@ export function useCancelOrderMutation(orderId: string) {
       } satisfies CancelOrderInput),
     onSuccess: (detail) => {
       queryClient.setQueryData(orderDetailQueryKey(orderId), detail);
+      void invalidateOrdersQueries(queryClient, orderId);
+    },
+    onError: handleAuth,
+  });
+}
+
+export function useSelectReceivingMethodMutation(orderId: string) {
+  const queryClient = useQueryClient();
+  const handleAuth = useOrdersAuthGuard(buildOrderDetailReturn(orderId));
+
+  return useMutation({
+    mutationFn: (receivingMethod: SelectReceivingMethodInput['receivingMethod']) =>
+      selectReceivingMethod({ orderId, receivingMethod }),
+    onSuccess: () => {
       void invalidateOrdersQueries(queryClient, orderId);
     },
     onError: handleAuth,

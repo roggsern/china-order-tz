@@ -359,6 +359,7 @@ describe('list and detail consistency', () => {
         status: 'processing',
         provider: 'nmb',
       },
+      receivingChoice: null,
     };
 
     const { fromList, fromDetail } = sameLifecycleFromListAndDetail(list, detail);

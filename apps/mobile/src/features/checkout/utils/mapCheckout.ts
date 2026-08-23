@@ -5,6 +5,7 @@ import type {
   CheckoutItem,
   CheckoutPrepare,
   CheckoutSession,
+  CheckoutShippingChoiceValue,
   CheckoutShippingSummary,
   DeliveryAddressInput,
   DeliveryAddressPayload,
@@ -88,6 +89,9 @@ export function mapCheckoutPrepare(raw: unknown): CheckoutPrepare {
   const data = asRecord(raw);
   const customer = asRecord(data.customer);
   const itemsRaw = Array.isArray(data.items) ? data.items : [];
+  const items = itemsRaw
+    .map(mapCheckoutItem)
+    .filter((item): item is CheckoutItem => item !== null);
 
   return {
     customer: {
@@ -97,13 +101,12 @@ export function mapCheckoutPrepare(raw: unknown): CheckoutPrepare {
       phone: stringField(customer, 'phone'),
     },
     deliveryAddress: mapDeliveryAddress(data.delivery_address),
-    items: itemsRaw
-      .map(mapCheckoutItem)
-      .filter((item): item is CheckoutItem => item !== null),
+    items,
     subtotal: moneyField(data, 'subtotal'),
     shippingSummary: mapShippingSummary(data.shipping_summary),
     grandTotal: moneyField(data, 'grand_total'),
     readyForConfirmation: boolField(data, 'ready_for_confirmation') ?? false,
+    shippingChoices: resolveCheckoutShippingChoices(items, data),
   };
 }
 
@@ -168,6 +171,93 @@ export function buildShippingChoicePayload(
   }
 
   return payload;
+}
+
+const KNOWN_SHIPPING_CHOICES: CheckoutShippingChoiceValue[] = [
+  'company_shipping',
+  'customer_agent',
+  'self_pickup',
+  'negotiated_delivery',
+];
+
+function isShippingChoiceValue(value: string | null): value is CheckoutShippingChoiceValue {
+  return value != null && (KNOWN_SHIPPING_CHOICES as string[]).includes(value);
+}
+
+/**
+ * Hide options the backend marks unavailable. Missing `available` stays visible.
+ */
+export function visibleShippingChoices(
+  options: ShippingChoiceOption[],
+): ShippingChoiceOption[] {
+  return options.filter((option) => option.available !== false);
+}
+
+/**
+ * Prefer an explicit backend option list when present on prepare/session.
+ * Never invent fees; labels are presentation only.
+ */
+export function shippingChoicesFromPayload(raw: unknown): ShippingChoiceOption[] | null {
+  const data = asRecord(raw);
+  const rows = Array.isArray(data.available_shipping_choices)
+    ? data.available_shipping_choices
+    : Array.isArray(data.shipping_options)
+      ? data.shipping_options
+      : Array.isArray(data.shipping_choices)
+        ? data.shipping_choices
+        : null;
+  if (!rows) return null;
+
+  const mapped = rows
+    .map((row) => {
+      const item = asRecord(row);
+      const value = stringField(item, 'value') ?? stringField(item, 'shipping_choice');
+      if (!isShippingChoiceValue(value)) return null;
+      const available = boolField(item, 'available') ?? boolField(item, 'enabled');
+      return {
+        value,
+        label: stringField(item, 'label') ?? value,
+        ...(available == null ? {} : { available }),
+      } satisfies ShippingChoiceOption;
+    })
+    .filter((row): row is ShippingChoiceOption => row !== null);
+
+  return mapped;
+}
+
+/**
+ * Resolve checkout shipping/receiving options.
+ * Backend list wins when present; otherwise item `source` markers (China / Dar).
+ */
+export function resolveCheckoutShippingChoices(
+  items: CheckoutItem[],
+  rawPayload?: unknown,
+): ShippingChoiceOption[] {
+  const fromPayload = rawPayload != null ? shippingChoicesFromPayload(rawPayload) : null;
+  return visibleShippingChoices(fromPayload ?? shippingChoicesForItems(items));
+}
+
+/** Session totals only — never add a client-computed fee. */
+export function checkoutTotalsFromSession(session: CheckoutSession): {
+  subtotal: CheckoutSession['subtotal'];
+  shippingTotal: CheckoutSession['shippingTotal'];
+  discountTotal: CheckoutSession['discountTotal'];
+  taxTotal: CheckoutSession['taxTotal'];
+  grandTotal: CheckoutSession['grandTotal'];
+} {
+  return {
+    subtotal: session.subtotal,
+    shippingTotal: session.shippingTotal,
+    discountTotal: session.discountTotal,
+    taxTotal: session.taxTotal,
+    grandTotal: session.grandTotal,
+  };
+}
+
+export function shippingChoicePayloadHasClientFee(
+  payload: ApplyShippingChoicePayload,
+): boolean {
+  return Object.keys(payload).some((key) => /fee|price|total|amount/i.test(key));
 }
 
 /**

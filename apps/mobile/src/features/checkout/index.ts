@@ -5,6 +5,8 @@ export {
   fetchCheckoutSession,
   refreshCheckoutSession,
   applyCheckoutShippingChoice,
+  cancelCheckoutSession,
+  cancelCheckoutSessionSafely,
   updateDeliveryAddress,
 } from './api/checkoutApi';
 export {
@@ -12,10 +14,12 @@ export {
   useStartCheckoutSessionMutation,
   useRefreshCheckoutSessionMutation,
   useApplyShippingChoiceMutation,
+  useCancelCheckoutSessionMutation,
   useUpdateDeliveryAddressMutation,
   checkoutPrepareQueryKey,
   checkoutSessionQueryKey,
 } from './hooks/useCheckout';
+export { invalidateAfterCheckoutCancel } from './utils/checkoutQueryKeys';
 export { CheckoutScreen } from './screens/CheckoutScreen';
 export { CheckoutProgress } from './components/CheckoutProgress';
 export type { CheckoutProgressStep } from './components/CheckoutProgress';
@@ -26,6 +30,9 @@ export {
   buildShippingChoicePayload,
   buildDeliveryAddressPayload,
   shippingChoicesForItems,
+  visibleShippingChoices,
+  resolveCheckoutShippingChoices,
+  checkoutTotalsFromSession,
   isReadyForPayment,
   isStaleOrExpiredCheckoutError,
   journeyLabelFromCheckoutItems,

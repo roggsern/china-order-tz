@@ -1,12 +1,16 @@
 import {
   buildDeliveryAddressPayload,
   buildShippingChoicePayload,
+  checkoutTotalsFromSession,
   isReadyForPayment,
   isStaleOrExpiredCheckoutError,
   journeyLabelFromCheckoutItems,
   mapCheckoutPrepare,
   mapCheckoutSession,
+  resolveCheckoutShippingChoices,
+  shippingChoicePayloadHasClientFee,
   shippingChoicesForItems,
+  visibleShippingChoices,
 } from './mapCheckout';
 import { ApiError } from '@/src/core/errors';
 
@@ -56,6 +60,10 @@ describe('mapCheckoutPrepare', () => {
     expect(prepare.shippingSummary.chinaShippingTotal).toBe('40000');
     expect(prepare.deliveryAddress.city).toBe('Dar es Salaam');
     expect(prepare.items[0]?.source).toBe('China');
+    expect(prepare.shippingChoices.map((choice) => choice.value)).toEqual([
+      'company_shipping',
+      'customer_agent',
+    ]);
   });
 });
 
@@ -131,6 +139,106 @@ describe('buildShippingChoicePayload', () => {
       agent_name: null,
       agent_contact: null,
     });
+  });
+});
+
+describe('delivery option fixtures and totals', () => {
+  const chinaItem = {
+    id: '1',
+    productId: 'p',
+    productName: 'A',
+    quantity: 1,
+    unitPrice: 1,
+    lineSubtotal: 1,
+    source: 'China',
+    shippingMethod: null,
+    shippingPrice: null,
+    shippingSubtotal: null,
+    deliveryStatus: null,
+  };
+  const darItem = {
+    ...chinaItem,
+    source: 'Dar',
+    deliveryStatus: 'To Be Negotiated',
+  };
+
+  it('renders backend China options from CHINA_IMPORT item source', () => {
+    const choices = shippingChoicesForItems([chinaItem]);
+    expect(choices.map((choice) => choice.value)).toEqual([
+      'company_shipping',
+      'customer_agent',
+    ]);
+  });
+
+  it('renders backend TZ options from TZ_LOCAL item source', () => {
+    const choices = shippingChoicesForItems([darItem]);
+    expect(choices.map((choice) => choice.value)).toEqual([
+      'self_pickup',
+      'negotiated_delivery',
+    ]);
+  });
+
+  it('hides unavailable options from a backend payload', () => {
+    const choices = resolveCheckoutShippingChoices([darItem], {
+      available_shipping_choices: [
+        { value: 'self_pickup', label: 'Self Pickup', available: true },
+        { value: 'negotiated_delivery', label: 'Delivery', available: false },
+      ],
+    });
+    expect(choices.map((choice) => choice.value)).toEqual(['self_pickup']);
+    expect(visibleShippingChoices(choices).some((choice) => choice.available === false)).toBe(
+      false,
+    );
+  });
+
+  it('posts shipping choice without a client-calculated fee', () => {
+    const payload = buildShippingChoicePayload({
+      shippingChoice: 'negotiated_delivery',
+    });
+    expect(payload).toEqual({
+      shipping_choice: 'negotiated_delivery',
+      shipping_method: null,
+      agent_name: null,
+      agent_contact: null,
+    });
+    expect(shippingChoicePayloadHasClientFee(payload)).toBe(false);
+  });
+
+  it('reads totals from the refreshed session after selection', () => {
+    const session = mapCheckoutSession({
+      id: 'sess-1',
+      currency: 'TZS',
+      status: 'validated',
+      subtotal: '80000',
+      shipping_total: '5000',
+      discount_total: '0',
+      tax_total: '0',
+      grand_total: '85000',
+      shipping_choice: 'company_shipping',
+      shipping_method: 'air',
+      shipping_ready: true,
+      is_expired: false,
+    });
+    expect(checkoutTotalsFromSession(session)).toEqual({
+      subtotal: '80000',
+      shippingTotal: '5000',
+      discountTotal: '0',
+      taxTotal: '0',
+      grandTotal: '85000',
+    });
+  });
+
+  it('keeps pickup vs delivery values from the backend payload', () => {
+    const choices = resolveCheckoutShippingChoices([], {
+      shipping_options: [
+        { value: 'self_pickup', label: 'Collect in person' },
+        { value: 'negotiated_delivery', label: 'Arrange delivery' },
+      ],
+    });
+    expect(choices).toEqual([
+      { value: 'self_pickup', label: 'Collect in person' },
+      { value: 'negotiated_delivery', label: 'Arrange delivery' },
+    ]);
   });
 });
 

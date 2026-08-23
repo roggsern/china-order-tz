@@ -49,6 +49,8 @@ export type CheckoutPrepare = {
   shippingSummary: CheckoutShippingSummary;
   grandTotal: CheckoutMoney;
   readyForConfirmation: boolean;
+  /** Backend option list when present; otherwise inferred from item source. */
+  shippingChoices: ShippingChoiceOption[];
 };
 
 export type CheckoutSessionStatus =
@@ -86,6 +88,8 @@ export type CheckoutSession = {
 export type ShippingChoiceOption = {
   value: CheckoutShippingChoiceValue;
   label: string;
+  /** Absent or true = selectable. False is hidden, never shown as available. */
+  available?: boolean;
 };
 
 export type ApplyShippingChoiceInput = {

@@ -3,12 +3,14 @@ export {
   fetchOrderDetail,
   fetchOrderTracking,
   cancelOrder,
+  selectReceivingMethod,
 } from './api/ordersApi';
 export {
   useOrdersList,
   useOrderDetail,
   useOrderTracking,
   useCancelOrderMutation,
+  useSelectReceivingMethodMutation,
   invalidateOrdersQueries,
   invalidateAfterPaymentSuccess,
 } from './hooks/useOrders';
@@ -28,6 +30,7 @@ export { OrderPaymentBlock } from './components/OrderPaymentBlock';
 export { OrderFulfillmentBlock } from './components/OrderFulfillmentBlock';
 export { OrderTimeline } from './components/OrderTimeline';
 export { CancelOrderButton } from './components/CancelOrderButton';
+export { OrderReceivingChoicePanel } from './components/OrderReceivingChoicePanel';
 export { ContinuePaymentButton } from './components/ContinuePaymentButton';
 export {
   mapOrderListItem,
@@ -41,6 +44,9 @@ export {
   journeyLabelFromOrderSource,
   formatOrderMoney,
   buildCancelOrderPayload,
+  buildReceivingMethodPayload,
+  mapReceivingChoiceSnapshot,
+  shouldOfferReceivingChoice,
   normalizeOrdersFilter,
 } from './utils/mapOrders';
 export { isOrderPayableFromServer } from './utils/isOrderPayable';
@@ -69,4 +75,7 @@ export type {
   OrdersListPage,
   OrdersListFilter,
   CancelOrderInput,
+  ReceivingChoiceSnapshot,
+  LastMileReceivingMethod,
+  SelectReceivingMethodInput,
 } from './models/types';

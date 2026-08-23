@@ -17,6 +17,21 @@ describe('getCheckoutErrorMessage', () => {
     expect(isCheckoutUnauthenticatedError(error)).toBe(true);
   });
 
+  it('shows a shipping-choice validation error without inventing a fee', () => {
+    expect(
+      getCheckoutErrorMessage(
+        new ApiError({
+          message: 'The given data was invalid.',
+          status: 422,
+          code: 'validation_failed',
+          errors: {
+            shipping_choice: ['The selected shipping choice is invalid for this cart.'],
+          },
+        }),
+      ),
+    ).toBe('The selected shipping choice is invalid for this cart.');
+  });
+
   it('maps validation_failed with field errors', () => {
     expect(
       getCheckoutErrorMessage(

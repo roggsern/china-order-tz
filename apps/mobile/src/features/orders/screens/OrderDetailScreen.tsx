@@ -19,6 +19,7 @@ import { colors, spacing, typography } from '@/src/shared/theme';
 import { CancelOrderButton } from '../components/CancelOrderButton';
 import { ContinuePaymentButton } from '../components/ContinuePaymentButton';
 import { OrderFulfillmentBlock } from '../components/OrderFulfillmentBlock';
+import { OrderReceivingChoicePanel } from '../components/OrderReceivingChoicePanel';
 import { OrderItemRow } from '../components/OrderItemRow';
 import { OrderPaymentBlock } from '../components/OrderPaymentBlock';
 import { OrderSummaryBlock } from '../components/OrderSummaryBlock';
@@ -166,6 +167,12 @@ export function OrderDetailScreen({ orderId }: Props) {
       <ContinuePaymentButton
         orderId={orderId}
         enabled={offerContinuePayment}
+      />
+
+      <OrderReceivingChoicePanel
+        orderId={orderId}
+        receivingChoice={order.receivingChoice}
+        onUpdated={() => void detailQuery.refetch()}
       />
 
       <OrderFulfillmentBlock fulfillment={lifecycle.fulfillment} />

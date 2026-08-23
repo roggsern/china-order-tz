@@ -8,6 +8,7 @@ import type {
   CheckoutShippingChoiceValue,
   ShippingChoiceOption,
 } from '../models/types';
+import { visibleShippingChoices } from '../utils/mapCheckout';
 
 type Props = {
   options: ShippingChoiceOption[];
@@ -33,6 +34,7 @@ export function ShippingChoicePicker({
   const [agentName, setAgentName] = useState('');
   const [agentContact, setAgentContact] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
+  const visibleOptions = visibleShippingChoices(options);
 
   function handleSubmit() {
     setLocalError(null);
@@ -57,7 +59,7 @@ export function ShippingChoicePicker({
     });
   }
 
-  if (options.length === 0) {
+  if (visibleOptions.length === 0) {
     return (
       <Text style={styles.note}>
         No shipping choices available for this cart. Check cart channel and try again.
@@ -67,12 +69,13 @@ export function ShippingChoicePicker({
 
   return (
     <Card elevated={false} style={styles.wrap}>
-      <Text style={styles.title}>Shipping / receiving</Text>
+      <Text style={styles.title}>Shipping option</Text>
       <Text style={styles.note}>
-        Options follow your cart’s commerce channel. The server validates the final choice.
+        Options follow your cart’s commerce channel. Fees and availability come from the
+        server after you save.
       </Text>
 
-      {options.map((option) => {
+      {visibleOptions.map((option) => {
         const active = choice === option.value;
         return (
           <Pressable

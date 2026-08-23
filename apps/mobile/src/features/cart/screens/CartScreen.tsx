@@ -1,10 +1,14 @@
 import { useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/src/core/auth';
+import { cancelCheckoutSessionSafely } from '@/src/features/checkout/api/checkoutApi';
+import { pendingCheckoutContextStorage } from '@/src/features/checkout/storage/pendingCheckoutContextStorage';
+import { shouldCancelCheckoutSession } from '@/src/features/checkout/utils/cancelCheckoutSession';
 import { EmptyState } from '@/src/shared/ui/EmptyState';
 import { ScreenContainer } from '@/src/shared/ui/ScreenContainer';
 import { ScreenLoadingState } from '@/src/shared/ui/ScreenLoadingState';
+import { SecondaryButton } from '@/src/shared/ui/SecondaryButton';
 import { TrustStrip } from '@/src/shared/ui/TrustStrip';
 import { colors, spacing, typography } from '@/src/shared/theme';
 import { CartLineItemCard } from '../components/CartLineItemCard';
@@ -12,6 +16,7 @@ import { CartTotals } from '../components/CartTotals';
 import { ProceedToCheckoutButton } from '../components/ProceedToCheckoutButton';
 import {
   useCart,
+  useClearCartMutation,
   useRemoveCartItemMutation,
   useUpdateCartItemMutation,
 } from '../hooks/useCart';
@@ -23,6 +28,7 @@ export function CartScreen() {
   const cartQuery = useCart();
   const updateMutation = useUpdateCartItemMutation();
   const removeMutation = useRemoveCartItemMutation();
+  const clearMutation = useClearCartMutation();
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
 
@@ -57,7 +63,8 @@ export function CartScreen() {
   const cart = cartQuery.data;
   const items = cart?.items ?? [];
   const isEmpty = !cart || cart.isEmpty || items.length === 0;
-  const mutating = updateMutation.isPending || removeMutation.isPending;
+  const mutating =
+    updateMutation.isPending || removeMutation.isPending || clearMutation.isPending;
 
   async function changeQuantity(itemId: string, quantity: number) {
     setActionError(null);
@@ -80,6 +87,45 @@ export function CartScreen() {
       setActionError(getCartErrorMessage(error));
     } finally {
       setBusyItemId(null);
+    }
+  }
+
+  function confirmClearCart() {
+    Alert.alert(
+      'Clear cart?',
+      'This removes every item from your server cart.',
+      [
+        { text: 'Keep items', style: 'cancel' },
+        {
+          text: 'Clear cart',
+          style: 'destructive',
+          onPress: () => void clearAllItems(),
+        },
+      ],
+    );
+  }
+
+  async function clearAllItems() {
+    setActionError(null);
+    try {
+      await clearMutation.mutateAsync();
+      const stored = await pendingCheckoutContextStorage.read();
+      if (
+        stored?.checkoutSessionId &&
+        shouldCancelCheckoutSession({
+          sessionId: stored.checkoutSessionId,
+          orderId: stored.orderId,
+        })
+      ) {
+        try {
+          await cancelCheckoutSessionSafely(stored.checkoutSessionId);
+        } catch {
+          // Cart already cleared; leftover session cancel is best-effort.
+        }
+        await pendingCheckoutContextStorage.clear();
+      }
+    } catch (error) {
+      setActionError(getCartErrorMessage(error));
     }
   }
 
@@ -129,6 +175,13 @@ export function CartScreen() {
             ))}
 
             {cart ? <CartTotals cart={cart} /> : null}
+            <SecondaryButton
+              label="Clear cart"
+              disabled={mutating}
+              loading={clearMutation.isPending}
+              onPress={confirmClearCart}
+              style={styles.clearButton}
+            />
             <ProceedToCheckoutButton disabled={isEmpty || mutating} />
             <TrustStrip
               title="Before you checkout"
@@ -193,5 +246,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     ...typography.body,
     color: colors.error,
+  },
+  clearButton: {
+    marginTop: spacing.md,
+    alignSelf: 'stretch',
   },
 });

@@ -5,12 +5,16 @@ import type {
   OrderTracking,
   OrdersListFilter,
   OrdersListPage,
+  ReceivingChoiceSnapshot,
+  SelectReceivingMethodInput,
 } from '../models/types';
 import {
   buildCancelOrderPayload,
+  buildReceivingMethodPayload,
   mapOrderDetail,
   mapOrderTracking,
   mapOrdersListPage,
+  mapReceivingChoiceSnapshot,
   normalizeOrdersFilter,
 } from '../utils/mapOrders';
 
@@ -65,4 +69,21 @@ export async function cancelOrder(input: CancelOrderInput): Promise<OrderDetail>
     buildCancelOrderPayload(input.reason),
   );
   return mapOrderDetail(response.data);
+}
+
+/**
+ * POST /orders/{order}/receiving-method — post-arrival China company shipping only.
+ * Distinct from checkout shipping-choice and from delivery-option CRUD.
+ */
+export async function selectReceivingMethod(
+  input: SelectReceivingMethodInput,
+): Promise<ReceivingChoiceSnapshot | null> {
+  const response = await apiClient.post<unknown>(
+    `/orders/${encodeURIComponent(input.orderId)}/receiving-method`,
+    buildReceivingMethodPayload(input.receivingMethod),
+  );
+  const data = response.data && typeof response.data === 'object'
+    ? (response.data as Record<string, unknown>)
+    : {};
+  return mapReceivingChoiceSnapshot(data.receiving_choice);
 }

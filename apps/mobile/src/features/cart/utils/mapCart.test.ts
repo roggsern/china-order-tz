@@ -106,12 +106,63 @@ describe('mapCart / mapCartItem', () => {
       productName: 'Evening Gown',
       journeyLabel: 'Order from China',
       commerceChannelCode: 'CHINA_IMPORT',
-      imageUrl: 'https://cdn.example/g.jpg',
+      imageUrl: 'https://cdn.example/g.jpg', // product fallback when variant has no image
       displayAttributes: [
         { attribute: 'Color', value: 'Black' },
         { attribute: 'Storage', value: '128GB' },
       ],
     });
+  });
+
+  it('uses each selected variant image for the same product', () => {
+    const product = {
+      id: 'prod-1',
+      slug: 'gown',
+      name: 'Evening Gown',
+      commerce_channel_code: 'CHINA_IMPORT',
+      primary_image: { url: 'https://cdn.example/product.jpg' },
+    };
+
+    const variantA = mapCartItem({
+      ...rawItem,
+      id: 'item-a',
+      product_variant_id: 'var-a',
+      product,
+      variant: {
+        id: 'var-a',
+        name: 'Black',
+        primary_image: { url: 'https://cdn.example/variant-a.jpg' },
+      },
+    });
+    const variantB = mapCartItem({
+      ...rawItem,
+      id: 'item-b',
+      product_variant_id: 'var-b',
+      product,
+      variant: {
+        id: 'var-b',
+        name: 'Red',
+        primary_image: { url: 'https://cdn.example/variant-b.jpg' },
+      },
+    });
+
+    expect(variantA?.imageUrl).toBe('https://cdn.example/variant-a.jpg');
+    expect(variantB?.imageUrl).toBe('https://cdn.example/variant-b.jpg');
+    expect(variantA?.imageUrl).not.toBe(variantB?.imageUrl);
+  });
+
+  it('falls back to the product image when the variant has no image', () => {
+    const item = mapCartItem({
+      ...rawItem,
+      product: {
+        ...rawItem.product,
+        primary_image: { url: 'https://cdn.example/product-only.jpg' },
+      },
+      variant: {
+        ...rawItem.variant,
+      },
+    });
+    expect(item?.imageUrl).toBe('https://cdn.example/product-only.jpg');
   });
 
   it('prefers display_url for cart line images', () => {

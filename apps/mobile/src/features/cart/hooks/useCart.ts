@@ -8,6 +8,7 @@ import {
 import { buildLoginHref } from '../utils/authReturn';
 import {
   addToCart,
+  clearCart,
   fetchCart,
   removeCartItem,
   updateCartItemQuantity,
@@ -101,6 +102,26 @@ export function useRemoveCartItemMutation() {
     mutationFn: (itemId: string) => removeCartItem(itemId),
     onSuccess: (cart) => {
       applyCart(cart);
+    },
+    onError: (error) => {
+      handleAuthError(error);
+    },
+  });
+}
+
+/**
+ * Clears the authenticated server cart. Cache is replaced only after success.
+ * Does not invent a guest cart. Does not empty UI on failure.
+ */
+export function useClearCartMutation() {
+  const queryClient = useQueryClient();
+  const { applyCart, handleAuthError } = useSyncCartCache();
+
+  return useMutation({
+    mutationFn: () => clearCart(),
+    onSuccess: (cart) => {
+      applyCart(cart);
+      void queryClient.invalidateQueries({ queryKey: ['checkout'] });
     },
     onError: (error) => {
       handleAuthError(error);

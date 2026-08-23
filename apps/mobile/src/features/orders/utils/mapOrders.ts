@@ -15,6 +15,7 @@ import type {
   OrderTrackingShipment,
   OrdersListFilter,
   OrdersListPage,
+  ReceivingChoiceSnapshot,
 } from '../models/types';
 import { formatCustomerMoney } from '@/src/shared/utils/formatCustomerMoney';
 import { resolveOrderMediaUrl } from './resolveOrderMediaUrl';
@@ -339,7 +340,33 @@ export function mapOrderDetail(raw: unknown): OrderDetail {
     canCancel: boolField(data, 'can_cancel'),
     canPay: boolField(data, 'can_pay'),
     activePaymentTransaction: mapActivePaymentTransaction(data.active_payment_transaction),
+    receivingChoice: mapReceivingChoiceSnapshot(data.receiving_choice),
   };
+}
+
+export function mapReceivingChoiceSnapshot(raw: unknown): ReceivingChoiceSnapshot | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const data = asRecord(raw);
+  const selected = stringField(data, 'selected_method');
+  return {
+    eligible: boolField(data, 'eligible') ?? false,
+    canSelect: boolField(data, 'can_select') ?? false,
+    selectedMethod:
+      selected === 'self_pickup' || selected === 'negotiated_delivery' ? selected : null,
+    selectedMethodLabel: stringField(data, 'selected_method_label'),
+    selectedAt: stringField(data, 'selected_at'),
+  };
+}
+
+export function buildReceivingMethodPayload(method: 'self_pickup' | 'negotiated_delivery'): {
+  receiving_method: 'self_pickup' | 'negotiated_delivery';
+} {
+  return { receiving_method: method };
+}
+
+export function shouldOfferReceivingChoice(choice: ReceivingChoiceSnapshot | null | undefined): boolean {
+  if (!choice) return false;
+  return choice.eligible && choice.canSelect && !choice.selectedMethod;
 }
 
 function mapTimelineEvent(raw: unknown): OrderTimelineEvent | null {

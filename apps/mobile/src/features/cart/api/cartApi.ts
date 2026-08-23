@@ -46,3 +46,12 @@ export async function removeCartItem(itemId: string): Promise<Cart> {
   );
   return mapCart(response.data);
 }
+
+/**
+ * DELETE /cart/clear — authenticated cart only (no guest cart).
+ * Server keeps the cart row and force-deletes items. Empty clear is idempotent.
+ */
+export async function clearCart(): Promise<Cart> {
+  const response = await apiClient.delete<unknown>('/cart/clear');
+  return mapCart(response.data);
+}

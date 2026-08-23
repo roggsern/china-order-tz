@@ -9,6 +9,7 @@ import { cartQueryKey } from '@/src/features/cart';
 import { buildLoginHref } from '@/src/features/cart/utils/authReturn';
 import {
   applyCheckoutShippingChoice,
+  cancelCheckoutSessionSafely,
   prepareCheckout,
   refreshCheckoutSession,
   startCheckoutSession,
@@ -16,14 +17,17 @@ import {
 } from '../api/checkoutApi';
 import type { ApplyShippingChoiceInput, DeliveryAddressInput } from '../models/types';
 import { isCheckoutUnauthenticatedError } from '../utils/checkoutErrorMessage';
+import {
+  checkoutPrepareQueryKey,
+  checkoutSessionQueryKey,
+  invalidateAfterCheckoutCancel,
+} from '../utils/checkoutQueryKeys';
 
-export function checkoutPrepareQueryKey() {
-  return ['checkout', 'prepare'] as const;
-}
-
-export function checkoutSessionQueryKey(sessionId: string | null) {
-  return ['checkout', 'session', sessionId] as const;
-}
+export {
+  checkoutPrepareQueryKey,
+  checkoutSessionQueryKey,
+  invalidateAfterCheckoutCancel,
+} from '../utils/checkoutQueryKeys';
 
 function useCheckoutAuthGuard() {
   return (error: unknown) => {
@@ -89,6 +93,19 @@ export function useApplyShippingChoiceMutation() {
       queryClient.setQueryData(checkoutSessionQueryKey(session.id), session);
       void queryClient.invalidateQueries({ queryKey: cartQueryKey() });
       void queryClient.invalidateQueries({ queryKey: checkoutPrepareQueryKey() });
+    },
+    onError: handleAuth,
+  });
+}
+
+export function useCancelCheckoutSessionMutation() {
+  const queryClient = useQueryClient();
+  const handleAuth = useCheckoutAuthGuard();
+
+  return useMutation({
+    mutationFn: (sessionId: string) => cancelCheckoutSessionSafely(sessionId),
+    onSuccess: (_result, sessionId) => {
+      void invalidateAfterCheckoutCancel(queryClient, sessionId);
     },
     onError: handleAuth,
   });

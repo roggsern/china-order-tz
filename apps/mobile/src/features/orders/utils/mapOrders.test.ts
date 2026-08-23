@@ -1,13 +1,16 @@
 import {
   buildCancelOrderPayload,
+  buildReceivingMethodPayload,
   isOrdersListEmpty,
   journeyLabelFromOrderSource,
   mapOrderDetail,
   mapOrderListItem,
   mapOrderTracking,
   mapOrdersListPage,
+  mapReceivingChoiceSnapshot,
   normalizeOrdersFilter,
   shouldOfferCancel,
+  shouldOfferReceivingChoice,
 } from './mapOrders';
 
 describe('journeyLabelFromOrderSource', () => {
@@ -270,6 +273,33 @@ describe('mapOrderDetail', () => {
     expect(detail.shipment?.status).toBe('Being prepared');
     expect(detail.canPay).toBeNull();
     expect(detail.activePaymentTransaction).toBeNull();
+    expect(detail.receivingChoice).toBeNull();
+  });
+
+  it('maps post-arrival receiving_choice without inventing eligibility', () => {
+    const detail = mapOrderDetail({
+      id: 'ord-china',
+      source: 'China',
+      status: 'processing',
+      items: [],
+      summary: { grand_total: '1' },
+      receiving_choice: {
+        eligible: true,
+        can_select: true,
+        selected_method: null,
+        selected_method_label: null,
+        selected_at: null,
+      },
+    });
+
+    expect(detail.receivingChoice).toEqual({
+      eligible: true,
+      canSelect: true,
+      selectedMethod: null,
+      selectedMethodLabel: null,
+      selectedAt: null,
+    });
+    expect(shouldOfferReceivingChoice(detail.receivingChoice)).toBe(true);
   });
 
   it('maps can_pay and active_payment_transaction on detail', () => {
@@ -382,5 +412,38 @@ describe('normalizeOrdersFilter', () => {
   it('defaults unknown filters to all', () => {
     expect(normalizeOrdersFilter('active')).toBe('active');
     expect(normalizeOrdersFilter('nope')).toBe('all');
+  });
+});
+
+describe('receiving choice', () => {
+  it('posts receiving_method through the backend contract', () => {
+    expect(buildReceivingMethodPayload('self_pickup')).toEqual({
+      receiving_method: 'self_pickup',
+    });
+    expect(buildReceivingMethodPayload('negotiated_delivery')).toEqual({
+      receiving_method: 'negotiated_delivery',
+    });
+  });
+
+  it('does not offer selection when the backend snapshot is ineligible', () => {
+    expect(
+      shouldOfferReceivingChoice(
+        mapReceivingChoiceSnapshot({
+          eligible: false,
+          can_select: false,
+          selected_method: null,
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects invalid selected_method values', () => {
+    expect(
+      mapReceivingChoiceSnapshot({
+        eligible: true,
+        can_select: true,
+        selected_method: 'courier',
+      })?.selectedMethod,
+    ).toBeNull();
   });
 });

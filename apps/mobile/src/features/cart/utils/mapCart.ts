@@ -117,8 +117,8 @@ export function mapCartItem(raw: unknown): CartItem | null {
     productName: stringField(product, 'name') ?? 'Product',
     productSlug: stringField(product, 'slug'),
     imageUrl:
-      mediaUrl(product.primary_image) ??
       mediaUrl(variant.primary_image) ??
+      mediaUrl(product.primary_image) ??
       null,
     commerceChannelCode,
     commerceSourceLabel: stringField(product, 'commerce_source_label'),

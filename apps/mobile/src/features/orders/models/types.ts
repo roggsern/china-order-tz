@@ -119,6 +119,17 @@ export type OrderShipmentSummary = {
   statusLabel: string | null;
 };
 
+export type LastMileReceivingMethod = 'self_pickup' | 'negotiated_delivery';
+
+/** Snapshot from CustomerOrderResource / CustomerOrderDetailResource `receiving_choice`. */
+export type ReceivingChoiceSnapshot = {
+  eligible: boolean;
+  canSelect: boolean;
+  selectedMethod: LastMileReceivingMethod | null;
+  selectedMethodLabel: string | null;
+  selectedAt: string | null;
+};
+
 /** Detail from CustomerOrderDetailResource. */
 export type OrderDetail = {
   id: string;
@@ -140,6 +151,13 @@ export type OrderDetail = {
   canPay: boolean | null;
   /** Present only when API includes it — never infer from local storage. */
   activePaymentTransaction: ActivePaymentTransactionRef | null;
+  /** Post-arrival receiving choice. Distinct from checkout shipping-choice. */
+  receivingChoice: ReceivingChoiceSnapshot | null;
+};
+
+export type SelectReceivingMethodInput = {
+  orderId: string;
+  receivingMethod: LastMileReceivingMethod;
 };
 
 export type OrderTimelineEvent = {

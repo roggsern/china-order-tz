@@ -30,11 +30,16 @@ import { DeliveryAddressForm } from '../components/DeliveryAddressForm';
 import { ShippingChoicePicker } from '../components/ShippingChoicePicker';
 import {
   useApplyShippingChoiceMutation,
+  useCancelCheckoutSessionMutation,
   useCheckoutPrepare,
   useRefreshCheckoutSessionMutation,
   useStartCheckoutSessionMutation,
   useUpdateDeliveryAddressMutation,
 } from '../hooks/useCheckout';
+import {
+  isCompletedCheckoutSessionCancelError,
+  shouldCancelCheckoutSession,
+} from '../utils/cancelCheckoutSession';
 import type { CheckoutSession } from '../models/types';
 import {
   isRecoverableCheckoutSession,
@@ -49,7 +54,6 @@ import {
   isReadyForPayment,
   isStaleOrExpiredCheckoutError,
   journeyLabelFromCheckoutItems,
-  shippingChoicesForItems,
 } from '../utils/mapCheckout';
 
 type RecoveryOffer = {
@@ -63,6 +67,7 @@ export function CheckoutScreen() {
   const refreshMutation = useRefreshCheckoutSessionMutation();
   const shippingMutation = useApplyShippingChoiceMutation();
   const addressMutation = useUpdateDeliveryAddressMutation();
+  const cancelMutation = useCancelCheckoutSessionMutation();
 
   const [session, setSessionState] = useState<CheckoutSession | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -127,8 +132,8 @@ export function CheckoutScreen() {
 
   const prepare = prepareQuery.data;
   const shippingOptions = useMemo(
-    () => shippingChoicesForItems(prepare?.items ?? []),
-    [prepare?.items],
+    () => prepare?.shippingChoices ?? [],
+    [prepare?.shippingChoices],
   );
   const journeyLabel = journeyLabelFromCheckoutItems(prepare?.items ?? []);
   const readyForPayment = isReadyForPayment(session);
@@ -164,9 +169,78 @@ export function CheckoutScreen() {
   }
 
   async function discardRecoveredCheckout() {
+    const sessionId = recoveryOffer?.checkoutSessionId;
+    const stored = await pendingCheckoutContextStorage.read();
+    if (
+      sessionId &&
+      shouldCancelCheckoutSession({
+        sessionId,
+        orderId: stored?.orderId,
+      })
+    ) {
+      try {
+        await cancelMutation.mutateAsync(sessionId);
+      } catch (err) {
+        if (isCompletedCheckoutSessionCancelError(err)) {
+          await pendingCheckoutContextStorage.clear();
+          setRecoveryOffer(null);
+          setSessionState(null);
+          return;
+        }
+        setActionError(getCheckoutErrorMessage(err));
+        return;
+      }
+    }
     await pendingCheckoutContextStorage.clear();
     setRecoveryOffer(null);
     setSessionState(null);
+  }
+
+  async function abandonActiveCheckout() {
+    if (!session?.id) return;
+    setActionError(null);
+    if (
+      shouldCancelCheckoutSession({
+        sessionId: session.id,
+        sessionStatus: session.status,
+      })
+    ) {
+      try {
+        await cancelMutation.mutateAsync(session.id);
+      } catch (err) {
+        setActionError(getCheckoutErrorMessage(err));
+        return;
+      }
+    }
+    setSession(null);
+    router.replace('/(app)/(tabs)/cart');
+  }
+
+  async function restartExpiredCheckout() {
+    if (!session?.id) return;
+    setActionError(null);
+    if (
+      shouldCancelCheckoutSession({
+        sessionId: session.id,
+        sessionStatus: session.status,
+      })
+    ) {
+      try {
+        await cancelMutation.mutateAsync(session.id);
+      } catch (err) {
+        if (isCompletedCheckoutSessionCancelError(err)) {
+          setActionError(getCheckoutErrorMessage(err));
+          return;
+        }
+        setActionError(getCheckoutErrorMessage(err));
+        return;
+      }
+    }
+    setSession(null);
+    startMutation.mutate(undefined, {
+      onSuccess: setSession,
+      onError: (err) => setActionError(getCheckoutErrorMessage(err)),
+    });
   }
 
   if (authStatus !== 'authenticated') {
@@ -258,6 +332,7 @@ export function CheckoutScreen() {
     startMutation.isPending ||
     refreshMutation.isPending ||
     shippingMutation.isPending ||
+    cancelMutation.isPending ||
     recoveryBusy;
 
   return (
@@ -390,6 +465,15 @@ export function CheckoutScreen() {
               style={styles.inlineButton}
             />
 
+            {session.status !== 'completed' ? (
+              <SecondaryButton
+                label="Cancel checkout"
+                disabled={busy}
+                onPress={() => void abandonActiveCheckout()}
+                style={styles.inlineButton}
+              />
+            ) : null}
+
             {!session.isExpired && session.status !== 'expired' ? (
               <ShippingChoicePicker
                 options={shippingOptions}
@@ -415,14 +499,8 @@ export function CheckoutScreen() {
             ) : (
               <PrimaryButton
                 label="Restart checkout"
-                onPress={() => {
-                  setSession(null);
-                  setActionError(null);
-                  startMutation.mutate(undefined, {
-                    onSuccess: setSession,
-                    onError: (err) => setActionError(getCheckoutErrorMessage(err)),
-                  });
-                }}
+                disabled={busy}
+                onPress={() => void restartExpiredCheckout()}
                 style={styles.inlineButton}
               />
             )}

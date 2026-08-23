@@ -7,6 +7,9 @@ import type {
   DeliveryAddressInput,
 } from '../models/types';
 import {
+  isCheckoutSessionAlreadyGone,
+} from '../utils/cancelCheckoutSession';
+import {
   buildDeliveryAddressPayload,
   buildShippingChoicePayload,
   mapCheckoutPrepare,
@@ -62,6 +65,32 @@ export async function applyCheckoutShippingChoice(
     buildShippingChoicePayload(input),
   );
   return mapCheckoutSession(response.data);
+}
+
+/**
+ * DELETE /checkout/{id} — cancels an unfinished server session.
+ * Does not cancel an already-created order. Completed sessions return 422.
+ */
+export async function cancelCheckoutSession(sessionId: string): Promise<void> {
+  await apiClient.delete(`/checkout/${encodeURIComponent(sessionId)}`);
+}
+
+/**
+ * Treat already-cancelled / missing sessions as a successful abandon.
+ * Completed-session 422 is not swallowed.
+ */
+export async function cancelCheckoutSessionSafely(
+  sessionId: string,
+): Promise<'cancelled' | 'already_gone'> {
+  try {
+    await cancelCheckoutSession(sessionId);
+    return 'cancelled';
+  } catch (error) {
+    if (isCheckoutSessionAlreadyGone(error)) {
+      return 'already_gone';
+    }
+    throw error;
+  }
 }
 
 /** PATCH /profile/address — required before prepare when address missing. */

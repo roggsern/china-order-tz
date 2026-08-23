@@ -3,6 +3,7 @@ export {
   fetchCart,
   updateCartItemQuantity,
   removeCartItem,
+  clearCart,
 } from './api/cartApi';
 export {
   useCart,
@@ -10,6 +11,7 @@ export {
   useAddToCartMutation,
   useUpdateCartItemMutation,
   useRemoveCartItemMutation,
+  useClearCartMutation,
   cartQueryKey,
 } from './hooks/useCart';
 export { CartScreen } from './screens/CartScreen';
