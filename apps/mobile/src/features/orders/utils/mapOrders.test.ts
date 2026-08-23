@@ -70,6 +70,7 @@ describe('mapOrderListItem', () => {
     expect(order?.progress?.currentLabel).toBe('Order confirmed');
     expect(order?.canCancel).toBeNull();
     expect(order?.canPay).toBeNull();
+    expect(order?.activePaymentTransaction).toBeNull();
   });
 
   it('absolutizes production-shaped relative storage image_url for list cards', () => {
@@ -113,6 +114,46 @@ describe('mapOrderListItem', () => {
         status: 'pending_payment',
       })?.canPay,
     ).toBe(true);
+    expect(
+      mapOrderListItem({
+        id: 'ord-unpay',
+        can_pay: false,
+        status: 'pending_payment',
+      })?.canPay,
+    ).toBe(false);
+  });
+
+  it('maps active_payment_transaction from the backend only', () => {
+    const withActive = mapOrderListItem({
+      id: 'ord-active',
+      status: 'pending_payment',
+      can_pay: true,
+      active_payment_transaction: {
+        id: 'txn-snippe-1',
+        status: 'processing',
+        provider: 'snippe',
+      },
+    });
+
+    expect(withActive?.activePaymentTransaction).toEqual({
+      id: 'txn-snippe-1',
+      status: 'processing',
+      provider: 'snippe',
+    });
+
+    const missing = mapOrderListItem({
+      id: 'ord-no-txn',
+      status: 'pending_payment',
+      can_pay: true,
+    });
+    expect(missing?.activePaymentTransaction).toBeNull();
+
+    const empty = mapOrderListItem({
+      id: 'ord-empty-txn',
+      status: 'pending_payment',
+      active_payment_transaction: {},
+    });
+    expect(empty?.activePaymentTransaction).toBeNull();
   });
 });
 
@@ -227,6 +268,30 @@ describe('mapOrderDetail', () => {
     expect(detail.payment?.paymentStatus).toBe('paid');
     expect(detail.payment?.reference).toBe('COTZ-PAY-9');
     expect(detail.shipment?.status).toBe('Being prepared');
+    expect(detail.canPay).toBeNull();
+    expect(detail.activePaymentTransaction).toBeNull();
+  });
+
+  it('maps can_pay and active_payment_transaction on detail', () => {
+    const detail = mapOrderDetail({
+      id: 'ord-recover',
+      status: 'pending_payment',
+      can_pay: true,
+      active_payment_transaction: {
+        id: 'txn-nmb-9',
+        status: 'pending',
+        provider: 'nmb',
+      },
+      items: [],
+      summary: { grand_total: '1000' },
+    });
+
+    expect(detail.canPay).toBe(true);
+    expect(detail.activePaymentTransaction).toEqual({
+      id: 'txn-nmb-9',
+      status: 'pending',
+      provider: 'nmb',
+    });
   });
 
   it('absolutizes detail product_image_snapshot relative storage paths', () => {

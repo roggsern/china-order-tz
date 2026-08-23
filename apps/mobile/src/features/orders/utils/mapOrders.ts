@@ -5,6 +5,7 @@ import type {
   OrderListItem,
   OrderListPreview,
   OrderPaymentSnapshot,
+  ActivePaymentTransactionRef,
   OrderProgress,
   OrderProgressStep,
   OrderShipmentSummary,
@@ -132,6 +133,7 @@ export function mapOrderListItem(raw: unknown): OrderListItem | null {
     progress: mapOrderProgress(data.progress),
     canCancel: boolField(data, 'can_cancel'),
     canPay: boolField(data, 'can_pay'),
+    activePaymentTransaction: mapActivePaymentTransaction(data.active_payment_transaction),
   };
 }
 
@@ -264,6 +266,21 @@ function mapOrderSummary(raw: unknown): OrderSummary {
   };
 }
 
+/**
+ * Map backend `active_payment_transaction`. Never invent an attempt from local state.
+ */
+export function mapActivePaymentTransaction(raw: unknown): ActivePaymentTransactionRef | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const data = asRecord(raw);
+  const id = stringField(data, 'id');
+  if (!id) return null;
+  return {
+    id,
+    status: stringField(data, 'status') ?? '',
+    provider: stringField(data, 'provider'),
+  };
+}
+
 function mapPaymentSnapshot(raw: unknown): OrderPaymentSnapshot | null {
   if (!raw || typeof raw !== 'object') return null;
   const data = asRecord(raw);
@@ -321,6 +338,7 @@ export function mapOrderDetail(raw: unknown): OrderDetail {
       'TZS',
     canCancel: boolField(data, 'can_cancel'),
     canPay: boolField(data, 'can_pay'),
+    activePaymentTransaction: mapActivePaymentTransaction(data.active_payment_transaction),
   };
 }
 

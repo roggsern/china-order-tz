@@ -1,4 +1,11 @@
-export type PaymentMethodCode = 'nmb' | 'cash' | (string & {});
+export type PaymentMethodCode = 'nmb' | 'snippe' | 'cash' | (string & {});
+
+/** Backend active payment attempt — Wave 1 recovery reads this, never local storage. */
+export type ActivePaymentTransactionRef = {
+  id: string;
+  status: string;
+  provider: string | null;
+};
 
 export type PaymentMethodAvailability = {
   code: string;

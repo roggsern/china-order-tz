@@ -1,3 +1,7 @@
+import type { ActivePaymentTransactionRef } from '@/src/features/payments/models/types';
+
+export type { ActivePaymentTransactionRef };
+
 /** Server order list filter (Contract v1). */
 export type OrdersListFilter = 'all' | 'active' | 'completed';
 
@@ -48,6 +52,8 @@ export type OrderListItem = {
   canCancel: boolean | null;
   /** Present only when API includes it — never invent eligibility. */
   canPay: boolean | null;
+  /** Present only when API includes it — never infer from local storage. */
+  activePaymentTransaction: ActivePaymentTransactionRef | null;
 };
 
 export type OrdersListPage = {
@@ -132,6 +138,8 @@ export type OrderDetail = {
   canCancel: boolean | null;
   /** Present only when API includes it — never invent eligibility. */
   canPay: boolean | null;
+  /** Present only when API includes it — never infer from local storage. */
+  activePaymentTransaction: ActivePaymentTransactionRef | null;
 };
 
 export type OrderTimelineEvent = {

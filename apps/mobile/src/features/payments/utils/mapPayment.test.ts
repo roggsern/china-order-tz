@@ -31,18 +31,51 @@ describe('mapPaymentMethods', () => {
     });
   });
 
-  it('does not expose cash as a selectable mobile payment method', () => {
+  it('trusts backend selectable flags for nmb, snippe, and cash', () => {
+    const methods = mapPaymentMethods({
+      default_provider: 'nmb',
+      enabled_methods: ['nmb', 'snippe', 'cash'],
+      methods: [
+        { code: 'nmb', enabled: true, available: true, selectable: true },
+        { code: 'snippe', enabled: true, available: true, selectable: true },
+        { code: 'cash', enabled: true, available: true, selectable: true },
+      ],
+    });
+
+    expect(methods.methods.find((method) => method.code === 'nmb')?.selectable).toBe(true);
+    expect(methods.methods.find((method) => method.code === 'snippe')?.selectable).toBe(true);
+    expect(methods.methods.find((method) => method.code === 'cash')?.selectable).toBe(true);
+  });
+
+  it('does not override backend when cash is not selectable', () => {
     const methods = mapPaymentMethods({
       default_provider: 'nmb',
       enabled_methods: ['nmb', 'cash'],
       methods: [
         { code: 'nmb', enabled: true, available: true, selectable: true },
-        { code: 'cash', enabled: true, available: true, selectable: true },
+        { code: 'cash', enabled: true, available: true, selectable: false },
       ],
     });
 
     expect(methods.methods.find((method) => method.code === 'cash')?.selectable).toBe(false);
     expect(methods.methods.find((method) => method.code === 'nmb')?.selectable).toBe(true);
+  });
+
+  it('maps unknown future method codes without crashing', () => {
+    const methods = mapPaymentMethods({
+      default_provider: 'future_pay',
+      enabled_methods: ['future_pay'],
+      methods: [
+        { code: 'future_pay', enabled: true, available: true, selectable: true },
+      ],
+    });
+
+    expect(methods.methods[0]).toMatchObject({
+      code: 'future_pay',
+      enabled: true,
+      available: true,
+      selectable: true,
+    });
   });
 });
 
