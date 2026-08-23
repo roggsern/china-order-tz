@@ -4,8 +4,19 @@
     "appVersionSource": "local"
   },
   "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "environment": "development",
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.chinaordertz.com/api/v1",
+        "EXPO_PUBLIC_WEB_APP_BASE_URL": "https://chinaordertz.com",
+        "EXPO_PUBLIC_ALLOW_NMB_SANDBOX_CHECKOUT": "true"
+      }
+    },
     "preview": {
       "distribution": "internal",
+      "environment": "preview",
       "android": {
         "buildType": "apk"
       },
@@ -16,6 +27,7 @@
       }
     },
     "production": {
+      "environment": "production",
       "android": {
         "buildType": "app-bundle"
       },
@@ -27,6 +39,11 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
+    }
   }
 }

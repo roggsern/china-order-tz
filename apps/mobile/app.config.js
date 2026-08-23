@@ -23,11 +23,13 @@ function resolveGoogleServicesFile() {
   return appJson.expo?.android?.googleServicesFile || './google-services.json';
 }
 
-module.exports = () => {
+module.exports = ({ config }) => {
   const expo = appJson.expo;
   return {
+    ...config,
     ...expo,
     android: {
+      ...config.android,
       ...expo.android,
       googleServicesFile: resolveGoogleServicesFile(),
     },

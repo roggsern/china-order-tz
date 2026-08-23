@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "jest"
+    "test": "jest",
+    "config:check": "expo config --type public"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
