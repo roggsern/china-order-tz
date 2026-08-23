@@ -37,6 +37,7 @@ export function ShippingChoicePicker({
   const visibleOptions = visibleShippingChoices(options);
 
   function handleSubmit() {
+    if (submitting) return;
     setLocalError(null);
     if (!choice) {
       setLocalError('Select a shipping option to continue.');

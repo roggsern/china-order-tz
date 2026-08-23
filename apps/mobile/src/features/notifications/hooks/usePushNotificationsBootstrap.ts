@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
-import * as Notifications from 'expo-notifications';
 import { useAuthStore } from '@/src/core/auth';
+import { attachPushRuntimeListeners } from '../services/pushListeners';
 import {
   configureForegroundNotificationHandler,
   handleExpoPushTokenRotation,
@@ -67,38 +66,23 @@ export function usePushNotificationsBootstrap(): void {
       void registerPushForCurrentUser({ userId });
     }
 
-    const receivedSub = Notifications.addNotificationReceivedListener(() => {
-      // Arrival only — refresh inbox/unread; do not navigate.
-      invalidateRef.current();
-    });
-
-    const responseSub = Notifications.addNotificationResponseReceivedListener(
-      (response) => {
+    const detachListeners = attachPushRuntimeListeners({
+      onReceived: () => {
+        // Arrival only — refresh inbox/unread; do not navigate.
+        invalidateRef.current();
+      },
+      onResponse: (response) => {
         handleNotificationResponseNavigation(response);
         invalidateRef.current();
       },
-    );
-
-    const tokenSub = Notifications.addPushTokenListener(() => {
-      // Native FCM/APNs token rotation — coalesce via registerPushForCurrentUser.
-      // Must NOT resetPushRegistrationState() (clears in-flight → parallel storms).
-      void handleExpoPushTokenRotation(undefined, userId);
+      onToken: () => {
+        // Native FCM/APNs token rotation — coalesce via registerPushForCurrentUser.
+        // Must NOT resetPushRegistrationState() (clears in-flight → parallel storms).
+        void handleExpoPushTokenRotation(undefined, userId);
+      },
     });
 
-    const onAppState = (next: AppStateStatus) => {
-      if (next === 'active') {
-        // Resume: refresh unread only. Do NOT re-register (avoids storms).
-        invalidateRef.current();
-      }
-    };
-    const appStateSub = AppState.addEventListener('change', onAppState);
-
-    return () => {
-      receivedSub.remove();
-      responseSub.remove();
-      tokenSub.remove();
-      appStateSub.remove();
-    };
+    return detachListeners;
     // Intentionally depend only on authStatus — invalidateNotifications is read via ref.
   }, [authStatus]);
 }

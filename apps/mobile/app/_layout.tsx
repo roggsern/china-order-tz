@@ -11,6 +11,7 @@ import { SplashView } from '@/src/features/auth';
 import { usePushNotificationsBootstrap } from '@/src/features/notifications';
 import { AppErrorBoundary } from '@/src/shared/components/AppErrorBoundary';
 import { useAuthBootstrap } from '@/src/shared/hooks/useAuthBootstrap';
+import { useForegroundCommerceRefresh } from '@/src/shared/hooks/useForegroundCommerceRefresh';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -22,8 +23,9 @@ function isPaymentReturnUrl(url: string): boolean {
   return /payment-return/i.test(url);
 }
 
-function AuthenticatedPushBootstrap() {
+function AuthenticatedRuntimeBootstrap() {
   usePushNotificationsBootstrap();
+  useForegroundCommerceRefresh();
   return null;
 }
 
@@ -80,7 +82,7 @@ export default function RootLayout() {
   return (
     <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <AuthenticatedPushBootstrap />
+        <AuthenticatedRuntimeBootstrap />
         <Stack screenOptions={{ headerShown: true }}>
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="(auth)" options={{ headerShown: false }} />

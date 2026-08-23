@@ -6,6 +6,7 @@ import {
   isUnauthenticatedApiError,
 } from '@/src/core/auth/handleAuthenticatedAuthFailure';
 import { clearSessionOnAuthFailure } from '@/src/core/auth/clearSession';
+import { createAppQueryClient } from '@/src/core/api/queryClient';
 
 jest.mock('@/src/core/auth/clearSession', () => ({
   clearSessionOnAuthFailure: jest.fn(async () => undefined),
@@ -43,6 +44,10 @@ describe('authenticated query 401 strategy', () => {
 
     const client = new QueryClient({
       queryCache: new QueryCache({ onError }),
+      defaultOptions: {
+        queries: { gcTime: 0, retry: false },
+        mutations: { gcTime: 0, retry: 0 },
+      },
     });
 
     await client.fetchQuery({
@@ -60,10 +65,15 @@ describe('authenticated query 401 strategy', () => {
 
     await Promise.resolve();
     expect(mockClearOnAuthFailure).toHaveBeenCalled();
+    client.clear();
   });
 
   it('public queries are unaffected by auth meta handler', async () => {
     const client = new QueryClient({
+      defaultOptions: {
+        queries: { gcTime: 0, retry: false },
+        mutations: { gcTime: 0, retry: 0 },
+      },
       queryCache: new QueryCache({
         onError: (error, query) => {
           const requiresAuth = Boolean(
@@ -90,5 +100,33 @@ describe('authenticated query 401 strategy', () => {
 
     await Promise.resolve();
     expect(mockClearOnAuthFailure).not.toHaveBeenCalled();
+    client.clear();
+  });
+
+  it('protected query 401 does not infinite retry and clears auth once', async () => {
+    const client = createAppQueryClient();
+    let attempts = 0;
+
+    await client
+      .fetchQuery({
+        queryKey: ['cart', 'current', 'wave6-401'],
+        queryFn: async () => {
+          attempts += 1;
+          throw new ApiError({
+            message: 'Unauthenticated',
+            status: 401,
+            code: 'unauthenticated',
+          });
+        },
+        meta: AUTHENTICATED_QUERY_META,
+        retryDelay: 0,
+        gcTime: 0,
+      })
+      .catch(() => undefined);
+
+    await Promise.resolve();
+    expect(attempts).toBe(1);
+    expect(mockClearOnAuthFailure).toHaveBeenCalledTimes(1);
+    client.clear();
   });
 });

@@ -26,7 +26,6 @@ function useSyncCartCache() {
   return {
     applyCart: (cart: Cart) => {
       queryClient.setQueryData(cartQueryKey(), cart);
-      void queryClient.invalidateQueries({ queryKey: cartQueryKey() });
     },
     handleAuthError: (error: unknown) => {
       if (isCartUnauthenticatedError(error)) {

@@ -54,7 +54,12 @@ describe('clearSession policies', () => {
     mockClearToken.mockReset();
     mockClearPaymentContext.mockReset();
     mockClearCheckoutContext.mockReset();
-    queryClient = new QueryClient();
+    queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { gcTime: 0, retry: false },
+        mutations: { gcTime: 0, retry: 0 },
+      },
+    });
     registerAppQueryClient(queryClient);
 
     useAuthStore.setState({
@@ -70,6 +75,10 @@ describe('clearSession policies', () => {
     queryClient.setQueryData(['checkout', 'prepare'], { ready: true });
     queryClient.setQueryData(['payments', 'methods'], { methods: [] });
     queryClient.setQueryData(['storefront', 'homepage', 'TZ_LOCAL'], { ok: true });
+  });
+
+  afterEach(() => {
+    queryClient.clear();
   });
 
   it('auth 401 / default clearSession preserves payment and checkout context', async () => {
@@ -112,7 +121,12 @@ describe('clearSession policies', () => {
 
 describe('clearUserSensitiveQueryCaches isolation', () => {
   it('removes User A commerce caches before User B can read them', () => {
-    const client = new QueryClient();
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { gcTime: 0, retry: false },
+        mutations: { gcTime: 0, retry: 0 },
+      },
+    });
     registerAppQueryClient(client);
     client.setQueryData(['cart', 'current'], { owner: 'A' });
     client.setQueryData(['orders', 'detail', '1'], { owner: 'A' });
@@ -121,5 +135,6 @@ describe('clearUserSensitiveQueryCaches isolation', () => {
 
     expect(client.getQueryData(['cart', 'current'])).toBeUndefined();
     expect(client.getQueryData(['orders', 'detail', '1'])).toBeUndefined();
+    client.clear();
   });
 });

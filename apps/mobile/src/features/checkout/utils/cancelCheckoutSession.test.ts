@@ -103,7 +103,10 @@ describe('cancelCheckoutSession', () => {
 describe('invalidateAfterCheckoutCancel', () => {
   it('removes the session query and invalidates prepare without emptying cart', async () => {
     const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
+      defaultOptions: {
+        queries: { retry: false, gcTime: 0 },
+        mutations: { gcTime: 0, retry: 0 },
+      },
     });
     const cart = {
       id: 'cart-1',

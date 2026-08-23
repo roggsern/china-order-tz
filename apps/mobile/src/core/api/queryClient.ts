@@ -4,6 +4,7 @@ import {
   handleAuthenticatedRequestAuthFailure,
   isUnauthenticatedApiError,
 } from '@/src/core/auth/handleAuthenticatedAuthFailure';
+import { shouldRetryMutation, shouldRetryTransientRead } from './queryRetryPolicy';
 
 export function createAppQueryClient(): QueryClient {
   return new QueryClient({
@@ -19,12 +20,13 @@ export function createAppQueryClient(): QueryClient {
     }),
     defaultOptions: {
       queries: {
-        retry: 1,
+        retry: (failureCount, error) => shouldRetryTransientRead(error, failureCount),
+        retryDelay: 750,
         staleTime: 30_000,
         refetchOnWindowFocus: false,
       },
       mutations: {
-        retry: 0,
+        retry: () => shouldRetryMutation(),
       },
     },
   });

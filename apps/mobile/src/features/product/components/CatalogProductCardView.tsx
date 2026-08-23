@@ -6,6 +6,7 @@ import type { CommerceJourney } from '@/src/shared/types/commerce';
 import { Badge } from '@/src/shared/ui/Badge';
 import { Card } from '@/src/shared/ui/Card';
 import { PriceText } from '@/src/shared/ui/PriceText';
+import { listImageProps } from '@/src/shared/media/listImageProps';
 import { colors, radius, spacing, typography } from '@/src/shared/theme';
 import { buildSafeProductHref } from '../utils/buildSafeProductHref';
 import {
@@ -76,6 +77,7 @@ export function CatalogProductCardView({ product, journey, storeSlug }: Props) {
               style={styles.image}
               contentFit="cover"
               transition={200}
+              {...listImageProps(product.imageUrl)}
             />
           ) : (
             <View style={[styles.image, styles.placeholder]}>

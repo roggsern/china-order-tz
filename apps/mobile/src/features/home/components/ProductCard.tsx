@@ -7,6 +7,7 @@ import {
 } from '@/src/features/product';
 import { Badge } from '@/src/shared/ui/Badge';
 import { PriceText } from '@/src/shared/ui/PriceText';
+import { listImageProps } from '@/src/shared/media/listImageProps';
 import { colors, radius, shadows, spacing, typography } from '@/src/shared/theme';
 import type { HomepageProductCard } from '../models/types';
 import { resolveHomepageProductJourney } from '../utils/resolveHomepageProductJourney';
@@ -49,6 +50,7 @@ export function ProductCard({ product, badgeLabel }: Props) {
             source={{ uri: product.imageUrl }}
             style={styles.image}
             contentFit="cover"
+            {...listImageProps(product.imageUrl)}
           />
         ) : (
           <View style={[styles.image, styles.imagePlaceholder]}>

@@ -7,6 +7,7 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
+import { canSubmitInFlightAction } from '@/src/core/async/inFlightGuard';
 import { useAuthStore } from '@/src/core/auth';
 import { buildLoginHref } from '@/src/features/cart/utils/authReturn';
 import { Badge } from '@/src/shared/ui/Badge';
@@ -145,6 +146,13 @@ export function CheckoutScreen() {
       : 'shipping';
 
   async function continueRecoveredCheckout(sessionId: string) {
+    if (
+      !canSubmitInFlightAction(
+        recoveryBusy || startMutation.isPending || cancelMutation.isPending,
+      )
+    ) {
+      return;
+    }
     setRecoveryBusy(true);
     setActionError(null);
     try {
@@ -169,6 +177,9 @@ export function CheckoutScreen() {
   }
 
   async function discardRecoveredCheckout() {
+    if (!canSubmitInFlightAction(recoveryBusy || cancelMutation.isPending)) {
+      return;
+    }
     const sessionId = recoveryOffer?.checkoutSessionId;
     const stored = await pendingCheckoutContextStorage.read();
     if (
@@ -198,6 +209,16 @@ export function CheckoutScreen() {
 
   async function abandonActiveCheckout() {
     if (!session?.id) return;
+    if (
+      !canSubmitInFlightAction(
+        startMutation.isPending ||
+          shippingMutation.isPending ||
+          cancelMutation.isPending ||
+          recoveryBusy,
+      )
+    ) {
+      return;
+    }
     setActionError(null);
     if (
       shouldCancelCheckoutSession({
@@ -415,6 +436,7 @@ export function CheckoutScreen() {
             loading={startMutation.isPending}
             disabled={busy || Boolean(recoveryOffer)}
             onPress={() => {
+              if (!canSubmitInFlightAction(busy)) return;
               setActionError(null);
               startMutation.mutate(undefined, {
                 onSuccess: setSession,
@@ -481,6 +503,7 @@ export function CheckoutScreen() {
                 currentChoice={session.shippingChoice}
                 currentMethod={session.shippingMethod}
                 onSubmit={(input) => {
+                  if (!canSubmitInFlightAction(busy)) return;
                   setActionError(null);
                   shippingMutation.mutate(
                     { sessionId: session.id, ...input },

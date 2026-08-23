@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { Card } from '@/src/shared/ui/Card';
 import { colors, radius, spacing, typography } from '@/src/shared/theme';
+import { canSubmitInFlightAction } from '@/src/core/async/inFlightGuard';
 import { useSelectReceivingMethodMutation } from '../hooks/useOrders';
 import type { LastMileReceivingMethod, ReceivingChoiceSnapshot } from '../models/types';
 import { getOrderErrorMessage } from '../utils/orderErrorMessage';
@@ -47,6 +48,7 @@ export function OrderReceivingChoicePanel({
   const offerSelect = shouldShowReceivingSelector(receivingChoice, orderStatus);
 
   async function selectMethod(method: LastMileReceivingMethod) {
+    if (!canSubmitInFlightAction(mutation.isPending)) return;
     setError(null);
     try {
       await mutation.mutateAsync(method);

@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
+import { canSubmitInFlightAction } from '@/src/core/async/inFlightGuard';
 import { useAuthStore } from '@/src/core/auth';
 import { buildLoginHref } from '@/src/features/cart/utils/authReturn';
 import { useOrderDetail } from '@/src/features/orders/hooks/useOrders';
@@ -125,7 +126,7 @@ export function ReturnRequestScreen({ orderId }: Props) {
   }
 
   async function submit() {
-    if (mutation.isPending) return;
+    if (!canSubmitInFlightAction(mutation.isPending)) return;
 
     const items = returnableItems
       .filter((item) => selections[item.id]?.selected)

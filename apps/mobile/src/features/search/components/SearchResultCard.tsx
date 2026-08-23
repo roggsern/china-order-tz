@@ -13,6 +13,7 @@ import type { CommerceJourney } from '@/src/shared/types/commerce';
 import { Badge } from '@/src/shared/ui/Badge';
 import { Card } from '@/src/shared/ui/Card';
 import { PriceText } from '@/src/shared/ui/PriceText';
+import { listImageProps } from '@/src/shared/media/listImageProps';
 import { colors, radius, spacing, typography } from '@/src/shared/theme';
 import type { SearchHit } from '../models/types';
 import { resolveHitJourney } from '../utils/resolveHitJourney';
@@ -78,6 +79,7 @@ export function SearchResultCard({ hit }: Props) {
               style={styles.image}
               contentFit="cover"
               transition={200}
+              {...listImageProps(hit.imageUrl)}
             />
           ) : (
             <View style={[styles.image, styles.placeholder]}>

@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { createExclusiveLock } from '@/src/core/async/exclusiveLock';
 import { useAuthStore } from '@/src/core/auth';
 import { cancelCheckoutSessionSafely } from '@/src/features/checkout/api/checkoutApi';
 import { pendingCheckoutContextStorage } from '@/src/features/checkout/storage/pendingCheckoutContextStorage';
@@ -31,6 +32,7 @@ export function CartScreen() {
   const clearMutation = useClearCartMutation();
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
+  const cartActionLockRef = useRef(createExclusiveLock());
 
   if (authStatus !== 'authenticated') {
     return (
@@ -67,6 +69,7 @@ export function CartScreen() {
     updateMutation.isPending || removeMutation.isPending || clearMutation.isPending;
 
   async function changeQuantity(itemId: string, quantity: number) {
+    if (!cartActionLockRef.current.tryAcquire()) return;
     setActionError(null);
     setBusyItemId(itemId);
     try {
@@ -75,10 +78,12 @@ export function CartScreen() {
       setActionError(getCartErrorMessage(error));
     } finally {
       setBusyItemId(null);
+      cartActionLockRef.current.release();
     }
   }
 
   async function removeItem(itemId: string) {
+    if (!cartActionLockRef.current.tryAcquire()) return;
     setActionError(null);
     setBusyItemId(itemId);
     try {
@@ -87,6 +92,7 @@ export function CartScreen() {
       setActionError(getCartErrorMessage(error));
     } finally {
       setBusyItemId(null);
+      cartActionLockRef.current.release();
     }
   }
 
@@ -106,6 +112,7 @@ export function CartScreen() {
   }
 
   async function clearAllItems() {
+    if (!cartActionLockRef.current.tryAcquire()) return;
     setActionError(null);
     try {
       await clearMutation.mutateAsync();
@@ -126,6 +133,8 @@ export function CartScreen() {
       }
     } catch (error) {
       setActionError(getCartErrorMessage(error));
+    } finally {
+      cartActionLockRef.current.release();
     }
   }
 

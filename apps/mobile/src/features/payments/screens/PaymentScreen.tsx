@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { AppState, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { createExclusiveLock, runExclusive } from '@/src/core/async/exclusiveLock';
+import { shouldRefreshActivePaymentOnResume } from '@/src/shared/hooks/foregroundCommerceRefresh';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { clearSessionOnAuthFailure, useAuthStore } from '@/src/core/auth';
@@ -94,6 +96,22 @@ export function PaymentScreen() {
   const [error, setError] = useState<string | null>(null);
   const [statusNote, setStatusNote] = useState<string | null>(null);
   const restoredRef = useRef(false);
+  const actionLockRef = useRef(createExclusiveLock());
+  const refreshStatusRef = useRef<() => Promise<void>>(async () => undefined);
+  const resumeStateRef = useRef<{
+    viewKind: string | null;
+    transactionId: string | null;
+  }>({
+    viewKind: null,
+    transactionId: null,
+  });
+
+  resumeStateRef.current = {
+    viewKind: view?.kind ?? null,
+    transactionId:
+      transaction?.id ??
+      (view?.kind === 'recovery' ? view.transaction.id : null),
+  };
 
   const paymentReturnHref = buildPaymentHref({
     orderId: orderIdParam ?? order?.id,
@@ -254,7 +272,7 @@ export function PaymentScreen() {
     return false;
   }
 
-  async function startSelectedPayment() {
+  async function startSelectedPaymentUnlocked() {
     const currentView = view ?? { kind: 'selector' as const };
     const decision = resolvePaymentStartDecision({
       view: currentView,
@@ -262,7 +280,7 @@ export function PaymentScreen() {
     });
 
     if (decision.decision === 'recover') {
-      await continueRecoveredPayment();
+      await continueRecoveredPaymentUnlocked();
       return;
     }
     if (decision.decision === 'paid') {
@@ -371,7 +389,7 @@ export function PaymentScreen() {
     }
   }
 
-  async function continueRecoveredPayment() {
+  async function continueRecoveredPaymentUnlocked() {
     if (view?.kind !== 'recovery') return;
     setBusy(true);
     setError(null);
@@ -417,7 +435,7 @@ export function PaymentScreen() {
     }
   }
 
-  async function refreshStatus() {
+  async function refreshStatusUnlocked() {
     if (!transaction?.id && view?.kind !== 'recovery') return;
     const transactionId = transaction?.id ?? (view?.kind === 'recovery' ? view.transaction.id : null);
     if (!transactionId) return;
@@ -451,6 +469,45 @@ export function PaymentScreen() {
       setBusy(false);
     }
   }
+
+  async function startSelectedPayment() {
+    const outcome = await runExclusive(actionLockRef.current, () =>
+      startSelectedPaymentUnlocked(),
+    );
+    if (outcome === 'busy') return;
+  }
+
+  async function continueRecoveredPayment() {
+    const outcome = await runExclusive(actionLockRef.current, () =>
+      continueRecoveredPaymentUnlocked(),
+    );
+    if (outcome === 'busy') return;
+  }
+
+  async function refreshStatus() {
+    const outcome = await runExclusive(actionLockRef.current, () =>
+      refreshStatusUnlocked(),
+    );
+    if (outcome === 'busy') return;
+  }
+
+  refreshStatusRef.current = refreshStatus;
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next !== 'active') return;
+      if (
+        !shouldRefreshActivePaymentOnResume({
+          viewKind: resumeStateRef.current.viewKind,
+          transactionId: resumeStateRef.current.transactionId,
+        })
+      ) {
+        return;
+      }
+      void refreshStatusRef.current();
+    });
+    return () => subscription.remove();
+  }, []);
 
   if (authStatus !== 'authenticated') {
     return (

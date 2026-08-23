@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Image } from 'expo-image';
+import { listImageProps } from '@/src/shared/media/listImageProps';
 import { colors, radius, spacing, typography } from '@/src/shared/theme';
 
 type Props = {
@@ -40,6 +41,7 @@ export function OrderThumbnail({
           source={{ uri: uri! }}
           style={styles.image}
           contentFit="cover"
+          {...listImageProps(uri!)}
           onError={() => {
             if (uri) setFailedUri(uri);
           }}

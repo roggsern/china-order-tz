@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { Badge } from '@/src/shared/ui/Badge';
 import { Card } from '@/src/shared/ui/Card';
 import { PriceText } from '@/src/shared/ui/PriceText';
+import { listImageProps } from '@/src/shared/media/listImageProps';
 import { colors, radius, spacing, typography } from '@/src/shared/theme';
 import type { CartItem } from '../models/types';
 
@@ -40,6 +41,7 @@ export function CartLineItemCard({
             style={styles.image}
             contentFit="cover"
             transition={200}
+            {...listImageProps(item.imageUrl)}
           />
         ) : (
           <View style={[styles.image, styles.placeholder]}>

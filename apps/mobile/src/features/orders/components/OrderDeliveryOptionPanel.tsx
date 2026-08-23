@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { canSubmitInFlightAction } from '@/src/core/async/inFlightGuard';
 import { Card } from '@/src/shared/ui/Card';
 import { colors, radius, spacing, typography } from '@/src/shared/theme';
 import {
@@ -59,6 +60,7 @@ export function OrderDeliveryOptionPanel({
   }
 
   async function saveOption() {
+    if (!canSubmitInFlightAction(busy)) return;
     setError(null);
     try {
       if (option) {
@@ -84,6 +86,7 @@ export function OrderDeliveryOptionPanel({
   }
 
   async function confirmOption() {
+    if (!canSubmitInFlightAction(busy)) return;
     setError(null);
     try {
       await updateMutation.mutateAsync({ deliveryStatus: 'confirmed' });
