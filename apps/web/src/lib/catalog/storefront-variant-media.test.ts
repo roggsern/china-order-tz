@@ -129,6 +129,48 @@ describe("cart and checkout variant image display", () => {
     assert.equal(resolved.url, "/storage/product.jpg");
   });
 
+  it("keeps distinct selected-variant images for two lines of the same product", () => {
+    const product = {
+      name: "STRETCH PENCIL SKIRTS",
+      primary_image: {
+        id: "product-main",
+        url: "/storage/skirts/product-main.jpg",
+        alt_text: "product",
+      },
+    };
+
+    const black = resolveCartLineDisplayImage(
+      {
+        product,
+        variant: {
+          primary_image: {
+            id: "black-s",
+            url: "/storage/skirts/black-s.jpg",
+            alt_text: "Black S",
+          },
+        },
+      },
+      "line-black-s",
+    );
+    const red = resolveCartLineDisplayImage(
+      {
+        product,
+        variant: {
+          primary_image: {
+            id: "red-xxl",
+            url: "/storage/skirts/red-xxl.jpg",
+            alt_text: "Red XXL",
+          },
+        },
+      },
+      "line-red-xxl",
+    );
+
+    assert.equal(black.url, "/storage/skirts/black-s.jpg");
+    assert.equal(red.url, "/storage/skirts/red-xxl.jpg");
+    assert.notEqual(black.url, red.url);
+  });
+
   it("uses variant gallery for local cart snapshots", () => {
     const image = resolveVariantCartImage(baseProduct as Product, "variant-black");
     assert.equal(image.url, "/storage/variant-black.jpg");

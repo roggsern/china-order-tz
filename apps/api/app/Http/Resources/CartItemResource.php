@@ -26,21 +26,17 @@ class CartItemResource extends JsonResource
             : null;
 
         if (is_array($productPayload) && $this->product !== null) {
-            $hasProductMedia = $this->product->relationLoaded('media')
-                || $this->product->relationLoaded('images');
-            if ($hasProductMedia) {
-                $mediaResolver = app(CustomerProductMediaResolver::class);
-                $variant = $this->relationLoaded('variant') ? $this->variant : null;
-                $productPayload['primary_image'] = $mediaResolver->resolvePrimary($this->product, $variant);
-                $productPayload['images'] = $mediaResolver->resolveGallery($this->product, $variant);
-            }
+            $mediaResolver = app(CustomerProductMediaResolver::class);
+            $variant = $this->relationLoaded('variant') ? $this->variant : null;
+            $productPayload['primary_image'] = $mediaResolver->resolvePrimary($this->product, $variant);
+            $productPayload['images'] = $mediaResolver->resolveGallery($this->product, $variant);
         }
 
         $variantResource = null;
         if ($this->relationLoaded('variant') && $this->variant !== null) {
+            // Media-only loads must not restore full variant attributes/presentation.
             $hasVariantPresentation = $this->variant->relationLoaded('catalogAttributeValues')
-                || $this->variant->relationLoaded('attributeValues')
-                || $this->variant->relationLoaded('media');
+                || $this->variant->relationLoaded('attributeValues');
             $variantResource = $hasVariantPresentation
                 ? new CustomerProductVariantResource($this->variant)
                 : new CustomerProductListingVariantResource($this->variant);

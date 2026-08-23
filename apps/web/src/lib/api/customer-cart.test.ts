@@ -131,3 +131,92 @@ test("mapServerCartItems prefers display_attributes over nested attribute_values
   ]);
   assert.equal(line.configurationLabel, "Black");
 });
+
+test("mapServerCartItems keeps distinct selected-variant images on two lines of the same product", () => {
+  const blackImage = "https://cdn.example/skirts/black-s.jpg";
+  const redImage = "https://cdn.example/skirts/red-xxl.jpg";
+  const productPrimary = "https://cdn.example/skirts/product-main.jpg";
+
+  const cart: ServerCart = {
+    id: "cart-skirts",
+    items: [
+      {
+        id: "line-black-s",
+        product_id: BASE_PRODUCT_ID,
+        product_variant_id: "variant-black-s",
+        quantity: 1,
+        unit_price: 25000,
+        product: {
+          id: BASE_PRODUCT_ID,
+          slug: "stretch-pencil-skirts",
+          name: "STRETCH PENCIL SKIRTS",
+          primary_image: { id: "black-img", url: blackImage },
+        },
+        variant: {
+          id: "variant-black-s",
+          sku: "COT-TZ-ZIONMODE-7UVAFE-BLACK-S",
+          name: "Black S",
+          primary_image: { id: "black-img", url: blackImage },
+        },
+      },
+      {
+        id: "line-red-xxl",
+        product_id: BASE_PRODUCT_ID,
+        product_variant_id: "variant-red-xxl",
+        quantity: 1,
+        unit_price: 25000,
+        product: {
+          id: BASE_PRODUCT_ID,
+          slug: "stretch-pencil-skirts",
+          name: "STRETCH PENCIL SKIRTS",
+          primary_image: { id: "red-img", url: redImage },
+        },
+        variant: {
+          id: "variant-red-xxl",
+          sku: "COT-TZ-ZIONMODE-7UVAFE-RED-XXL",
+          name: "Red XXL",
+          primary_image: { id: "red-img", url: redImage },
+        },
+      },
+    ],
+  };
+
+  const [blackLine, redLine] = mapServerCartItems(cart);
+
+  assert.equal(blackLine.image.url, blackImage);
+  assert.equal(redLine.image.url, redImage);
+  assert.notEqual(blackLine.image.url, redLine.image.url);
+  assert.notEqual(blackLine.image.url, productPrimary);
+  assert.notEqual(redLine.image.url, productPrimary);
+});
+
+test("mapServerCartItems falls back to product primary when variant media is missing", () => {
+  const productPrimary = "https://cdn.example/skirts/product-main.jpg";
+
+  const cart: ServerCart = {
+    id: "cart-fallback",
+    items: [
+      {
+        id: "line-no-variant-media",
+        product_id: BASE_PRODUCT_ID,
+        product_variant_id: "variant-plain",
+        quantity: 1,
+        unit_price: 18000,
+        product: {
+          id: BASE_PRODUCT_ID,
+          slug: "plain-skirt",
+          name: "Plain Skirt",
+          primary_image: { id: "product-img", url: productPrimary },
+        },
+        variant: {
+          id: "variant-plain",
+          sku: "PLAIN-S",
+          name: "S",
+        },
+      },
+    ],
+  };
+
+  const [line] = mapServerCartItems(cart);
+  assert.equal(line.image.url, productPrimary);
+});

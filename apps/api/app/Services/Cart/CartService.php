@@ -225,8 +225,10 @@ class CartService
     }
 
     /**
-     * @param  bool  $includeVariantPresentation  Full variant attrs/media for cart UI GET;
+     * @param  bool  $includeVariantPresentation  Full variant attrs for cart UI GET;
      *                                            false for mutation responses used by checkout sync.
+     *                                            Slim mutations still eager-load product/variant media
+     *                                            so line images stay selected-variant-aware.
      */
     public function loadCart(Cart $cart, bool $includeVariantPresentation = true): Cart
     {
@@ -235,8 +237,10 @@ class CartService
                 'items.product.commerceChannel',
                 'items.product.brand',
                 'items.product.category',
+                'items.product.media' => fn ($query) => $query->images()->active()->ordered(),
                 'items.product.shippingOptions',
                 'items.variant.product',
+                'items.variant.media' => fn ($query) => $query->images()->active()->ordered(),
                 'items.variant.prices',
                 'items.variant.inventories',
                 'items.variant.inventory',
