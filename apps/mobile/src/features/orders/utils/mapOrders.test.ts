@@ -11,6 +11,7 @@ import {
   normalizeOrdersFilter,
   shouldOfferCancel,
   shouldOfferReceivingChoice,
+  shouldShowReceivingSelector,
 } from './mapOrders';
 
 describe('journeyLabelFromOrderSource', () => {
@@ -423,6 +424,70 @@ describe('receiving choice', () => {
     expect(buildReceivingMethodPayload('negotiated_delivery')).toEqual({
       receiving_method: 'negotiated_delivery',
     });
+  });
+
+  it('maps list receiving_choice for CHINA_IMPORT cards', () => {
+    const order = mapOrderListItem({
+      id: 'ord-china-list',
+      source: 'China',
+      status: 'shipped',
+      receiving_choice: {
+        eligible: true,
+        can_select: true,
+        selected_method: null,
+      },
+    });
+    expect(order?.receivingChoice).toEqual({
+      eligible: true,
+      canSelect: true,
+      selectedMethod: null,
+      selectedMethodLabel: null,
+      selectedAt: null,
+    });
+    expect(shouldShowReceivingSelector(order?.receivingChoice, order?.status)).toBe(
+      true,
+    );
+  });
+
+  it('does not offer a selector after a method is already selected', () => {
+    expect(
+      shouldShowReceivingSelector(
+        mapReceivingChoiceSnapshot({
+          eligible: true,
+          can_select: false,
+          selected_method: 'self_pickup',
+        }),
+        'shipped',
+      ),
+    ).toBe(false);
+  });
+
+  it('hides receiving action on cancelled and refunded orders', () => {
+    const snapshot = mapReceivingChoiceSnapshot({
+      eligible: true,
+      can_select: true,
+      selected_method: null,
+    });
+    expect(shouldShowReceivingSelector(snapshot, 'cancelled')).toBe(false);
+    expect(shouldShowReceivingSelector(snapshot, 'refunded')).toBe(false);
+    expect(shouldShowReceivingSelector(snapshot, 'refund_pending')).toBe(false);
+  });
+
+  it('keeps TZ_LOCAL list cards without a receiving selector', () => {
+    const order = mapOrderListItem({
+      id: 'ord-tz',
+      source: 'Dar',
+      status: 'processing',
+      receiving_choice: {
+        eligible: false,
+        can_select: false,
+        selected_method: null,
+      },
+    });
+    expect(order?.journeyLabel).toBe('Buy from TZ');
+    expect(shouldShowReceivingSelector(order?.receivingChoice, order?.status)).toBe(
+      false,
+    );
   });
 
   it('does not offer selection when the backend snapshot is ineligible', () => {

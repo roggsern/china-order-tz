@@ -42,6 +42,30 @@ describe('selectReceivingMethod', () => {
     });
   });
 
+  it('posts negotiated_delivery as the backend-supported delivery value', async () => {
+    mockPost.mockResolvedValue({
+      data: {
+        receiving_choice: {
+          eligible: true,
+          can_select: false,
+          selected_method: 'negotiated_delivery',
+          selected_method_label: 'Negotiated Delivery',
+          selected_at: '2026-08-24T00:00:00Z',
+        },
+      },
+    } as never);
+
+    const snapshot = await selectReceivingMethod({
+      orderId: 'ord-1',
+      receivingMethod: 'negotiated_delivery',
+    });
+
+    expect(mockPost).toHaveBeenCalledWith('/orders/ord-1/receiving-method', {
+      receiving_method: 'negotiated_delivery',
+    });
+    expect(snapshot?.selectedMethod).toBe('negotiated_delivery');
+  });
+
   it('surfaces backend validation errors', async () => {
     mockPost.mockRejectedValue(
       new ApiError({

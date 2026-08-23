@@ -8,6 +8,7 @@ export type AccountCapabilityId =
   | 'wishlist'
   | 'security_password'
   | 'notifications'
+  | 'returns'
   | 'support'
   | 'settings'
   | 'privacy'
@@ -69,6 +70,14 @@ export const ACCOUNT_CAPABILITIES: AccountCapability[] = [
     decision: 'native',
     nativeHref: '/(app)/account/notifications',
     reason: 'GET/PATCH /notifications*',
+  },
+  {
+    id: 'returns',
+    label: 'Returns',
+    apiExists: true,
+    decision: 'native',
+    nativeHref: '/(app)/account/returns',
+    reason: 'GET /returns, POST /orders/{id}/returns',
   },
   {
     id: 'support',

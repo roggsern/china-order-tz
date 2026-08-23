@@ -10,6 +10,8 @@ export type NotificationSemanticData = {
   shipmentId: string | null;
   ticketId: string | null;
   ticketNumber: string | null;
+  returnId: string | null;
+  refundId: string | null;
 };
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -47,6 +49,8 @@ export function parseNotificationSemanticData(
     shipmentId: stringField(data, 'shipment_id', 'shipmentId'),
     ticketId: stringField(data, 'ticket_id', 'ticketId'),
     ticketNumber: stringField(data, 'ticket_number', 'ticketNumber'),
+    returnId: stringField(data, 'return_id', 'returnId'),
+    refundId: stringField(data, 'refund_id', 'refundId'),
   };
 }
 

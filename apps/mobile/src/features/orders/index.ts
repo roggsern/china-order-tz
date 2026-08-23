@@ -11,6 +11,9 @@ export {
   useOrderTracking,
   useCancelOrderMutation,
   useSelectReceivingMethodMutation,
+  useOrderDeliveryOption,
+  useSelectDeliveryOptionMutation,
+  useUpdateDeliveryOptionMutation,
   invalidateOrdersQueries,
   invalidateAfterPaymentSuccess,
 } from './hooks/useOrders';
@@ -31,6 +34,7 @@ export { OrderFulfillmentBlock } from './components/OrderFulfillmentBlock';
 export { OrderTimeline } from './components/OrderTimeline';
 export { CancelOrderButton } from './components/CancelOrderButton';
 export { OrderReceivingChoicePanel } from './components/OrderReceivingChoicePanel';
+export { OrderDeliveryOptionPanel } from './components/OrderDeliveryOptionPanel';
 export { ContinuePaymentButton } from './components/ContinuePaymentButton';
 export {
   mapOrderListItem,
@@ -47,6 +51,7 @@ export {
   buildReceivingMethodPayload,
   mapReceivingChoiceSnapshot,
   shouldOfferReceivingChoice,
+  shouldShowReceivingSelector,
   normalizeOrdersFilter,
 } from './utils/mapOrders';
 export { isOrderPayableFromServer } from './utils/isOrderPayable';
@@ -55,6 +60,7 @@ export {
   resolveOrderDisplayStatus,
   resolvePaymentDisplayStatus,
   resolveFulfillmentDisplayStatus,
+  resolveReceivingDisplayStatus,
 } from './utils/orderLifecycleDisplay';
 export { hasOrderTrackingEntry } from './utils/hasOrderTrackingEntry';
 export {

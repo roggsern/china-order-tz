@@ -90,6 +90,24 @@ export default function AppLayout() {
         }}
       />
       <Stack.Screen
+        name="orders/[id]/return"
+        options={{
+          header: () => <StackAppHeader title="Request return" />,
+        }}
+      />
+      <Stack.Screen
+        name="account/returns/index"
+        options={{
+          header: () => <StackAppHeader title="Returns" />,
+        }}
+      />
+      <Stack.Screen
+        name="account/returns/[id]"
+        options={{
+          header: () => <StackAppHeader title="Return" />,
+        }}
+      />
+      <Stack.Screen
         name="account/addresses"
         options={{
           header: () => <StackAppHeader title="Addresses" />,

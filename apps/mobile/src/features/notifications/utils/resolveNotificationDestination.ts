@@ -2,6 +2,7 @@ import {
   buildOrderDetailHref,
   buildOrderTrackingHref,
 } from '@/src/features/orders/utils/orderRoutes';
+import { buildReturnDetailHref } from '@/src/features/returns/utils/returnRoutes';
 import {
   parseNotificationSemanticData,
   type NotificationSemanticData,
@@ -23,6 +24,24 @@ const ORDER_DETAIL_EVENTS = new Set([
   'order_cancelled',
   'payment_confirmed',
   'order_delivered',
+  'warehouse_ready_for_pickup',
+  'warehouse_ready_for_delivery_arrangement',
+  'company_handover_pickup_requested',
+  'company_handover_delivery_requested',
+  'company_handover_completed_pickup',
+  'company_handover_completed_delivery',
+  'refund_started',
+  'refund_requested',
+  'refund_approved',
+  'refund_completed',
+  'refund_failed',
+  'refund_rejected',
+]);
+
+const RETURN_DETAIL_EVENTS = new Set([
+  'return_requested',
+  'return_approved',
+  'return_rejected',
 ]);
 
 const SUPPORT_EVENTS = new Set([
@@ -64,6 +83,10 @@ export function resolveNotificationDestinationFromSemantic(
     return buildOrderTrackingHref(data.orderId);
   }
 
+  if (RETURN_DETAIL_EVENTS.has(event) && data.returnId && isUuidLike(data.returnId)) {
+    return buildReturnDetailHref(data.returnId);
+  }
+
   if (ORDER_DETAIL_EVENTS.has(event) && data.orderId && isUuidLike(data.orderId)) {
     return buildOrderDetailHref(data.orderId);
   }
@@ -81,6 +104,9 @@ export function resolveNotificationDestinationFromSemantic(
   }
 
   // Soft fallbacks when type unknown but canonical ids exist.
+  if (data.returnId && isUuidLike(data.returnId)) {
+    return buildReturnDetailHref(data.returnId);
+  }
   if (data.orderId && isUuidLike(data.orderId)) {
     return buildOrderDetailHref(data.orderId);
   }

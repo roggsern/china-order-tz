@@ -38,6 +38,7 @@ export function buildOrderListCardPresentation(
     paymentStatus: order.paymentStatus,
     transactionStatus: order.activePaymentTransaction?.status,
     progress: order.progress,
+    receivingChoice: order.receivingChoice,
   });
 
   return {
@@ -47,8 +48,8 @@ export function buildOrderListCardPresentation(
     isMultiItem: itemCount > 1 || extraItems > 0,
     quantity: primary?.quantity ?? preview?.totalQuantity ?? null,
     orderNumber: order.orderNumber ?? order.id,
-    statusLabel: lifecycle.order.label,
-    statusTone: orderDisplayTone(lifecycle.order.key),
+    statusLabel: lifecycle.headline.label,
+    statusTone: orderDisplayTone(lifecycle.headline.key),
     createdAt: order.createdAt,
     grandTotal: order.grandTotal,
     currency: order.currency ?? 'TZS',

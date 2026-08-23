@@ -135,6 +135,7 @@ export function mapOrderListItem(raw: unknown): OrderListItem | null {
     canCancel: boolField(data, 'can_cancel'),
     canPay: boolField(data, 'can_pay'),
     activePaymentTransaction: mapActivePaymentTransaction(data.active_payment_transaction),
+    receivingChoice: mapReceivingChoiceSnapshot(data.receiving_choice),
   };
 }
 
@@ -367,6 +368,25 @@ export function buildReceivingMethodPayload(method: 'self_pickup' | 'negotiated_
 export function shouldOfferReceivingChoice(choice: ReceivingChoiceSnapshot | null | undefined): boolean {
   if (!choice) return false;
   return choice.eligible && choice.canSelect && !choice.selectedMethod;
+}
+
+const TERMINAL_RECEIVING_ORDER_STATUSES = new Set([
+  'cancelled',
+  'refunded',
+  'refund_pending',
+]);
+
+/**
+ * Selector visibility. Backend snapshot is authoritative for eligibility;
+ * terminal order statuses never keep a receiving action on screen.
+ */
+export function shouldShowReceivingSelector(
+  choice: ReceivingChoiceSnapshot | null | undefined,
+  orderStatus?: string | null,
+): boolean {
+  const status = orderStatus?.trim().toLowerCase() ?? '';
+  if (TERMINAL_RECEIVING_ORDER_STATUSES.has(status)) return false;
+  return shouldOfferReceivingChoice(choice);
 }
 
 function mapTimelineEvent(raw: unknown): OrderTimelineEvent | null {

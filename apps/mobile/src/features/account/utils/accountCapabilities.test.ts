@@ -13,6 +13,7 @@ describe('accountCapabilities', () => {
       'wishlist',
       'security_password',
       'notifications',
+      'returns',
       'support',
       'close_account',
     ] as const) {

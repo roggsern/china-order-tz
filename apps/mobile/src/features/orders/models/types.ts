@@ -54,6 +54,8 @@ export type OrderListItem = {
   canPay: boolean | null;
   /** Present only when API includes it — never infer from local storage. */
   activePaymentTransaction: ActivePaymentTransactionRef | null;
+  /** Post-arrival receiving snapshot when the list payload includes it. */
+  receivingChoice: ReceivingChoiceSnapshot | null;
 };
 
 export type OrdersListPage = {

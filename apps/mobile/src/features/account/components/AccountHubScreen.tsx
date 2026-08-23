@@ -176,6 +176,11 @@ export function AccountHubScreen() {
           description="Read your account and order notifications."
           onPress={() => openNative('notifications')}
         />
+        <AccountMenuCard
+          title="Returns"
+          description="View return requests and their server status."
+          onPress={() => openNative('returns')}
+        />
 
         <Text style={styles.sectionLabel}>Help</Text>
         <AccountMenuCard

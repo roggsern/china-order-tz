@@ -110,4 +110,19 @@ describe('orderCardPresentation', () => {
     expect(isOrderPayableFromServer({ status: 'pending_payment' })).toBe(true);
     expect(isOrderPayableFromServer({ status: 'paid' })).toBe(false);
   });
+
+  it('shows receiving headline on list cards when the snapshot requires action', () => {
+    const order = mapOrderListItem({
+      id: 'ord-recv',
+      source: 'China',
+      status: 'shipped',
+      receiving_choice: {
+        eligible: true,
+        can_select: true,
+        selected_method: null,
+      },
+    });
+    const presentation = buildOrderListCardPresentation(order!);
+    expect(presentation.statusLabel).toBe('Action required');
+  });
 });

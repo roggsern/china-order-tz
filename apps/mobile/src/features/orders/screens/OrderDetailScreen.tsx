@@ -16,8 +16,11 @@ import { EmptyState } from '@/src/shared/ui/EmptyState';
 import { ScreenLoadingState } from '@/src/shared/ui/ScreenLoadingState';
 import { SecondaryButton } from '@/src/shared/ui/SecondaryButton';
 import { colors, spacing, typography } from '@/src/shared/theme';
+import { shouldOfferReturnRequest } from '@/src/features/returns/utils/returnEligibility';
+import { buildOrderReturnHref } from '@/src/features/returns/utils/returnRoutes';
 import { CancelOrderButton } from '../components/CancelOrderButton';
 import { ContinuePaymentButton } from '../components/ContinuePaymentButton';
+import { OrderDeliveryOptionPanel } from '../components/OrderDeliveryOptionPanel';
 import { OrderFulfillmentBlock } from '../components/OrderFulfillmentBlock';
 import { OrderReceivingChoicePanel } from '../components/OrderReceivingChoicePanel';
 import { OrderItemRow } from '../components/OrderItemRow';
@@ -110,8 +113,10 @@ export function OrderDetailScreen({ orderId }: Props) {
     transactionStatus: order.activePaymentTransaction?.status,
     progress: order.progress,
     shipment: order.shipment,
+    receivingChoice: order.receivingChoice,
   });
   const displayProgress = resolveProgressForDisplay(order.status, order.progress);
+  const offerReturn = shouldOfferReturnRequest(order.status);
 
   return (
     <ScrollView
@@ -133,8 +138,8 @@ export function OrderDetailScreen({ orderId }: Props) {
           <Badge label={order.journeyLabel} tone="brand" />
         ) : null}
         <Badge
-          label={lifecycle.order.label}
-          tone={orderDisplayTone(lifecycle.order.key)}
+          label={lifecycle.headline.label}
+          tone={orderDisplayTone(lifecycle.headline.key)}
         />
       </View>
       {order.createdAt ? (
@@ -171,11 +176,21 @@ export function OrderDetailScreen({ orderId }: Props) {
 
       <OrderReceivingChoicePanel
         orderId={orderId}
+        orderStatus={order.status}
         receivingChoice={order.receivingChoice}
         onUpdated={() => void detailQuery.refetch()}
       />
 
-      <OrderFulfillmentBlock fulfillment={lifecycle.fulfillment} />
+      <OrderDeliveryOptionPanel
+        orderId={orderId}
+        orderStatus={order.status}
+        paymentStatus={order.payment?.paymentStatus ?? null}
+      />
+
+      <OrderFulfillmentBlock
+        fulfillment={lifecycle.fulfillment}
+        receiving={lifecycle.receiving}
+      />
 
       <OrderTimeline progress={displayProgress} />
 
@@ -207,6 +222,14 @@ export function OrderDetailScreen({ orderId }: Props) {
         <SecondaryButton
           label="View tracking"
           onPress={() => router.push(buildOrderTrackingHref(orderId))}
+          style={styles.trackingButton}
+        />
+      ) : null}
+
+      {offerReturn ? (
+        <SecondaryButton
+          label="Request return"
+          onPress={() => router.push(buildOrderReturnHref(orderId) as never)}
           style={styles.trackingButton}
         />
       ) : null}

@@ -14,16 +14,26 @@ import {
 import { cartQueryKey } from '@/src/features/cart/hooks/useCart';
 import { buildLoginHref } from '@/src/features/cart/utils/authReturn';
 import {
+  fetchDeliveryOption,
+  selectDeliveryOption,
+  updateDeliveryOption,
+} from '../api/deliveryOptionApi';
+import {
   cancelOrder,
   fetchOrderDetail,
   fetchOrderTracking,
   fetchOrders,
   selectReceivingMethod,
 } from '../api/ordersApi';
+import type {
+  SelectDeliveryOptionInput,
+  UpdateDeliveryOptionInput,
+} from '../models/deliveryOption';
 import type { CancelOrderInput, OrdersListFilter, SelectReceivingMethodInput } from '../models/types';
 import { isOrderUnauthenticatedError } from '../utils/orderErrorMessage';
 import { buildOrdersListHref } from '../utils/orderRoutes';
 import {
+  orderDeliveryOptionQueryKey,
   orderDetailQueryKey,
   orderTrackingQueryKey,
   ordersListQueryKey,
@@ -31,6 +41,7 @@ import {
 } from '../utils/ordersQueryKeys';
 
 export {
+  orderDeliveryOptionQueryKey,
   orderDetailQueryKey,
   orderTrackingQueryKey,
   ordersListQueryKey,
@@ -138,6 +149,54 @@ export function useCancelOrderMutation(orderId: string) {
       } satisfies CancelOrderInput),
     onSuccess: (detail) => {
       queryClient.setQueryData(orderDetailQueryKey(orderId), detail);
+      void invalidateOrdersQueries(queryClient, orderId);
+    },
+    onError: handleAuth,
+  });
+}
+
+export function useOrderDeliveryOption(orderId: string | null, enabled = true) {
+  const authStatus = useAuthStore((s) => s.status);
+
+  return useQuery({
+    queryKey: orderDeliveryOptionQueryKey(orderId ?? ''),
+    queryFn: () => fetchDeliveryOption(orderId!),
+    enabled:
+      Boolean(orderId) && enabled && authStatus === 'authenticated',
+    meta: AUTHENTICATED_QUERY_META,
+  });
+}
+
+export function useSelectDeliveryOptionMutation(orderId: string) {
+  const queryClient = useQueryClient();
+  const handleAuth = useOrdersAuthGuard(buildOrderDetailReturn(orderId));
+
+  return useMutation({
+    mutationFn: (
+      input: Omit<SelectDeliveryOptionInput, 'orderId'>,
+    ) => selectDeliveryOption({ orderId, ...input }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: orderDeliveryOptionQueryKey(orderId),
+      });
+      void invalidateOrdersQueries(queryClient, orderId);
+    },
+    onError: handleAuth,
+  });
+}
+
+export function useUpdateDeliveryOptionMutation(orderId: string) {
+  const queryClient = useQueryClient();
+  const handleAuth = useOrdersAuthGuard(buildOrderDetailReturn(orderId));
+
+  return useMutation({
+    mutationFn: (
+      input: Omit<UpdateDeliveryOptionInput, 'orderId'>,
+    ) => updateDeliveryOption({ orderId, ...input }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: orderDeliveryOptionQueryKey(orderId),
+      });
       void invalidateOrdersQueries(queryClient, orderId);
     },
     onError: handleAuth,

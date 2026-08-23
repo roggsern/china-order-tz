@@ -5,6 +5,7 @@ import {
   resolveOrderDisplayStatus,
   resolvePaymentDisplayStatus,
   resolveProgressForDisplay,
+  resolveReceivingDisplayStatus,
   resolveTrackingHeroLabel,
 } from './orderLifecycleDisplay';
 import { buildOrderListCardPresentation } from './orderCardPresentation';
@@ -40,6 +41,7 @@ function listOrder(
     canCancel: overrides.canCancel ?? null,
     canPay: overrides.canPay ?? null,
     activePaymentTransaction: overrides.activePaymentTransaction ?? null,
+    receivingChoice: overrides.receivingChoice ?? null,
     ...overrides,
   };
 }
@@ -50,6 +52,7 @@ function sameLifecycleFromListAndDetail(list: OrderListItem, detail: OrderDetail
     statusLabel: list.statusLabel,
     paymentStatus: list.paymentStatus,
     progress: list.progress,
+    receivingChoice: list.receivingChoice,
   });
   const fromDetail = buildOrderLifecyclePresentation({
     status: detail.status,
@@ -59,6 +62,7 @@ function sameLifecycleFromListAndDetail(list: OrderListItem, detail: OrderDetail
     paymentProvider: detail.payment?.provider,
     progress: detail.progress,
     shipment: detail.shipment,
+    receivingChoice: detail.receivingChoice,
   });
   return { fromList, fromDetail };
 }
@@ -450,5 +454,134 @@ describe('tracking hero', () => {
         progress: progress('SHIPPED', 'Shipped'),
       }),
     ).toBe('On the way');
+  });
+});
+
+describe('receiving presentation', () => {
+  it('shows action required when receiving choice is needed', () => {
+    const display = buildOrderLifecyclePresentation({
+      status: 'shipped',
+      progress: progress('CHOOSE_RECEIVING_METHOD', 'Choose receiving method'),
+      receivingChoice: {
+        eligible: true,
+        canSelect: true,
+        selectedMethod: null,
+        selectedMethodLabel: null,
+        selectedAt: null,
+      },
+    });
+    expect(display.receiving.actionRequired).toBe(true);
+    expect(display.headline.label).toBe('Action required');
+    expect(display.order.key).toBe('shipped');
+    expect(display.fulfillment.key).toBe('CHOOSE_RECEIVING_METHOD');
+  });
+
+  it('shows pickup state after self_pickup is selected', () => {
+    expect(
+      resolveReceivingDisplayStatus({
+        orderStatus: 'shipped',
+        receivingChoice: {
+          eligible: true,
+          canSelect: false,
+          selectedMethod: 'self_pickup',
+          selectedMethodLabel: 'Self Pickup',
+          selectedAt: '2026-08-24T00:00:00Z',
+        },
+      }).label,
+    ).toBe('Waiting for pickup');
+  });
+
+  it('shows backend delivery state after negotiated_delivery is selected', () => {
+    expect(
+      resolveReceivingDisplayStatus({
+        orderStatus: 'shipped',
+        receivingChoice: {
+          eligible: true,
+          canSelect: false,
+          selectedMethod: 'negotiated_delivery',
+          selectedMethodLabel: 'Negotiated Delivery',
+          selectedAt: '2026-08-24T00:00:00Z',
+        },
+      }).label,
+    ).toBe('Delivery arrangement pending');
+  });
+
+  it('does not invent receiving state for TZ_LOCAL without a snapshot', () => {
+    const display = buildOrderLifecyclePresentation({
+      status: 'processing',
+      progress: progress('PREPARING', 'Preparing your order'),
+      receivingChoice: {
+        eligible: false,
+        canSelect: false,
+        selectedMethod: null,
+        selectedMethodLabel: null,
+        selectedAt: null,
+      },
+    });
+    expect(display.receiving.actionRequired).toBe(false);
+    expect(display.receiving.label).toBeNull();
+    expect(display.headline.label).toBe('Processing');
+  });
+
+  it('does not expose receiving action on cancelled or refunded orders', () => {
+    expect(
+      resolveReceivingDisplayStatus({
+        orderStatus: 'cancelled',
+        receivingChoice: {
+          eligible: true,
+          canSelect: true,
+          selectedMethod: null,
+          selectedMethodLabel: null,
+          selectedAt: null,
+        },
+      }).actionRequired,
+    ).toBe(false);
+    expect(
+      resolveReceivingDisplayStatus({
+        orderStatus: 'refunded',
+        receivingChoice: {
+          eligible: true,
+          canSelect: true,
+          selectedMethod: null,
+          selectedMethodLabel: null,
+          selectedAt: null,
+        },
+      }).label,
+    ).toBeNull();
+  });
+});
+
+describe('status separation', () => {
+  it('keeps order, payment, fulfillment, return, and refund layers distinct', () => {
+    const display = buildOrderLifecyclePresentation({
+      status: 'delivered',
+      paymentStatus: 'paid',
+      progress: progress('DELIVERED', 'Delivered'),
+    });
+    expect(display.order.key).toBe('delivered');
+    expect(display.payment.key).toBe('paid');
+    expect(display.fulfillment.key).toBe('DELIVERED');
+    expect(display.order.key).not.toBe(display.payment.key);
+  });
+
+  it('does not mark the order refunded when only a return is pending', () => {
+    const display = buildOrderLifecyclePresentation({
+      status: 'delivered',
+      paymentStatus: 'paid',
+      progress: progress('DELIVERED', 'Delivered'),
+    });
+    expect(display.order.key).not.toBe('refunded');
+    expect(display.payment.key).not.toBe('refunded');
+    expect(display.order.label).toBe('Delivered');
+  });
+
+  it('keeps refund_pending display backend-authoritative', () => {
+    const display = buildOrderLifecyclePresentation({
+      status: 'refund_pending',
+      paymentStatus: 'paid',
+    });
+    expect(display.order.key).toBe('refund_pending');
+    expect(display.order.label).toBe('Refund in progress');
+    expect(display.payment.key).not.toBe('failed');
   });
 });

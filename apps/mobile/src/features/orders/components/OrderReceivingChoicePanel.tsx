@@ -5,10 +5,11 @@ import { colors, radius, spacing, typography } from '@/src/shared/theme';
 import { useSelectReceivingMethodMutation } from '../hooks/useOrders';
 import type { LastMileReceivingMethod, ReceivingChoiceSnapshot } from '../models/types';
 import { getOrderErrorMessage } from '../utils/orderErrorMessage';
-import { shouldOfferReceivingChoice } from '../utils/mapOrders';
+import { shouldShowReceivingSelector } from '../utils/mapOrders';
 
 type Props = {
   orderId: string;
+  orderStatus?: string | null;
   receivingChoice: ReceivingChoiceSnapshot | null | undefined;
   onUpdated?: () => void;
 };
@@ -32,6 +33,7 @@ const RECEIVING_OPTIONS: {
 
 export function OrderReceivingChoicePanel({
   orderId,
+  orderStatus,
   receivingChoice,
   onUpdated,
 }: Props) {
@@ -42,7 +44,7 @@ export function OrderReceivingChoicePanel({
     return null;
   }
 
-  const offerSelect = shouldOfferReceivingChoice(receivingChoice);
+  const offerSelect = shouldShowReceivingSelector(receivingChoice, orderStatus);
 
   async function selectMethod(method: LastMileReceivingMethod) {
     setError(null);

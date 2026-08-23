@@ -15,3 +15,7 @@ export function orderTrackingQueryKey(orderId: string) {
 export function ordersRootQueryKey() {
   return ['orders'] as const;
 }
+
+export function orderDeliveryOptionQueryKey(orderId: string) {
+  return ['orders', 'delivery-option', orderId] as const;
+}

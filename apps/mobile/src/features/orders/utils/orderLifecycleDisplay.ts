@@ -1,5 +1,11 @@
 import { paymentMethodLabel } from '@/src/features/payments/utils/paymentAvailability';
-import type { OrderProgress, OrderShipmentSummary } from '../models/types';
+import type {
+  LastMileReceivingMethod,
+  OrderProgress,
+  OrderShipmentSummary,
+  ReceivingChoiceSnapshot,
+} from '../models/types';
+import { shouldOfferReceivingChoice } from './mapOrders';
 
 const TERMINAL_ORDER_STATUSES = new Set([
   'cancelled',
@@ -67,10 +73,20 @@ export type FulfillmentDisplayStatus = {
   showProgression: boolean;
 };
 
+export type ReceivingDisplayStatus = {
+  key: string;
+  label: string | null;
+  actionRequired: boolean;
+  selectedMethod: LastMileReceivingMethod | null;
+};
+
 export type OrderLifecyclePresentation = {
   order: OrderDisplayStatus;
   payment: PaymentDisplayStatus;
   fulfillment: FulfillmentDisplayStatus;
+  receiving: ReceivingDisplayStatus;
+  /** Customer-facing badge. Does not change backend order.status. */
+  headline: OrderDisplayStatus;
 };
 
 export type OrderLifecycleInput = {
@@ -82,6 +98,7 @@ export type OrderLifecycleInput = {
   transactionStatus?: string | null;
   progress?: OrderProgress | null;
   shipment?: Pick<OrderShipmentSummary, 'status' | 'statusLabel'> | null;
+  receivingChoice?: ReceivingChoiceSnapshot | null;
 };
 
 function normalize(value: string | null | undefined): string {
@@ -256,14 +273,80 @@ export function resolveFulfillmentDisplayStatus(input: {
   };
 }
 
+/**
+ * Receiving-choice presentation from the backend snapshot.
+ * Does not invent pickup/delivery state when the snapshot is absent.
+ */
+export function resolveReceivingDisplayStatus(input: {
+  orderStatus: string | null;
+  receivingChoice?: ReceivingChoiceSnapshot | null;
+}): ReceivingDisplayStatus {
+  if (isTerminalOrderStatus(input.orderStatus)) {
+    return {
+      key: 'none',
+      label: null,
+      actionRequired: false,
+      selectedMethod: null,
+    };
+  }
+
+  const choice = input.receivingChoice ?? null;
+  if (choice?.selectedMethod === 'self_pickup') {
+    return {
+      key: 'self_pickup',
+      label: 'Waiting for pickup',
+      actionRequired: false,
+      selectedMethod: 'self_pickup',
+    };
+  }
+  if (choice?.selectedMethod === 'negotiated_delivery') {
+    return {
+      key: 'negotiated_delivery',
+      label: 'Delivery arrangement pending',
+      actionRequired: false,
+      selectedMethod: 'negotiated_delivery',
+    };
+  }
+  if (shouldOfferReceivingChoice(choice)) {
+    return {
+      key: 'choice_required',
+      label: 'Action required',
+      actionRequired: true,
+      selectedMethod: null,
+    };
+  }
+
+  return {
+    key: 'none',
+    label: null,
+    actionRequired: false,
+    selectedMethod: null,
+  };
+}
+
+export function resolveCustomerFacingHeadline(
+  order: OrderDisplayStatus,
+  receiving: ReceivingDisplayStatus,
+): OrderDisplayStatus {
+  if (receiving.label) {
+    return { key: receiving.key, label: receiving.label };
+  }
+  return order;
+}
+
 export function buildOrderLifecyclePresentation(
   input: OrderLifecycleInput,
 ): OrderLifecyclePresentation {
+  const order = resolveOrderDisplayStatus({
+    status: input.status,
+    statusLabel: input.statusLabel,
+  });
+  const receiving = resolveReceivingDisplayStatus({
+    orderStatus: input.status,
+    receivingChoice: input.receivingChoice,
+  });
   return {
-    order: resolveOrderDisplayStatus({
-      status: input.status,
-      statusLabel: input.statusLabel,
-    }),
+    order,
     payment: resolvePaymentDisplayStatus({
       orderStatus: input.status,
       paymentStatus: input.paymentStatus,
@@ -276,6 +359,8 @@ export function buildOrderLifecyclePresentation(
       progress: input.progress,
       shipment: input.shipment,
     }),
+    receiving,
+    headline: resolveCustomerFacingHeadline(order, receiving),
   };
 }
 
@@ -351,7 +436,11 @@ export function orderDisplayTone(
     case 'READY_TO_SHIP':
     case 'SHIPPED':
     case 'ARRIVED_TANZANIA':
+    case 'self_pickup':
+    case 'negotiated_delivery':
       return 'info';
+    case 'choice_required':
+      return 'warning';
     default:
       return 'neutral';
   }

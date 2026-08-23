@@ -41,6 +41,51 @@ describe('resolveNotificationDestination', () => {
     ).toBe(`/(app)/orders/${QA_ORDER_ID}`);
   });
 
+  it('maps return events to return detail when return_id is present', () => {
+    const returnId = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff';
+    for (const event of ['return_requested', 'return_approved', 'return_rejected']) {
+      expect(
+        resolveNotificationDestination({
+          event_type: event,
+          order_id: ORDER_ID,
+          return_id: returnId,
+        }),
+      ).toBe(`/(app)/account/returns/${returnId}`);
+    }
+  });
+
+  it('maps refund updates to order detail without inventing payment state', () => {
+    for (const event of [
+      'refund_requested',
+      'refund_approved',
+      'refund_completed',
+      'refund_failed',
+    ]) {
+      expect(
+        resolveNotificationDestination({
+          event_type: event,
+          order_id: ORDER_ID,
+          refund_id: 'cccccccc-dddd-4eee-8fff-000000000000',
+        }),
+      ).toBe(`/(app)/orders/${ORDER_ID}`);
+    }
+  });
+
+  it('maps post-pay receiving handoff events to order detail', () => {
+    for (const event of [
+      'warehouse_ready_for_pickup',
+      'company_handover_pickup_requested',
+      'company_handover_delivery_requested',
+    ]) {
+      expect(
+        resolveNotificationDestination({
+          event_type: event,
+          order_id: ORDER_ID,
+        }),
+      ).toBe(`/(app)/orders/${ORDER_ID}`);
+    }
+  });
+
   it('maps shipment events to tracking route', () => {
     for (const event of [
       'shipment_created',
