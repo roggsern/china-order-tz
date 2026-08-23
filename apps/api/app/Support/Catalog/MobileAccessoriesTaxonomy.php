@@ -29,6 +29,29 @@ final class MobileAccessoriesTaxonomy
 
     public const POWER_BANKS_NAME = 'Power Banks';
 
+    public const MOBILE_ACCESSORIES_SLUG = 'mobile-accessories';
+
+    /**
+     * Competing CPT names seen in operator-created Consumer Electronics trees.
+     *
+     * @var list<string>
+     */
+    public const COMPETING_POWER_BANK_TYPE_NAMES = [
+        'Power Bank',
+        'Power Banks',
+    ];
+
+    /**
+     * Competing CPT slugs that must never be (re)created.
+     *
+     * @var list<string>
+     */
+    public const FORBIDDEN_POWER_BANK_TYPE_SLUGS = [
+        'mobile-accessories-power-banks',
+        'consumer-electronics-power-banks-power-bank',
+        'consumer-electronics-power-banks-power-banks',
+    ];
+
     /**
      * Competing locations that seed/import must never recreate.
      *
@@ -68,5 +91,23 @@ final class MobileAccessoriesTaxonomy
     public static function isForbiddenPowerBankSlug(string $slug): bool
     {
         return in_array($slug, self::FORBIDDEN_POWER_BANK_SLUGS, true);
+    }
+
+    public static function isCompetingPowerBankTypeName(string $name): bool
+    {
+        return in_array($name, self::COMPETING_POWER_BANK_TYPE_NAMES, true);
+    }
+
+    public static function isForbiddenPowerBankTypeSlug(string $slug): bool
+    {
+        if ($slug === self::CANONICAL_POWER_BANK_TYPE_SLUG) {
+            return false;
+        }
+
+        if (in_array($slug, self::FORBIDDEN_POWER_BANK_TYPE_SLUGS, true)) {
+            return true;
+        }
+
+        return str_ends_with($slug, '-power-bank') || str_ends_with($slug, '-power-banks');
     }
 }

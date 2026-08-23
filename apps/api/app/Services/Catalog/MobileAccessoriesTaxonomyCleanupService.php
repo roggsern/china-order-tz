@@ -15,7 +15,7 @@ use RuntimeException;
 
 /**
  * Reuses Phones & Tablets → Phone Accessories → Power Banks and
- * deactivates competing Consumer Electronics / flat Power Banks nodes.
+ * retires competing Consumer Electronics Power Banks categories/CPTs.
  */
 class MobileAccessoriesTaxonomyCleanupService
 {
@@ -23,10 +23,15 @@ class MobileAccessoriesTaxonomyCleanupService
      * @return array{
      *     dry_run: bool,
      *     canonical_category_id: string|null,
+     *     canonical_product_type_id: string|null,
      *     competing: list<array<string, mixed>>,
+     *     competing_product_types: list<array<string, mixed>>,
+     *     planned_migrations: list<array<string, mixed>>,
      *     migrated_product_ids: list<string>,
      *     deactivated_category_ids: list<string>,
+     *     deactivated_product_type_ids: list<string>,
      *     skipped_category_ids: list<string>,
+     *     skipped_product_type_ids: list<string>,
      *     steps: list<string>
      * }
      */
@@ -43,10 +48,15 @@ class MobileAccessoriesTaxonomyCleanupService
      * @return array{
      *     dry_run: bool,
      *     canonical_category_id: string|null,
+     *     canonical_product_type_id: string|null,
      *     competing: list<array<string, mixed>>,
+     *     competing_product_types: list<array<string, mixed>>,
+     *     planned_migrations: list<array<string, mixed>>,
      *     migrated_product_ids: list<string>,
      *     deactivated_category_ids: list<string>,
+     *     deactivated_product_type_ids: list<string>,
      *     skipped_category_ids: list<string>,
+     *     skipped_product_type_ids: list<string>,
      *     steps: list<string>
      * }
      */
@@ -62,53 +72,116 @@ class MobileAccessoriesTaxonomyCleanupService
             );
         }
 
-        $competing = $this->findCompetingPowerBankCategories($canonical);
+        $canonicalType = $this->resolveCanonicalProductType($canonical);
+        if ($canonicalType === null) {
+            throw new RuntimeException(
+                'Canonical Power Bank product type is missing. Seed Phones & Tablets taxonomy first.',
+            );
+        }
+
+        $competingCategories = $this->findCompetingPowerBankCategories($canonical);
+        $competingTypes = $this->findCompetingPowerBankProductTypes($canonical, $canonicalType)
+            ->reject(fn (CatalogProductType $type) => $competingCategories->contains('id', $type->subcategory_id))
+            ->values();
+
         $steps = [
-            'Canonical Power Banks: '.MobileAccessoriesTaxonomy::CANONICAL_POWER_BANKS_SLUG,
+            'Canonical category: '.MobileAccessoriesTaxonomy::CANONICAL_POWER_BANKS_SLUG,
+            'Canonical CPT: '.MobileAccessoriesTaxonomy::CANONICAL_POWER_BANK_TYPE_SLUG,
         ];
         $migratedProductIds = [];
-        $deactivatedIds = [];
-        $skippedIds = [];
-        $reports = [];
+        $deactivatedCategoryIds = [];
+        $deactivatedTypeIds = [];
+        $skippedCategoryIds = [];
+        $skippedTypeIds = [];
+        $categoryReports = [];
+        $typeReports = [];
+        $plannedMigrations = [];
 
-        foreach ($competing as $category) {
-            $report = $this->inspectCompeting($category);
-            $reports[] = $report;
+        foreach ($competingCategories as $category) {
+            $report = $this->inspectCompetingCategory($category);
+            $categoryReports[] = $report;
 
             if ($report['child_count'] > 0) {
-                $skippedIds[] = $category->id;
-                $steps[] = "Skipped {$category->slug}: has {$report['child_count']} child categor(y/ies).";
+                $skippedCategoryIds[] = $category->id;
+                $steps[] = "Skipped category {$category->slug}: has {$report['child_count']} child categor(y/ies).";
                 continue;
             }
 
             if ($dryRun) {
-                $steps[] = $this->dryRunStep($category, $report);
+                $steps[] = $this->dryRunCategoryStep($category, $report);
                 continue;
             }
 
-            $this->repointDependencies($canonical, $category, $report);
+            $this->repointCategoryDependencies($canonical, $canonicalType, $category, $report);
             $migratedProductIds = [...$migratedProductIds, ...$report['product_ids']];
 
             $category->is_active = false;
             $category->save();
             $category->delete();
-            $deactivatedIds[] = $category->id;
-            $steps[] = "Deactivated competing Power Banks [{$category->slug}].";
+            $deactivatedCategoryIds[] = $category->id;
+            $steps[] = "Deactivated competing Power Banks category [{$category->slug}].";
         }
 
-        if ($competing->isEmpty()) {
-            $steps[] = 'No competing Power Banks nodes found.';
+        foreach ($competingTypes as $type) {
+            $report = $this->inspectCompetingProductType($type, $canonical, $canonicalType);
+            $typeReports[] = $report;
+            $plannedMigrations = [...$plannedMigrations, ...$report['planned_migrations']];
+
+            if (! $report['attribute_compatibility']['compatible']) {
+                $skippedTypeIds[] = $type->id;
+                $missing = implode(', ', $report['attribute_compatibility']['missing_required_on_competing']);
+                $steps[] = "Skipped CPT {$type->slug}: canonical required attributes missing on competing type ({$missing}).";
+                continue;
+            }
+
+            if ($dryRun) {
+                $steps[] = $this->dryRunProductTypeStep($report);
+                continue;
+            }
+
+            $this->migrateCompetingProductType($canonical, $canonicalType, $type, $report);
+            $migratedProductIds = [...$migratedProductIds, ...$report['product_ids']];
+
+            if ($this->competingProductTypeIsSafeToRetire($type)) {
+                $type->is_active = false;
+                $type->save();
+                $deactivatedTypeIds[] = $type->id;
+                $steps[] = "Deactivated competing Power Banks CPT [{$type->slug}]. Parent category [{$report['category_slug']}] preserved.";
+            } else {
+                $skippedTypeIds[] = $type->id;
+                $steps[] = "Migrated products from CPT {$type->slug} but left it active: remaining dependencies.";
+            }
+        }
+
+        if ($competingCategories->isEmpty() && $competingTypes->isEmpty()) {
+            $steps[] = 'No competing Power Banks categories or CPTs found.';
         }
 
         return [
             'dry_run' => $dryRun,
             'canonical_category_id' => $canonical->id,
-            'competing' => $reports,
+            'canonical_product_type_id' => $canonicalType->id,
+            'competing' => $categoryReports,
+            'competing_product_types' => $typeReports,
+            'planned_migrations' => $plannedMigrations,
             'migrated_product_ids' => $migratedProductIds,
-            'deactivated_category_ids' => $deactivatedIds,
-            'skipped_category_ids' => $skippedIds,
+            'deactivated_category_ids' => $deactivatedCategoryIds,
+            'deactivated_product_type_ids' => $deactivatedTypeIds,
+            'skipped_category_ids' => $skippedCategoryIds,
+            'skipped_product_type_ids' => $skippedTypeIds,
             'steps' => $steps,
         ];
+    }
+
+    public function resolveCanonicalProductType(Category $canonical): ?CatalogProductType
+    {
+        return CatalogProductType::query()
+            ->where('slug', MobileAccessoriesTaxonomy::CANONICAL_POWER_BANK_TYPE_SLUG)
+            ->first()
+            ?? CatalogProductType::query()
+                ->where('subcategory_id', $canonical->id)
+                ->where('name', 'Power Bank')
+                ->first();
     }
 
     /**
@@ -147,6 +220,28 @@ class MobileAccessoriesTaxonomyCleanupService
     }
 
     /**
+     * @return Collection<int, CatalogProductType>
+     */
+    public function findCompetingPowerBankProductTypes(Category $canonical, CatalogProductType $canonicalType): Collection
+    {
+        return CatalogProductType::query()
+            ->where('id', '!=', $canonicalType->id)
+            ->where(function ($query): void {
+                $query->whereIn('name', MobileAccessoriesTaxonomy::COMPETING_POWER_BANK_TYPE_NAMES)
+                    ->orWhereIn('slug', MobileAccessoriesTaxonomy::FORBIDDEN_POWER_BANK_TYPE_SLUGS)
+                    ->orWhere('slug', 'like', '%-power-bank')
+                    ->orWhere('slug', 'like', '%-power-banks');
+            })
+            ->whereHas('subcategory', function ($query) use ($canonical): void {
+                $query->whereNull('store_id')
+                    ->where('origin', CatalogOrigin::China)
+                    ->where('id', '!=', $canonical->id);
+            })
+            ->with(['subcategory.department'])
+            ->get();
+    }
+
+    /**
      * @return array{
      *     id: string,
      *     slug: string,
@@ -163,7 +258,7 @@ class MobileAccessoriesTaxonomyCleanupService
      *     child_count: int
      * }
      */
-    private function inspectCompeting(Category $category): array
+    private function inspectCompetingCategory(Category $category): array
     {
         $productIds = Product::query()
             ->where('category_id', $category->id)
@@ -196,9 +291,129 @@ class MobileAccessoriesTaxonomyCleanupService
     }
 
     /**
+     * @return array{
+     *     id: string,
+     *     slug: string,
+     *     name: string,
+     *     category_id: string|null,
+     *     category_slug: string|null,
+     *     category_name: string|null,
+     *     department_slug: string|null,
+     *     product_count: int,
+     *     product_ids: list<string>,
+     *     import_map_source_count: int,
+     *     import_map_target_count: int,
+     *     attribute_compatibility: array<string, mixed>,
+     *     planned_migrations: list<array<string, mixed>>,
+     *     target_category_id: string,
+     *     target_category_slug: string,
+     *     target_product_type_id: string,
+     *     target_product_type_slug: string
+     * }
+     */
+    private function inspectCompetingProductType(
+        CatalogProductType $type,
+        Category $canonical,
+        CatalogProductType $canonicalType,
+    ): array {
+        $parent = $type->subcategory;
+        $products = Product::query()
+            ->where('catalog_product_type_id', $type->id)
+            ->get(['id', 'name', 'slug', 'category_id', 'catalog_product_type_id', 'price']);
+
+        $compatibility = $this->compareAttributeCompatibility($type, $canonicalType);
+        $planned = [];
+        foreach ($products as $product) {
+            $planned[] = [
+                'product_id' => $product->id,
+                'product_name' => $product->name,
+                'product_slug' => $product->slug,
+                'from_category_id' => $product->category_id,
+                'from_category_slug' => $parent?->slug,
+                'from_product_type_id' => $type->id,
+                'from_product_type_slug' => $type->slug,
+                'to_category_id' => $canonical->id,
+                'to_category_slug' => $canonical->slug,
+                'to_product_type_id' => $canonicalType->id,
+                'to_product_type_slug' => $canonicalType->slug,
+                'will_migrate' => $compatibility['compatible'],
+            ];
+        }
+
+        return [
+            'id' => $type->id,
+            'slug' => $type->slug,
+            'name' => $type->name,
+            'category_id' => $parent?->id,
+            'category_slug' => $parent?->slug,
+            'category_name' => $parent?->name,
+            'department_slug' => $parent?->department?->slug,
+            'product_count' => $products->count(),
+            'product_ids' => $products->pluck('id')->all(),
+            'import_map_source_count' => $parent === null ? 0 : StoreTaxonomyImportMap::query()
+                ->where('source_category_id', $parent->id)
+                ->count(),
+            'import_map_target_count' => $parent === null ? 0 : StoreTaxonomyImportMap::query()
+                ->where('target_category_id', $parent->id)
+                ->count(),
+            'attribute_compatibility' => $compatibility,
+            'planned_migrations' => $planned,
+            'target_category_id' => $canonical->id,
+            'target_category_slug' => $canonical->slug,
+            'target_product_type_id' => $canonicalType->id,
+            'target_product_type_slug' => $canonicalType->slug,
+        ];
+    }
+
+    /**
+     * @return array{
+     *     compatible: bool,
+     *     competing_attribute_slugs: list<string>,
+     *     canonical_attribute_slugs: list<string>,
+     *     competing_required_slugs: list<string>,
+     *     canonical_required_slugs: list<string>,
+     *     missing_required_on_competing: list<string>,
+     *     extra_on_competing: list<string>
+     * }
+     */
+    private function compareAttributeCompatibility(
+        CatalogProductType $competing,
+        CatalogProductType $canonical,
+    ): array {
+        $competing->loadMissing('attributes');
+        $canonical->loadMissing('attributes');
+
+        $competingSlugs = $competing->attributes->pluck('slug')->filter()->values()->all();
+        $canonicalSlugs = $canonical->attributes->pluck('slug')->filter()->values()->all();
+        $competingRequired = $competing->attributes
+            ->filter(fn ($attribute) => (bool) ($attribute->pivot->is_required ?? false))
+            ->pluck('slug')
+            ->values()
+            ->all();
+        $canonicalRequired = $canonical->attributes
+            ->filter(fn ($attribute) => (bool) ($attribute->pivot->is_required ?? false))
+            ->pluck('slug')
+            ->values()
+            ->all();
+
+        $missingRequired = array_values(array_diff($canonicalRequired, $competingSlugs));
+        $extra = array_values(array_diff($competingSlugs, $canonicalSlugs));
+
+        return [
+            'compatible' => $missingRequired === [],
+            'competing_attribute_slugs' => $competingSlugs,
+            'canonical_attribute_slugs' => $canonicalSlugs,
+            'competing_required_slugs' => $competingRequired,
+            'canonical_required_slugs' => $canonicalRequired,
+            'missing_required_on_competing' => $missingRequired,
+            'extra_on_competing' => $extra,
+        ];
+    }
+
+    /**
      * @param  array<string, mixed>  $report
      */
-    private function dryRunStep(Category $category, array $report): string
+    private function dryRunCategoryStep(Category $category, array $report): string
     {
         $deps = [];
         if ($report['product_count'] > 0) {
@@ -212,45 +427,65 @@ class MobileAccessoriesTaxonomyCleanupService
         }
 
         if ($deps === []) {
-            return "Would deactivate empty competing Power Banks [{$category->slug}].";
+            return "Would deactivate empty competing Power Banks category [{$category->slug}].";
         }
 
-        return "Would migrate ".implode(', ', $deps)." from [{$category->slug}] then deactivate.";
+        return "Would migrate ".implode(', ', $deps)." from category [{$category->slug}] then deactivate.";
     }
 
     /**
      * @param  array<string, mixed>  $report
      */
-    private function repointDependencies(Category $canonical, Category $competing, array $report): void
+    private function dryRunProductTypeStep(array $report): string
     {
+        $parent = $report['category_slug'] ?? 'unknown';
+
+        if ($report['product_count'] === 0) {
+            return "Would deactivate empty competing Power Banks CPT [{$report['slug']}] under [{$parent}]. Parent category preserved.";
+        }
+
+        return sprintf(
+            'Would migrate %d product(s) from CPT [%s] / category [%s] to CPT [%s] / category [%s]. Parent [%s] preserved.',
+            $report['product_count'],
+            $report['slug'],
+            $parent,
+            $report['target_product_type_slug'],
+            $report['target_category_slug'],
+            $parent,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $report
+     */
+    private function repointCategoryDependencies(
+        Category $canonical,
+        CatalogProductType $canonicalType,
+        Category $competing,
+        array $report,
+    ): void {
         Product::query()
             ->where('category_id', $competing->id)
-            ->update(['category_id' => $canonical->id]);
-
-        $canonicalTypeId = CatalogProductType::query()
-            ->where('slug', MobileAccessoriesTaxonomy::CANONICAL_POWER_BANK_TYPE_SLUG)
-            ->value('id')
-            ?? CatalogProductType::query()
-                ->where('subcategory_id', $canonical->id)
-                ->where('name', 'Power Bank')
-                ->value('id');
+            ->update([
+                'category_id' => $canonical->id,
+                'catalog_product_type_id' => $canonicalType->id,
+            ]);
 
         foreach ($report['catalog_product_type_ids'] as $typeId) {
             $type = CatalogProductType::query()->find($typeId);
-            if ($type === null) {
+            if ($type === null || $type->id === $canonicalType->id) {
                 continue;
             }
 
-            if ($canonicalTypeId !== null && $type->id !== $canonicalTypeId) {
-                Product::query()
-                    ->where('catalog_product_type_id', $type->id)
-                    ->update(['catalog_product_type_id' => $canonicalTypeId]);
-                $type->delete();
-                continue;
-            }
-
-            $type->subcategory_id = $canonical->id;
+            Product::query()
+                ->where('catalog_product_type_id', $type->id)
+                ->update([
+                    'category_id' => $canonical->id,
+                    'catalog_product_type_id' => $canonicalType->id,
+                ]);
+            $type->is_active = false;
             $type->save();
+            $type->delete();
         }
 
         $maps = StoreTaxonomyImportMap::query()
@@ -278,5 +513,32 @@ class MobileAccessoriesTaxonomyCleanupService
             $competing->catalogProducts()->detach();
             $canonical->catalogProducts()->syncWithoutDetaching($productIds->all());
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $report
+     */
+    private function migrateCompetingProductType(
+        Category $canonical,
+        CatalogProductType $canonicalType,
+        CatalogProductType $competing,
+        array $report,
+    ): void {
+        Product::query()
+            ->where('catalog_product_type_id', $competing->id)
+            ->update([
+                'category_id' => $canonical->id,
+                'catalog_product_type_id' => $canonicalType->id,
+            ]);
+
+        // Parent Mobile Accessories / other accessory roots keep their import maps.
+        unset($report);
+    }
+
+    private function competingProductTypeIsSafeToRetire(CatalogProductType $type): bool
+    {
+        $type->refresh();
+
+        return Product::query()->where('catalog_product_type_id', $type->id)->doesntExist();
     }
 }

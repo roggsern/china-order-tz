@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\CatalogProductType;
 use App\Models\Category;
 use App\Models\Department;
+use App\Support\Catalog\MobileAccessoriesTaxonomy;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
@@ -1174,6 +1175,13 @@ class CatalogProductTypeSeeder extends Seeder
                 }
 
                 foreach ($typeNames as $index => $name) {
+                    if (
+                        $departmentSlug === MobileAccessoriesTaxonomy::CONSUMER_ELECTRONICS_DEPARTMENT_SLUG
+                        && MobileAccessoriesTaxonomy::isCompetingPowerBankTypeName($name)
+                    ) {
+                        continue;
+                    }
+
                     $slug = $parent->slug.'-'.Str::slug($name);
                     $attributes = [
                         'subcategory_id' => $parent->id,
