@@ -20,7 +20,10 @@ function isTerminalOrderDisplayStatus(
   return (
     progress?.current_key === CUSTOMER_ORDER_PROGRESS_KEYS.DELIVERED ||
     status === "completed" ||
-    status === "delivered"
+    status === "delivered" ||
+    status === "cancelled" ||
+    status === "refunded" ||
+    status === "refund_pending"
   );
 }
 
@@ -28,6 +31,18 @@ function resolveTerminalOrderDisplayLabel(
   status: OrderStatus,
   progress: CustomerOrderProgress | null,
 ): string {
+  if (status === "cancelled") {
+    return ORDER_STATUS_LABELS.cancelled ?? "Cancelled";
+  }
+
+  if (status === "refunded") {
+    return ORDER_STATUS_LABELS.refunded ?? "Refunded";
+  }
+
+  if (status === "refund_pending") {
+    return progress?.current_label || "Refund pending";
+  }
+
   if (progress?.current_key === CUSTOMER_ORDER_PROGRESS_KEYS.DELIVERED) {
     return progress.current_label;
   }

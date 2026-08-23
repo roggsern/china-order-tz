@@ -22,9 +22,16 @@ function isPaymentComplete(paymentStatus: PaymentStatus): boolean {
   return paymentStatus === "paid" || paymentStatus === "refunded";
 }
 
-function paymentSummaryLine(paymentStatus: PaymentStatus): CompactOrderStatusLine | null {
+function paymentSummaryLine(
+  paymentStatus: PaymentStatus,
+  orderStatus: string,
+): CompactOrderStatusLine | null {
   if (isPaymentComplete(paymentStatus)) {
     return { label: "Payment completed", completed: true };
+  }
+
+  if (orderStatus === "cancelled") {
+    return { label: "Payment not completed", completed: false };
   }
 
   if (paymentStatus === "pending" || paymentStatus === "pending_payment") {
@@ -65,7 +72,7 @@ export function buildCompactOrderStatusSummary(
   const progress = parseCustomerOrderProgress(order.progress);
   const completedLines: CompactOrderStatusLine[] = [];
 
-  const paymentLine = paymentSummaryLine(order.paymentStatus);
+  const paymentLine = paymentSummaryLine(order.paymentStatus, order.status);
   if (paymentLine?.completed) {
     completedLines.push(paymentLine);
   }

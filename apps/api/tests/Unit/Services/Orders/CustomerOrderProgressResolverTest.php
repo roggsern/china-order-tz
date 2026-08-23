@@ -7,7 +7,10 @@ use App\Enums\DeliveryOptionStatus;
 use App\Enums\DeliveryType;
 use App\Enums\FulfillmentStatus;
 use App\Enums\OrderStatus;
+use App\Enums\PaymentProvider;
 use App\Enums\PaymentStatus;
+use App\Enums\PaymentTransactionStatus;
+use App\Models\PaymentTransaction;
 use App\Enums\ShipmentLifecycleStatus;
 use App\Enums\ShipmentStatus;
 use App\Models\DeliveryOption;
@@ -51,6 +54,27 @@ class CustomerOrderProgressResolverTest extends TestCase
         $this->assertSame('AWAITING_PAYMENT', $progress['current_key']);
         $this->assertSame('Awaiting payment', $progress['current_label']);
         $this->assertFalse(collect($progress['steps'])->contains(fn (array $step) => $step['completed']));
+    }
+
+    public function test_cancelled_order_is_not_awaiting_payment_when_stale_transaction_is_processing(): void
+    {
+        $user = User::factory()->create();
+        $order = Order::factory()->create([
+            'user_id' => $user->id,
+            'status' => OrderStatus::Cancelled,
+            'paid_at' => null,
+        ]);
+
+        PaymentTransaction::factory()->processing()->create([
+            'order_id' => $order->id,
+            'provider' => PaymentProvider::Nmb,
+            'status' => PaymentTransactionStatus::Processing,
+        ]);
+
+        $progress = $this->resolver->resolve($order->fresh(['payments', 'paymentTransactions']));
+
+        $this->assertSame(CustomerOrderProgressKey::Cancelled->value, $progress['current_key']);
+        $this->assertSame('Order cancelled', $progress['current_label']);
     }
 
     public function test_paid_order_projects_order_confirmed(): void

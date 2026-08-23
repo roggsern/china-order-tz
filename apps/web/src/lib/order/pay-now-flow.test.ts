@@ -51,4 +51,10 @@ describe("Pay Now flow wiring", () => {
     assert.match(details, /isCustomerOrderPayable/);
     assert.doesNotMatch(details, /order\.status === "pending_payment" \|\| order\.status === "pending"/);
   });
+
+  it("hides Pay Now and tracking CTAs on cancelled orders", () => {
+    const details = readSource("components/order/OrderDetailsContent.tsx");
+    assert.match(details, /isCustomerOrderPayable/);
+    assert.match(details, /order\.status !== "cancelled"/);
+  });
 });

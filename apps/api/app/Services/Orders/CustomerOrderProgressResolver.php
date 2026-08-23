@@ -42,15 +42,15 @@ class CustomerOrderProgressResolver
             'deliveryOption',
         ]);
 
+        $terminalKey = $this->resolveTerminalKey($order);
+        if ($terminalKey !== null) {
+            return $this->buildTerminalProgress($terminalKey);
+        }
+
         $payment = $this->resolveLatestPayment($order);
 
         if ($this->isAwaitingPayment($order, $payment)) {
             return $this->buildProgress(CustomerOrderProgressKey::AwaitingPayment);
-        }
-
-        $terminalKey = $this->resolveTerminalKey($order);
-        if ($terminalKey !== null) {
-            return $this->buildTerminalProgress($terminalKey);
         }
 
         if ($this->isCustomerAgentDelivery($order)) {

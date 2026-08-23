@@ -236,12 +236,14 @@ export function OrderDetailsContent({ orderNumber }: OrderDetailsContentProps) {
               Pay now
             </Link>
           )}
-          <Link
-            href={trackHref}
-            className="inline-flex min-h-10 items-center justify-center rounded-xl bg-gradient-to-r from-[#c9a227] to-[#e8c547] px-4 text-sm font-bold text-zinc-900 shadow-sm transition hover:brightness-105"
-          >
-            Track Order
-          </Link>
+          {order.status !== "cancelled" && order.status !== "refunded" ? (
+            <Link
+              href={trackHref}
+              className="inline-flex min-h-10 items-center justify-center rounded-xl bg-gradient-to-r from-[#c9a227] to-[#e8c547] px-4 text-sm font-bold text-zinc-900 shadow-sm transition hover:brightness-105"
+            >
+              Track Order
+            </Link>
+          ) : null}
           {(order.status === "delivered" || order.status === "completed") && (
             <Link
               href={`/orders/${encodeURIComponent(order.orderNumber)}/return`}

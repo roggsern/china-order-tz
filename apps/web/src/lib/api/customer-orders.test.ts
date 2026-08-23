@@ -55,6 +55,12 @@ test("list mapper surfaces backend can_pay without session fields", () => {
   assert.equal(item.status, "pending_payment");
 });
 
+test("mapApiPaymentStatus does not let initiated override a cancelled order", () => {
+  assert.equal(mapApiPaymentStatus("initiated", "cancelled"), PAYMENT_STATUS.CANCELLED);
+  assert.equal(mapApiPaymentStatus("pending", "cancelled"), PAYMENT_STATUS.CANCELLED);
+  assert.equal(mapApiPaymentStatus("paid", "cancelled"), PAYMENT_STATUS.PAID);
+});
+
 test("mapApiPaymentStatus prefers payment record over order status", () => {
   assert.equal(
     mapApiPaymentStatus("initiated", "delivered"),
@@ -206,6 +212,27 @@ test("mapApiCustomerOrderDetailToOrder maps legacy payment method and reference"
   assert.equal(order.paymentMethod, "mpesa");
   assert.equal(order.paymentReference, "PAY-LEGACY-001");
   assert.equal(order.paymentPaidAt, "2026-07-30T09:30:00+00:00");
+});
+
+test("detail mapper keeps cancelled order cancelled when payment snapshot is stale", () => {
+  const order = mapApiCustomerOrderDetailToOrder({
+    ...BASE_DETAIL,
+    status: "cancelled",
+    can_pay: false,
+    active_payment_transaction: null,
+    payment: {
+      payment_status: "initiated",
+      payment_method: "nmb",
+      provider: "nmb",
+      payment_transaction_id: "txn-stale-nmb",
+    },
+  });
+
+  assert.equal(order.status, "cancelled");
+  assert.equal(order.canPay, false);
+  assert.equal(order.paymentStatus, PAYMENT_STATUS.CANCELLED);
+  assert.equal(order.paymentMethod, "nmb");
+  assert.equal(order.activePaymentTransaction, null);
 });
 
 test("detail mapper restores payment transaction from backend without sessionStorage", () => {

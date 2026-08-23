@@ -75,6 +75,19 @@ test("resolveCustomerOrderDisplayStatus shows waiting labels after customer choi
   assert.equal(delivery, "Delivery arrangement pending");
 });
 
+test("resolveCustomerOrderDisplayStatus shows Cancelled even with stale awaiting-payment progress", () => {
+  const label = resolveCustomerOrderDisplayStatus({
+    status: "cancelled",
+    progress: {
+      current_key: "AWAITING_PAYMENT",
+      current_label: "Awaiting payment",
+      steps: [{ key: "AWAITING_PAYMENT", label: "Awaiting payment", completed: false }],
+    },
+  });
+
+  assert.equal(label, "Cancelled");
+});
+
 test("resolveCustomerOrderDisplayStatus falls back to order status labels", () => {
   const label = resolveCustomerOrderDisplayStatus({
     status: "processing",

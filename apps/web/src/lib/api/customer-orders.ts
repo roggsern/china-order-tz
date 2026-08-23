@@ -259,6 +259,14 @@ export function mapApiPaymentStatus(
   paymentStatus: string | null | undefined,
   orderStatus: string,
 ): PaymentStatus {
+  if (
+    orderStatus === "cancelled" &&
+    paymentStatus !== "paid" &&
+    paymentStatus !== "refunded"
+  ) {
+    return "cancelled";
+  }
+
   switch (paymentStatus) {
     case "pending":
     case "initiated":

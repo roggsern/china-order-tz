@@ -18,29 +18,48 @@ class CustomerOrderPaymentStatusResolver
 {
     public function resolve(Order $order): string
     {
+        $orderStatus = $order->status instanceof OrderStatus
+            ? $order->status
+            : OrderStatus::tryFrom((string) $order->status);
+
         $transaction = $this->resolveAuthoritativeTransaction($order);
 
         if ($transaction !== null) {
+            $transactionStatus = $this->transactionStatus($transaction);
+
+            if ($transactionStatus === PaymentTransactionStatus::Successful) {
+                return PaymentStatus::Paid->value;
+            }
+
+            if ($orderStatus === OrderStatus::Cancelled) {
+                return PaymentStatus::Cancelled->value;
+            }
+
+            if ($orderStatus === OrderStatus::Refunded) {
+                return PaymentStatus::Refunded->value;
+            }
+
             return $this->mapTransactionStatus($transaction);
         }
 
         $payment = $this->resolveLatestPayment($order);
+        $legacyStatus = $payment?->status instanceof PaymentStatus
+            ? $payment->status->value
+            : (filled($payment?->status) ? (string) $payment->status : null);
 
-        if ($payment?->status instanceof PaymentStatus) {
-            return $payment->status->value;
-        }
+        if ($legacyStatus !== null) {
+            if ($orderStatus === OrderStatus::Cancelled
+                && ! in_array($legacyStatus, [PaymentStatus::Paid->value, PaymentStatus::Refunded->value], true)
+            ) {
+                return PaymentStatus::Cancelled->value;
+            }
 
-        if ($payment !== null && filled($payment->status)) {
-            return (string) $payment->status;
+            return $legacyStatus;
         }
 
         if ($order->paid_at !== null) {
             return PaymentStatus::Paid->value;
         }
-
-        $orderStatus = $order->status instanceof OrderStatus
-            ? $order->status
-            : OrderStatus::tryFrom((string) $order->status);
 
         return match ($orderStatus) {
             OrderStatus::Cancelled => PaymentStatus::Cancelled->value,

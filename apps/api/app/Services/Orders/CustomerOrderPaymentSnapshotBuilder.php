@@ -74,6 +74,10 @@ class CustomerOrderPaymentSnapshotBuilder
      */
     public function activeTransactionPayload(Order $order): ?array
     {
+        if (! $this->canPay($order)) {
+            return null;
+        }
+
         $transaction = $this->resolveLatestActiveTransaction($order);
         if ($transaction === null) {
             return null;

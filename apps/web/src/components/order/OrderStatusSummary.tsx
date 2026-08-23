@@ -41,9 +41,11 @@ export function OrderStatusSummary({ summary }: OrderStatusSummaryProps) {
         <p className="mt-2 text-base font-semibold text-zinc-900">{summary.currentStatus}</p>
       </div>
 
-      <p className="text-sm text-zinc-500">
-        Track your order for live shipment updates.
-      </p>
+      {summary.currentStatus !== "Cancelled" && summary.currentStatus !== "Refunded" ? (
+        <p className="text-sm text-zinc-500">
+          Track your order for live shipment updates.
+        </p>
+      ) : null}
     </div>
   );
 }

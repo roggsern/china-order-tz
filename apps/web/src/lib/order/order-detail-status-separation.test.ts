@@ -31,6 +31,22 @@ test("buildCompactOrderStatusSummary shows payment, confirmed, and current statu
   assert.equal(summary.currentStatus, "Delivered");
 });
 
+test("buildCompactOrderStatusSummary shows Cancelled and payment not completed", () => {
+  const summary = buildCompactOrderStatusSummary({
+    status: ORDER_STATUS.CANCELLED,
+    paymentStatus: PAYMENT_STATUS.CANCELLED,
+    progress: {
+      current_key: "CANCELLED",
+      current_label: "Order cancelled",
+      steps: [{ key: "CANCELLED", label: "Order cancelled", completed: false }],
+    },
+  });
+
+  assert.deepEqual(summary.completedLines, [{ label: "Payment not completed", completed: false }]);
+  assert.equal(summary.currentStatus, "Cancelled");
+  assert.notEqual(summary.currentStatus, "Awaiting payment");
+});
+
 test("buildCompactOrderStatusSummary shows pending payment for unpaid orders", () => {
   const summary = buildCompactOrderStatusSummary({
     status: ORDER_STATUS.PENDING_PAYMENT,
