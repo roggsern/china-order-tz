@@ -12,6 +12,8 @@ import {
 } from "@/lib/admin/order-detail-display";
 import { resolveAdminOrderSourceBadge } from "@/lib/admin/order-source-badge";
 import { useAdminOrders } from "@/components/admin/AdminOrdersProvider";
+import { AdminConfirmOfficePaymentCard } from "@/components/admin/AdminConfirmOfficePaymentCard";
+import { useAdminPermissions } from "@/hooks/use-admin-permissions";
 import { AdminOrderCustomerCard } from "@/components/admin/AdminOrderCustomerCard";
 import { AdminOrderFulfilmentWorkspaceCard } from "@/components/admin/AdminOrderFulfilmentWorkspaceCard";
 import { AdminOrderItemsList } from "@/components/admin/AdminOrderItemsList";
@@ -29,7 +31,8 @@ interface AdminOrderDetailContentProps {
 }
 
 export function AdminOrderDetailContent({ orderId }: AdminOrderDetailContentProps) {
-  const { getOrderById, isHydrated } = useAdminOrders();
+  const { getOrderById, isHydrated, refreshOrders } = useAdminOrders();
+  const { permissions, loading: permissionsLoading } = useAdminPermissions();
   const order = getOrderById(orderId);
 
   const shippingMethods = useMemo(() => {
@@ -242,6 +245,13 @@ export function AdminOrderDetailContent({ orderId }: AdminOrderDetailContentProp
               </Link>
             </div>
           </section>
+
+          <AdminConfirmOfficePaymentCard
+            order={order}
+            permissions={permissions}
+            permissionsLoading={permissionsLoading}
+            onConfirmed={refreshOrders}
+          />
 
           <section className="admin-card p-4 sm:p-5">
             <h2 className="text-sm font-semibold text-zinc-900">Payment summary</h2>

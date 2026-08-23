@@ -1,4 +1,5 @@
 import type { AdminFulfillmentApiError } from "@/lib/api/admin-fulfillments";
+import { hasAdminPermission } from "@/lib/api/admin-me";
 
 type ApiSuccessResponse<T> = {
   success?: boolean;
@@ -132,6 +133,50 @@ export async function completeCancellationRefund(
     },
     "Unable to complete cancellation refund.",
   );
+}
+
+export async function confirmOfficePayment(
+  orderId: string,
+  input?: { reference?: string; note?: string },
+): Promise<unknown> {
+  return adminFetch(
+    `/api/admin/orders/${encodeURIComponent(orderId)}/pay`,
+    {
+      method: "PATCH",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        reference: input?.reference?.trim() || undefined,
+        note: input?.note?.trim() || undefined,
+      }),
+    },
+    "Unable to confirm Pay at Office payment.",
+  );
+}
+
+export function canConfirmOfficePayment(permissions: string[] | undefined): boolean {
+  return hasAdminPermission(permissions, "orders.mark_paid");
+}
+
+export function isEligibleOfficePaymentOrder(order: {
+  paymentMethod?: string | null;
+  paymentStatus?: string | null;
+  status?: string | null;
+}): boolean {
+  const method = (order.paymentMethod ?? "").toLowerCase();
+  const paymentStatus = (order.paymentStatus ?? "").toLowerCase();
+  const status = (order.status ?? "").toLowerCase();
+
+  const isOfficeMethod = method === "cod" || method === "cash";
+  const paymentAwaiting =
+    paymentStatus === "pending" ||
+    paymentStatus === "pending_payment" ||
+    paymentStatus === "initiated";
+  const orderAwaiting = status === "pending" || status === "pending_payment";
+
+  return isOfficeMethod && paymentAwaiting && orderAwaiting;
 }
 
 export async function failCancellationRefund(

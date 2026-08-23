@@ -58,7 +58,7 @@ export function saveLocalOrderFromBackendConfirmation(input: SaveBackendOrderInp
   linkDraftToOrder(input.draftId, order.id);
   saveOrder(order);
   // Do not clear/lock the cart here — payment has not been selected yet.
-  // Cart is locked when the customer completes payment or places COD/bank transfer.
+  // Cart is locked when the customer completes payment or places Pay at Office / bank transfer.
 
   return order;
 }

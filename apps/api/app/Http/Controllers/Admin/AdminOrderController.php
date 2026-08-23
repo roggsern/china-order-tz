@@ -59,10 +59,16 @@ class AdminOrderController extends Controller
 
     public function pay(PayOrderRequest $request, Order $order, PayOrderAction $action): JsonResponse
     {
+        $validated = $request->validated();
+
         return response()->json([
             'success' => true,
-            'message' => 'Order paid successfully.',
-            'data' => new OrderResource($action->handle($order)),
+            'message' => 'Payment confirmed. The order is now paid.',
+            'data' => new OrderResource($action->handle(
+                $order,
+                $validated['reference'] ?? null,
+                $validated['note'] ?? null,
+            )),
         ]);
     }
 

@@ -30,6 +30,20 @@ describe('mapPaymentMethods', () => {
       selectable: true,
     });
   });
+
+  it('does not expose cash as a selectable mobile payment method', () => {
+    const methods = mapPaymentMethods({
+      default_provider: 'nmb',
+      enabled_methods: ['nmb', 'cash'],
+      methods: [
+        { code: 'nmb', enabled: true, available: true, selectable: true },
+        { code: 'cash', enabled: true, available: true, selectable: true },
+      ],
+    });
+
+    expect(methods.methods.find((method) => method.code === 'cash')?.selectable).toBe(false);
+    expect(methods.methods.find((method) => method.code === 'nmb')?.selectable).toBe(true);
+  });
 });
 
 describe('buildStartPaymentPayload', () => {

@@ -64,6 +64,37 @@ class PaymentConfigurationResolverTest extends TestCase
         $this->assertSame('nmb', $this->resolver->resolveStartProvider('nmb'));
     }
 
+    public function test_resolve_start_provider_rejects_cash_even_when_enabled(): void
+    {
+        app(SettingsService::class)->set('payments.enabled_methods', [
+            'nmb' => true,
+            'mpesa' => false,
+            'card' => false,
+            'cash' => true,
+            'bank_transfer' => false,
+        ]);
+        app(SettingsService::class)->set('payments.default_provider', 'cash');
+        Cache::flush();
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $this->resolver->resolveStartProvider(null);
+    }
+
+    public function test_resolve_start_provider_rejects_explicit_cash(): void
+    {
+        app(SettingsService::class)->set('payments.enabled_methods', [
+            'nmb' => true,
+            'mpesa' => false,
+            'card' => false,
+            'cash' => true,
+            'bank_transfer' => false,
+        ]);
+        Cache::flush();
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $this->resolver->resolveStartProvider('cash');
+    }
+
     public function test_resolve_start_provider_rejects_disabled(): void
     {
         app(SettingsService::class)->set('payments.enabled_methods', [

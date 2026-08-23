@@ -38,7 +38,8 @@ export function mapPaymentMethod(raw: unknown): PaymentMethodAvailability | null
     code,
     enabled: boolField(data, 'enabled'),
     available: boolField(data, 'available'),
-    selectable: boolField(data, 'selectable'),
+    // Mobile currently starts NMB only. Do not expose Pay at Office as selectable.
+    selectable: code === 'cash' ? false : boolField(data, 'selectable'),
   };
 }
 

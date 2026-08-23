@@ -20,6 +20,9 @@ class PayOrderRequest extends FormRequest
      */
     public function rules(): array
     {
-        return [];
+        return [
+            'reference' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'note' => ['sometimes', 'nullable', 'string', 'max:1000'],
+        ];
     }
 }

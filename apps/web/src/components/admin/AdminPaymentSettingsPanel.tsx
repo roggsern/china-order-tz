@@ -203,15 +203,17 @@ export function AdminPaymentSettingsPanel() {
                         {PAYMENT_METHOD_LABELS[method]}
                       </span>
                       <span className="mt-0.5 block text-xs text-zinc-600">
-                        {status?.available
-                          ? "Provider available"
-                          : method === "nmb"
-                            ? "NMB credentials not configured in ENV"
-                            : method === "snippe"
-                              ? "Snippe credentials not configured in ENV"
-                            : method === "cash" || method === "bank_transfer"
-                              ? "Local method"
-                              : "External provider not configured"}
+                        {method === "cash"
+                          ? "Local payment method"
+                          : status?.available
+                            ? "Provider available"
+                            : method === "nmb"
+                              ? "NMB credentials not configured in ENV"
+                              : method === "snippe"
+                                ? "Snippe credentials not configured in ENV"
+                              : method === "bank_transfer"
+                                ? "Local method"
+                                : "External provider not configured"}
                       </span>
                     </span>
                   </label>

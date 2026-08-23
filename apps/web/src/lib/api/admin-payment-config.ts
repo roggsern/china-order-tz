@@ -167,6 +167,6 @@ export const PAYMENT_METHOD_LABELS: Record<keyof PaymentEnabledMethods, string> 
   snippe: "Mobile Money (Snippe)",
   mpesa: "M-Pesa",
   card: "Card",
-  cash: "Cash",
+  cash: "Pay at Office",
   bank_transfer: "Bank transfer",
 };

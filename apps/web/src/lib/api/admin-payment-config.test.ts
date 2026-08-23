@@ -91,6 +91,7 @@ describe("admin payment settings snippe toggle", () => {
     assert.equal(payload.nmb, true);
     assert.equal(PAYMENT_METHOD_ORDER[0], "nmb");
     assert.equal(PAYMENT_METHOD_LABELS.nmb, "NMB");
+    assert.equal(PAYMENT_METHOD_LABELS.cash, "Pay at Office");
   });
 
   it("admin payment panel submits complete enabled_methods including snippe", () => {
@@ -105,5 +106,7 @@ describe("admin payment settings snippe toggle", () => {
     assert.match(panel, /Mobile Money \(Snippe\)|PAYMENT_METHOD_LABELS/);
     assert.match(panel, /method === "snippe"/);
     assert.doesNotMatch(panel, /api\.snippe\.sh/i);
+    assert.match(panel, /Pay at Office|PAYMENT_METHOD_LABELS/);
+    assert.match(panel, /Local payment method/);
   });
 });

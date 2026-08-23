@@ -65,6 +65,8 @@ function ConfirmationHeader({ order }: { order: Order }) {
   }
 
   if (isOrderPaymentPending(order)) {
+    const isPayAtOffice = order.paymentMethod === PAYMENT_METHOD_CODES.COD;
+
     return (
       <header className="text-center">
         <div
@@ -74,11 +76,12 @@ function ConfirmationHeader({ order }: { order: Order }) {
           ⏳
         </div>
         <h1 className="mt-5 text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl">
-          Order Received
+          {isPayAtOffice ? "Order successfully placed" : "Order Received"}
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-          Thank you — we&apos;ve received your order. Complete payment to confirm, or pay on
-          delivery if you chose COD.
+          {isPayAtOffice
+            ? "Your order is awaiting payment. Processing begins after payment is received and confirmed."
+            : "Thank you — we've received your order. Payment is still required before we process it."}
         </p>
       </header>
     );
@@ -324,6 +327,41 @@ export function OrderSuccessContent({ orderId }: OrderSuccessContentProps) {
           </p>
           <OrderSummaryTotals totals={order.totals} hideZeroDiscount />
         </section>
+
+        {order.paymentMethod === PAYMENT_METHOD_CODES.COD ? (
+          <section
+            aria-labelledby="pay-at-office-heading"
+            className="rounded-2xl border border-amber-200 bg-amber-50/70 px-5 py-5"
+          >
+            <SectionHeading id="pay-at-office-heading">Pay at Office</SectionHeading>
+            <p className="mt-2 text-sm text-zinc-700">
+              Your order was placed successfully and is awaiting payment. Processing begins after
+              CHINA ORDER TZ confirms that payment has been received.
+            </p>
+            <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="text-xs font-medium text-zinc-500">Payment status</dt>
+                <dd className="font-semibold text-zinc-900">Awaiting payment</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-medium text-zinc-500">Payment method</dt>
+                <dd className="font-semibold text-zinc-900">Pay at Office</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-medium text-zinc-500">Order reference</dt>
+                <dd className="font-mono font-semibold text-zinc-900">{order.orderNumber}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-medium text-zinc-500">Amount due</dt>
+                <dd className="font-semibold text-zinc-900">{formatPrice(order.grandTotal)}</dd>
+              </div>
+            </dl>
+            <p className="mt-4 text-sm text-zinc-600">
+              Visit or contact a CHINA ORDER TZ office to complete payment. Bring your order
+              reference.
+            </p>
+          </section>
+        ) : null}
 
         {order.paymentMethod === PAYMENT_METHOD_CODES.BANK_TRANSFER ? (
           <section

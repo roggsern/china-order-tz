@@ -5,99 +5,109 @@ namespace App\Actions\AdminOrders;
 use App\Enums\OrderStatus;
 use App\Models\Admin;
 use App\Models\Order;
-use App\Services\CostProfit\ProfitEngine;
-use App\Services\Fulfillment\FulfillmentEngine;
-use App\Services\Inventory\DTOs\InventoryCommitmentContext;
-use App\Services\Inventory\InventoryCommitmentService;
 use App\Services\Orders\Lifecycle\OrderLifecycleContext;
-use App\Services\Orders\Lifecycle\OrderLifecycleEngine;
+use App\Services\Payments\ManualPaymentConfirmationService;
+use App\Services\Payments\PaidOrderCompletionService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Admin mark-paid — inventory commitment + OrderLifecycleEngine paid transition + fulfillment.
+ * Admin payment confirmation.
  *
- * LOCKED MODULE NOTE (Lifecycle Closure #2): status write uses OrderLifecycleEngine.
- * Inventory writes go through InventoryCommitmentService → MutationGate (ADR 055).
+ * Pay at Office (cash) uses ManualPaymentConfirmationService so payment + order
+ * converge into PaidOrderCompletionService. Orders without a cash payment keep
+ * the generic admin-pay path through the same downstream completion service.
  */
 class PayOrderAction
 {
     public function __construct(
-        private readonly FulfillmentEngine $fulfillmentEngine,
-        private readonly ProfitEngine $profitEngine,
-        private readonly OrderLifecycleEngine $lifecycle,
-        private readonly InventoryCommitmentService $inventoryCommitment,
+        private readonly ManualPaymentConfirmationService $manualConfirmation,
+        private readonly PaidOrderCompletionService $paidCompletion,
     ) {}
 
-    public function handle(Order $order): Order
-    {
-        if ($order->status === OrderStatus::Paid) {
-            $this->throwValidationError('Order is already paid.');
-        }
-
-        if (! in_array($order->status, [OrderStatus::Pending, OrderStatus::PendingPayment], true)) {
-            $this->throwValidationError('Only pending orders can be paid.');
-        }
-
+    public function handle(
+        Order $order,
+        ?string $reference = null,
+        ?string $note = null,
+    ): Order {
         /** @var Admin|null $admin */
         $admin = Auth::user() instanceof Admin ? Auth::user() : null;
+        if ($admin === null) {
+            $this->throwValidationError('An authorized admin must confirm payment.');
+        }
 
+        if ($this->manualConfirmation->hasBlockingNonCashPayment($order)) {
+            $this->throwValidationError('This order is not a Pay at Office payment.');
+        }
+
+        $cashPayment = $this->manualConfirmation->findCashPayment($order);
+        if ($cashPayment !== null) {
+            return $this->manualConfirmation->confirm($order, $admin, $reference, $note);
+        }
+
+        return $this->confirmGenericAdminPay($order, $admin);
+    }
+
+    private function confirmGenericAdminPay(Order $order, Admin $admin): Order
+    {
         return DB::transaction(function () use ($order, $admin): Order {
-            $order->load('items.product', 'items.variant');
+            /** @var Order $locked */
+            $locked = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
 
-            try {
-                $this->inventoryCommitment->commitForOrder(new InventoryCommitmentContext(
-                    order: $order,
-                    actor: $admin,
-                    source: 'admin_pay',
-                    metadata: ['path' => 'PayOrderAction'],
-                    strict: true,
-                ));
-            } catch (ValidationException $e) {
-                $message = collect($e->errors())->flatten()->first()
-                    ?? 'Insufficient stock for one or more order items.';
-                $this->throwValidationError((string) $message);
+            $status = $locked->status instanceof OrderStatus
+                ? $locked->status
+                : OrderStatus::tryFrom((string) $locked->status);
+
+            if ($status === OrderStatus::Paid && $locked->paid_at !== null) {
+                return $locked->fresh([
+                    'user',
+                    'coupon',
+                    'items.product',
+                    'items.variant',
+                    'payments',
+                    'shippingAddress',
+                    'fulfillment',
+                    'statusHistory',
+                ]) ?? $locked;
+            }
+
+            if ($status === OrderStatus::Cancelled) {
+                $this->throwValidationError('Cancelled orders cannot be confirmed as paid.');
+            }
+
+            if (in_array($status, [OrderStatus::Refunded, OrderStatus::RefundPending], true)) {
+                $this->throwValidationError('Refunded orders cannot be confirmed as paid.');
+            }
+
+            if ($status === null || ! in_array($status, [OrderStatus::Pending, OrderStatus::PendingPayment], true)) {
+                $this->throwValidationError('Only pending orders can be paid.');
             }
 
             $context = new OrderLifecycleContext(
                 source: 'admin_pay',
                 reason: 'Admin marked order paid',
                 admin: $admin,
+                idempotencyKey: 'admin-pay:'.$locked->id,
                 metadata: ['path' => 'PayOrderAction'],
             );
 
-            $paid = $this->lifecycle->markPaid($order, $context)->load([
-                'user',
-                'coupon',
-                'items.product',
-                'items.variant',
-                'payments',
-                'shippingAddress',
-                'fulfillment',
-                'statusHistory',
-            ]);
-
             try {
-                $this->profitEngine->calculateForOrder($paid);
-            } catch (\Throwable $e) {
-                Log::warning('profit.calculate_after_admin_pay_failed', [
-                    'order_id' => $paid->id,
-                    'message' => $e->getMessage(),
-                ]);
+                $paid = $this->paidCompletion->complete(
+                    $locked,
+                    $context,
+                    inventorySource: 'admin_pay',
+                    inventoryActor: $admin,
+                    inventoryStrict: true,
+                    inventoryMetadata: ['path' => 'PayOrderAction'],
+                );
+            } catch (ValidationException $e) {
+                $message = collect($e->errors())->flatten()->first()
+                    ?? 'Unable to confirm payment.';
+                $this->throwValidationError((string) $message);
             }
 
-            try {
-                $this->fulfillmentEngine->createForOrder($paid);
-            } catch (\Throwable $e) {
-                Log::warning('fulfillment.create_after_admin_pay_failed', [
-                    'order_id' => $paid->id,
-                    'message' => $e->getMessage(),
-                ]);
-            }
-
-            return $paid->fresh([
+            return $paid->load([
                 'user',
                 'coupon',
                 'items.product',

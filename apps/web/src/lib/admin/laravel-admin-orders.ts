@@ -1,7 +1,8 @@
 import type { Order, OrderLineItem, OrderStatus } from "@/lib/types/order";
 import { ORDER_STATUS, normalizeOrder } from "@/lib/types/order";
-import type { PaymentStatus } from "@/lib/types/payment";
+import type { PaymentMethodCode, PaymentStatus } from "@/lib/types/payment";
 import { PAYMENT_STATUS } from "@/lib/types/payment";
+import { backendMethodToStorefrontCode } from "@/lib/checkout/payment-availability";
 import type { ShippingMethodCode } from "@/lib/shipping/types";
 import { durationDaysFromSnapshots } from "@/lib/shipping/durations";
 import { EMPTY_SHIPPING_ADDRESS } from "@/lib/types/checkout";
@@ -81,6 +82,14 @@ function mapBackendStatus(status: string | undefined): OrderStatus {
     return raw as OrderStatus;
   }
   return (raw || ORDER_STATUS.PENDING) as OrderStatus;
+}
+
+function mapLaravelPaymentMethod(method: string | undefined): PaymentMethodCode | null {
+  if (!method?.trim()) {
+    return null;
+  }
+
+  return backendMethodToStorefrontCode(method.trim().toLowerCase());
 }
 
 function mapPaymentStatus(order: LaravelAdminOrder): PaymentStatus {
@@ -216,7 +225,7 @@ export function mapLaravelAdminOrderToWebOrder(row: LaravelAdminOrder): Order {
     id: row.id,
     orderNumber: row.order_number ?? row.id,
     paymentStatus: mapPaymentStatus(row),
-    paymentMethod: null,
+    paymentMethod: mapLaravelPaymentMethod(row.payments?.[0]?.method),
     paymentReference: row.payments?.[0]?.reference ?? null,
     status: mapBackendStatus(row.status),
     createdAt,

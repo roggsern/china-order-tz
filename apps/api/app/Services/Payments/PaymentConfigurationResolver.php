@@ -141,6 +141,20 @@ final class PaymentConfigurationResolver
      * Resolve the provider used for payment start.
      * Uses settings default when request omits provider; rejects unknown/disabled methods.
      */
+    /**
+     * Online start() is only valid for orchestrated gateways.
+     * Cash / bank transfer stay checkout methods and must not enter PaymentOrchestrator::start.
+     */
+    public function isOrchestratedStartMethod(string $method): bool
+    {
+        $method = strtolower(trim($method));
+
+        return in_array($method, [
+            PaymentMethod::Nmb->value,
+            PaymentMethod::Snippe->value,
+        ], true);
+    }
+
     public function resolveStartProvider(?string $provider = null): string
     {
         $resolved = $provider !== null && trim($provider) !== ''
@@ -152,6 +166,14 @@ final class PaymentConfigurationResolver
             'provider',
             $provider === null || trim((string) $provider) === '',
         );
+
+        if (! $this->isOrchestratedStartMethod($resolved)) {
+            ApiResponse::throwCodedValidation([
+                'provider' => [
+                    "Payment provider [{$resolved}] cannot start an online payment session.",
+                ],
+            ], 'payment_failed');
+        }
 
         return $resolved;
     }

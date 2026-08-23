@@ -89,7 +89,7 @@ function submitLabelForMethod(
   }
   if (method === PAYMENT_METHOD_CODES.NMB) return "Pay securely";
   if (method === PAYMENT_METHOD_CODES.SNIPPE) return "Pay with Mobile Money";
-  if (method === PAYMENT_METHOD_CODES.COD) return "Place order (pay on delivery)";
+  if (method === PAYMENT_METHOD_CODES.COD) return "Place order (pay at office)";
   if (method === PAYMENT_METHOD_CODES.BANK_TRANSFER) return "Place order (bank transfer)";
   return "Continue to payment";
 }
@@ -360,11 +360,7 @@ export function PaymentPageContent() {
       }
 
       if (paymentMethod === PAYMENT_METHOD_CODES.COD && backendMethod) {
-        try {
-          await prepareOrderPayment(backendOrderId, backendMethod);
-        } catch {
-          // COD can still finalize locally as payable on delivery.
-        }
+        await prepareOrderPayment(backendOrderId, backendMethod);
       }
 
       finishOrder(order, clearPurchasedItems, router);

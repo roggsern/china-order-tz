@@ -22,7 +22,10 @@ use App\Services\Payments\Orchestration\NmbOrchestratorCallbackService;
 use App\Services\Payments\Orchestration\PaymentOrchestrator;
 use App\Payments\Gateways\Snippe\SnippeReplayGuard;
 use App\Payments\Gateways\Snippe\SnippeWebhookSignatureVerifier;
+use App\Services\Payments\ManualPaymentConfirmationService;
+use App\Services\Payments\ManualPaymentMutationGuard;
 use App\Services\Payments\Orchestration\PaymentTransactionCompletionService;
+use App\Services\Payments\PaidOrderCompletionService;
 use App\Services\Payments\Orchestration\SnippeOrchestratorWebhookService;
 use App\Services\Payments\Orchestration\Providers\NmbPaymentProvider;
 use App\Services\Payments\Orchestration\Providers\SnippePaymentProvider;
@@ -67,6 +70,9 @@ class PaymentServiceProvider extends ServiceProvider
 
         $this->app->singleton(NmbPaymentProvider::class);
         $this->app->singleton(MerchantReferenceGenerator::class);
+        $this->app->singleton(PaidOrderCompletionService::class);
+        $this->app->singleton(ManualPaymentConfirmationService::class);
+        $this->app->singleton(ManualPaymentMutationGuard::class);
         $this->app->singleton(PaymentTransactionCompletionService::class);
         $this->app->singleton(NmbOrchestratorCallbackService::class);
         $this->app->singleton(SnippeOrchestratorWebhookService::class);

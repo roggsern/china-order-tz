@@ -2,36 +2,23 @@
 
 namespace App\Services\Payments\Orchestration;
 
-use App\Enums\OrderStatus;
-use App\Enums\NotificationEventType;
 use App\Enums\PaymentTransactionStatus;
-use App\Events\Audit\PaymentConfirmed as PaymentConfirmedAudit;
 use App\Models\Order;
 use App\Models\PaymentTransaction;
-use App\Services\CostProfit\ProfitEngine;
-use App\Services\Fulfillment\FulfillmentEngine;
-use App\Services\Inventory\DTOs\InventoryCommitmentContext;
-use App\Services\Inventory\InventoryCommitmentService;
-use App\Services\Notifications\NotificationPlatform;
 use App\Services\Orders\Lifecycle\OrderLifecycleContext;
-use App\Services\Orders\Lifecycle\OrderLifecycleEngine;
 use App\Services\Payments\Orchestration\DTOs\PaymentProviderResult;
+use App\Services\Payments\PaidOrderCompletionService;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 /**
  * Marks orchestrator payment transactions (and parent orders) as paid.
- * Commits inventory once on payment success (ADR 055), then fulfillment.
+ * Downstream paid processing is shared with manual confirmation.
  */
 class PaymentTransactionCompletionService
 {
     public function __construct(
-        private readonly FulfillmentEngine $fulfillmentEngine,
-        private readonly NotificationPlatform $notifications,
-        private readonly ProfitEngine $profitEngine,
-        private readonly OrderLifecycleEngine $lifecycle,
-        private readonly InventoryCommitmentService $inventoryCommitment,
+        private readonly PaidOrderCompletionService $paidCompletion,
     ) {}
 
     public function applyResult(PaymentTransaction $transaction, PaymentProviderResult $result): PaymentTransaction
@@ -47,8 +34,7 @@ class PaymentTransactionCompletionService
             if ($locked->status === PaymentTransactionStatus::Successful) {
                 $locked->loadMissing('order');
                 if ($locked->order !== null) {
-                    $this->commitInventory($locked->order, $locked, strict: false);
-                    $this->startFulfillment($locked->order);
+                    $this->completeOrder($locked, $locked->order, inventoryStrict: false);
                 }
 
                 return $locked->load('order');
@@ -91,110 +77,38 @@ class PaymentTransactionCompletionService
             return;
         }
 
-        $alreadyPaid = $order->status === OrderStatus::Paid && $order->paid_at !== null;
-
-        if (! $alreadyPaid) {
-            try {
-                $this->lifecycle->markPaid(
-                    $order,
-                    OrderLifecycleContext::payment(
-                        'Payment transaction successful',
-                        'payment-txn:'.$transaction->id,
-                        [
-                            'payment_transaction_id' => $transaction->id,
-                            'provider' => $transaction->provider instanceof \BackedEnum
-                                ? $transaction->provider->value
-                                : (string) $transaction->provider,
-                        ],
-                    ),
-                );
-            } catch (ValidationException $e) {
-                Log::warning('lifecycle.mark_paid_rejected', [
-                    'order_id' => $order->id,
-                    'transaction_id' => $transaction->id,
-                    'errors' => $e->errors(),
-                ]);
-
-                return;
-            }
-
-            $order = $order->fresh() ?? $order;
-
-            try {
-                event(PaymentConfirmedAudit::fromOrder($order));
-            } catch (\Throwable $e) {
-                Log::warning('audit.payment_confirmed_failed', [
-                    'order_id' => $order->id,
-                    'message' => $e->getMessage(),
-                ]);
-            }
-
-            $order->loadMissing('user');
-            if ($order->user !== null) {
-                try {
-                    $notifyKey = 'payment_confirmed:'.$order->id.':'.$order->user->id;
-                    $this->notifications->notifyCustomer(
-                        NotificationEventType::PaymentConfirmed,
-                        $order->user,
-                        [
-                            'customer_name' => $order->user->name,
-                            'order_number' => $order->order_number,
-                            'order_id' => $order->id,
-                            'order_total' => (string) $order->total,
-                            'currency' => $order->currency,
-                        ],
-                        idempotencyKey: $notifyKey,
-                        correlationKey: $notifyKey,
-                    );
-                } catch (\Throwable $e) {
-                    Log::warning('notification.payment_confirmed_failed', [
-                        'order_id' => $order->id,
-                        'message' => $e->getMessage(),
-                    ]);
-                }
-            }
-        }
-
-        $paidOrder = $order->fresh() ?? $order;
-
-        // Strict on first payment success path (including already-paid race): must commit.
-        $this->commitInventory($paidOrder, $transaction, strict: true);
-
-        try {
-            $this->profitEngine->calculateForOrder($paidOrder);
-        } catch (\Throwable $e) {
-            Log::warning('profit.calculate_after_payment_failed', [
-                'order_id' => $paidOrder->id,
-                'message' => $e->getMessage(),
-            ]);
-        }
-
-        $this->startFulfillment($paidOrder);
+        $this->completeOrder($transaction, $order, inventoryStrict: true);
     }
 
-    private function commitInventory(Order $order, PaymentTransaction $transaction, bool $strict): void
-    {
-        $this->inventoryCommitment->commitForOrder(new InventoryCommitmentContext(
-            order: $order,
-            payment: $transaction,
-            source: 'payment_transaction',
-            channel: null,
-            metadata: [
+    private function completeOrder(
+        PaymentTransaction $transaction,
+        Order $order,
+        bool $inventoryStrict,
+    ): void {
+        $context = OrderLifecycleContext::payment(
+            'Payment transaction successful',
+            'payment-txn:'.$transaction->id,
+            [
                 'payment_transaction_id' => $transaction->id,
+                'provider' => $transaction->provider instanceof \BackedEnum
+                    ? $transaction->provider->value
+                    : (string) $transaction->provider,
             ],
-            strict: $strict,
-        ));
-    }
+        );
 
-    private function startFulfillment(Order $order): void
-    {
         try {
-            $this->fulfillmentEngine->createForOrder($order);
-        } catch (\Throwable $e) {
-            Log::warning('fulfillment.create_after_payment_failed', [
-                'order_id' => $order->id,
-                'message' => $e->getMessage(),
-            ]);
+            $this->paidCompletion->complete(
+                $order,
+                $context,
+                inventorySource: 'payment_transaction',
+                inventoryPaymentTransaction: $transaction,
+                inventoryStrict: $inventoryStrict,
+                inventoryMetadata: [
+                    'payment_transaction_id' => $transaction->id,
+                ],
+            );
+        } catch (ValidationException) {
+            // Gateway path historically logs and leaves the transaction result persisted.
         }
     }
 }

@@ -13,7 +13,7 @@ export function shouldRedirectToOrderSuccess(order: Order): boolean {
     return false;
   }
 
-  // Still waiting for the customer to pick NMB / M-Pesa / COD / Bank Transfer.
+  // Still waiting for the customer to pick NMB / M-Pesa / Pay at Office / Bank Transfer.
   if (!order.paymentMethod) {
     return false;
   }
@@ -23,7 +23,7 @@ export function shouldRedirectToOrderSuccess(order: Order): boolean {
     return true;
   }
 
-  // COD: accepted as place-order confirmation (payable on delivery).
+  // Pay at Office: order is placed and remains awaiting payment confirmation.
   if (order.paymentMethod === PAYMENT_METHOD_CODES.COD) {
     return true;
   }

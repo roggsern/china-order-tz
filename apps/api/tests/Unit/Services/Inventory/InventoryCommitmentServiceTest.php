@@ -23,7 +23,11 @@ use App\Services\Inventory\InventoryCommitmentService;
 use App\Services\Payments\Orchestration\DTOs\PaymentProviderResult;
 use App\Services\Payments\Orchestration\PaymentTransactionCompletionService;
 use App\Actions\AdminOrders\PayOrderAction;
+use App\Models\Admin;
+use App\Support\Admin\AdminPermissions;
+use Database\Seeders\CommerceChannelSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
@@ -38,6 +42,7 @@ class InventoryCommitmentServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(CommerceChannelSeeder::class);
         $this->commitment = app(InventoryCommitmentService::class);
     }
 
@@ -126,6 +131,7 @@ class InventoryCommitmentServiceTest extends TestCase
         ['order' => $order, 'inventory' => $inventory] = $this->makeSimpleOrder(onHand: 6, qty: 2);
         $order->forceFill(['status' => OrderStatus::Pending])->save();
 
+        Sanctum::actingAs(Admin::factory()->withPermissions([AdminPermissions::ORDERS_MARK_PAID])->create());
         app(PayOrderAction::class)->handle($order);
 
         $this->assertSame(OrderStatus::Paid, $order->fresh()->status);
@@ -137,6 +143,7 @@ class InventoryCommitmentServiceTest extends TestCase
         ['order' => $order, 'inventory' => $inventory] = $this->makeVariantOrder(onHand: 8, qty: 3);
         $order->forceFill(['status' => OrderStatus::Pending])->save();
 
+        Sanctum::actingAs(Admin::factory()->withPermissions([AdminPermissions::ORDERS_MARK_PAID])->create());
         app(PayOrderAction::class)->handle($order);
 
         $this->assertSame(5, (int) $inventory->fresh()->on_hand);

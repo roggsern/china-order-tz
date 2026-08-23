@@ -44,6 +44,11 @@ describe("checkout payment availability", () => {
       ["nmb", "cod"],
     );
     assert.equal(options.find((option) => option.code === "cod")?.backendCode, "cash");
+    assert.equal(options.find((option) => option.code === "cod")?.label, "Pay at Office");
+    assert.doesNotMatch(
+      options.find((option) => option.code === "cod")?.description ?? "",
+      /cash on delivery|pay on delivery/i,
+    );
   });
 
   it("hides disabled methods", () => {

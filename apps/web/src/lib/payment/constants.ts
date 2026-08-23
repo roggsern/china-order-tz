@@ -102,8 +102,8 @@ export const SIMPLIFIED_PAYMENT_OPTIONS = [
   },
   {
     code: "cod" as const,
-    label: "Cash on Delivery",
-    description: "Pay when your order arrives",
+    label: "Pay at Office",
+    description: "Place your order now and pay at a CHINA ORDER TZ office. Your order will be processed after payment is confirmed.",
     icon: "💵",
   },
   {
@@ -129,7 +129,8 @@ export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   nmb: "NMB Bank",
   snippe: "Mobile Money",
   selcom: "Selcom",
-  cod: "Cash on Delivery",
+  cash: "Pay at Office",
+  cod: "Pay at Office",
   airtel_money: "Airtel Money",
   mixx_by_yas: "Mixx by Yas",
   tigo_pesa: "Tigo Pesa",
