@@ -63,8 +63,26 @@ export type PaymentOrder = {
   checkoutSessionId: string | null;
 };
 
+export type StartPaymentOptions = {
+  provider?: string | null;
+  phoneNumber?: string | null;
+};
+
 export type StartPaymentPayload = {
   provider?: string;
+  phone_number?: string;
+};
+
+export type PreparedPayment = {
+  id: string;
+  reference: string | null;
+  orderId: string;
+  orderNumber: string | null;
+  amount: string | number | null;
+  currency: string;
+  paymentMethod: string | null;
+  status: string;
+  readyForPayment: boolean;
 };
 
 export type ReconcileNmbReturnInput = {

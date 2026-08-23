@@ -3,6 +3,11 @@ import type {
   PaymentMethodsAvailability,
 } from '../models/types';
 
+export type MobileSupportedPaymentMethod = 'nmb' | 'snippe' | 'cash';
+
+export const MOBILE_SUPPORTED_PAYMENT_METHODS: readonly MobileSupportedPaymentMethod[] =
+  ['nmb', 'snippe', 'cash'];
+
 export type PaymentAvailabilityOption = {
   code: string;
   backendCode: string;
@@ -11,7 +16,15 @@ export type PaymentAvailabilityOption = {
   enabled: boolean;
   available: boolean;
   selectable: boolean;
+  supported: boolean;
 };
+
+/** Mobile can start only these flows. Backend may expose others; do not invent starts. */
+export function isMobileSupportedPaymentMethod(
+  code: string,
+): code is MobileSupportedPaymentMethod {
+  return (MOBILE_SUPPORTED_PAYMENT_METHODS as readonly string[]).includes(code);
+}
 
 const KNOWN_METHOD_COPY: Record<string, { label: string; description: string }> = {
   nmb: {
@@ -91,6 +104,7 @@ export function buildSelectablePaymentOptions(
       enabled: row?.enabled ?? true,
       available: row?.available ?? true,
       selectable: true,
+      supported: isMobileSupportedPaymentMethod(backendCode),
     });
   }
 
@@ -106,11 +120,14 @@ export function resolveDefaultPaymentCode(
   }
 
   const preferred = availability.defaultProvider;
-  if (preferred && options.some((option) => option.code === preferred)) {
+  if (
+    preferred &&
+    options.some((option) => option.code === preferred && option.supported)
+  ) {
     return preferred;
   }
 
-  return options[0]?.code ?? null;
+  return options.find((option) => option.supported)?.code ?? options[0]?.code ?? null;
 }
 
 export function selectablePaymentCodes(

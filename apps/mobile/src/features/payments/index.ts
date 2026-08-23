@@ -2,6 +2,7 @@ export {
   fetchPaymentMethods,
   createOrderFromCheckoutSession,
   startPayment,
+  prepareOrderPayment,
   fetchPaymentTransaction,
   refreshPaymentTransaction,
   retryNmbCheckoutSession,

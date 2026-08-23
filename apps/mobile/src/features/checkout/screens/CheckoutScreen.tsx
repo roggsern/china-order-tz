@@ -443,9 +443,10 @@ export function CheckoutScreen() {
               description: 'Shipping and grand totals are confirmed by the API.',
             },
             {
-              id: 'nmb',
-              title: 'NMB Hosted Checkout',
-              description: 'Payment opens in a secure bank handoff. Paid status is never guessed on device.',
+              id: 'payment',
+              title: 'Server-confirmed payment',
+              description:
+                'Choose a payment method next. Paid status is confirmed by the server, never guessed on device.',
             },
           ]}
         />

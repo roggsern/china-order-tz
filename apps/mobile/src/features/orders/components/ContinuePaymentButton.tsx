@@ -10,14 +10,15 @@ type Props = {
 };
 
 /**
- * Resume NMB payment for unpaid orders — reuses PaymentScreen(orderId).
+ * Pay Now for backend-payable unpaid orders — PaymentScreen classifies
+ * selector vs recovery from can_pay + active_payment_transaction.
  */
 export function ContinuePaymentButton({ orderId, enabled }: Props) {
   if (!enabled) return null;
 
   return (
     <PrimaryButton
-      label="Continue payment"
+      label="Pay Now"
       onPress={() => router.push(buildPaymentHref({ orderId }) as never)}
       style={styles.button}
     />

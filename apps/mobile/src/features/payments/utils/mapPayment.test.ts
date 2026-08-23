@@ -8,6 +8,8 @@ import {
   isTerminalPaymentStatus,
   mapPaymentMethods,
   mapPaymentOrder,
+  mapPreparedPayment,
+  isPreparedPaymentPaid,
   mapPaymentTransaction,
   paymentStatusLabel,
 } from './mapPayment';
@@ -83,6 +85,15 @@ describe('buildStartPaymentPayload', () => {
   it('omits provider when unset and includes nmb when provided', () => {
     expect(buildStartPaymentPayload()).toEqual({});
     expect(buildStartPaymentPayload('nmb')).toEqual({ provider: 'nmb' });
+  });
+
+  it('includes snippe phone_number without inventing paid state', () => {
+    expect(
+      buildStartPaymentPayload({
+        provider: 'snippe',
+        phoneNumber: '0712345678',
+      }),
+    ).toEqual({ provider: 'snippe', phone_number: '0712345678' });
   });
 });
 
@@ -183,6 +194,23 @@ describe('status helpers', () => {
     expect(isTerminalPaymentStatus('successful')).toBe(true);
     expect(isTerminalPaymentStatus('processing')).toBe(false);
     expect(isSuccessfulPaymentStatus('successful')).toBe(true);
+  });
+});
+
+describe('mapPreparedPayment', () => {
+  it('maps Pay at Office preparation and does not treat initiated as paid', () => {
+    const prepared = mapPreparedPayment({
+      id: 'pay-office-1',
+      order_id: 'ord-1',
+      payment_method: 'cash',
+      status: 'initiated',
+      ready_for_payment: true,
+      currency: 'TZS',
+      amount: '1000',
+    });
+    expect(prepared.paymentMethod).toBe('cash');
+    expect(isPreparedPaymentPaid(prepared.status)).toBe(false);
+    expect(isSuccessfulPaymentStatus('processing')).toBe(false);
   });
 });
 

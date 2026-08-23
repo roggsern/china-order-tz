@@ -83,8 +83,11 @@ export function useStartPaymentMutation() {
   const handleAuth = usePaymentAuthGuard();
 
   return useMutation({
-    mutationFn: (input: { orderId: string; provider?: string | null }) =>
-      startPayment(input.orderId, input.provider),
+    mutationFn: (input: {
+      orderId: string;
+      provider?: string | null;
+      phoneNumber?: string | null;
+    }) => startPayment(input.orderId, input),
     onSuccess: (transaction) => {
       queryClient.setQueryData(
         paymentTransactionQueryKey(transaction.id),

@@ -4,8 +4,10 @@ import type {
   PaymentMethodsAvailability,
   PaymentOrder,
   PaymentOrderSummary,
+  PreparedPayment,
   PaymentTransaction,
   ReconcileNmbReturnInput,
+  StartPaymentOptions,
   ReconcileNmbReturnPayload,
   StartPaymentPayload,
 } from '../models/types';
@@ -100,9 +102,44 @@ export function mapPaymentOrder(raw: unknown): PaymentOrder {
   };
 }
 
-export function buildStartPaymentPayload(provider?: string | null): StartPaymentPayload {
-  const trimmed = provider?.trim();
-  return trimmed ? { provider: trimmed } : {};
+export function buildStartPaymentPayload(
+  providerOrOptions?: string | StartPaymentOptions | null,
+): StartPaymentPayload {
+  const options: StartPaymentOptions =
+    typeof providerOrOptions === 'string' || providerOrOptions == null
+      ? { provider: providerOrOptions }
+      : providerOrOptions;
+
+  const payload: StartPaymentPayload = {};
+  const provider = options.provider?.trim();
+  if (provider) {
+    payload.provider = provider;
+  }
+  const phone = options.phoneNumber?.trim();
+  if (phone) {
+    payload.phone_number = phone;
+  }
+  return payload;
+}
+
+export function mapPreparedPayment(raw: unknown): PreparedPayment {
+  const data = asRecord(raw);
+  return {
+    id: stringField(data, 'id') ?? '',
+    reference: stringField(data, 'reference'),
+    orderId: stringField(data, 'order_id') ?? '',
+    orderNumber: stringField(data, 'order_number'),
+    amount: moneyField(data, 'amount'),
+    currency: stringField(data, 'currency') ?? 'TZS',
+    paymentMethod: stringField(data, 'payment_method'),
+    status: stringField(data, 'status') ?? 'initiated',
+    readyForPayment: boolField(data, 'ready_for_payment'),
+  };
+}
+
+/** Cash/office Payment rows stay unpaid until an administrator confirms. */
+export function isPreparedPaymentPaid(status: string | null | undefined): boolean {
+  return status === 'paid' || status === 'successful' || status === 'confirmed';
 }
 
 export function buildReconcileNmbPayload(

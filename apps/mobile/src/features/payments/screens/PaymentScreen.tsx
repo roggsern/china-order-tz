@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { clearSessionOnAuthFailure, useAuthStore } from '@/src/core/auth';
 import { buildLoginHref } from '@/src/features/cart/utils/authReturn';
+import { fetchOrderDetail } from '@/src/features/orders/api/ordersApi';
 import { invalidateAfterPaymentSuccess } from '@/src/features/orders/hooks/useOrders';
+import { isOrderPayableFromServer } from '@/src/features/orders/utils/isOrderPayable';
 import { buildPostPaymentOrdersHref } from '@/src/features/orders/utils/orderRoutes';
 import { Badge } from '@/src/shared/ui/Badge';
 import { Card } from '@/src/shared/ui/Card';
@@ -13,30 +15,55 @@ import { PrimaryButton } from '@/src/shared/ui/PrimaryButton';
 import { ScreenContainer } from '@/src/shared/ui/ScreenContainer';
 import { SecondaryButton } from '@/src/shared/ui/SecondaryButton';
 import { TrustStrip } from '@/src/shared/ui/TrustStrip';
-import { colors, spacing, typography } from '@/src/shared/theme';
+import { colors, radius, spacing, typography } from '@/src/shared/theme';
 import {
+  prepareOrderPayment,
   refreshPaymentTransaction,
-  retryNmbCheckoutSession,
+  startPayment,
 } from '../api/paymentsApi';
+import { PaymentMethodSelectorCard } from '../components/PaymentMethodSelector';
 import { PaymentStatusCard } from '../components/PaymentStatusCard';
 import { usePaymentMethods } from '../hooks/usePayments';
-import type { PaymentOrder, PaymentTransaction } from '../models/types';
+import type {
+  PaymentOrder,
+  PaymentTransaction,
+  PreparedPayment,
+} from '../models/types';
+import { continueNmbCheckout } from '../utils/continueNmbCheckout';
+import { ensurePaymentOrder } from '../utils/ensurePaymentOrder';
 import { handleNmbPaymentReturn } from '../utils/handlePaymentReturn';
 import {
+  isPreparedPaymentPaid,
   isSuccessfulPaymentStatus,
   isTerminalPaymentStatus,
 } from '../utils/mapPayment';
-import { launchNmbCheckoutForTransaction } from '../utils/nmbBrowser';
-import { buildPaymentHref } from '../utils/paymentRoutes';
-import { payOrderWithNmb } from '../utils/payWithNmb';
 import {
-  clearPaymentAndCheckoutContexts,
-  handOffCheckoutToPayment,
-} from '../utils/recoveryHandoff';
+  buildSelectablePaymentOptions,
+  resolveDefaultPaymentCode,
+} from '../utils/paymentAvailability';
 import {
   getPaymentErrorMessage,
   isPaymentUnauthenticatedError,
 } from '../utils/paymentErrorMessage';
+import { buildPaymentHref } from '../utils/paymentRoutes';
+import {
+  applyRefreshedTransaction,
+  paymentProviderLabel,
+  resolvePaymentStartDecision,
+  unsupportedPaymentMethodMessage,
+} from '../utils/paymentSession';
+import {
+  isPaymentInProgressError,
+  paymentInProgressCustomerMessage,
+  recoveryFromStartError,
+  resolvePayNowView,
+  type PayNowView,
+} from '../utils/payNowRecovery';
+import { payOrderWithNmb } from '../utils/payWithNmb';
+import {
+  clearPaymentAndCheckoutContexts,
+} from '../utils/recoveryHandoff';
+import { validateSnippePhoneInput } from '../utils/snippePhone';
 
 function firstParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -58,8 +85,14 @@ export function PaymentScreen() {
   const methodsQuery = usePaymentMethods(authStatus === 'authenticated');
   const [order, setOrder] = useState<PaymentOrder | null>(null);
   const [transaction, setTransaction] = useState<PaymentTransaction | null>(null);
+  const [officePayment, setOfficePayment] = useState<PreparedPayment | null>(null);
+  const [view, setView] = useState<PayNowView | null>(null);
+  const [selectedCode, setSelectedCode] = useState<string | null>(null);
+  const [snippePhone, setSnippePhone] = useState('');
+  const [snippePhoneError, setSnippePhoneError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [statusNote, setStatusNote] = useState<string | null>(null);
   const restoredRef = useRef(false);
 
   const paymentReturnHref = buildPaymentHref({
@@ -68,42 +101,111 @@ export function PaymentScreen() {
     paymentTransactionId: paymentTransactionIdParam ?? transaction?.id,
   });
 
-  const nmbSelectable = methodsQuery.data?.methods.find(
-    (method) => method.code === 'nmb' && method.selectable,
+  const options = methodsQuery.data
+    ? buildSelectablePaymentOptions(methodsQuery.data)
+    : [];
+  const effectiveSelectedCode =
+    selectedCode ??
+    (methodsQuery.data
+      ? resolveDefaultPaymentCode(methodsQuery.data, options)
+      : null);
+
+  const applyLoadedTransaction = useCallback(
+    (next: PaymentTransaction, fallbackOrderId?: string | null) => {
+      setTransaction(next);
+      const nextOrderId = next.orderId || next.order?.id || fallbackOrderId;
+      if (nextOrderId) {
+        setOrder((current) => ({
+          id: nextOrderId,
+          orderNumber: next.order?.orderNumber ?? current?.orderNumber ?? null,
+          status: next.order?.status ?? current?.status ?? null,
+          currency: next.currency || current?.currency || 'TZS',
+          grandTotal: next.order?.grandTotal ?? current?.grandTotal ?? null,
+          checkoutSessionId: checkoutSessionId ?? current?.checkoutSessionId ?? null,
+        }));
+      }
+    },
+    [checkoutSessionId],
   );
 
   useEffect(() => {
     if (authStatus !== 'authenticated' || restoredRef.current) return;
-    if (!paymentTransactionIdParam && !orderIdParam) return;
     restoredRef.current = true;
 
     void (async () => {
       setBusy(true);
       setError(null);
       try {
-        const handled = await handleNmbPaymentReturn({
-          orderId: orderIdParam,
-          paymentTransactionId: paymentTransactionIdParam,
-        });
-        if (handled.transaction) {
-          setTransaction(handled.transaction);
-          if (handled.orderId) {
-            setOrder({
-              id: handled.orderId,
-              orderNumber: handled.transaction.order?.orderNumber ?? null,
-              status: handled.transaction.order?.status ?? null,
-              currency: handled.transaction.currency,
-              grandTotal: handled.transaction.order?.grandTotal ?? null,
-              checkoutSessionId: checkoutSessionId ?? null,
+        if (paymentTransactionIdParam || (orderIdParam && !checkoutSessionId && paymentTransactionIdParam)) {
+          const handled = await handleNmbPaymentReturn({
+            orderId: orderIdParam,
+            paymentTransactionId: paymentTransactionIdParam,
+          });
+          if (handled.transaction) {
+            applyLoadedTransaction(handled.transaction, handled.orderId);
+            const restoredView = applyRefreshedTransaction({
+              id: handled.transaction.id,
+              status: handled.transaction.status,
+              provider: handled.transaction.provider,
             });
-          }
-          if (isSuccessfulPaymentStatus(handled.transaction.status)) {
-            await invalidateAfterPaymentSuccess(
-              queryClient,
-              handled.orderId,
-            );
+            setView(restoredView);
+            if (restoredView.kind === 'paid') {
+              await invalidateAfterPaymentSuccess(queryClient, handled.orderId);
+            }
+            return;
           }
         }
+
+        if (orderIdParam) {
+          const detail = await fetchOrderDetail(orderIdParam);
+          setOrder({
+            id: detail.id,
+            orderNumber: detail.orderNumber,
+            status: detail.status,
+            currency: detail.currency,
+            grandTotal: detail.summary.grandTotal,
+            checkoutSessionId: checkoutSessionId ?? null,
+          });
+
+          const canPay = isOrderPayableFromServer(detail);
+          let nextView = resolvePayNowView({
+            canPay,
+            orderStatus: detail.status ?? '',
+            paymentStatus: detail.payment?.paymentStatus,
+            activeTransaction: detail.activePaymentTransaction,
+          });
+
+          if (nextView.kind === 'recovery') {
+            try {
+              const refreshed = await refreshPaymentTransaction(nextView.transaction.id);
+              applyLoadedTransaction(refreshed, refreshed.orderId || detail.id);
+              nextView = applyRefreshedTransaction({
+                id: refreshed.id,
+                status: refreshed.status,
+                provider: refreshed.provider,
+              });
+              if (nextView.kind === 'paid') {
+                await invalidateAfterPaymentSuccess(queryClient, detail.id);
+              } else if (nextView.kind === 'selector') {
+                setStatusNote(
+                  'The previous payment request is no longer active. Choose a payment method.',
+                );
+              } else {
+                setStatusNote('Your previous payment request is still pending.');
+              }
+            } catch (refreshError) {
+              setTransaction(null);
+              setView(nextView);
+              setError(getPaymentErrorMessage(refreshError));
+              return;
+            }
+          }
+
+          setView(nextView);
+          return;
+        }
+
+        setView({ kind: 'selector' });
       } catch (err) {
         if (isPaymentUnauthenticatedError(err)) {
           await clearSessionOnAuthFailure();
@@ -111,6 +213,7 @@ export function PaymentScreen() {
           return;
         }
         setError(getPaymentErrorMessage(err));
+        setView({ kind: 'selector' });
       } finally {
         setBusy(false);
       }
@@ -122,6 +225,7 @@ export function PaymentScreen() {
     paymentTransactionIdParam,
     paymentReturnHref,
     queryClient,
+    applyLoadedTransaction,
   ]);
 
   async function redirectToLogin() {
@@ -129,21 +233,178 @@ export function PaymentScreen() {
     router.push(buildLoginHref(paymentReturnHref));
   }
 
-  async function runPaymentFlow() {
+  async function markPaidFromBackend(orderId?: string | null) {
+    setView({ kind: 'paid' });
+    await invalidateAfterPaymentSuccess(queryClient, orderId);
+    await clearPaymentAndCheckoutContexts();
+  }
+
+  function enterRecoveryFromError(err: unknown) {
+    const recovered = recoveryFromStartError(err);
+    if (recovered) {
+      setView({ kind: 'recovery', transaction: recovered });
+      setStatusNote(paymentInProgressCustomerMessage());
+      setError(null);
+      return true;
+    }
+    if (isPaymentInProgressError(err)) {
+      setError(paymentInProgressCustomerMessage());
+      return true;
+    }
+    return false;
+  }
+
+  async function startSelectedPayment() {
+    const currentView = view ?? { kind: 'selector' as const };
+    const decision = resolvePaymentStartDecision({
+      view: currentView,
+      selectedCode: effectiveSelectedCode,
+    });
+
+    if (decision.decision === 'recover') {
+      await continueRecoveredPayment();
+      return;
+    }
+    if (decision.decision === 'paid') {
+      setView({ kind: 'paid' });
+      return;
+    }
+    if (decision.decision === 'not_payable') {
+      setView({ kind: 'not_payable', reason: decision.reason });
+      return;
+    }
+    if (decision.decision === 'unsupported') {
+      setError(unsupportedPaymentMethodMessage());
+      return;
+    }
+    if (decision.decision !== 'start') {
+      return;
+    }
+
+    if (decision.flow === 'snippe') {
+      const phoneError = validateSnippePhoneInput(snippePhone);
+      if (phoneError) {
+        setSnippePhoneError(phoneError);
+        return;
+      }
+    }
+
     setError(null);
+    setSnippePhoneError(null);
     setBusy(true);
     try {
-      const result = await payOrderWithNmb({
-        checkoutSessionId,
+      const nextOrder = await ensurePaymentOrder({
         orderId: orderIdParam ?? order?.id,
-        provider: nmbSelectable?.code ?? 'nmb',
-        existingTransaction: null,
+        checkoutSessionId,
+        existingOrder: order,
       });
-      setOrder(result.order);
-      setTransaction(result.transaction);
-      if (isSuccessfulPaymentStatus(result.transaction.status)) {
-        await invalidateAfterPaymentSuccess(queryClient, result.order.id);
-        await clearPaymentAndCheckoutContexts();
+      setOrder(nextOrder);
+
+      if (decision.flow === 'nmb') {
+        const result = await payOrderWithNmb({
+          checkoutSessionId,
+          orderId: nextOrder.id,
+          provider: 'nmb',
+          existingTransaction: null,
+        });
+        setOrder(result.order);
+        setTransaction(result.transaction);
+        if (isSuccessfulPaymentStatus(result.transaction.status)) {
+          await markPaidFromBackend(result.order.id);
+        } else {
+          setView({
+            kind: 'recovery',
+            transaction: {
+              id: result.transaction.id,
+              status: result.transaction.status,
+              provider: result.transaction.provider,
+            },
+          });
+        }
+        return;
+      }
+
+      if (decision.flow === 'snippe') {
+        const started = await startPayment(nextOrder.id, {
+          provider: 'snippe',
+          phoneNumber: snippePhone.trim(),
+        });
+        applyLoadedTransaction(started, nextOrder.id);
+        if (isSuccessfulPaymentStatus(started.status)) {
+          await markPaidFromBackend(nextOrder.id);
+          return;
+        }
+        setView({
+          kind: 'recovery',
+          transaction: {
+            id: started.id,
+            status: started.status,
+            provider: started.provider,
+          },
+        });
+        setStatusNote('Payment request sent. Approve it on your phone when prompted.');
+        return;
+      }
+
+      const prepared = await prepareOrderPayment(nextOrder.id, 'cash');
+      setOfficePayment(prepared);
+      setTransaction(null);
+      if (isPreparedPaymentPaid(prepared.status)) {
+        await markPaidFromBackend(nextOrder.id);
+        return;
+      }
+      setView({ kind: 'selector' });
+      setStatusNote(
+        'Pay at Office. Your order stays unpaid until an authorized administrator confirms payment.',
+      );
+    } catch (err) {
+      if (isPaymentUnauthenticatedError(err)) {
+        redirectToLogin();
+        return;
+      }
+      if (enterRecoveryFromError(err)) {
+        return;
+      }
+      setError(getPaymentErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function continueRecoveredPayment() {
+    if (view?.kind !== 'recovery') return;
+    setBusy(true);
+    setError(null);
+    try {
+      const refreshed = await refreshPaymentTransaction(view.transaction.id);
+      applyLoadedTransaction(refreshed, refreshed.orderId || order?.id);
+      const next = applyRefreshedTransaction({
+        id: refreshed.id,
+        status: refreshed.status,
+        provider: refreshed.provider,
+      });
+      setView(next);
+
+      if (next.kind === 'paid') {
+        await markPaidFromBackend(refreshed.orderId || order?.id);
+        return;
+      }
+      if (next.kind === 'selector') {
+        setTransaction(null);
+        setStatusNote('The previous payment request ended. You can choose another payment method.');
+        return;
+      }
+
+      if (refreshed.provider === 'nmb') {
+        const result = await continueNmbCheckout({
+          transaction: refreshed,
+          checkoutSessionId,
+        });
+        setOrder(result.order);
+        setTransaction(result.transaction);
+        if (isSuccessfulPaymentStatus(result.transaction.status)) {
+          await markPaidFromBackend(result.order.id);
+        }
       }
     } catch (err) {
       if (isPaymentUnauthenticatedError(err)) {
@@ -157,63 +418,28 @@ export function PaymentScreen() {
   }
 
   async function refreshStatus() {
-    if (!transaction?.id) return;
+    if (!transaction?.id && view?.kind !== 'recovery') return;
+    const transactionId = transaction?.id ?? (view?.kind === 'recovery' ? view.transaction.id : null);
+    if (!transactionId) return;
+
     setBusy(true);
     setError(null);
     try {
-      const next = await refreshPaymentTransaction(transaction.id);
-      setTransaction(next);
-      if (isSuccessfulPaymentStatus(next.status)) {
-        await invalidateAfterPaymentSuccess(
-          queryClient,
-          next.orderId || orderIdParam,
-        );
-        await clearPaymentAndCheckoutContexts();
-      }
-    } catch (err) {
-      if (isPaymentUnauthenticatedError(err)) {
-        redirectToLogin();
-        return;
-      }
-      setError(getPaymentErrorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function retryCheckout() {
-    if (!transaction?.id) {
-      await runPaymentFlow();
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      let next = await retryNmbCheckoutSession(transaction.id);
-      await handOffCheckoutToPayment({
-        orderId: next.orderId || order?.id || orderIdParam || null,
-        paymentTransactionId: next.id,
-        merchantReference: next.merchantReference,
-        successIndicator: next.successIndicator,
-        checkoutSessionId: checkoutSessionId ?? null,
+      const nextTxn = await refreshPaymentTransaction(transactionId);
+      applyLoadedTransaction(nextTxn, nextTxn.orderId || orderIdParam);
+      const next = applyRefreshedTransaction({
+        id: nextTxn.id,
+        status: nextTxn.status,
+        provider: nextTxn.provider,
       });
-
-      const browser = await launchNmbCheckoutForTransaction(next);
-      const handled = await handleNmbPaymentReturn({
-        returnUrl: browser.url,
-        orderId: next.orderId || order?.id || orderIdParam,
-        paymentTransactionId: next.id,
-        merchantReference: next.merchantReference,
-        resultIndicator: browser.returnParams.resultIndicator,
-      });
-      next = handled.transaction ?? (await refreshPaymentTransaction(next.id));
-      setTransaction(next);
-      if (isSuccessfulPaymentStatus(next.status)) {
-        await invalidateAfterPaymentSuccess(
-          queryClient,
-          next.orderId || orderIdParam,
-        );
-        await clearPaymentAndCheckoutContexts();
+      setView(next);
+      if (next.kind === 'paid') {
+        await markPaidFromBackend(nextTxn.orderId || orderIdParam);
+      } else if (next.kind === 'selector') {
+        setTransaction(null);
+        setStatusNote('The previous payment request ended. You can choose another payment method.');
+      } else {
+        setStatusNote('Your previous payment request is still pending.');
       }
     } catch (err) {
       if (isPaymentUnauthenticatedError(err)) {
@@ -242,7 +468,8 @@ export function PaymentScreen() {
     !checkoutSessionId &&
     !orderIdParam &&
     !paymentTransactionIdParam &&
-    !transaction
+    !transaction &&
+    !officePayment
   ) {
     return (
       <EmptyState
@@ -255,7 +482,12 @@ export function PaymentScreen() {
     );
   }
 
-  const paid = isSuccessfulPaymentStatus(transaction?.status);
+  const paid =
+    view?.kind === 'paid' || isSuccessfulPaymentStatus(transaction?.status);
+  const notPayable = view?.kind === 'not_payable';
+  const recovery = view?.kind === 'recovery';
+  const showSelector =
+    !paid && !notPayable && !officePayment && view?.kind === 'selector';
   const terminal = isTerminalPaymentStatus(transaction?.status);
   const confirmedOrderId =
     transaction?.orderId ||
@@ -270,28 +502,103 @@ export function PaymentScreen() {
     router.replace(buildPostPaymentOrdersHref(confirmedOrderId));
   }
 
+  const recoveryProvider = recovery
+    ? paymentProviderLabel(view.transaction.provider)
+    : paymentProviderLabel(transaction?.provider);
+
   return (
     <ScreenContainer padded={false} style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.eyebrow}>Payment</Text>
-        <Text style={styles.heading}>NMB Hosted Checkout</Text>
+        <Text style={styles.heading}>
+          {paid
+            ? 'Payment confirmed'
+            : officePayment
+              ? 'Pay at Office'
+              : recovery
+                ? 'Payment request pending'
+                : 'Choose payment method'}
+        </Text>
         <Text style={styles.subheading}>
-          Pay securely with NMB. Status is confirmed by the server only — never
-          guessed from the browser return.
+          {paid
+            ? 'The server confirmed this payment. View your order for status and tracking.'
+            : officePayment
+              ? 'Pay at a CHINA ORDER TZ office. Your order stays unpaid until an authorized administrator confirms payment.'
+              : recovery
+                ? `Continue the existing ${recoveryProvider} request. A new payment will not be started.`
+                : 'Choose how you want to pay. Payment is confirmed by the server only.'}
         </Text>
 
-        <Card elevated={false} style={styles.methodCard}>
-          <Text style={styles.cardTitle}>Payment method</Text>
-          <Badge label="NMB" tone="brand" style={styles.methodBadge} />
-          <Text style={styles.meta}>
-            You will leave the app briefly to complete bank checkout, then return
-            here for confirmation.
-          </Text>
-        </Card>
-
         {error ? <Text style={styles.error}>{error}</Text> : null}
+        {statusNote ? <Text style={styles.note}>{statusNote}</Text> : null}
 
-        {transaction ? <PaymentStatusCard transaction={transaction} /> : null}
+        {notPayable ? (
+          <Card elevated={false} style={styles.methodCard}>
+            <Text style={styles.cardTitle}>This order cannot be paid now</Text>
+            <Text style={styles.meta}>
+              {view?.kind === 'not_payable' && view.reason === 'cancelled'
+                ? 'The order is cancelled or refunded, so payment is no longer available.'
+                : 'Payment is not available for this order.'}
+            </Text>
+          </Card>
+        ) : null}
+
+        {officePayment ? (
+          <Card elevated={false} style={styles.methodCard}>
+            <Badge label="Pay at Office" tone="brand" style={styles.methodBadge} />
+            <Text style={styles.cardTitle}>Payment not completed</Text>
+            <Text style={styles.meta}>
+              Place your order now and pay at a CHINA ORDER TZ office. Delivery
+              starts after payment is confirmed.
+            </Text>
+            {officePayment.orderNumber || order?.orderNumber ? (
+              <Text style={styles.meta}>
+                Order {officePayment.orderNumber ?? order?.orderNumber}
+              </Text>
+            ) : null}
+          </Card>
+        ) : null}
+
+        {showSelector ? (
+          <PaymentMethodSelectorCard
+            options={options}
+            selectedCode={effectiveSelectedCode}
+            onSelect={(code) => {
+              setSelectedCode(code);
+              setError(null);
+            }}
+            disabled={busy || methodsQuery.isLoading}
+          />
+        ) : null}
+
+        {showSelector && effectiveSelectedCode === 'snippe' ? (
+          <View style={styles.phoneWrap}>
+            <Text style={styles.cardTitle}>Mobile Money number</Text>
+            <TextInput
+              value={snippePhone}
+              onChangeText={(value) => {
+                setSnippePhone(value);
+                if (snippePhoneError) setSnippePhoneError(null);
+              }}
+              keyboardType="phone-pad"
+              placeholder="0712345678"
+              placeholderTextColor={colors.textMuted}
+              style={styles.phoneInput}
+              editable={!busy}
+            />
+            <Text style={styles.meta}>
+              A Mobile Money payment request will be sent to this number. Approve
+              it on your phone when prompted.
+            </Text>
+            {snippePhoneError ? (
+              <Text style={styles.error}>{snippePhoneError}</Text>
+            ) : null}
+          </View>
+        ) : null}
+
+        {transaction && !officePayment ? (
+          <PaymentStatusCard transaction={transaction} />
+        ) : null}
 
         {order?.orderNumber ? (
           <Text style={styles.meta}>Order {order.orderNumber}</Text>
@@ -310,19 +617,61 @@ export function PaymentScreen() {
               style={styles.inlineButton}
             />
           </Card>
+        ) : notPayable ? (
+          <SecondaryButton
+            label="View order"
+            onPress={() =>
+              router.replace(buildPostPaymentOrdersHref(confirmedOrderId))
+            }
+            style={styles.inlineButton}
+          />
+        ) : officePayment ? (
+          <PrimaryButton
+            label={confirmedOrderId ? 'View order' : 'View my orders'}
+            onPress={() => void goToOrdersAfterPayment()}
+            style={styles.inlineButton}
+          />
         ) : (
           <View style={styles.actions}>
-            <PrimaryButton
-              label={transaction ? 'Retry NMB checkout' : 'Pay with NMB'}
-              loading={busy}
-              disabled={busy || methodsQuery.isLoading}
-              onPress={() => void (transaction ? retryCheckout() : runPaymentFlow())}
-              style={styles.inlineButton}
-            />
+            {recovery ? (
+              <>
+                {transaction?.provider === 'nmb' || view.transaction.provider === 'nmb' ? (
+                  <PrimaryButton
+                    label="Continue payment"
+                    loading={busy}
+                    disabled={busy}
+                    onPress={() => void continueRecoveredPayment()}
+                    style={styles.inlineButton}
+                  />
+                ) : null}
+                <SecondaryButton
+                  label="Check payment status"
+                  disabled={busy}
+                  onPress={() => void refreshStatus()}
+                  style={styles.inlineButton}
+                />
+              </>
+            ) : (
+              <PrimaryButton
+                label={
+                  effectiveSelectedCode === 'cash'
+                    ? 'Pay at Office'
+                    : effectiveSelectedCode === 'snippe'
+                      ? 'Pay with Mobile Money'
+                      : effectiveSelectedCode === 'nmb'
+                        ? 'Pay with NMB'
+                        : 'Continue payment'
+                }
+                loading={busy}
+                disabled={busy || methodsQuery.isLoading || !effectiveSelectedCode}
+                onPress={() => void startSelectedPayment()}
+                style={styles.inlineButton}
+              />
+            )}
 
-            {transaction ? (
+            {transaction && !recovery ? (
               <SecondaryButton
-                label="Refresh status"
+                label="Check payment status"
                 disabled={busy}
                 onPress={() => void refreshStatus()}
                 style={styles.inlineButton}
@@ -331,7 +680,7 @@ export function PaymentScreen() {
 
             {terminal && !paid ? (
               <Text style={styles.note}>
-                Payment was not completed. You can retry or return to checkout.
+                Payment was not completed. You can try again or choose another method.
               </Text>
             ) : null}
           </View>
@@ -341,22 +690,22 @@ export function PaymentScreen() {
           title="What happens next"
           items={[
             {
-              id: 'handoff',
-              title: 'Secure bank handoff',
+              id: 'choice',
+              title: 'Choose a method',
               description:
-                'NMB Hosted Checkout opens in your system browser for card or mobile money payment.',
+                'NMB, Mobile Money, or Pay at Office appear only when the server makes them available.',
             },
             {
-              id: 'return',
-              title: 'Return & confirm',
+              id: 'confirm',
+              title: 'Server confirmation',
               description:
-                'After payment, return to the app. Only a successful server refresh marks the order paid.',
+                'Closing a provider screen does not mark the order paid. Only a successful server refresh does.',
             },
             {
               id: 'retry',
-              title: 'Safe to retry',
+              title: 'Safe to continue',
               description:
-                'If the browser closes early, use Retry or Refresh status — never assume unpaid means failed.',
+                'If a payment request is already pending, the app restores it instead of starting another one.',
             },
           ]}
         />
@@ -422,5 +771,19 @@ const styles = StyleSheet.create({
   inlineButton: {
     marginTop: spacing.md,
     alignSelf: 'stretch',
+  },
+  phoneWrap: {
+    marginBottom: spacing.md,
+  },
+  phoneInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    ...typography.body,
+    color: colors.text,
+    backgroundColor: colors.background,
+    marginBottom: spacing.sm,
   },
 });

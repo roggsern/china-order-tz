@@ -115,6 +115,7 @@ describe('payment availability adapter', () => {
       code: 'future_pay',
       backendCode: 'future_pay',
       selectable: true,
+      supported: false,
     });
     expect(resolveDefaultPaymentCode(mapped, options)).toBe('future_pay');
   });
@@ -131,5 +132,46 @@ describe('payment availability adapter', () => {
     });
     const options = buildSelectablePaymentOptions(mapped);
     expect(resolveDefaultPaymentCode(mapped, options)).toBe('snippe');
+  });
+
+  it('hides disabled Snippe and marks unknown methods unsupported', () => {
+    const hidden = buildSelectablePaymentOptions(
+      availability({
+        default_provider: 'nmb',
+        enabled_methods: ['nmb', 'snippe'],
+        methods: [
+          { code: 'nmb', enabled: true, available: true, selectable: true },
+          { code: 'snippe', enabled: false, available: false, selectable: false },
+        ],
+      }),
+    );
+    expect(hidden.some((option) => option.code === 'snippe')).toBe(false);
+
+    const unknown = buildSelectablePaymentOptions(
+      availability({
+        default_provider: 'future_pay',
+        enabled_methods: ['future_pay', 'nmb'],
+        methods: [
+          { code: 'future_pay', enabled: true, available: true, selectable: true },
+          { code: 'nmb', enabled: true, available: true, selectable: true },
+        ],
+      }),
+    );
+    expect(unknown.find((option) => option.code === 'future_pay')?.supported).toBe(false);
+    expect(unknown.find((option) => option.code === 'nmb')?.supported).toBe(true);
+  });
+
+  it('labels cash as Pay at Office, not COD or pay on delivery', () => {
+    const options = buildSelectablePaymentOptions(
+      availability({
+        default_provider: 'cash',
+        enabled_methods: ['cash'],
+        methods: [{ code: 'cash', enabled: true, available: true, selectable: true }],
+      }),
+    );
+    expect(options[0]?.label).toBe('Pay at Office');
+    expect(`${options[0]?.label} ${options[0]?.description}`).not.toMatch(
+      /cod|cash on delivery|pay on delivery/i,
+    );
   });
 });

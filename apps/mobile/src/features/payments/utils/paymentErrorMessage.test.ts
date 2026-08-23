@@ -39,6 +39,18 @@ describe('getPaymentErrorMessage', () => {
     expect(message).not.toMatch(/No internet/i);
   });
 
+  it('maps payment_in_progress to recovery copy without exposing the code', () => {
+    const message = getPaymentErrorMessage(
+      new ApiError({
+        message: 'An active payment is already in progress for this order.',
+        status: 422,
+        code: 'payment_in_progress',
+      }),
+    );
+    expect(message).toMatch(/payment request pending/i);
+    expect(message).not.toMatch(/payment_in_progress/i);
+  });
+
   it('maps business_rule_violated', () => {
     expect(
       getPaymentErrorMessage(

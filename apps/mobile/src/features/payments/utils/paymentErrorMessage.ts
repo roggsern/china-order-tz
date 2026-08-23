@@ -1,8 +1,16 @@
 import { ApiError, getSharedTransportErrorMessage } from '@/src/core/errors';
+import {
+  isPaymentInProgressError,
+  paymentInProgressCustomerMessage,
+} from './payNowRecovery';
 
 export function getPaymentErrorMessage(error: unknown): string {
   const transport = getSharedTransportErrorMessage(error);
   if (transport) return transport;
+
+  if (isPaymentInProgressError(error)) {
+    return paymentInProgressCustomerMessage();
+  }
 
   if (error instanceof ApiError) {
     switch (error.code) {

@@ -9,7 +9,7 @@ type Props = {
 };
 
 /**
- * Navigates to real NMB payment flow with checkout session context.
+ * Navigates to the shared payment selector with checkout session context.
  */
 export function ContinueToPaymentButton({ enabled, checkoutSessionId }: Props) {
   return (
@@ -25,7 +25,7 @@ export function ContinueToPaymentButton({ enabled, checkoutSessionId }: Props) {
         style={styles.button}
       />
       <Text style={styles.note}>
-        Opens NMB Hosted Checkout. Payment success is confirmed by the server only.
+        Choose a payment method. Payment is confirmed by the server only.
       </Text>
     </View>
   );

@@ -3,14 +3,17 @@ import { apiClient } from '@/src/core/api';
 import type {
   PaymentMethodsAvailability,
   PaymentOrder,
+  PreparedPayment,
   PaymentTransaction,
   ReconcileNmbReturnInput,
+  StartPaymentOptions,
 } from '../models/types';
 import {
   buildReconcileNmbPayload,
   buildStartPaymentPayload,
   mapPaymentMethods,
   mapPaymentOrder,
+  mapPreparedPayment,
   mapPaymentTransaction,
 } from '../utils/mapPayment';
 
@@ -47,13 +50,38 @@ export async function createOrderFromCheckoutSession(
 /** POST /payments/start/{order} */
 export async function startPayment(
   orderId: string,
-  provider?: string | null,
+  providerOrOptions?: string | StartPaymentOptions | null,
 ): Promise<PaymentTransaction> {
   const response = await apiClient.post<unknown>(
     `/payments/start/${encodeURIComponent(orderId)}`,
-    buildStartPaymentPayload(provider),
+    buildStartPaymentPayload(providerOrOptions),
   );
   return mapPaymentTransaction(response.data);
+}
+
+/**
+ * POST /orders/{order}/payments — prepares a Payment row (Pay at Office cash).
+ * Does not create a PaymentTransaction and does not mark the order paid.
+ */
+export async function prepareOrderPayment(
+  orderId: string,
+  paymentMethod: string,
+): Promise<PreparedPayment> {
+  const response = await apiClient.post<unknown>(
+    `/orders/${encodeURIComponent(orderId)}/payments`,
+    { payment_method: paymentMethod },
+  );
+  const prepared = mapPreparedPayment(response.data);
+  if (!prepared.id.trim()) {
+    throw new ApiError({
+      message: 'Payment could not be prepared. Please try again.',
+      status: 500,
+      code: 'server_error',
+      requestId: typeof response.request_id === 'string' ? response.request_id : null,
+      raw: response && typeof response === 'object' ? (response as never) : null,
+    });
+  }
+  return prepared;
 }
 
 /** GET /payments/{paymentTransaction} */
