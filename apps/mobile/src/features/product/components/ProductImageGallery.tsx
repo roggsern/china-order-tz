@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -29,6 +29,11 @@ import {
   resolveProductVideoThumbnailUrl,
 } from '../utils/productVideo';
 import type { ProductGalleryMediaSlide } from '../utils/resolvePdpGalleryMedia';
+import {
+  galleryImageIdentity,
+  pdpGalleryImageProps,
+} from '../utils/pdpVariantMedia';
+import { useHeldPdpGallerySlides } from '../utils/useHeldPdpGallerySlides';
 
 type Props = {
   slides: ProductGalleryMediaSlide[];
@@ -212,22 +217,32 @@ function VideoSlide({ video }: { video: CatalogProductVideo }) {
  * Does not autoplay with sound; swipe remains horizontal paging.
  */
 export function ProductImageGallery({ slides }: Props) {
-  const galleryKey = slides.map((slide) => slide.key).join('|');
+  const displaySlides = useHeldPdpGallerySlides(slides);
+  const galleryKey = galleryImageIdentity(displaySlides);
+  const scrollRef = useRef<ScrollView>(null);
+  const previousGalleryKey = useRef(galleryKey);
   const [scrollState, setScrollState] = useState({ galleryKey, index: 0 });
   const index =
     scrollState.galleryKey === galleryKey
-      ? Math.min(scrollState.index, Math.max(0, slides.length - 1))
+      ? Math.min(scrollState.index, Math.max(0, displaySlides.length - 1))
       : 0;
+
+  useEffect(() => {
+    if (previousGalleryKey.current === galleryKey) return;
+    previousGalleryKey.current = galleryKey;
+    setScrollState({ galleryKey, index: 0 });
+    scrollRef.current?.scrollTo({ x: 0, animated: false });
+  }, [galleryKey]);
 
   function onScrollEnd(event: NativeSyntheticEvent<NativeScrollEvent>) {
     const next = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
     setScrollState({
       galleryKey,
-      index: Math.max(0, Math.min(next, slides.length - 1)),
+      index: Math.max(0, Math.min(next, displaySlides.length - 1)),
     });
   }
 
-  if (slides.length === 0) {
+  if (displaySlides.length === 0) {
     return (
       <View
         style={[styles.frame, styles.placeholder]}
@@ -242,14 +257,14 @@ export function ProductImageGallery({ slides }: Props) {
   return (
     <View style={styles.frame}>
       <ScrollView
-        key={galleryKey}
+        ref={scrollRef}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={onScrollEnd}
         decelerationRate="fast"
       >
-        {slides.map((slide, slideIndex) => {
+        {displaySlides.map((slide, slideIndex) => {
           if (slide.kind === 'video') {
             return (
               <VideoSlide
@@ -260,22 +275,24 @@ export function ProductImageGallery({ slides }: Props) {
             );
           }
 
+          const uri = slide.image.url;
           return (
-            <View key={slide.key} style={styles.slide}>
+            <View key={`image-slot-${slideIndex}`} style={styles.slide}>
               <Image
-                source={{ uri: slide.image.url ?? undefined }}
+                source={{ uri: uri ?? undefined }}
                 style={styles.image}
                 contentFit={imageFit}
-                transition={200}
+                transition={0}
+                {...(uri ? pdpGalleryImageProps(uri) : {})}
                 accessibilityLabel={slide.image.altText ?? 'Product image'}
               />
             </View>
           );
         })}
       </ScrollView>
-      {slides.length > 1 ? (
+      {displaySlides.length > 1 ? (
         <View style={styles.dots}>
-          {slides.map((slide, i) => (
+          {displaySlides.map((slide, i) => (
             <View
               key={`dot-${slide.key}`}
               style={[styles.dot, i === index ? styles.dotActive : null]}

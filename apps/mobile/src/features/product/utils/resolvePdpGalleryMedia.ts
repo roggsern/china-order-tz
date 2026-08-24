@@ -1,6 +1,16 @@
-import type { CatalogImage, CatalogProductVideo } from '../models/types';
+import type {
+  CatalogImage,
+  CatalogProductVideo,
+  CatalogProductVariant,
+  ConfigurationSelections,
+  ProductConfiguration,
+} from '../models/types';
 import { isSupportedProductVideoUrl } from './productVideo';
 import { resolvePdpGalleryImages } from './configurationOptions';
+import {
+  buildVariantGalleries,
+  resolveMediaPreviewConfigurationId,
+} from './resolveMediaPreview';
 
 export type ProductGalleryImageSlide = {
   kind: 'image';
@@ -54,4 +64,47 @@ export function resolvePdpGalleryMedia(params: {
   }));
 
   return [...imageSlides, ...videoSlides];
+}
+
+/**
+ * Gallery resolution for the PDP screen.
+ *
+ * Commercial match (price/SKU/ATC) stays gated on configuration loading.
+ * Media preview uses current selections immediately so a refetch cannot
+ * reset the carousel to product-primary images.
+ */
+export function resolvePdpGalleryMediaFromPdpState(params: {
+  productImages: CatalogImage[];
+  variants: CatalogProductVariant[];
+  videos?: CatalogProductVideo[] | null;
+  configuration: ProductConfiguration | null;
+  configurationLoading: boolean;
+  selections: ConfigurationSelections;
+  variantGalleries?: ReturnType<typeof buildVariantGalleries>;
+}): ProductGalleryMediaSlide[] {
+  const exactConfigurationId =
+    !params.configurationLoading && params.configuration?.isComplete
+      ? params.configuration.matchedConfigurationId
+      : null;
+
+  const variantGalleries =
+    params.variantGalleries ?? buildVariantGalleries(params.variants);
+
+  const mediaPreviewConfigurationId = params.configuration
+    ? resolveMediaPreviewConfigurationId({
+        configurations: params.configuration.configurations,
+        selections: params.selections,
+        attributes: params.configuration.attributes,
+        variantGalleries,
+        exactConfigurationId,
+      })
+    : null;
+
+  return resolvePdpGalleryMedia({
+    productImages: params.productImages,
+    variants: params.variants,
+    matchedConfigurationId: exactConfigurationId,
+    mediaPreviewConfigurationId,
+    videos: params.videos,
+  });
 }

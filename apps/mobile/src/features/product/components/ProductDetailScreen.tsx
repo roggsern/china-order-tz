@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { clearSessionOnAuthFailure, useAuthStore } from '@/src/core/auth';
@@ -31,11 +31,10 @@ import type {
 } from '../models/types';
 import { canAddToCart, resolveAddToCartGate } from '../utils/canAddToCart';
 import { resolveDisplayedProductPrice } from '../utils/resolveDisplayedProductPrice';
-import {
-  buildVariantGalleries,
-  resolveMediaPreviewConfigurationId,
-} from '../utils/resolveMediaPreview';
-import { resolvePdpGalleryMedia } from '../utils/resolvePdpGalleryMedia';
+import { buildVariantGalleries } from '../utils/resolveMediaPreview';
+import { resolvePdpGalleryMediaFromPdpState } from '../utils/resolvePdpGalleryMedia';
+import { collectPdpVariantPrefetchUrls } from '../utils/pdpVariantMedia';
+import { prefetchPdpVariantMedia } from '../utils/prefetchPdpVariantMedia';
 import { AddToCartButton } from './AddToCartButton';
 import { ProductAvailabilityBadge } from './ProductAvailabilityBadge';
 import { ProductConfigurationSelector } from './ProductConfigurationSelector';
@@ -167,6 +166,22 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
     [detailQuery.data?.variants],
   );
 
+  useEffect(() => {
+    const detail = detailQuery.data;
+    if (!detail) return;
+    void prefetchPdpVariantMedia(
+      collectPdpVariantPrefetchUrls({
+        variants: detail.variants,
+        configurations: liveConfiguration?.configurations,
+        attributes: liveConfiguration?.attributes,
+      }),
+    );
+  }, [
+    detailQuery.data,
+    liveConfiguration?.attributes,
+    liveConfiguration?.configurations,
+  ]);
+
   const storeRequired = journey === 'TZ_LOCAL' && !storeSlug;
   const product = detailQuery.data;
 
@@ -219,28 +234,14 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
     quoteLoading: Boolean(matchedForQuote) && quoteQuery.isFetching,
   });
 
-  const exactConfigurationId =
-    !configStatus.loading && configuration?.isComplete
-      ? configuration.matchedConfigurationId
-      : null;
-
-  const mediaPreviewConfigurationId =
-    !configStatus.loading && configuration
-      ? resolveMediaPreviewConfigurationId({
-          configurations: configuration.configurations,
-          selections,
-          attributes: configuration.attributes,
-          variantGalleries,
-          exactConfigurationId,
-        })
-      : null;
-
-  const gallerySlides = resolvePdpGalleryMedia({
+  const gallerySlides = resolvePdpGalleryMediaFromPdpState({
     productImages: detailProduct.images,
     variants: detailProduct.variants,
-    matchedConfigurationId: exactConfigurationId,
-    mediaPreviewConfigurationId,
     videos: detailProduct.videos,
+    configuration,
+    configurationLoading: configStatus.loading,
+    selections,
+    variantGalleries,
   });
 
   const matchedConfigurationId = configuration?.matchedConfigurationId ?? null;
