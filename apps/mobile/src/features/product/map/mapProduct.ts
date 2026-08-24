@@ -61,11 +61,16 @@ export function mapCategory(raw: unknown): CatalogCategory | null {
   const name = stringField(data, 'name');
   const slug = stringField(data, 'slug');
   if (!id || !name || !slug) return null;
+  const imageUrl =
+    mediaUrl(data.image) ??
+    stringField(data, 'image') ??
+    stringField(data, 'image_url');
   return {
     id,
     name,
     slug,
     parentId: stringField(data, 'parent_id'),
+    imageUrl,
   };
 }
 

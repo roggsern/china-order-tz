@@ -26,6 +26,8 @@ export type CatalogCategory = {
   name: string;
   slug: string;
   parentId?: string | null;
+  /** Present when catalog/CMS JSON includes image | image_url | media. */
+  imageUrl?: string | null;
 };
 
 export type CatalogBrand = {

@@ -1,4 +1,5 @@
 import {
+  mapCategory,
   mapProductCard,
   mapProductConfiguration,
   mapProductDetail,
@@ -372,5 +373,39 @@ describe('mapProductListResponse', () => {
     expect(result.page).toBe(1);
     expect(result.lastPage).toBe(3);
     expect(result.total).toBe(40);
+  });
+});
+
+describe('mapCategory', () => {
+  it('passes through an explicit category image URL when the catalog payload includes one', () => {
+    expect(
+      mapCategory({
+        id: '1',
+        name: 'Automotive',
+        slug: 'automotive',
+        image: 'https://cdn.example/custom-automotive.jpg',
+      })?.imageUrl,
+    ).toBe('https://cdn.example/custom-automotive.jpg');
+  });
+
+  it('reads media objects without inventing a URL', () => {
+    expect(
+      mapCategory({
+        id: '2',
+        name: 'Health & Medical',
+        slug: 'health-medical',
+        image: { url: 'https://cdn.example/health.jpg' },
+      })?.imageUrl,
+    ).toBe('https://cdn.example/health.jpg');
+  });
+
+  it('leaves imageUrl empty when the catalog payload has no image', () => {
+    expect(
+      mapCategory({
+        id: '3',
+        name: 'Automotive',
+        slug: 'automotive',
+      })?.imageUrl,
+    ).toBeNull();
   });
 });

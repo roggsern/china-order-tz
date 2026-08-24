@@ -3,6 +3,7 @@ import { useJourneyStore } from '@/src/core/auth/journeyStore';
 import {
   buildRenderableSections,
   homepageQueryKey,
+  mapCategoryCard,
   mapHomepageResponse,
   mapProductCard,
   resolveHomepageCommerceContext,
@@ -377,6 +378,21 @@ describe('mapProductCard', () => {
         commerce_channel_code: 'CHINA_IMPORT',
       })?.imageUrl,
     ).toBe('https://cdn.example/display.webp');
+  });
+
+  it('maps CMS category.image onto homepage cards so mobile can override bundled art', () => {
+    expect(
+      mapCategoryCard({
+        id: 'c-auto',
+        name: 'Automotive',
+        slug: 'automotive',
+        image: 'https://cdn.example/custom-automotive.jpg',
+      }),
+    ).toMatchObject({
+      slug: 'automotive',
+      name: 'Automotive',
+      imageUrl: 'https://cdn.example/custom-automotive.jpg',
+    });
   });
 });
 

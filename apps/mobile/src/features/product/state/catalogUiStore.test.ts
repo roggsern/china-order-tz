@@ -27,6 +27,13 @@ describe('useCatalogUiStore', () => {
     expect(useCatalogUiStore.getState().selectedChinaCategorySlug).toBeNull();
   });
 
+  it('keeps homepage category browse slugs unchanged (Automotive identity)', () => {
+    useCatalogUiStore.getState().setSelectedChinaCategorySlug('automotive');
+    expect(useCatalogUiStore.getState().selectedChinaCategorySlug).toBe(
+      'automotive',
+    );
+  });
+
   it('stores TZ category deep-link selection independently of store', () => {
     useCatalogUiStore.getState().setSelectedTzStoreSlug('zion-mode');
     useCatalogUiStore.getState().setSelectedTzCategorySlug('dresses');

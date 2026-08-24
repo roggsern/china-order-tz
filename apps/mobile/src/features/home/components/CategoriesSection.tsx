@@ -3,10 +3,11 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useJourneyStore } from '@/src/core/auth';
 import { useCatalogUiStore } from '@/src/features/product';
+import { listImageProps } from '@/src/shared/media/listImageProps';
 import { SectionHeader } from '@/src/shared/ui/SectionHeader';
 import { colors, radius, spacing, typography } from '@/src/shared/theme';
 import type { HomepageCategoryCard } from '../models/types';
-import { resolveCategoryPresentation } from '../utils/categoryPresentation';
+import { resolveCategoryImageSource } from '../utils/categoryPresentation';
 
 type Props = {
   title?: string | null;
@@ -17,7 +18,8 @@ type Props = {
 /**
  * Category / collection discovery.
  * Deep-links China Shop (browse route) with the selected category slug via catalogUiStore.
- * Visual priority: server image when present → owned presentation artwork → generic artwork.
+ * Visual priority: explicit CMS/backend imageUrl → owned family artwork → generic artwork.
+ * Browse deep-link uses the category slug unchanged.
  */
 export function CategoriesSection({ title, subtitle, categories }: Props) {
   const setJourney = useJourneyStore((s) => s.setJourney);
@@ -39,9 +41,10 @@ export function CategoriesSection({ title, subtitle, categories }: Props) {
         contentContainerStyle={styles.rail}
       >
         {categories.map((category) => {
-          const presentation = resolveCategoryPresentation({
+          const image = resolveCategoryImageSource({
             slug: category.slug,
             name: category.name,
+            imageUrl: category.imageUrl,
           });
           return (
             <Pressable
@@ -56,19 +59,14 @@ export function CategoriesSection({ title, subtitle, categories }: Props) {
               accessibilityLabel={category.name}
             >
               <View style={styles.imageFrame}>
-                {category.imageUrl ? (
-                  <Image
-                    source={{ uri: category.imageUrl }}
-                    style={styles.image}
-                    contentFit="cover"
-                  />
-                ) : (
-                  <Image
-                    source={presentation.artwork}
-                    style={styles.image}
-                    contentFit="cover"
-                  />
-                )}
+                <Image
+                  source={image.source}
+                  style={styles.image}
+                  contentFit="cover"
+                  {...(image.kind === 'remote' && image.uri
+                    ? listImageProps(image.uri)
+                    : {})}
+                />
               </View>
               <Text style={styles.name} numberOfLines={2}>
                 {category.name}

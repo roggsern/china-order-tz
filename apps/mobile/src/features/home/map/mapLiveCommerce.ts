@@ -28,7 +28,7 @@ export function mapCatalogCategoryToHomepageCard(
     name: category.name,
     slug: category.slug,
     description: null,
-    imageUrl: null,
+    imageUrl: category.imageUrl ?? null,
   };
 }
 
