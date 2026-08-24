@@ -365,29 +365,11 @@ export function buildReceivingMethodPayload(method: 'self_pickup' | 'negotiated_
   return { receiving_method: method };
 }
 
-export function shouldOfferReceivingChoice(choice: ReceivingChoiceSnapshot | null | undefined): boolean {
-  if (!choice) return false;
-  return choice.eligible && choice.canSelect && !choice.selectedMethod;
-}
-
-const TERMINAL_RECEIVING_ORDER_STATUSES = new Set([
-  'cancelled',
-  'refunded',
-  'refund_pending',
-]);
-
-/**
- * Selector visibility. Backend snapshot is authoritative for eligibility;
- * terminal order statuses never keep a receiving action on screen.
- */
-export function shouldShowReceivingSelector(
-  choice: ReceivingChoiceSnapshot | null | undefined,
-  orderStatus?: string | null,
-): boolean {
-  const status = orderStatus?.trim().toLowerCase() ?? '';
-  if (TERMINAL_RECEIVING_ORDER_STATUSES.has(status)) return false;
-  return shouldOfferReceivingChoice(choice);
-}
+export {
+  shouldOfferCancel,
+  shouldOfferReceivingChoice,
+  shouldShowReceivingSelector,
+} from './orderLifecycleRules';
 
 function mapTimelineEvent(raw: unknown): OrderTimelineEvent | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -462,23 +444,6 @@ export function normalizeOrdersFilter(value: unknown): OrdersListFilter {
     return value;
   }
   return 'all';
-}
-
-/**
- * Cancel CTA visibility.
- * Prefer explicit server `can_cancel` when present.
- * Otherwise offer cancel and let the API reject with business_rule_violated —
- * never invent fulfillment / lifecycle eligibility locally.
- */
-export function shouldOfferCancel(order: {
-  status: string | null;
-  canCancel: boolean | null;
-}): boolean {
-  if (typeof order.canCancel === 'boolean') {
-    return order.canCancel;
-  }
-  // Already cancelled per server status — no point offering again.
-  return order.status !== 'cancelled';
 }
 
 export function buildCancelOrderPayload(reason?: string | null): { reason?: string } {

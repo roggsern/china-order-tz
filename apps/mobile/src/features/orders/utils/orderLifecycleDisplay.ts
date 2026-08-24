@@ -5,13 +5,13 @@ import type {
   OrderShipmentSummary,
   ReceivingChoiceSnapshot,
 } from '../models/types';
-import { shouldOfferReceivingChoice } from './mapOrders';
-
-const TERMINAL_ORDER_STATUSES = new Set([
-  'cancelled',
-  'refunded',
-  'refund_pending',
-]);
+import {
+  isNegativeTerminalOrderStatus,
+  isPendingReceivingPresentationKey,
+  isSuccessTerminalLifecycle,
+  isSuccessTerminalOrderStatus,
+  shouldOfferReceivingChoice,
+} from './orderLifecycleRules';
 
 const ORDER_DISPLAY_LABELS: Record<string, string> = {
   pending: 'Awaiting payment',
@@ -105,8 +105,9 @@ function normalize(value: string | null | undefined): string {
   return value?.trim().toLowerCase() ?? '';
 }
 
+/** Negative terminal only (cancelled / refunded / refund_pending). */
 export function isTerminalOrderStatus(status: string | null | undefined): boolean {
-  return TERMINAL_ORDER_STATUSES.has(normalize(status));
+  return isNegativeTerminalOrderStatus(status);
 }
 
 /**
@@ -232,7 +233,7 @@ export function resolveFulfillmentDisplayStatus(input: {
   const progress = input.progress ?? null;
   const currentKey = progress?.currentKey?.trim() ?? '';
 
-  if (isTerminalOrderStatus(orderStatus)) {
+  if (isNegativeTerminalOrderStatus(orderStatus)) {
     if (currentKey && TERMINAL_PROGRESS_KEYS.has(currentKey) && progress?.currentLabel) {
       return {
         key: currentKey,
@@ -275,13 +276,15 @@ export function resolveFulfillmentDisplayStatus(input: {
 
 /**
  * Receiving-choice presentation from the backend snapshot.
- * Does not invent pickup/delivery state when the snapshot is absent.
+ * Historical selected_method is preserved; pending pickup/delivery copy
+ * cannot override authoritative delivered/completed progress.
  */
 export function resolveReceivingDisplayStatus(input: {
   orderStatus: string | null;
   receivingChoice?: ReceivingChoiceSnapshot | null;
+  progress?: OrderProgress | null;
 }): ReceivingDisplayStatus {
-  if (isTerminalOrderStatus(input.orderStatus)) {
+  if (isNegativeTerminalOrderStatus(input.orderStatus)) {
     return {
       key: 'none',
       label: null,
@@ -291,7 +294,31 @@ export function resolveReceivingDisplayStatus(input: {
   }
 
   const choice = input.receivingChoice ?? null;
-  if (choice?.selectedMethod === 'self_pickup') {
+  const selectedMethod = choice?.selectedMethod ?? null;
+  const successTerminal = isSuccessTerminalLifecycle({
+    orderStatus: input.orderStatus,
+    progress: input.progress,
+  });
+
+  if (successTerminal) {
+    if (selectedMethod) {
+      const label = input.progress?.currentLabel?.trim() || 'Completed';
+      return {
+        key: 'completed',
+        label,
+        actionRequired: false,
+        selectedMethod,
+      };
+    }
+    return {
+      key: 'none',
+      label: null,
+      actionRequired: false,
+      selectedMethod: null,
+    };
+  }
+
+  if (selectedMethod === 'self_pickup') {
     return {
       key: 'self_pickup',
       label: 'Waiting for pickup',
@@ -299,7 +326,7 @@ export function resolveReceivingDisplayStatus(input: {
       selectedMethod: 'self_pickup',
     };
   }
-  if (choice?.selectedMethod === 'negotiated_delivery') {
+  if (selectedMethod === 'negotiated_delivery') {
     return {
       key: 'negotiated_delivery',
       label: 'Delivery arrangement pending',
@@ -327,10 +354,28 @@ export function resolveReceivingDisplayStatus(input: {
 export function resolveCustomerFacingHeadline(
   order: OrderDisplayStatus,
   receiving: ReceivingDisplayStatus,
+  fulfillment?: FulfillmentDisplayStatus,
+  input?: Pick<OrderLifecycleInput, 'status' | 'progress'>,
 ): OrderDisplayStatus {
-  if (receiving.label) {
+  if (
+    receiving.label &&
+    (receiving.actionRequired || isPendingReceivingPresentationKey(receiving.key))
+  ) {
     return { key: receiving.key, label: receiving.label };
   }
+
+  if (
+    input &&
+    isSuccessTerminalLifecycle({
+      orderStatus: input.status,
+      progress: input.progress,
+    }) &&
+    !isSuccessTerminalOrderStatus(input.status) &&
+    fulfillment?.label
+  ) {
+    return { key: fulfillment.key, label: fulfillment.label };
+  }
+
   return order;
 }
 
@@ -341,9 +386,15 @@ export function buildOrderLifecyclePresentation(
     status: input.status,
     statusLabel: input.statusLabel,
   });
+  const fulfillment = resolveFulfillmentDisplayStatus({
+    orderStatus: input.status,
+    progress: input.progress,
+    shipment: input.shipment,
+  });
   const receiving = resolveReceivingDisplayStatus({
     orderStatus: input.status,
     receivingChoice: input.receivingChoice,
+    progress: input.progress,
   });
   return {
     order,
@@ -354,13 +405,9 @@ export function buildOrderLifecyclePresentation(
       paymentMethod: input.paymentMethod,
       paymentProvider: input.paymentProvider,
     }),
-    fulfillment: resolveFulfillmentDisplayStatus({
-      orderStatus: input.status,
-      progress: input.progress,
-      shipment: input.shipment,
-    }),
+    fulfillment,
     receiving,
-    headline: resolveCustomerFacingHeadline(order, receiving),
+    headline: resolveCustomerFacingHeadline(order, receiving, fulfillment, input),
   };
 }
 
@@ -374,7 +421,7 @@ export function resolveProgressForDisplay(
     return progress;
   }
 
-  if (isTerminalOrderStatus(orderStatus) && progress?.currentKey && TERMINAL_PROGRESS_KEYS.has(progress.currentKey)) {
+  if (isNegativeTerminalOrderStatus(orderStatus) && progress?.currentKey && TERMINAL_PROGRESS_KEYS.has(progress.currentKey)) {
     return {
       currentKey: progress.currentKey,
       currentLabel: progress.currentLabel,
@@ -390,14 +437,32 @@ export function resolveTrackingHeroLabel(input: {
   trackingCurrentLabel?: string | null;
   trackingCurrentStatus?: string | null;
   progress?: OrderProgress | null;
+  receivingChoice?: ReceivingChoiceSnapshot | null;
 }): string {
   const lifecycle = buildOrderLifecyclePresentation({
     status: input.orderStatus,
     progress: input.progress,
+    receivingChoice: input.receivingChoice,
   });
 
-  if (isTerminalOrderStatus(input.orderStatus)) {
+  if (isNegativeTerminalOrderStatus(input.orderStatus)) {
     return lifecycle.order.label;
+  }
+
+  if (
+    isSuccessTerminalLifecycle({
+      orderStatus: input.orderStatus,
+      progress: input.progress,
+    })
+  ) {
+    return lifecycle.headline.label;
+  }
+
+  if (
+    lifecycle.receiving.actionRequired ||
+    isPendingReceivingPresentationKey(lifecycle.receiving.key)
+  ) {
+    return lifecycle.headline.label;
   }
 
   if (!lifecycle.fulfillment.showProgression) {
@@ -428,6 +493,8 @@ export function orderDisplayTone(
     case 'paid':
     case 'delivered':
     case 'completed':
+    case 'DELIVERED':
+    case 'DELIVERED_TO_AGENT':
     case 'refunded_complete':
       return 'success';
     case 'processing':

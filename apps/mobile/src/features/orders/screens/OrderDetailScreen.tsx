@@ -98,6 +98,7 @@ export function OrderDetailScreen({ orderId }: Props) {
     shouldOfferCancel({
       status: order.status,
       canCancel: order.canCancel,
+      progress: order.progress,
     });
   const offerContinuePayment = isOrderPayableFromServer({
     status: order.status,
@@ -177,6 +178,7 @@ export function OrderDetailScreen({ orderId }: Props) {
       <OrderReceivingChoicePanel
         orderId={orderId}
         orderStatus={order.status}
+        progress={order.progress}
         receivingChoice={order.receivingChoice}
         onUpdated={() => void detailQuery.refetch()}
       />

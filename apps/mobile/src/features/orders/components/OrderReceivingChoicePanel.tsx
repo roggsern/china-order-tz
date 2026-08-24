@@ -4,13 +4,18 @@ import { Card } from '@/src/shared/ui/Card';
 import { colors, radius, spacing, typography } from '@/src/shared/theme';
 import { canSubmitInFlightAction } from '@/src/core/async/inFlightGuard';
 import { useSelectReceivingMethodMutation } from '../hooks/useOrders';
-import type { LastMileReceivingMethod, ReceivingChoiceSnapshot } from '../models/types';
+import type {
+  LastMileReceivingMethod,
+  OrderProgress,
+  ReceivingChoiceSnapshot,
+} from '../models/types';
 import { getOrderErrorMessage } from '../utils/orderErrorMessage';
 import { shouldShowReceivingSelector } from '../utils/mapOrders';
 
 type Props = {
   orderId: string;
   orderStatus?: string | null;
+  progress?: OrderProgress | null;
   receivingChoice: ReceivingChoiceSnapshot | null | undefined;
   onUpdated?: () => void;
 };
@@ -35,6 +40,7 @@ const RECEIVING_OPTIONS: {
 export function OrderReceivingChoicePanel({
   orderId,
   orderStatus,
+  progress,
   receivingChoice,
   onUpdated,
 }: Props) {
@@ -45,7 +51,11 @@ export function OrderReceivingChoicePanel({
     return null;
   }
 
-  const offerSelect = shouldShowReceivingSelector(receivingChoice, orderStatus);
+  const offerSelect = shouldShowReceivingSelector(
+    receivingChoice,
+    orderStatus,
+    progress,
+  );
 
   async function selectMethod(method: LastMileReceivingMethod) {
     if (!canSubmitInFlightAction(mutation.isPending)) return;

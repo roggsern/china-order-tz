@@ -1,4 +1,5 @@
 import { isOrderPayableFromServer } from './isOrderPayable';
+import { shouldOfferCancel } from './mapOrders';
 import {
   buildOrderLifecyclePresentation,
   resolveFulfillmentDisplayStatus,
@@ -9,7 +10,14 @@ import {
   resolveTrackingHeroLabel,
 } from './orderLifecycleDisplay';
 import { buildOrderListCardPresentation } from './orderCardPresentation';
-import type { OrderDetail, OrderListItem, OrderProgress } from '../models/types';
+import { hasOrderTrackingEntry } from './hasOrderTrackingEntry';
+import { shouldOfferReturnRequest } from '@/src/features/returns/utils/returnEligibility';
+import type {
+  OrderDetail,
+  OrderListItem,
+  OrderProgress,
+  ReceivingChoiceSnapshot,
+} from '../models/types';
 
 function progress(
   currentKey: string,
@@ -455,6 +463,23 @@ describe('tracking hero', () => {
       }),
     ).toBe('On the way');
   });
+
+  it('uses waiting-for-pickup headline when self pickup is still pending', () => {
+    expect(
+      resolveTrackingHeroLabel({
+        orderStatus: 'shipped',
+        trackingCurrentLabel: 'On the way',
+        progress: progress('CHOOSE_RECEIVING_METHOD', 'Choose receiving method'),
+        receivingChoice: {
+          eligible: true,
+          canSelect: false,
+          selectedMethod: 'self_pickup',
+          selectedMethodLabel: 'Self Pickup',
+          selectedAt: '2026-08-24T00:00:00Z',
+        },
+      }),
+    ).toBe('Waiting for pickup');
+  });
 });
 
 describe('receiving presentation', () => {
@@ -548,6 +573,258 @@ describe('receiving presentation', () => {
         },
       }).label,
     ).toBeNull();
+  });
+});
+
+const SELF_PICKUP: ReceivingChoiceSnapshot = {
+  eligible: false,
+  canSelect: false,
+  selectedMethod: 'self_pickup',
+  selectedMethodLabel: 'Self Pickup',
+  selectedAt: '2026-08-24T00:00:00Z',
+};
+
+function chinaCompletedProgress(): OrderProgress {
+  return {
+    currentKey: 'DELIVERED',
+    currentLabel: 'Completed',
+    steps: [
+      { key: 'ORDER_CONFIRMED', label: 'Order confirmed', completed: true },
+      { key: 'PREPARING', label: 'Preparing your order', completed: true },
+      { key: 'SHIPPED', label: 'Shipped', completed: true },
+      { key: 'ARRIVED_TANZANIA', label: 'Arrived in Tanzania', completed: true },
+      {
+        key: 'CHOOSE_RECEIVING_METHOD',
+        label: 'Choose receiving method',
+        completed: true,
+      },
+      { key: 'DELIVERED', label: 'Completed', completed: true },
+    ],
+  };
+}
+
+describe('Wave 8A terminal receiving and cancel precedence', () => {
+  it('shows Waiting for pickup while self pickup is selected and handover is not terminal', () => {
+    const display = buildOrderLifecyclePresentation({
+      status: 'shipped',
+      paymentStatus: 'paid',
+      progress: progress('CHOOSE_RECEIVING_METHOD', 'Choose receiving method'),
+      receivingChoice: {
+        ...SELF_PICKUP,
+        eligible: true,
+      },
+    });
+    expect(display.receiving.label).toBe('Waiting for pickup');
+    expect(display.headline.label).toBe('Waiting for pickup');
+    expect(display.receiving.selectedMethod).toBe('self_pickup');
+    expect(display.order.key).toBe('shipped');
+  });
+
+  it('shows terminal receiving after self pickup + completed progress', () => {
+    const display = buildOrderLifecyclePresentation({
+      status: 'completed',
+      statusLabel: 'Completed',
+      paymentStatus: 'paid',
+      progress: chinaCompletedProgress(),
+      shipment: { status: 'Completed', statusLabel: 'Completed' },
+      receivingChoice: SELF_PICKUP,
+    });
+    expect(display.headline.label).toBe('Completed');
+    expect(display.headline.label).not.toBe('Waiting for pickup');
+    expect(display.order.label).toBe('Completed');
+    expect(display.payment.label).toBe('Paid');
+    expect(display.fulfillment.label).toBe('Completed');
+    expect(display.receiving.label).toBe('Completed');
+    expect(display.receiving.label).not.toBe('Waiting for pickup');
+    expect(display.receiving.actionRequired).toBe(false);
+    expect(display.receiving.selectedMethod).toBe('self_pickup');
+  });
+
+  it('hides Cancel Order for completed, delivered, cancelled, refunded, and refund_pending', () => {
+    for (const status of [
+      'completed',
+      'delivered',
+      'cancelled',
+      'refunded',
+      'refund_pending',
+    ]) {
+      expect(shouldOfferCancel({ status, canCancel: null })).toBe(false);
+    }
+  });
+
+  it('keeps cancel available for pending unpaid orders', () => {
+    expect(
+      shouldOfferCancel({ status: 'pending_payment', canCancel: null }),
+    ).toBe(true);
+    expect(shouldOfferCancel({ status: 'pending', canCancel: null })).toBe(true);
+  });
+
+  it('keeps return eligibility backend-authoritative after delivered and completed', () => {
+    expect(shouldOfferReturnRequest('delivered')).toBe(true);
+    expect(shouldOfferReturnRequest('completed')).toBe(true);
+    expect(shouldOfferReturnRequest('shipped')).toBe(false);
+  });
+
+  it('preserves historical Self Pickup after completion', () => {
+    const receiving = resolveReceivingDisplayStatus({
+      orderStatus: 'completed',
+      progress: chinaCompletedProgress(),
+      receivingChoice: SELF_PICKUP,
+    });
+    expect(receiving.selectedMethod).toBe('self_pickup');
+    expect(receiving.key).toBe('completed');
+  });
+
+  it('does not let a stale receiving snapshot override terminal fulfillment', () => {
+    const display = buildOrderLifecyclePresentation({
+      status: 'shipped',
+      paymentStatus: 'paid',
+      progress: chinaCompletedProgress(),
+      receivingChoice: {
+        eligible: true,
+        canSelect: true,
+        selectedMethod: 'self_pickup',
+        selectedMethodLabel: 'Self Pickup',
+        selectedAt: '2026-08-24T00:00:00Z',
+      },
+    });
+    expect(display.fulfillment.label).toBe('Completed');
+    expect(display.receiving.label).toBe('Completed');
+    expect(display.receiving.actionRequired).toBe(false);
+    expect(display.headline.label).not.toBe('Waiting for pickup');
+    expect(display.headline.label).not.toBe('Action required');
+    expect(
+      shouldOfferCancel({
+        status: 'shipped',
+        canCancel: null,
+        progress: chinaCompletedProgress(),
+      }),
+    ).toBe(false);
+  });
+
+  it('keeps list and detail lifecycle presentation in agreement for completed self pickup', () => {
+    const list = listOrder({
+      id: 'ord-8a',
+      status: 'completed',
+      statusLabel: 'Completed',
+      paymentStatus: 'paid',
+      source: 'China',
+      journeyLabel: 'Order from China',
+      progress: chinaCompletedProgress(),
+      receivingChoice: SELF_PICKUP,
+      canCancel: null,
+    });
+    const detail: OrderDetail = {
+      id: 'ord-8a',
+      orderNumber: 'COTZ-8A',
+      source: 'China',
+      journeyLabel: 'Order from China',
+      status: 'completed',
+      statusLabel: 'Completed',
+      createdAt: null,
+      items: [],
+      summary: {
+        subtotal: null,
+        shipping: null,
+        tax: null,
+        discount: null,
+        grandTotal: '10000',
+      },
+      payment: {
+        paymentStatus: 'paid',
+        paymentMethod: 'nmb',
+        reference: null,
+        provider: 'nmb',
+        amount: '10000',
+        currency: 'TZS',
+        paidAt: null,
+        initiatedAt: null,
+      },
+      progress: chinaCompletedProgress(),
+      shipment: {
+        status: 'Completed',
+        statusLabel: 'Completed',
+        trackingReference: null,
+        carrierName: null,
+      },
+      currency: 'TZS',
+      canCancel: null,
+      canPay: false,
+      activePaymentTransaction: null,
+      receivingChoice: SELF_PICKUP,
+    };
+
+    const { fromList, fromDetail } = sameLifecycleFromListAndDetail(list, detail);
+    expect(fromList.headline.label).toBe(fromDetail.headline.label);
+    expect(fromList.receiving.label).toBe(fromDetail.receiving.label);
+    expect(fromList.fulfillment.label).toBe(fromDetail.fulfillment.label);
+    expect(fromList.headline.label).toBe('Completed');
+    expect(buildOrderListCardPresentation(list).statusLabel).toBe('Completed');
+    expect(
+      resolveTrackingHeroLabel({
+        orderStatus: detail.status,
+        trackingCurrentLabel: 'Completed',
+        progress: detail.progress,
+        receivingChoice: detail.receivingChoice,
+      }),
+    ).toBe('Completed');
+    expect(hasOrderTrackingEntry(detail)).toBe(true);
+  });
+
+  it('applies CHINA_IMPORT company-shipping completed labels from backend progress', () => {
+    const display = buildOrderLifecyclePresentation({
+      status: 'delivered',
+      paymentStatus: 'paid',
+      progress: chinaCompletedProgress(),
+      receivingChoice: SELF_PICKUP,
+    });
+    expect(display.order.label).toBe('Delivered');
+    expect(display.fulfillment.label).toBe('Completed');
+    expect(display.receiving.label).toBe('Completed');
+    expect(display.headline.label).toBe('Delivered');
+    expect(shouldOfferCancel({ status: 'delivered', canCancel: null })).toBe(false);
+    expect(shouldOfferReturnRequest('delivered')).toBe(true);
+  });
+
+  it('applies TZ_LOCAL completed presentation without inventing a receiving layer', () => {
+    const display = buildOrderLifecyclePresentation({
+      status: 'completed',
+      paymentStatus: 'paid',
+      progress: progress('DELIVERED', 'Completed', {
+        steps: [
+          { key: 'ORDER_CONFIRMED', label: 'Order confirmed', completed: true },
+          { key: 'PREPARING', label: 'Preparing your order', completed: true },
+          { key: 'READY_TO_SHIP', label: 'Order ready', completed: true },
+          { key: 'DELIVERED', label: 'Completed', completed: true },
+        ],
+      }),
+      receivingChoice: {
+        eligible: false,
+        canSelect: false,
+        selectedMethod: null,
+        selectedMethodLabel: null,
+        selectedAt: null,
+      },
+    });
+    expect(display.headline.label).toBe('Completed');
+    expect(display.fulfillment.label).toBe('Completed');
+    expect(display.receiving.label).toBeNull();
+    expect(display.receiving.actionRequired).toBe(false);
+    expect(shouldOfferCancel({ status: 'completed', canCancel: null })).toBe(false);
+  });
+
+  it('keeps Wave 2 late payment reconciliation on cancelled orders', () => {
+    const display = buildOrderLifecyclePresentation({
+      status: 'cancelled',
+      paymentStatus: 'paid',
+      transactionStatus: 'successful',
+      receivingChoice: SELF_PICKUP,
+    });
+    expect(display.order.label).toBe('Cancelled');
+    expect(display.payment.label).toBe('Paid');
+    expect(display.headline.label).toBe('Cancelled');
+    expect(display.receiving.label).toBeNull();
+    expect(shouldOfferCancel({ status: 'cancelled', canCancel: null })).toBe(false);
   });
 });
 

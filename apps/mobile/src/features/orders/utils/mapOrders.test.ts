@@ -394,11 +394,47 @@ describe('mapOrderTracking', () => {
 });
 
 describe('shouldOfferCancel / cancel payload', () => {
-  it('prefers server can_cancel and never invents eligibility math', () => {
-    expect(shouldOfferCancel({ status: 'shipped', canCancel: true })).toBe(true);
+  it('prefers server can_cancel for statuses that remain cancellable', () => {
     expect(shouldOfferCancel({ status: 'paid', canCancel: false })).toBe(false);
+    expect(shouldOfferCancel({ status: 'pending', canCancel: true })).toBe(true);
+    expect(shouldOfferCancel({ status: 'processing', canCancel: true })).toBe(true);
+  });
+
+  it('never shows cancel on terminal or post-shipment statuses', () => {
+    expect(shouldOfferCancel({ status: 'completed', canCancel: null })).toBe(false);
+    expect(shouldOfferCancel({ status: 'delivered', canCancel: null })).toBe(false);
     expect(shouldOfferCancel({ status: 'cancelled', canCancel: null })).toBe(false);
+    expect(shouldOfferCancel({ status: 'refunded', canCancel: null })).toBe(false);
+    expect(shouldOfferCancel({ status: 'refund_pending', canCancel: null })).toBe(
+      false,
+    );
+    expect(shouldOfferCancel({ status: 'shipped', canCancel: null })).toBe(false);
+    expect(shouldOfferCancel({ status: 'completed', canCancel: true })).toBe(false);
+    expect(shouldOfferCancel({ status: 'delivered', canCancel: true })).toBe(false);
+  });
+
+  it('keeps unpaid and paid pre-shipment cancel fallback when can_cancel is omitted', () => {
+    expect(shouldOfferCancel({ status: 'pending', canCancel: null })).toBe(true);
+    expect(shouldOfferCancel({ status: 'pending_payment', canCancel: null })).toBe(
+      true,
+    );
     expect(shouldOfferCancel({ status: 'paid', canCancel: null })).toBe(true);
+    expect(shouldOfferCancel({ status: 'confirmed', canCancel: null })).toBe(true);
+    expect(shouldOfferCancel({ status: 'processing', canCancel: null })).toBe(true);
+  });
+
+  it('hides cancel when backend progress is already delivered', () => {
+    expect(
+      shouldOfferCancel({
+        status: 'shipped',
+        canCancel: true,
+        progress: {
+          currentKey: 'DELIVERED',
+          currentLabel: 'Completed',
+          steps: [],
+        },
+      }),
+    ).toBe(false);
   });
 
   it('builds optional cancel reason body', () => {
@@ -462,7 +498,7 @@ describe('receiving choice', () => {
     ).toBe(false);
   });
 
-  it('hides receiving action on cancelled and refunded orders', () => {
+  it('hides receiving action on cancelled, refunded, delivered, and completed orders', () => {
     const snapshot = mapReceivingChoiceSnapshot({
       eligible: true,
       can_select: true,
@@ -471,6 +507,8 @@ describe('receiving choice', () => {
     expect(shouldShowReceivingSelector(snapshot, 'cancelled')).toBe(false);
     expect(shouldShowReceivingSelector(snapshot, 'refunded')).toBe(false);
     expect(shouldShowReceivingSelector(snapshot, 'refund_pending')).toBe(false);
+    expect(shouldShowReceivingSelector(snapshot, 'delivered')).toBe(false);
+    expect(shouldShowReceivingSelector(snapshot, 'completed')).toBe(false);
   });
 
   it('keeps TZ_LOCAL list cards without a receiving selector', () => {
@@ -488,6 +526,24 @@ describe('receiving choice', () => {
     expect(shouldShowReceivingSelector(order?.receivingChoice, order?.status)).toBe(
       false,
     );
+  });
+
+  it('does not offer a receiving selector once progress is completed', () => {
+    expect(
+      shouldShowReceivingSelector(
+        mapReceivingChoiceSnapshot({
+          eligible: true,
+          can_select: true,
+          selected_method: null,
+        }),
+        'shipped',
+        {
+          currentKey: 'DELIVERED',
+          currentLabel: 'Completed',
+          steps: [],
+        },
+      ),
+    ).toBe(false);
   });
 
   it('does not offer selection when the backend snapshot is ineligible', () => {

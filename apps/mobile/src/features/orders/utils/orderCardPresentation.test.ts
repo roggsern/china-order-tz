@@ -125,4 +125,29 @@ describe('orderCardPresentation', () => {
     const presentation = buildOrderListCardPresentation(order!);
     expect(presentation.statusLabel).toBe('Action required');
   });
+
+  it('does not show Waiting for pickup on completed CHINA_IMPORT list cards', () => {
+    const order = mapOrderListItem({
+      id: 'ord-china-done',
+      source: 'China',
+      status: 'completed',
+      status_label: 'Completed',
+      payment_status: 'paid',
+      progress: {
+        current_key: 'DELIVERED',
+        current_label: 'Completed',
+        steps: [],
+      },
+      receiving_choice: {
+        eligible: false,
+        can_select: false,
+        selected_method: 'self_pickup',
+        selected_method_label: 'Self Pickup',
+      },
+    });
+    const presentation = buildOrderListCardPresentation(order!);
+    expect(presentation.statusLabel).toBe('Completed');
+    expect(presentation.statusLabel).not.toBe('Waiting for pickup');
+    expect(presentation.fulfillmentLabel).toBe('Completed');
+  });
 });

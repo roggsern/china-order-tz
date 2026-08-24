@@ -88,6 +88,7 @@ export function OrderTrackingScreen({ orderId }: Props) {
           statusLabel: tracking.shipment.statusLabel,
         }
       : detail?.shipment,
+    receivingChoice: detail?.receivingChoice,
   });
   const displayProgress = resolveProgressForDisplay(
     detail?.status ?? null,
@@ -107,6 +108,7 @@ export function OrderTrackingScreen({ orderId }: Props) {
     trackingCurrentLabel: tracking.currentStatusLabel,
     trackingCurrentStatus: tracking.currentStatus,
     progress: tracking.progress ?? detail?.progress,
+    receivingChoice: detail?.receivingChoice,
   });
 
   return (
