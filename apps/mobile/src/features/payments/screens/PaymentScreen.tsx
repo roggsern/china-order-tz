@@ -65,6 +65,10 @@ import { payOrderWithNmb } from '../utils/payWithNmb';
 import {
   clearPaymentAndCheckoutContexts,
 } from '../utils/recoveryHandoff';
+import {
+  isSnippePhoneEntryVisible,
+  resolveSnippePhonePrefill,
+} from '../utils/snippePhonePrefill';
 import { validateSnippePhoneInput } from '../utils/snippePhone';
 
 function firstParam(value: string | string[] | undefined): string | undefined {
@@ -73,6 +77,7 @@ function firstParam(value: string | string[] | undefined): string | undefined {
 
 export function PaymentScreen() {
   const authStatus = useAuthStore((s) => s.status);
+  const accountPhone = useAuthStore((s) => s.user?.phone ?? null);
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{
     checkoutSessionId?: string | string[];
@@ -90,7 +95,13 @@ export function PaymentScreen() {
   const [officePayment, setOfficePayment] = useState<PreparedPayment | null>(null);
   const [view, setView] = useState<PayNowView | null>(null);
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
-  const [snippePhone, setSnippePhone] = useState('');
+  const [snippePhoneEdited, setSnippePhoneEdited] = useState(false);
+  const [snippePhoneDraft, setSnippePhoneDraft] = useState('');
+  const snippePhone = resolveSnippePhonePrefill({
+    profilePhone: accountPhone,
+    currentValue: snippePhoneDraft,
+    editedInSession: snippePhoneEdited,
+  });
   const [snippePhoneError, setSnippePhoneError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -628,13 +639,18 @@ export function PaymentScreen() {
           />
         ) : null}
 
-        {showSelector && effectiveSelectedCode === 'snippe' ? (
+        {isSnippePhoneEntryVisible({
+          viewKind: view?.kind ?? null,
+          selectedCode: effectiveSelectedCode,
+          hasOfficePayment: Boolean(officePayment),
+        }) ? (
           <View style={styles.phoneWrap}>
             <Text style={styles.cardTitle}>Mobile Money number</Text>
             <TextInput
               value={snippePhone}
               onChangeText={(value) => {
-                setSnippePhone(value);
+                setSnippePhoneEdited(true);
+                setSnippePhoneDraft(value);
                 if (snippePhoneError) setSnippePhoneError(null);
               }}
               keyboardType="phone-pad"
@@ -644,8 +660,7 @@ export function PaymentScreen() {
               editable={!busy}
             />
             <Text style={styles.meta}>
-              A Mobile Money payment request will be sent to this number. Approve
-              it on your phone when prompted.
+              Use the number that should receive the payment prompt.
             </Text>
             {snippePhoneError ? (
               <Text style={styles.error}>{snippePhoneError}</Text>

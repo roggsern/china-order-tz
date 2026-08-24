@@ -19,6 +19,13 @@ export function normalizeSnippePhone(phone: string): string | null {
   return TZ_MOBILE.test(normalized) ? normalized : null;
 }
 
+/** Friendly local form for the payment input. Backend still accepts 07 / +255 / 255. */
+export function formatSnippePhoneForInput(phone: string): string | null {
+  const normalized = normalizeSnippePhone(phone);
+  if (!normalized) return null;
+  return `0${normalized.slice(3)}`;
+}
+
 export function validateSnippePhoneInput(phone: string): string | null {
   const trimmed = phone.trim();
   if (!trimmed) {

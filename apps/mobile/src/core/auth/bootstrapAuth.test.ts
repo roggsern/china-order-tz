@@ -69,6 +69,22 @@ describe('bootstrapAuth', () => {
     expect(useAuthStore.getState().bootstrapStatus).toBe('complete');
   });
 
+  it('keeps GET /me phone on the authenticated user', async () => {
+    mockReadToken.mockResolvedValue('tok_abc');
+    mockApiGet.mockResolvedValue({
+      success: true,
+      data: { ...validUser, phone: '+255712345678' },
+    });
+
+    const result = await bootstrapAuth();
+
+    expect(result).toEqual({
+      status: 'authenticated',
+      user: { ...validUser, phone: '+255712345678' },
+    });
+    expect(useAuthStore.getState().user?.phone).toBe('+255712345678');
+  });
+
   it('bootstrap authenticated when GET /me succeeds', async () => {
     mockReadToken.mockResolvedValue('tok_abc');
     mockApiGet.mockResolvedValue({ success: true, data: validUser });
