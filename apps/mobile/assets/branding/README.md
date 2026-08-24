@@ -9,7 +9,8 @@ Source of truth: `apps/web/public/branding/`.
 | `logo-header.png` | Horizontal lockup (headers / splash) |
 | `logo-footer.png` | Footer / dark-surface lockup |
 | `logo-mark.png` | Compact mark (tab headers, favicon) |
-| `splash-brand.png` | Native + in-app splash |
+| `splash-brand.png` | Canonical horizontal lockup (do not overwrite) |
+| `splash-brand-safe.png` | Derived padded square for native + in-app splash |
 | `app-icon.png` | Store / Expo app icon (512px from web `icon-512.png`) |
 
 `app.json` and `src/shared/branding/assets.ts` point at these paths.
@@ -24,6 +25,8 @@ Copy-Item "$web\logo-header.png" .\logo-header.png -Force
 Copy-Item "$web\logo-footer.png" .\logo-footer.png -Force
 Copy-Item "$web\favicon.png" .\logo-mark.png -Force
 Copy-Item "$web\logo-header.png" .\splash-brand.png -Force
+# Then regenerate the splash-safe square (does not overwrite splash-brand.png):
+#   node ..\scripts\generate-splash-brand-safe.js
 Copy-Item "$web\icon-512.png" .\app-icon.png -Force
 ```
 

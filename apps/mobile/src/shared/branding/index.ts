@@ -5,4 +5,14 @@ export {
   OFFICIAL_BRANDING_FILES,
   FUTURE_BRANDING_FILES,
 } from './assets';
-export { BrandMark } from './BrandMark';
+export { BrandMark, resolveBrandMarkLayout } from './BrandMark';
+export {
+  SPLASH_BACKGROUND_COLOR,
+  SPLASH_CANONICAL_ASSET_PATH,
+  SPLASH_NATIVE_IMAGE_WIDTH,
+  SPLASH_RESIZE_MODE,
+  SPLASH_SAFE_ASSET_PATH,
+  SPLASH_SAFE_CANVAS_PX,
+  SPLASH_SAFE_PLUGIN_IMAGE,
+  SPLASH_VIEW_MARK_SIZE,
+} from './splashPresentation';

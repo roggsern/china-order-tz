@@ -1,5 +1,6 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { BRAND_NAME, BRAND_TAGLINE, BrandMark } from '@/src/shared/branding';
+import { BrandMark } from '@/src/shared/branding';
+import { SPLASH_VIEW_MARK_SIZE } from '@/src/shared/branding/splashPresentation';
 import { colors, spacing, typography } from '@/src/shared/theme';
 
 type Props = {
@@ -11,9 +12,7 @@ export function SplashView({ message = 'Loading your account…' }: Props) {
   return (
     <View style={styles.container} accessibilityLabel="splash">
       <View style={styles.hero}>
-        <BrandMark variant="splash" size={56} style={styles.logo} />
-        <Text style={styles.title}>{BRAND_NAME}</Text>
-        <Text style={styles.tagline}>{BRAND_TAGLINE}</Text>
+        <BrandMark variant="splash" size={SPLASH_VIEW_MARK_SIZE} style={styles.logo} />
       </View>
       <ActivityIndicator size="large" color={colors.primary} style={styles.spinner} />
       <Text style={styles.message}>{message}</Text>
@@ -37,19 +36,6 @@ const styles = StyleSheet.create({
   logo: {
     marginBottom: spacing.lg,
     backgroundColor: 'transparent',
-  },
-  title: {
-    ...typography.heading,
-    textAlign: 'center',
-    color: colors.text,
-    letterSpacing: 0.6,
-  },
-  tagline: {
-    ...typography.caption,
-    textAlign: 'center',
-    marginTop: spacing.sm,
-    color: colors.textMuted,
-    maxWidth: 280,
   },
   spinner: {
     marginBottom: spacing.lg,

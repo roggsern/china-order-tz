@@ -22,12 +22,14 @@ export const brandAssetPaths = {
   logoFooter: require('../../../assets/branding/logo-footer.png') as number,
   /** Compact mark for headers, avatars, and badges. */
   logoMark: require('../../../assets/branding/logo-mark.png') as number,
-  /** Native splash / bootstrap splash image. */
+  /** Native splash / bootstrap splash image (canonical lockup). */
   splashBrand: require('../../../assets/branding/splash-brand.png') as number,
+  /** Padded square lockup for native + React splash (do not overwrite canonical). */
+  splashBrandSafe: require('../../../assets/branding/splash-brand-safe.png') as number,
   /** Store / adaptive icon source (512px). */
   appIcon: require('../../../assets/branding/app-icon.png') as number,
   /** Alias kept for older call sites. */
-  splashIcon: require('../../../assets/branding/splash-brand.png') as number,
+  splashIcon: require('../../../assets/branding/splash-brand-safe.png') as number,
   androidAdaptiveForeground: require('../../../assets/images/android-icon-foreground.png') as number,
   androidAdaptiveBackground: require('../../../assets/images/android-icon-background.png') as number,
   favicon: require('../../../assets/images/favicon.png') as number,
@@ -42,6 +44,7 @@ export const OFFICIAL_BRANDING_FILES = {
   logoFooter: 'assets/branding/logo-footer.png',
   logoMark: 'assets/branding/logo-mark.png',
   splashBrand: 'assets/branding/splash-brand.png',
+  splashBrandSafe: 'assets/branding/splash-brand-safe.png',
   appIconSource: 'assets/branding/app-icon.png',
 } as const;
 
