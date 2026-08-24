@@ -1,24 +1,22 @@
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { Link, router } from 'expo-router';
+import { router } from 'expo-router';
 import { getAuthErrorMessage, getAuthFieldErrors } from '@/src/features/auth';
-import { authStyles as styles } from '@/src/features/auth/components/authStyles';
+import { AuthCard } from '@/src/features/auth/components/AuthCard';
+import {
+  AuthErrorBanner,
+  AuthSuccessBanner,
+} from '@/src/features/auth/components/AuthBanners';
+import { AuthField } from '@/src/features/auth/components/AuthField';
+import { AuthFooterLink } from '@/src/features/auth/components/AuthFooterLink';
+import { AuthHeader } from '@/src/features/auth/components/AuthHeader';
+import { AuthShell } from '@/src/features/auth/components/AuthShell';
 import {
   forgotPasswordRequestSchema,
   requestPasswordReset,
 } from '@/src/features/auth/api/forgotPasswordApi';
 import { buildAuthWebUrl } from '@/src/features/auth/utils/authWebLinks';
-import { colors, radius, spacing, typography } from '@/src/shared/theme';
+import { AUTH_LOGIN_HREF } from '@/src/features/auth/components/authRoutes';
+import { PrimaryButton } from '@/src/shared/ui';
 
 export function ForgotPasswordScreen() {
   const [email, setEmail] = useState('');
@@ -56,114 +54,62 @@ export function ForgotPasswordScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Text style={styles.heading} accessibilityRole="header">
-          Forgot password
-        </Text>
-        <Text style={styles.subheading}>
-          Enter your account email. If an account exists, we will send reset
-          instructions. The secure reset link opens on chinaordertz.com.
-        </Text>
+    <AuthShell>
+      <AuthHeader
+        title="Forgot password"
+        subtitle="Enter your account email. If an account exists, we will send reset instructions. The secure reset link opens on chinaordertz.com."
+      />
 
-        {formError ? (
-          <View style={styles.banner} accessibilityRole="alert">
-            <Text style={styles.bannerText}>{formError}</Text>
-          </View>
-        ) : null}
+      <AuthCard>
+        {formError ? <AuthErrorBanner message={formError} /> : null}
 
         {successMessage ? (
-          <View
-            style={successStyles.banner}
-            accessibilityRole="text"
-            accessibilityLiveRegion="polite"
-          >
-            <Text style={successStyles.text}>{successMessage}</Text>
-            <Text style={successStyles.hint}>
-              Check your inbox and spam folder. After resetting, return here to
-              sign in. Reset page: {buildAuthWebUrl('/reset-password')}
-            </Text>
-          </View>
+          <AuthSuccessBanner
+            message={successMessage}
+            hint={`Check your inbox and spam folder. After resetting, return here to sign in. Reset page: ${buildAuthWebUrl('/reset-password')}`}
+          />
         ) : null}
 
         {!successMessage ? (
           <>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={[styles.input, fieldErrors.email ? styles.inputError : null]}
+            <AuthField
+              label="Email"
+              value={email}
+              onChangeText={setEmail}
+              error={fieldErrors.email}
+              editable={!submitting}
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="email-address"
-              textContentType="emailAddress"
               autoComplete="email"
-              value={email}
-              onChangeText={setEmail}
-              editable={!submitting}
+              textContentType="emailAddress"
               accessibilityLabel="Email address"
             />
-            {fieldErrors.email ? (
-              <Text style={styles.fieldError}>{fieldErrors.email}</Text>
-            ) : (
-              <View style={styles.fieldSpacer} />
-            )}
 
-            <Pressable
-              style={[styles.button, submitting ? styles.buttonDisabled : null]}
+            <PrimaryButton
+              label="Send reset instructions"
+              loading={submitting}
               onPress={() => void onSubmit()}
-              disabled={submitting}
-              accessibilityRole="button"
               accessibilityLabel="Send password reset instructions"
-            >
-              {submitting ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>Send reset instructions</Text>
-              )}
-            </Pressable>
+            />
           </>
         ) : (
-          <Pressable
-            style={styles.button}
-            onPress={() => router.replace('/(auth)/login')}
-            accessibilityRole="button"
+          <PrimaryButton
+            label="Back to sign in"
+            onPress={() => router.replace(AUTH_LOGIN_HREF as never)}
             accessibilityLabel="Back to sign in"
-          >
-            <Text style={styles.buttonText}>Back to sign in</Text>
-          </Pressable>
+          />
         )}
+      </AuthCard>
 
-        <View style={styles.linkRow}>
-          <Link href="/(auth)/login" asChild>
-            <Pressable disabled={submitting} accessibilityRole="link">
-              <Text style={styles.linkText}>Back to sign in</Text>
-            </Pressable>
-          </Link>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      {!successMessage ? (
+        <AuthFooterLink
+          prompt=""
+          actionLabel="Back to sign in"
+          href={AUTH_LOGIN_HREF}
+          disabled={submitting}
+        />
+      ) : null}
+    </AuthShell>
   );
 }
-
-const successStyles = StyleSheet.create({
-  banner: {
-    backgroundColor: colors.successMuted,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  text: {
-    ...typography.bodyStrong,
-    color: colors.success,
-  },
-  hint: {
-    ...typography.caption,
-    marginTop: spacing.sm,
-    color: colors.textSecondary,
-  },
-});

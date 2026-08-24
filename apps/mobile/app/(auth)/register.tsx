@@ -1,15 +1,5 @@
-import { Link, router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
 
 import {
   getAuthErrorMessage,
@@ -17,11 +7,20 @@ import {
   registerAccount,
   registerRequestSchema,
 } from '@/src/features/auth';
-import { authStyles as styles } from '@/src/features/auth/components/authStyles';
+import { AuthCard } from '@/src/features/auth/components/AuthCard';
+import { AuthErrorBanner } from '@/src/features/auth/components/AuthBanners';
+import { AuthField } from '@/src/features/auth/components/AuthField';
+import { AuthFooterLink } from '@/src/features/auth/components/AuthFooterLink';
+import { AuthHeader } from '@/src/features/auth/components/AuthHeader';
+import { AuthLegalNote } from '@/src/features/auth/components/AuthLegalNote';
+import { AuthPasswordField } from '@/src/features/auth/components/AuthPasswordField';
+import { AuthShell } from '@/src/features/auth/components/AuthShell';
 import {
   buildLoginHref,
   sanitizeAuthReturnTo,
 } from '@/src/features/cart/utils/authReturn';
+import { AUTH_HOME_HREF } from '@/src/features/auth/components/authRoutes';
+import { PrimaryButton } from '@/src/shared/ui';
 
 export default function RegisterScreen() {
   const params = useLocalSearchParams<{ returnTo?: string | string[] }>();
@@ -67,7 +66,7 @@ export default function RegisterScreen() {
       if (returnTo) {
         router.replace(returnTo as never);
       } else {
-        router.replace('/(app)/(tabs)/home');
+        router.replace(AUTH_HOME_HREF as never);
       }
     } catch (error) {
       setFormError(getAuthErrorMessage(error));
@@ -78,103 +77,91 @@ export default function RegisterScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={styles.heading}>Register</Text>
-        <Text style={styles.subheading}>Create a customer account.</Text>
+    <AuthShell>
+      <AuthHeader
+        title="Create your account"
+        subtitle="Shop from China and trusted Tanzania stores with one customer account."
+      />
 
-        {formError ? (
-          <View style={styles.banner}>
-            <Text style={styles.bannerText}>{formError}</Text>
-          </View>
-        ) : null}
+      <AuthCard>
+        {formError ? <AuthErrorBanner message={formError} /> : null}
 
-        <Text style={styles.label}>Name</Text>
-        <TextInput
-          style={[styles.input, fieldErrors.name ? styles.inputError : null]}
+        <AuthField
+          label="Full name"
           value={name}
           onChangeText={setName}
+          error={fieldErrors.name}
           editable={!submitting}
+          autoCapitalize="words"
+          autoComplete="name"
+          textContentType="name"
+          accessibilityLabel="Name"
         />
-        {fieldErrors.name ? <Text style={styles.fieldError}>{fieldErrors.name}</Text> : <View style={styles.fieldSpacer} />}
 
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          style={[styles.input, fieldErrors.email ? styles.inputError : null]}
+        <AuthField
+          label="Email"
+          value={email}
+          onChangeText={setEmail}
+          error={fieldErrors.email}
+          editable={!submitting}
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="email-address"
+          autoComplete="email"
           textContentType="emailAddress"
-          value={email}
-          onChangeText={setEmail}
-          editable={!submitting}
+          accessibilityLabel="Email"
         />
-        {fieldErrors.email ? <Text style={styles.fieldError}>{fieldErrors.email}</Text> : <View style={styles.fieldSpacer} />}
 
-        <Text style={styles.label}>Phone (optional)</Text>
-        <TextInput
-          style={[styles.input, fieldErrors.phone ? styles.inputError : null]}
-          keyboardType="phone-pad"
-          textContentType="telephoneNumber"
+        <AuthField
+          label="Phone"
           value={phone}
           onChangeText={setPhone}
+          error={fieldErrors.phone}
+          helperText="Optional. Used for order updates."
           editable={!submitting}
+          keyboardType="phone-pad"
+          autoComplete="tel"
+          textContentType="telephoneNumber"
+          accessibilityLabel="Phone (optional)"
         />
-        {fieldErrors.phone ? <Text style={styles.fieldError}>{fieldErrors.phone}</Text> : <View style={styles.fieldSpacer} />}
 
-        <Text style={styles.label}>Password</Text>
-        <TextInput
-          style={[styles.input, fieldErrors.password ? styles.inputError : null]}
-          secureTextEntry
-          textContentType="newPassword"
+        <AuthPasswordField
+          label="Password"
           value={password}
           onChangeText={setPassword}
+          error={fieldErrors.password}
+          helperText="Use at least 8 characters."
           editable={!submitting}
+          isNewPassword
+          accessibilityLabel="Password"
         />
-        {fieldErrors.password ? (
-          <Text style={styles.fieldError}>{fieldErrors.password}</Text>
-        ) : (
-          <View style={styles.fieldSpacer} />
-        )}
 
-        <Text style={styles.label}>Confirm password</Text>
-        <TextInput
-          style={[styles.input, fieldErrors.password_confirmation ? styles.inputError : null]}
-          secureTextEntry
-          textContentType="newPassword"
+        <AuthPasswordField
+          label="Confirm password"
           value={passwordConfirmation}
           onChangeText={setPasswordConfirmation}
+          error={fieldErrors.password_confirmation}
           editable={!submitting}
+          isNewPassword
+          accessibilityLabel="Confirm password"
         />
-        {fieldErrors.password_confirmation ? (
-          <Text style={styles.fieldError}>{fieldErrors.password_confirmation}</Text>
-        ) : (
-          <View style={styles.fieldSpacer} />
-        )}
 
-        <Pressable
-          style={[styles.button, submitting ? styles.buttonDisabled : null]}
+        <PrimaryButton
+          label="Create account"
+          loading={submitting}
           onPress={() => void onSubmit()}
-          disabled={submitting}
-        >
-          {submitting ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Create account</Text>
-          )}
-        </Pressable>
+          accessibilityLabel="Create account"
+        />
 
-        <View style={styles.linkRow}>
-          <Link href={buildLoginHref(returnTo) as never} asChild>
-            <Pressable disabled={submitting}>
-              <Text style={styles.linkText}>Already have an account? Sign in</Text>
-            </Pressable>
-          </Link>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        <AuthLegalNote />
+      </AuthCard>
+
+      <AuthFooterLink
+        prompt="Already have an account?"
+        actionLabel="Sign in"
+        href={buildLoginHref(returnTo) as never}
+        disabled={submitting}
+      />
+    </AuthShell>
   );
 }

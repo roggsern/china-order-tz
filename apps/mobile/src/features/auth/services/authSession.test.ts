@@ -3,7 +3,11 @@ import { useAuthStore } from '@/src/core/auth/authStore';
 import { apiClient } from '@/src/core/api';
 import { secureTokenStorage } from '@/src/core/storage';
 import { getAuthErrorMessage } from '@/src/features/auth/utils/authErrorMessage';
-import { loginWithPassword, logout } from '@/src/features/auth/services/authSession';
+import {
+  loginWithPassword,
+  logout,
+  registerAccount,
+} from '@/src/features/auth/services/authSession';
 import { pendingPaymentContextStorage } from '@/src/features/payments/storage/pendingPaymentContextStorage';
 import { pendingCheckoutContextStorage } from '@/src/features/checkout/storage/pendingCheckoutContextStorage';
 
@@ -170,6 +174,98 @@ describe('loginWithPassword', () => {
     ).rejects.toMatchObject({ code: 'account_disabled' });
 
     expect(getAuthErrorMessage(error)).toBe('Account disabled');
+  });
+
+  it('trims login email and posts the same /login payload shape', async () => {
+    mockApiPost.mockResolvedValue({
+      success: true,
+      token: 'plain_token',
+      data: validUser,
+    });
+
+    await loginWithPassword({
+      email: '  ada@example.com  ',
+      password: 'Password123!',
+    });
+
+    expect(mockApiPost).toHaveBeenCalledWith(
+      '/login',
+      { email: 'ada@example.com', password: 'Password123!' },
+      null,
+    );
+  });
+});
+
+describe('registerAccount', () => {
+  beforeEach(() => {
+    mockSaveToken.mockReset();
+    mockClearToken.mockReset();
+    mockApiPost.mockReset();
+    mockBindPayment.mockReset().mockResolvedValue(null);
+    mockBindCheckout.mockReset().mockResolvedValue(null);
+    useAuthStore.setState({
+      status: 'unauthenticated',
+      user: null,
+      bootstrapStatus: 'complete',
+    });
+  });
+
+  it('posts the same /register payload including registration_source and phone', async () => {
+    mockApiPost.mockResolvedValue({
+      success: true,
+      token: 'plain_token',
+      data: validUser,
+    });
+
+    await registerAccount({
+      name: 'Ada',
+      email: 'ada@example.com',
+      password: 'Password123!',
+      password_confirmation: 'Password123!',
+      phone: '0712345678',
+    });
+
+    expect(mockApiPost).toHaveBeenCalledWith(
+      '/register',
+      {
+        name: 'Ada',
+        email: 'ada@example.com',
+        password: 'Password123!',
+        password_confirmation: 'Password123!',
+        registration_source: 'self_registration',
+        phone: '0712345678',
+      },
+      null,
+    );
+    expect(mockSaveToken).toHaveBeenCalledWith('plain_token');
+  });
+
+  it('omits phone from the register body when it is blank', async () => {
+    mockApiPost.mockResolvedValue({
+      success: true,
+      token: 'plain_token',
+      data: validUser,
+    });
+
+    await registerAccount({
+      name: 'Ada',
+      email: 'ada@example.com',
+      password: 'Password123!',
+      password_confirmation: 'Password123!',
+      phone: '   ',
+    });
+
+    expect(mockApiPost).toHaveBeenCalledWith(
+      '/register',
+      {
+        name: 'Ada',
+        email: 'ada@example.com',
+        password: 'Password123!',
+        password_confirmation: 'Password123!',
+        registration_source: 'self_registration',
+      },
+      null,
+    );
   });
 });
 

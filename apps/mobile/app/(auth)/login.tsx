@@ -1,15 +1,6 @@
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   getAuthErrorMessage,
@@ -17,8 +8,20 @@ import {
   loginRequestSchema,
   loginWithPassword,
 } from '@/src/features/auth';
-import { authStyles as styles } from '@/src/features/auth/components/authStyles';
-import { sanitizeAuthReturnTo, buildRegisterHref } from '@/src/features/cart';
+import { AuthCard } from '@/src/features/auth/components/AuthCard';
+import { AuthErrorBanner } from '@/src/features/auth/components/AuthBanners';
+import { AuthField } from '@/src/features/auth/components/AuthField';
+import { AuthFooterLink } from '@/src/features/auth/components/AuthFooterLink';
+import { AuthHeader } from '@/src/features/auth/components/AuthHeader';
+import { AuthPasswordField } from '@/src/features/auth/components/AuthPasswordField';
+import { AuthShell } from '@/src/features/auth/components/AuthShell';
+import { AUTH_FORGOT_PASSWORD_HREF, AUTH_HOME_HREF } from '@/src/features/auth/components/authRoutes';
+import {
+  buildRegisterHref,
+  sanitizeAuthReturnTo,
+} from '@/src/features/cart/utils/authReturn';
+import { PrimaryButton } from '@/src/shared/ui';
+import { colors, spacing, typography } from '@/src/shared/theme';
 
 export default function LoginScreen() {
   const params = useLocalSearchParams<{ returnTo?: string | string[] }>();
@@ -54,7 +57,7 @@ export default function LoginScreen() {
       if (returnTo) {
         router.replace(returnTo as never);
       } else {
-        router.replace('/(app)/(tabs)/home');
+        router.replace(AUTH_HOME_HREF as never);
       }
     } catch (error) {
       setFormError(getAuthErrorMessage(error));
@@ -65,77 +68,75 @@ export default function LoginScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={styles.subheading}>Sign in with your customer account.</Text>
+    <AuthShell>
+      <AuthHeader
+        title="Welcome back"
+        subtitle="Sign in to your CHINA ORDER TZ account."
+      />
 
-        {formError ? (
-          <View style={styles.banner}>
-            <Text style={styles.bannerText}>{formError}</Text>
-          </View>
-        ) : null}
+      <AuthCard>
+        {formError ? <AuthErrorBanner message={formError} /> : null}
 
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          style={[styles.input, fieldErrors.email ? styles.inputError : null]}
+        <AuthField
+          label="Email"
+          value={email}
+          onChangeText={setEmail}
+          error={fieldErrors.email}
+          editable={!submitting}
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="email-address"
+          autoComplete="email"
           textContentType="emailAddress"
-          value={email}
-          onChangeText={setEmail}
-          editable={!submitting}
+          accessibilityLabel="Email"
         />
-        {fieldErrors.email ? <Text style={styles.fieldError}>{fieldErrors.email}</Text> : <View style={styles.fieldSpacer} />}
 
-        <Text style={styles.label}>Password</Text>
-        <TextInput
-          style={[styles.input, fieldErrors.password ? styles.inputError : null]}
-          secureTextEntry
-          textContentType="password"
+        <AuthPasswordField
+          label="Password"
           value={password}
           onChangeText={setPassword}
+          error={fieldErrors.password}
           editable={!submitting}
+          accessibilityLabel="Password"
         />
-        {fieldErrors.password ? (
-          <Text style={styles.fieldError}>{fieldErrors.password}</Text>
-        ) : (
-          <View style={styles.fieldSpacer} />
-        )}
 
-        <View style={styles.linkRow}>
-          <Link href="/(auth)/forgot-password" asChild>
-            <Pressable disabled={submitting} accessibilityRole="link">
-              <Text style={styles.linkText}>Forgot password?</Text>
+        <View style={styles.forgotRow}>
+          <Link href={AUTH_FORGOT_PASSWORD_HREF} asChild>
+            <Pressable
+              disabled={submitting}
+              accessibilityRole="link"
+              accessibilityLabel="Forgot password?"
+            >
+              <Text style={styles.forgot}>Forgot password?</Text>
             </Pressable>
           </Link>
         </View>
 
-        <Pressable
-          style={[styles.button, submitting ? styles.buttonDisabled : null]}
+        <PrimaryButton
+          label="Sign in"
+          loading={submitting}
           onPress={() => void onSubmit()}
-          disabled={submitting}
-          accessibilityRole="button"
           accessibilityLabel="Sign in"
-        >
-          {submitting ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Sign in</Text>
-          )}
-        </Pressable>
+        />
+      </AuthCard>
 
-        <View style={styles.linkRow}>
-          <Link href={buildRegisterHref(returnTo) as never} asChild>
-            <Pressable disabled={submitting} accessibilityRole="link">
-              <Text style={styles.linkText}>Create an account</Text>
-            </Pressable>
-          </Link>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      <AuthFooterLink
+        prompt="New to CHINA ORDER TZ?"
+        actionLabel="Create account"
+        href={buildRegisterHref(returnTo) as never}
+        disabled={submitting}
+      />
+    </AuthShell>
   );
 }
+
+const styles = StyleSheet.create({
+  forgotRow: {
+    alignItems: 'flex-end',
+    marginBottom: spacing.lg,
+  },
+  forgot: {
+    ...typography.bodyStrong,
+    color: colors.primaryPressed,
+  },
+});
