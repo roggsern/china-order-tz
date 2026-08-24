@@ -5,7 +5,7 @@ export function getCatalogErrorMessage(error: unknown): string {
   if (transport) return transport;
 
   if (!(error instanceof ApiError)) {
-    return 'Unable to load catalog. Please try again.';
+    return 'Unable to load products. Please try again.';
   }
 
   switch (error.code) {
@@ -16,8 +16,8 @@ export function getCatalogErrorMessage(error: unknown): string {
     case 'unauthenticated':
       return error.message || 'Please sign in again to continue.';
     case 'server_error':
-      return error.message || 'Something went wrong loading catalog data.';
+      return error.message || 'Something went wrong loading products.';
     default:
-      return error.message || 'Unable to load catalog. Please try again.';
+      return error.message || 'Unable to load products. Please try again.';
   }
 }

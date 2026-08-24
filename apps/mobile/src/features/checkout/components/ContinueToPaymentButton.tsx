@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { PrimaryButton } from '@/src/shared/ui/PrimaryButton';
 import { colors, spacing, typography } from '@/src/shared/theme';
+import { continueToPaymentNote } from '@/src/features/payments/utils/customerPaymentCopy';
 
 type Props = {
   enabled: boolean;
@@ -24,9 +25,7 @@ export function ContinueToPaymentButton({ enabled, checkoutSessionId }: Props) {
         }
         style={styles.button}
       />
-      <Text style={styles.note}>
-        Choose a payment method. Payment is confirmed by the server only.
-      </Text>
+      <Text style={styles.note}>{continueToPaymentNote()}</Text>
     </View>
   );
 }

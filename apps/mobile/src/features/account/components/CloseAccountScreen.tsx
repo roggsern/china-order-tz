@@ -42,7 +42,7 @@ export function CloseAccountScreen() {
       Alert.alert(
         'Account closed',
         result.message ||
-          'Your account has been closed. Transaction records may be retained where required.',
+          'Your account has been closed. Some order and payment records may be kept where required.',
         [
           {
             text: 'Continue',

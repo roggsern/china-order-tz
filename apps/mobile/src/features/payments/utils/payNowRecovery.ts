@@ -157,5 +157,5 @@ export function recoveryFromStartError(
 }
 
 export function paymentInProgressCustomerMessage(): string {
-  return "There's already a payment request pending for this order.";
+  return 'A payment request is already in progress for this order.';
 }

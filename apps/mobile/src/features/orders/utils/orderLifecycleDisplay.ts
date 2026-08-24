@@ -55,6 +55,17 @@ const TERMINAL_PROGRESS_KEYS = new Set([
   'REFUNDED',
 ]);
 
+const FULFILLMENT_KEY_LABELS: Record<string, string> = {
+  PREPARING: 'Preparing',
+  READY_TO_SHIP: 'Ready to ship',
+  SHIPPED: 'Shipped',
+  ARRIVED_TANZANIA: 'Arrived in Tanzania',
+  CHOOSE_RECEIVING_METHOD: 'Choose receiving method',
+  SENT_TO_AGENT: 'Sent to agent',
+  DELIVERED_TO_AGENT: 'Ready for pickup',
+  DELIVERED: 'Delivered',
+};
+
 export type OrderDisplayStatus = {
   key: string;
   label: string;
@@ -140,7 +151,7 @@ export function resolveOrderDisplayStatus(input: {
     return { key: status || 'unknown', label: fallback };
   }
   if (status) {
-    return { key: status, label: status.replace(/_/g, ' ') };
+    return { key: status, label: 'In progress' };
   }
   return { key: 'unknown', label: 'Status unavailable' };
 }
@@ -213,7 +224,7 @@ export function resolvePaymentDisplayStatus(input: {
   if (paymentStatus) {
     return {
       key: paymentStatus,
-      label: paymentStatus.replace(/_/g, ' '),
+      label: 'Awaiting payment',
       methodLabel,
     };
   }
@@ -265,7 +276,10 @@ export function resolveFulfillmentDisplayStatus(input: {
     };
   }
 
-  const label = progress?.currentLabel?.trim() || currentKey.replace(/_/g, ' ');
+  const label =
+    progress?.currentLabel?.trim() ||
+    FULFILLMENT_KEY_LABELS[currentKey] ||
+    'In progress';
   return {
     key: currentKey,
     label,

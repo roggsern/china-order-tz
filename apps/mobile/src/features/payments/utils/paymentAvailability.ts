@@ -33,7 +33,7 @@ const KNOWN_METHOD_COPY: Record<string, { label: string; description: string }> 
   },
   snippe: {
     label: 'Mobile Money',
-    description: 'Powered by Snippe',
+    description: 'Pay with Mobile Money on your phone.',
   },
   cash: {
     label: 'Pay at Office',
@@ -42,7 +42,7 @@ const KNOWN_METHOD_COPY: Record<string, { label: string; description: string }> 
   },
   mpesa: {
     label: 'M-Pesa',
-    description: 'STK Push to your Vodacom M-Pesa number',
+    description: 'Pay with M-Pesa on your Vodacom number',
   },
   card: {
     label: 'Visa / Mastercard',

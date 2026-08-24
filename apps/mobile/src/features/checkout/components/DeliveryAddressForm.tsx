@@ -57,7 +57,7 @@ export function DeliveryAddressForm({ initial, submitting, onSubmit }: Props) {
       </Text>
 
       <Field label="Recipient" value={recipientName} onChangeText={setRecipientName} error={fieldErrors.recipientName} />
-      <Field label="Phone (E.164)" value={phone} onChangeText={setPhone} error={fieldErrors.phone} placeholder="+255..." />
+      <Field label="Phone" value={phone} onChangeText={setPhone} error={fieldErrors.phone} placeholder="+255..." />
       <Field label="Country" value={country} onChangeText={setCountry} error={fieldErrors.country} />
       <Field label="Region" value={region} onChangeText={setRegion} error={fieldErrors.region} />
       <Field label="City" value={city} onChangeText={setCity} error={fieldErrors.city} />

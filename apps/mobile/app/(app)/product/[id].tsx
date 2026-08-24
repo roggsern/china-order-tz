@@ -44,8 +44,8 @@ export default function ProductRoute() {
     return (
       <View style={{ flex: 1, backgroundColor: '#fff' }}>
         <CatalogEmptyState
-          title="Store context unavailable"
-          message="This TZ product could not be opened because its store is missing. Choose a store in Shop and open the product from that store. We never guess the store."
+          title="Store unavailable"
+          message="This product could not be opened because its store is missing. Choose a store in Shop, then open the product from there."
           actions={[
             {
               label: 'Go to Shop',

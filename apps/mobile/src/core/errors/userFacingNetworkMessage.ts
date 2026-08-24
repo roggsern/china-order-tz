@@ -4,7 +4,7 @@ export const NETWORK_OFFLINE_MESSAGE =
   'No internet connection. Check your connection and try again.';
 
 export const NETWORK_TIMEOUT_MESSAGE =
-  'Request timed out. Please try again.';
+  "We couldn't connect. Check your internet connection and try again.";
 
 export const GENERIC_SERVER_MESSAGE =
   'Something went wrong. Please try again.';

@@ -80,7 +80,7 @@ export function EditProfileScreen() {
       <Text style={styles.heading}>Edit profile</Text>
       <Text style={styles.caption}>
         Email changes stay on the website for verification. Name and phone update
-        here via the profile API.
+        here in the app.
       </Text>
 
       {profileQuery.data?.email ? (

@@ -13,6 +13,7 @@ import { pendingPaymentContextStorage } from '../storage/pendingPaymentContextSt
 import { handlePaymentReturn } from '../utils/handlePaymentReturn';
 import { isSuccessfulPaymentStatus } from '../utils/mapPayment';
 import { buildPaymentHref } from '../utils/paymentRoutes';
+import { paymentReturnHint } from '../utils/customerPaymentCopy';
 import { getPaymentErrorMessage } from '../utils/paymentErrorMessage';
 
 function firstParam(value: string | string[] | undefined): string | undefined {
@@ -49,7 +50,7 @@ export function PaymentReturnScreen() {
   const loginRedirectedRef = useRef(false);
 
   const statusMessage =
-    bootstrapStatus !== 'complete' ? 'Preparing session…' : message;
+    bootstrapStatus !== 'complete' ? 'Getting things ready…' : message;
 
   useEffect(() => {
     if (bootstrapStatus !== 'complete') {
@@ -86,7 +87,7 @@ export function PaymentReturnScreen() {
           const token = await secureTokenStorage.readToken();
           if (token && !bootstrapRetriedRef.current) {
             bootstrapRetriedRef.current = true;
-            setMessage('Restoring your session…');
+            setMessage('Signing you back in…');
             await bootstrapAuth();
             return;
           }
@@ -134,7 +135,7 @@ export function PaymentReturnScreen() {
         }
 
         if (!resolvedOrderId && !resolvedTxnId) {
-          setMessage('Unable to resolve payment return. Opening payment…');
+          setMessage('Unable to confirm payment. Opening payment…');
           router.replace('/(app)/payment');
           return;
         }
@@ -154,7 +155,7 @@ export function PaymentReturnScreen() {
     <View style={styles.wrap}>
       <ScreenLoadingState label={statusMessage} />
       <Text style={styles.hint}>
-        Returning from payment. Paid status is confirmed by the server, never by this link.
+        {paymentReturnHint()}
       </Text>
     </View>
   );

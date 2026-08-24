@@ -212,7 +212,7 @@ export function OrderTrackingScreen({ orderId }: Props) {
         <Card elevated={false} style={styles.box}>
           <Text style={styles.section}>Timeline</Text>
           <Text style={styles.line}>
-            Tracking events will appear here when the server publishes them.
+            Tracking updates will appear here as your order moves.
           </Text>
         </Card>
       )}

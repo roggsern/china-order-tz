@@ -55,7 +55,7 @@ export function ReturnsListScreen() {
     return (
       <EmptyState
         title="No returns yet"
-        message="Return requests you submit will appear here with their server status."
+        message="Return requests you submit will appear here with live updates."
         style={styles.fill}
       />
     );

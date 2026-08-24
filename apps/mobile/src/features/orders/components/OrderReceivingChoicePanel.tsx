@@ -33,7 +33,7 @@ const RECEIVING_OPTIONS: {
   {
     value: 'negotiated_delivery',
     label: 'Arrange delivery',
-    description: 'Ask CHINA ORDER TZ to arrange delivery. Fee is confirmed by the server.',
+    description: 'Ask CHINA ORDER TZ to arrange delivery. The delivery fee will be confirmed before dispatch.',
   },
 ];
 

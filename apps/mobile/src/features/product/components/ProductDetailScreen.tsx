@@ -72,7 +72,7 @@ function buildTrustItems(params: {
   if (resolvedStore) {
     items.push({
       id: 'store',
-      title: 'Store context',
+      title: 'Store',
       description: resolvedStore,
     });
   }
@@ -209,7 +209,7 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
 
   if (!product) {
     return (
-      <CatalogEmptyState title="Product not found" message="No product data returned." />
+      <CatalogEmptyState title="Product not found" message="This product isn't available right now." />
     );
   }
 

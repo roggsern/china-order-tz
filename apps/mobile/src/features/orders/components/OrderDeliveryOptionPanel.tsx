@@ -49,7 +49,7 @@ export function OrderDeliveryOptionPanel({
   if (query.isLoading && !query.data) {
     return (
       <Card elevated={false} style={styles.wrap}>
-        <Text style={styles.title}>Delivery handoff</Text>
+        <Text style={styles.title}>Delivery details</Text>
         <Text style={styles.note}>Loading delivery option…</Text>
       </Card>
     );
@@ -97,7 +97,7 @@ export function OrderDeliveryOptionPanel({
 
   return (
     <Card elevated={false} style={styles.wrap}>
-      <Text style={styles.title}>Delivery handoff</Text>
+      <Text style={styles.title}>Delivery details</Text>
       <Text style={styles.note}>
         Shipping choice was locked at checkout. This does not change the amount paid.
       </Text>
@@ -122,14 +122,14 @@ export function OrderDeliveryOptionPanel({
             </Text>
           ) : null}
           <Text style={styles.status}>
-            Status: {option.deliveryStatusLabel ?? option.deliveryStatus}
+            Status: {option.deliveryStatusLabel ?? (option.deliveryStatus === 'confirmed' ? 'Confirmed' : option.deliveryStatus === 'pending' ? 'Pending' : 'Update pending')}
           </Text>
         </View>
       ) : (
         <Text style={styles.note}>
           No delivery option on this order yet.
           {canSelect
-            ? ' You can record a legacy handoff below.'
+            ? ' You can add delivery details below.'
             : ' Complete payment first if this is an older order.'}
         </Text>
       )}

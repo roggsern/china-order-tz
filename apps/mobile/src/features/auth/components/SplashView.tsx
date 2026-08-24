@@ -7,7 +7,7 @@ type Props = {
 };
 
 /** Branded splash while SecureStore + GET /me bootstrap runs. */
-export function SplashView({ message = 'Restoring session…' }: Props) {
+export function SplashView({ message = 'Loading your account…' }: Props) {
   return (
     <View style={styles.container} accessibilityLabel="splash">
       <View style={styles.hero}>

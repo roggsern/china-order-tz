@@ -32,10 +32,6 @@ export function OrderPaymentBlock({ payment, display, orderStatus }: Props) {
         <Text style={styles.line}>
           {methodPrefix}: {display.methodLabel}
         </Text>
-      ) : payment.paymentMethod || payment.provider ? (
-        <Text style={styles.line}>
-          Method: {payment.paymentMethod ?? payment.provider}
-        </Text>
       ) : null}
       {payment.reference ? (
         <Text style={styles.line}>Reference: {payment.reference}</Text>

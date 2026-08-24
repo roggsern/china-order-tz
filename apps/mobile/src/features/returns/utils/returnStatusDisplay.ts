@@ -34,7 +34,7 @@ export function resolveReturnDisplayStatus(status: string | null | undefined): {
   if (!key) return { key: 'unknown', label: 'Return status unavailable' };
   return {
     key,
-    label: RETURN_STATUS_LABELS[key] ?? status!.replace(/_/g, ' '),
+    label: RETURN_STATUS_LABELS[key] ?? 'Return in review',
   };
 }
 
@@ -46,7 +46,7 @@ export function resolveRefundDisplayStatus(status: string | null | undefined): {
   if (!key) return { key: 'none', label: 'No refund yet' };
   return {
     key,
-    label: REFUND_STATUS_LABELS[key] ?? status!.replace(/_/g, ' '),
+    label: REFUND_STATUS_LABELS[key] ?? 'Refund update pending',
   };
 }
 

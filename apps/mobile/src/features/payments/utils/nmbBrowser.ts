@@ -87,7 +87,7 @@ export function buildNmbWebHostedCheckoutLauncherUrl(input: {
   const base = (input.webAppBaseUrl ?? env.webAppBaseUrl).replace(/\/$/, '');
   const txnId = input.paymentTransactionId.trim();
   if (!txnId) {
-    throw new Error('Payment transaction is required to open NMB checkout.');
+    throw new Error('Unable to open NMB payment. Please try again.');
   }
 
   const url = new URL(`${base}/payments/${encodeURIComponent(txnId)}/nmb`);
@@ -129,10 +129,10 @@ export async function openNmbWebsiteHostedCheckout(input: {
   successIndicator?: string | null;
 }): Promise<NmbBrowserSessionResult> {
   if (!input.paymentTransactionId.trim()) {
-    throw new Error('Payment transaction is required to open NMB checkout.');
+    throw new Error('Unable to open NMB payment. Please try again.');
   }
   if (!input.sessionId.trim()) {
-    throw new Error('NMB did not return a checkout session. Please try again.');
+    throw new Error('Unable to open NMB payment. Please try again.');
   }
 
   const launcherUrl = buildNmbWebHostedCheckoutLauncherUrl({

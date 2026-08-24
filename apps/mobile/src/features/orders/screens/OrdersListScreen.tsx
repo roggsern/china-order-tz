@@ -92,7 +92,7 @@ export function OrdersListScreen() {
           <Text style={styles.eyebrow}>Orders</Text>
           <Text style={styles.heading}>My orders</Text>
           <Text style={styles.subheading}>
-            Status, payment, and totals come from the server.
+            Track status, payment, and totals for every order.
           </Text>
         </View>
       }

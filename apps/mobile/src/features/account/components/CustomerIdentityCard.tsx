@@ -107,13 +107,13 @@ export function CustomerIdentityCard({
                 onPress={onRefreshVerification}
                 disabled={busy}
                 accessibilityRole="button"
-                accessibilityLabel="I already verified — refresh status"
+                accessibilityLabel="I already verified — check again"
               >
                 {refreshBusy ? (
                   <ActivityIndicator color={colors.primaryPressed} />
                 ) : (
                   <Text style={styles.refreshLinkText}>
-                    I already verified — refresh status
+                    I already verified — check again
                   </Text>
                 )}
               </Pressable>

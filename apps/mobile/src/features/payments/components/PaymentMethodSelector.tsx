@@ -46,7 +46,7 @@ export function PaymentMethodSelector({
             <Text style={styles.description}>{option.description}</Text>
             {!actionable ? (
               <Text style={styles.unsupported}>
-                This payment method is not available in the app yet.
+                This payment method is not available yet.
               </Text>
             ) : null}
           </Pressable>

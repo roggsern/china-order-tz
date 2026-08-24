@@ -64,8 +64,7 @@ export function ChangePasswordScreen() {
     <ScreenContainer style={styles.screen}>
       <Text style={styles.heading}>Change password</Text>
       <Text style={styles.caption}>
-        After a successful change the server revokes active tokens. You will need
-        to sign in again.
+        After you change your password, you will need to sign in again.
       </Text>
 
       <Text style={styles.label}>Current password</Text>

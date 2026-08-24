@@ -82,7 +82,7 @@ function VideoSlide({ video }: { video: CatalogProductVideo }) {
             style={styles.retryButton}
             accessibilityRole="button"
           >
-            <Text style={styles.retryText}>Watch on provider</Text>
+            <Text style={styles.retryText}>Watch video</Text>
           </Pressable>
         ) : null}
       </View>
@@ -93,7 +93,7 @@ function VideoSlide({ video }: { video: CatalogProductVideo }) {
     return (
       <View style={[styles.slide, styles.videoUnavailable]}>
         <Text style={styles.unavailableText}>
-          Inline playback is unavailable for this video.
+          This video cannot play here.
         </Text>
         {externalUrl ? (
           <Pressable
@@ -113,7 +113,7 @@ function VideoSlide({ video }: { video: CatalogProductVideo }) {
           style={styles.retryButton}
           accessibilityRole="button"
         >
-          <Text style={styles.retryText}>Retry inline</Text>
+          <Text style={styles.retryText}>Try again</Text>
         </Pressable>
       </View>
     );

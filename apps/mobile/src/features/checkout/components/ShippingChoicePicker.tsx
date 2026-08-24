@@ -63,7 +63,7 @@ export function ShippingChoicePicker({
   if (visibleOptions.length === 0) {
     return (
       <Text style={styles.note}>
-        No shipping choices available for this cart. Check cart channel and try again.
+        No shipping options are available for this cart. Check your cart and try again.
       </Text>
     );
   }
@@ -72,8 +72,7 @@ export function ShippingChoicePicker({
     <Card elevated={false} style={styles.wrap}>
       <Text style={styles.title}>Shipping option</Text>
       <Text style={styles.note}>
-        Options follow your cart’s commerce channel. Fees and availability come from the
-        server after you save.
+        Shipping options depend on what is in your cart. Fees update after you save.
       </Text>
 
       {visibleOptions.map((option) => {

@@ -95,6 +95,6 @@ describe('getCheckoutErrorMessage', () => {
           errors: { session: ['Checkout session has expired.'] },
         }),
       ),
-    ).toMatch(/expired|refresh/i);
+    ).toMatch(/timed out|totals changed/i);
   });
 });

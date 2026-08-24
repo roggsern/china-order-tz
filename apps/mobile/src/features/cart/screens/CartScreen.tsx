@@ -99,7 +99,7 @@ export function CartScreen() {
   function confirmClearCart() {
     Alert.alert(
       'Clear cart?',
-      'This removes every item from your server cart.',
+      'This removes every item from your cart.',
       [
         { text: 'Keep items', style: 'cancel' },
         {
@@ -155,8 +155,8 @@ export function CartScreen() {
           <Text style={styles.eyebrow}>Bag</Text>
           <Text style={styles.heading}>Your cart</Text>
           <Text style={styles.subheading}>
-            Prices and availability come from the server. Journeys cannot be mixed
-            in one cart.
+            Prices and availability are kept up to date. China import and Tanzania
+            store items stay in separate carts.
           </Text>
         </View>
 
@@ -196,10 +196,9 @@ export function CartScreen() {
               title="Before you checkout"
               items={[
                 {
-                  id: 'server-totals',
-                  title: 'Server-confirmed totals',
-                  description:
-                    'Line prices and cart totals are never recalculated on device.',
+                  id: 'totals',
+                  title: 'Up-to-date totals',
+                  description: 'Prices match what you will pay at checkout.',
                 },
                 {
                   id: 'journey',

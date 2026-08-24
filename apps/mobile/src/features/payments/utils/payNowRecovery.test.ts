@@ -157,9 +157,9 @@ describe('Pay Now recovery', () => {
       provider: 'snippe',
     });
     expect(paymentInProgressCustomerMessage()).toBe(
-      "There's already a payment request pending for this order.",
+      'A payment request is already in progress for this order.',
     );
-    expect(paymentInProgressCustomerMessage()).not.toMatch(/already in progress/i);
+    expect(paymentInProgressCustomerMessage()).not.toMatch(/payment_in_progress/i);
   });
 
   it('still maps the legacy message when the contract code is missing', () => {

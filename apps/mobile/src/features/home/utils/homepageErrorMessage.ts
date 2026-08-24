@@ -5,7 +5,7 @@ export function getHomepageErrorMessage(error: unknown): string {
   if (transport) return transport;
 
   if (!(error instanceof ApiError)) {
-    return 'Unable to load homepage. Please try again.';
+    return 'Unable to load home. Please try again.';
   }
 
   switch (error.code) {
@@ -14,8 +14,8 @@ export function getHomepageErrorMessage(error: unknown): string {
     case 'unauthenticated':
       return error.message || 'Please sign in again to continue.';
     case 'server_error':
-      return error.message || 'Something went wrong loading the homepage.';
+      return error.message || 'Something went wrong loading home.';
     default:
-      return error.message || 'Unable to load homepage. Please try again.';
+      return error.message || 'Unable to load home. Please try again.';
   }
 }

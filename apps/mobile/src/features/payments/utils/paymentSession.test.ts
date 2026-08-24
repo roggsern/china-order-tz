@@ -54,7 +54,7 @@ describe('payment start decisions', () => {
     expect(
       resolvePaymentStartDecision({ view: selector, selectedCode: 'future_pay' }),
     ).toEqual({ decision: 'unsupported', code: 'future_pay' });
-    expect(unsupportedPaymentMethodMessage()).toMatch(/not available in the app/i);
+    expect(unsupportedPaymentMethodMessage()).toMatch(/isn't available yet/i);
   });
 
   it('recovers processing Snippe instead of starting NMB', () => {

@@ -35,7 +35,7 @@ describe('getPaymentErrorMessage', () => {
         code: 'timeout',
       }),
     );
-    expect(message).toMatch(/timed out/i);
+    expect(message).toMatch(/couldn't connect/i);
     expect(message).not.toMatch(/No internet/i);
   });
 
@@ -47,7 +47,7 @@ describe('getPaymentErrorMessage', () => {
         code: 'payment_in_progress',
       }),
     );
-    expect(message).toMatch(/payment request pending/i);
+    expect(message).toMatch(/already in progress/i);
     expect(message).not.toMatch(/payment_in_progress/i);
   });
 

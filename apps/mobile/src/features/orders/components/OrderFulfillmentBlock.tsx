@@ -25,7 +25,7 @@ export function OrderFulfillmentBlock({ fulfillment, receiving }: Props) {
       {receiving?.label ? (
         <Text style={styles.line}>
           {receiving.actionRequired
-            ? 'Receiving: Action required — choose how to receive this order.'
+            ? "Receiving: Action required — choose how you'd like to receive this order."
             : `Receiving: ${receiving.label}`}
         </Text>
       ) : null}

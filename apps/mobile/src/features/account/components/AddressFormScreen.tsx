@@ -104,7 +104,7 @@ function AddressFormFields({
 
   const fields: [keyof FormState, string][] = [
     ['recipientName', 'Recipient name'],
-    ['phone', 'Phone (E.164)'],
+    ['phone', 'Phone'],
     ['label', 'Label (optional)'],
     ['street', 'Street'],
     ['district', 'District'],

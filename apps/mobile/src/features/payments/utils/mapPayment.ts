@@ -320,7 +320,7 @@ export function paymentStatusLabel(status: string | null | undefined): string {
     case 'expired':
       return 'Expired';
     default:
-      return status ? status.replace(/_/g, ' ') : 'Unknown';
+      return 'Processing';
   }
 }
 

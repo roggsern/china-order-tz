@@ -31,7 +31,7 @@ export function CancelOrderButton({
   function confirmCancel() {
     Alert.alert(
       'Cancel order?',
-      'This cannot be undone if the server accepts the cancellation.',
+      'This cannot be undone once cancelled.',
       [
         { text: 'Keep order', style: 'cancel' },
         {

@@ -240,7 +240,7 @@ export function OrderDetailScreen({ orderId }: Props) {
         orderId={orderId}
         enabled={offerCancel}
         onCancelled={() => {
-          setActionMessage('Order cancellation recorded.');
+          setActionMessage('Your order was cancelled.');
           void detailQuery.refetch();
         }}
         onRejected={(message) => {

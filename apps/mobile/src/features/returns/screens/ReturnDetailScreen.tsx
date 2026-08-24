@@ -117,7 +117,7 @@ export function ReturnDetailScreen({ returnId }: Props) {
         <Text style={styles.section}>Refund</Text>
         {row.refunds.length === 0 ? (
           <Text style={styles.meta}>
-            No refund has been recorded by the server yet.
+            No refund has been issued yet.
           </Text>
         ) : (
           row.refunds.map((refund) => {

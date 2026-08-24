@@ -10,10 +10,7 @@ export function getCheckoutErrorMessage(error: unknown): string {
   }
 
   if (isStaleOrExpiredCheckoutError(error)) {
-    return (
-      error.message ||
-      'Your checkout session expired or totals changed. Refresh checkout to continue.'
-    );
+    return 'Your checkout timed out or totals changed. Please review and continue.';
   }
 
   switch (error.code) {
@@ -44,7 +41,7 @@ export function getCheckoutErrorMessage(error: unknown): string {
       );
     }
     case 'not_found':
-      return error.message || 'Checkout session was not found.';
+      return "We couldn't find your checkout. Please start again.";
     case 'maintenance_mode':
       return error.message || 'The store is temporarily under maintenance.';
     case 'server_error':

@@ -49,6 +49,20 @@ import {
 } from '../utils/paymentErrorMessage';
 import { buildPaymentHref } from '../utils/paymentRoutes';
 import {
+  PAYMENT_NEXT_STEPS,
+  PAYMENT_NEXT_STEPS_TITLE,
+  paymentConfirmedSubheading,
+  paymentEndedChooseAgainNote,
+  paymentOfficeStatusNote,
+  paymentOfficeSubheading,
+  paymentProcessingHeading,
+  paymentProcessingSubheading,
+  paymentPromptSentNote,
+  paymentSelectorHeading,
+  paymentSelectorSubheading,
+  paymentStillProcessingNote,
+} from '../utils/customerPaymentCopy';
+import {
   applyRefreshedTransaction,
   paymentProviderLabel,
   resolvePaymentStartDecision,
@@ -216,11 +230,9 @@ export function PaymentScreen() {
               if (nextView.kind === 'paid') {
                 await invalidateAfterPaymentSuccess(queryClient, detail.id);
               } else if (nextView.kind === 'selector') {
-                setStatusNote(
-                  'The previous payment request is no longer active. Choose a payment method.',
-                );
+                setStatusNote(paymentEndedChooseAgainNote());
               } else {
-                setStatusNote('Your previous payment request is still pending.');
+                setStatusNote(paymentStillProcessingNote());
               }
             } catch (refreshError) {
               setTransaction(null);
@@ -371,7 +383,7 @@ export function PaymentScreen() {
             provider: started.provider,
           },
         });
-        setStatusNote('Payment request sent. Approve it on your phone when prompted.');
+        setStatusNote(paymentPromptSentNote());
         return;
       }
 
@@ -384,7 +396,7 @@ export function PaymentScreen() {
       }
       setView({ kind: 'selector' });
       setStatusNote(
-        'Pay at Office. Your order stays unpaid until an authorized administrator confirms payment.',
+        paymentOfficeStatusNote(),
       );
     } catch (err) {
       if (isPaymentUnauthenticatedError(err)) {
@@ -420,7 +432,7 @@ export function PaymentScreen() {
       }
       if (next.kind === 'selector') {
         setTransaction(null);
-        setStatusNote('The previous payment request ended. You can choose another payment method.');
+        setStatusNote(paymentEndedChooseAgainNote());
         return;
       }
 
@@ -466,9 +478,9 @@ export function PaymentScreen() {
         await markPaidFromBackend(nextTxn.orderId || orderIdParam);
       } else if (next.kind === 'selector') {
         setTransaction(null);
-        setStatusNote('The previous payment request ended. You can choose another payment method.');
+        setStatusNote(paymentEndedChooseAgainNote());
       } else {
-        setStatusNote('Your previous payment request is still pending.');
+        setStatusNote(paymentStillProcessingNote());
       }
     } catch (err) {
       if (isPaymentUnauthenticatedError(err)) {
@@ -584,17 +596,17 @@ export function PaymentScreen() {
             : officePayment
               ? 'Pay at Office'
               : recovery
-                ? 'Payment request pending'
-                : 'Choose payment method'}
+                ? paymentProcessingHeading()
+                : paymentSelectorHeading()}
         </Text>
         <Text style={styles.subheading}>
           {paid
-            ? 'The server confirmed this payment. View your order for status and tracking.'
+            ? paymentConfirmedSubheading()
             : officePayment
-              ? 'Pay at a CHINA ORDER TZ office. Your order stays unpaid until an authorized administrator confirms payment.'
+              ? paymentOfficeSubheading()
               : recovery
-                ? `Continue the existing ${recoveryProvider} request. A new payment will not be started.`
-                : 'Choose how you want to pay. Payment is confirmed by the server only.'}
+                ? paymentProcessingSubheading(recoveryProvider)
+                : paymentSelectorSubheading()}
         </Text>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -681,7 +693,7 @@ export function PaymentScreen() {
             <Badge label="Confirmed" tone="success" />
             <Text style={styles.successTitle}>Payment confirmed</Text>
             <Text style={styles.body}>
-              Server confirmed this payment. View your order for status and tracking.
+              {paymentConfirmedSubheading()}
             </Text>
             <PrimaryButton
               label={confirmedOrderId ? 'View order' : 'View my orders'}
@@ -759,27 +771,12 @@ export function PaymentScreen() {
         )}
 
         <TrustStrip
-          title="What happens next"
-          items={[
-            {
-              id: 'choice',
-              title: 'Choose a method',
-              description:
-                'NMB, Mobile Money, or Pay at Office appear only when the server makes them available.',
-            },
-            {
-              id: 'confirm',
-              title: 'Server confirmation',
-              description:
-                'Closing a provider screen does not mark the order paid. Only a successful server refresh does.',
-            },
-            {
-              id: 'retry',
-              title: 'Safe to continue',
-              description:
-                'If a payment request is already pending, the app restores it instead of starting another one.',
-            },
-          ]}
+          title={PAYMENT_NEXT_STEPS_TITLE}
+          items={PAYMENT_NEXT_STEPS.map((item) => ({
+            id: item.id,
+            title: item.title,
+            description: item.description,
+          }))}
         />
       </ScrollView>
     </ScreenContainer>

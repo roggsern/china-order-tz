@@ -52,6 +52,11 @@ import {
   isMissingDeliveryAddressError,
 } from '../utils/checkoutErrorMessage';
 import {
+  checkoutSessionStatusLabel,
+  checkoutShippingChoiceLabel,
+  checkoutShippingMethodLabel,
+} from '../utils/checkoutDisplayLabels';
+import {
   isReadyForPayment,
   isStaleOrExpiredCheckoutError,
   journeyLabelFromCheckoutItems,
@@ -161,7 +166,7 @@ export function CheckoutScreen() {
         await pendingCheckoutContextStorage.clear();
         setRecoveryOffer(null);
         setActionError(
-          'Previous checkout session is no longer available. Start checkout again.',
+          'Your previous checkout is no longer available. Please start again.',
         );
         return;
       }
@@ -386,7 +391,7 @@ export function CheckoutScreen() {
         <Text style={styles.heading}>Review & ship</Text>
         <Badge label={journeyLabel} tone="brand" style={styles.journeyBadge} />
         <Text style={styles.subheading}>
-          Review your order. Prices and shipping rules come from the server.
+          Review your order. Prices and shipping options are confirmed at checkout.
         </Text>
 
         <CheckoutProgress current={progressStep} />
@@ -397,7 +402,7 @@ export function CheckoutScreen() {
           <Card elevated style={styles.recoveryCard}>
             <Text style={styles.cardTitle}>Continue checkout?</Text>
             <Text style={styles.meta}>
-              We found an unfinished checkout session from before the app closed.
+              You have an unfinished checkout. Would you like to continue?
             </Text>
             <PrimaryButton
               label="Continue checkout"
@@ -432,7 +437,7 @@ export function CheckoutScreen() {
 
         {!session ? (
           <PrimaryButton
-            label="Start checkout session"
+            label="Continue to checkout"
             loading={startMutation.isPending}
             disabled={busy || Boolean(recoveryOffer)}
             onPress={() => {
@@ -447,11 +452,14 @@ export function CheckoutScreen() {
           />
         ) : (
           <Card elevated={false} style={styles.sessionBox}>
-            <Text style={styles.cardTitle}>Checkout session</Text>
+            <Text style={styles.cardTitle}>Your checkout</Text>
             <View style={styles.badgeRow}>
-              <Badge label={session.status} tone="info" />
-              {session.shippingChoice ? (
-                <Badge label={session.shippingChoice} tone="neutral" />
+              <Badge label={checkoutSessionStatusLabel(session.status)} tone="info" />
+              {checkoutShippingChoiceLabel(session.shippingChoice) ? (
+                <Badge
+                  label={checkoutShippingChoiceLabel(session.shippingChoice)!}
+                  tone="neutral"
+                />
               ) : null}
             </View>
             {session.expiresAt ? (
@@ -459,18 +467,20 @@ export function CheckoutScreen() {
             ) : null}
             {session.shippingChoice ? (
               <Text style={styles.meta}>
-                Choice: {session.shippingChoice}
-                {session.shippingMethod ? ` (${session.shippingMethod})` : ''}
+                Choice: {checkoutShippingChoiceLabel(session.shippingChoice)}
+                {checkoutShippingMethodLabel(session.shippingMethod)
+                  ? ` (${checkoutShippingMethodLabel(session.shippingMethod)})`
+                  : ''}
               </Text>
             ) : null}
             {session.isExpired || session.status === 'expired' ? (
               <Text style={styles.error}>
-                Session expired. Refresh or start checkout again.
+                This checkout timed out. Start again to continue.
               </Text>
             ) : null}
 
             <SecondaryButton
-              label="Refresh session"
+              label="Update totals"
               disabled={busy}
               onPress={() => {
                 setActionError(null);
@@ -539,15 +549,15 @@ export function CheckoutScreen() {
           title="Secure checkout"
           items={[
             {
-              id: 'server',
-              title: 'Server-owned totals',
-              description: 'Shipping and grand totals are confirmed by the API.',
+              id: 'totals',
+              title: 'Confirmed totals',
+              description: 'Shipping and total are confirmed at checkout.',
             },
             {
               id: 'payment',
-              title: 'Server-confirmed payment',
+              title: 'Secure payment',
               description:
-                'Choose a payment method next. Paid status is confirmed by the server, never guessed on device.',
+                'Choose a payment method next. Payment is confirmed before your order is processed.',
             },
           ]}
         />

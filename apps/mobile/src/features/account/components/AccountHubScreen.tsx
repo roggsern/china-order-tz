@@ -85,12 +85,12 @@ export function AccountHubScreen() {
         setResendMessage('Your email is verified.');
       } else {
         setResendMessage(
-          'Still unverified. Open the link from your email, then refresh again.',
+          'Still unverified. Open the link from your email, then check again.',
         );
       }
     } catch (error) {
       Alert.alert(
-        'Could not refresh',
+        'Could not check status',
         error instanceof Error ? error.message : 'Please try again.',
       );
     } finally {
@@ -178,7 +178,7 @@ export function AccountHubScreen() {
         />
         <AccountMenuCard
           title="Returns"
-          description="View return requests and their server status."
+          description="View your return requests and updates."
           onPress={() => openNative('returns')}
         />
 
@@ -215,7 +215,7 @@ export function AccountHubScreen() {
         <Text style={styles.sectionLabel}>Danger zone</Text>
         <AccountMenuCard
           title="Close account"
-          description="End access permanently. Some transaction records may be retained for operational or legal reasons."
+          description="End access permanently. Some order and payment records may be kept for operational or legal reasons."
           destructive
           onPress={() => openNative('close_account')}
         />
@@ -225,15 +225,15 @@ export function AccountHubScreen() {
           items={[
             {
               id: 'orders',
-              title: 'Server-owned order status',
+              title: 'Live order updates',
               description:
-                'Payment and fulfillment status always come from the API — never guessed on device.',
+                'Payment and fulfillment status update as your order progresses.',
             },
             {
               id: 'support',
-              title: 'Native where APIs exist',
+              title: 'In-app when possible',
               description:
-                'Website handoffs remain only for capabilities without a mobile API.',
+                'Some account tools still open on chinaordertz.com when they are not available in the app yet.',
             },
           ]}
         />

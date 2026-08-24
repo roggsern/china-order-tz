@@ -4,6 +4,7 @@ import { Card } from '@/src/shared/ui/Card';
 import { PriceText } from '@/src/shared/ui/PriceText';
 import { colors, spacing, typography } from '@/src/shared/theme';
 import type { PaymentTransaction } from '../models/types';
+import { paymentStatusCardNote } from '../utils/customerPaymentCopy';
 import {
   isSuccessfulPaymentStatus,
   paymentStatusLabel,
@@ -46,9 +47,7 @@ export function PaymentStatusCard({ transaction }: Props) {
       {transaction.order?.orderNumber ? (
         <Text style={styles.meta}>Order: {transaction.order.orderNumber}</Text>
       ) : null}
-      <Text style={styles.note}>
-        Final status is confirmed by the server after reconciliation and refresh.
-      </Text>
+      <Text style={styles.note}>{paymentStatusCardNote()}</Text>
     </Card>
   );
 }

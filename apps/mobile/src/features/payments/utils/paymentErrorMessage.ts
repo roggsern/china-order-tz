@@ -30,7 +30,7 @@ export function getPaymentErrorMessage(error: unknown): string {
         return first || error.message || 'Please check payment details and try again.';
       }
       case 'not_found':
-        return error.message || 'Payment transaction was not found.';
+        return "We couldn't find that payment. Please try again from your order.";
       case 'maintenance_mode':
         return error.message || 'The store is temporarily under maintenance.';
       case 'server_error':

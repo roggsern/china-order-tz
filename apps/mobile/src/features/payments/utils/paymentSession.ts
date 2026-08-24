@@ -67,9 +67,9 @@ export function paymentProviderLabel(provider: string | null | undefined): strin
   if (provider === 'snippe') return 'Mobile Money';
   if (provider === 'nmb') return 'NMB';
   if (provider === 'cash') return 'Pay at Office';
-  return provider?.trim() || 'payment';
+  return provider?.trim() || 'Payment';
 }
 
 export function unsupportedPaymentMethodMessage(): string {
-  return 'This payment method is not available in the app yet. Please choose another option.';
+  return "This payment method isn't available yet. Please choose another option.";
 }
