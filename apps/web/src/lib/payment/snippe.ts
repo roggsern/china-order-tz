@@ -74,29 +74,10 @@ export function isCustomerIdentityStartFailure(
   return responsePayload.error === "customer_identity";
 }
 
-function identityMessageKeys(transaction: PaymentTransactionPayload): string[] {
-  const responsePayload = transaction.response_payload;
-  if (!responsePayload || typeof responsePayload !== "object") {
-    return [];
-  }
-
-  const messages = responsePayload.messages;
-  if (!messages || typeof messages !== "object") {
-    return [];
-  }
-
-  return Object.keys(messages);
-}
-
 export function resolveSnippeStartFailureMessage(
   transaction: PaymentTransactionPayload,
 ): string {
   if (isCustomerIdentityStartFailure(transaction)) {
-    const keys = identityMessageKeys(transaction);
-    if (keys.some((key) => key.includes("firstname") || key.includes("lastname"))) {
-      return SNIPPE_RECIPIENT_NAME_MESSAGE;
-    }
-
     return SNIPPE_CUSTOMER_IDENTITY_MESSAGE;
   }
 

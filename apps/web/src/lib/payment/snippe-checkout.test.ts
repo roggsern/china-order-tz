@@ -86,7 +86,7 @@ describe("snippe payment helpers", () => {
     assert.equal(resolveSnippeStartFailureMessage(transaction), SNIPPE_CUSTOMER_IDENTITY_MESSAGE);
   });
 
-  it("maps single-word recipient name failures to an actionable correction", () => {
+  it("maps account name identity failures to customer copy, not recipient copy", () => {
     const transaction = makeTransaction({
       status: "failed",
       response_payload: {
@@ -95,7 +95,8 @@ describe("snippe payment helpers", () => {
       },
     });
 
-    assert.equal(resolveSnippeStartFailureMessage(transaction), SNIPPE_RECIPIENT_NAME_MESSAGE);
+    assert.equal(resolveSnippeStartFailureMessage(transaction), SNIPPE_CUSTOMER_IDENTITY_MESSAGE);
+    assert.notEqual(resolveSnippeStartFailureMessage(transaction), SNIPPE_RECIPIENT_NAME_MESSAGE);
   });
 
   it("maps expired verification reason to expiry-specific copy", () => {

@@ -3,12 +3,14 @@
 namespace App\Payments\Gateways\Snippe;
 
 use App\Models\Order;
-use App\Models\ShippingAddress;
 use App\Models\User;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Resolves real Snippe customer identity from order-time snapshots.
+ * Resolves Snippe payer/customer identity from the order customer account.
+ *
+ * Delivery recipient / shipping-address snapshot is fulfillment metadata only
+ * and must never be parsed into Snippe firstname / lastname.
  * Never fabricates placeholder names or emails.
  */
 final class SnippeCustomerIdentityResolver
@@ -20,11 +22,7 @@ final class SnippeCustomerIdentityResolver
      */
     public static function resolve(Order $order): array
     {
-        $order->loadMissing(['shippingAddress', 'user']);
-
-        if ($order->shippingAddress !== null) {
-            return self::fromShippingAddress($order->shippingAddress);
-        }
+        $order->loadMissing(['user']);
 
         if ($order->user !== null) {
             return self::fromUser($order->user);
@@ -33,20 +31,6 @@ final class SnippeCustomerIdentityResolver
         throw ValidationException::withMessages([
             'customer' => ['Customer identity is required for Snippe mobile money payments.'],
         ]);
-    }
-
-    /**
-     * @return array{firstname: string, lastname: string, email: string}
-     *
-     * @throws ValidationException
-     */
-    private static function fromShippingAddress(ShippingAddress $address): array
-    {
-        return self::assertComplete(
-            self::normalizeNamePart($address->first_name),
-            self::normalizeNamePart($address->last_name),
-            self::normalizeEmail($address->email),
-        );
     }
 
     /**

@@ -6,7 +6,6 @@ use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentProvider;
 use App\Enums\PaymentTransactionStatus;
-use App\Models\Order;
 use App\Models\PaymentTransaction;
 use App\Models\ShippingAddress;
 use App\Models\User;
@@ -18,6 +17,8 @@ use App\Services\Payments\PaymentConfigurationResolver;
 use App\Services\Settings\SettingsService;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\Sanctum;
@@ -267,7 +268,7 @@ class SnippePaymentOrchestratorTest extends TestCase
 
         $createPosts = collect(Http::recorded())->filter(
             function (array $pair): bool {
-                /** @var \Illuminate\Http\Client\Request $request */
+                /** @var Request $request */
                 $request = $pair[0];
 
                 return $request->method() === 'POST'
@@ -484,7 +485,7 @@ class SnippePaymentOrchestratorTest extends TestCase
     public function test_provider_timeout_is_handled_safely(): void
     {
         Http::fake([
-            'api.snippe.test/v1/payments' => fn () => throw new \Illuminate\Http\Client\ConnectionException('Timeout'),
+            'api.snippe.test/v1/payments' => fn () => throw new ConnectionException('Timeout'),
         ]);
 
         $user = User::factory()->create();
@@ -570,13 +571,20 @@ class SnippePaymentOrchestratorTest extends TestCase
         $this->assertStringContainsString('25571', (string) ($payload['request_payload']['phone_number'] ?? ''));
     }
 
-    public function test_missing_first_name_on_shipping_snapshot_prevents_snippe_post(): void
+    public function test_incomplete_shipping_recipient_does_not_prevent_snippe_when_customer_identity_is_complete(): void
     {
-        Http::fake();
+        Http::fake([
+            'api.snippe.test/v1/payments' => Http::response([
+                'status' => 'success',
+                'code' => 201,
+                'data' => ['reference' => 'pi_recipient_ignored', 'status' => 'pending'],
+            ], 201),
+        ]);
 
         $user = User::factory()->create([
             'first_name' => 'Fallback',
             'last_name' => 'Profile',
+            'name' => 'Fallback Profile',
             'email' => 'fallback@example.com',
         ]);
         $order = $this->createPayableOrder($user, ['total' => 45000]);
@@ -594,11 +602,17 @@ class SnippePaymentOrchestratorTest extends TestCase
         $this->postJson("/api/v1/payments/start/{$order->id}", [
             'provider' => PaymentMethod::Snippe->value,
             'phone_number' => '0712345678',
-        ])
-            ->assertCreated()
-            ->assertJsonPath('data.status', 'failed');
+        ])->assertCreated()->assertJsonPath('data.status', 'processing');
 
-        Http::assertNothingSent();
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            $this->assertSame('Fallback', $body['customer']['firstname'] ?? null);
+            $this->assertSame('Profile', $body['customer']['lastname'] ?? null);
+            $this->assertSame('fallback@example.com', $body['customer']['email'] ?? null);
+
+            return true;
+        });
         $this->assertSame(OrderStatus::PendingPayment, $order->fresh()->status);
     }
 
@@ -825,30 +839,95 @@ class SnippePaymentOrchestratorTest extends TestCase
             ->assertJsonPath('data.status', 'successful');
     }
 
-    public function test_shipping_address_snapshot_is_used_for_snippe_customer_identity(): void
+    public function test_snippe_customer_identity_comes_from_account_not_shipping_recipient(): void
     {
         Http::fake([
             'api.snippe.test/v1/payments' => Http::response([
                 'status' => 'success',
                 'code' => 201,
-                'data' => ['reference' => 'pi_snapshot_identity', 'status' => 'pending'],
+                'data' => ['reference' => 'pi_account_identity', 'status' => 'pending'],
             ], 201),
         ]);
 
         $user = User::factory()->create([
-            'first_name' => 'Robert',
-            'last_name' => 'Musa',
-            'name' => 'Robert Musa',
-            'email' => 'robert@example.com',
+            'first_name' => 'SeppRise',
+            'last_name' => 'Joseph',
+            'name' => 'SeppRise Joseph',
+            'email' => 'sepprise.joseph@example.com',
+        ]);
+        $order = $this->createPayableOrder($user, ['total' => 45000]);
+
+        $shipping = ShippingAddress::factory()->create([
+            'order_id' => $order->id,
+            'user_id' => $user->id,
+            'first_name' => 'ABC',
+            'last_name' => 'COMPANY LTD',
+            'phone' => '0755555555',
+            'email' => 'warehouse@example.com',
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/v1/payments/start/{$order->id}", [
+            'provider' => PaymentMethod::Snippe->value,
+            'phone_number' => '0712345678',
+        ])->assertCreated()->assertJsonPath('data.status', 'processing');
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            $this->assertSame('SeppRise', $body['customer']['firstname'] ?? null);
+            $this->assertSame('Joseph', $body['customer']['lastname'] ?? null);
+            $this->assertSame('sepprise.joseph@example.com', $body['customer']['email'] ?? null);
+            $this->assertSame('255712345678', $body['phone_number'] ?? null);
+            $this->assertNotSame('255755555555', $body['phone_number'] ?? null);
+
+            return true;
+        });
+
+        $shipping->refresh();
+        $this->assertSame('ABC', $shipping->first_name);
+        $this->assertSame('COMPANY LTD', $shipping->last_name);
+        $this->assertSame('0755555555', $shipping->phone);
+        $this->assertSame('warehouse@example.com', $shipping->email);
+    }
+
+    public function test_warehouse_recipient_does_not_block_snippe_start(): void
+    {
+        $this->assertRecipientDoesNotBlockSnippe('Warehouse', '', 'pi_warehouse_recipient');
+    }
+
+    public function test_single_token_recipient_does_not_block_snippe_start(): void
+    {
+        $this->assertRecipientDoesNotBlockSnippe('John', '', 'pi_john_recipient');
+    }
+
+    public function test_payment_phone_comes_from_selected_mobile_money_number_not_recipient_phone(): void
+    {
+        Http::fake([
+            'api.snippe.test/v1/payments' => Http::response([
+                'status' => 'success',
+                'code' => 201,
+                'data' => ['reference' => 'pi_phone_source', 'status' => 'pending'],
+            ], 201),
+        ]);
+
+        $user = User::factory()->create([
+            'first_name' => 'SeppRise',
+            'last_name' => 'Joseph',
+            'name' => 'SeppRise Joseph',
+            'email' => 'sepprise.joseph@example.com',
+            'phone' => '0766666666',
         ]);
         $order = $this->createPayableOrder($user, ['total' => 45000]);
 
         ShippingAddress::factory()->create([
             'order_id' => $order->id,
             'user_id' => $user->id,
-            'first_name' => 'Snapshot',
-            'last_name' => 'Recipient',
-            'email' => 'snapshot.recipient@example.com',
+            'first_name' => 'Warehouse',
+            'last_name' => '',
+            'phone' => '0755555555',
+            'email' => 'warehouse@example.com',
         ]);
 
         Sanctum::actingAs($user);
@@ -859,14 +938,155 @@ class SnippePaymentOrchestratorTest extends TestCase
         ])->assertCreated();
 
         Http::assertSent(function ($request) {
-            $body = $request->data();
-
-            $this->assertSame('Snapshot', $body['customer']['firstname'] ?? null);
-            $this->assertSame('Recipient', $body['customer']['lastname'] ?? null);
-            $this->assertSame('snapshot.recipient@example.com', $body['customer']['email'] ?? null);
+            $this->assertSame('255712345678', $request->data()['phone_number'] ?? null);
 
             return true;
         });
+    }
+
+    public function test_failed_snippe_retry_uses_customer_account_identity_without_editing_recipient(): void
+    {
+        Http::fake([
+            'api.snippe.test/v1/payments' => Http::response([
+                'status' => 'success',
+                'code' => 201,
+                'data' => ['reference' => 'pi_retry_identity', 'status' => 'pending'],
+            ], 201),
+        ]);
+
+        $user = User::factory()->create([
+            'first_name' => 'SeppRise',
+            'last_name' => 'Joseph',
+            'name' => 'SeppRise Joseph',
+            'email' => 'sepprise.joseph@example.com',
+        ]);
+        $order = $this->createPayableOrder($user, ['total' => 45000]);
+
+        $shipping = ShippingAddress::factory()->create([
+            'order_id' => $order->id,
+            'user_id' => $user->id,
+            'first_name' => 'Warehouse',
+            'last_name' => '',
+            'phone' => '0755555555',
+            'email' => 'warehouse@example.com',
+        ]);
+
+        PaymentTransaction::factory()->create([
+            'order_id' => $order->id,
+            'provider' => PaymentProvider::Snippe,
+            'status' => PaymentTransactionStatus::Failed,
+            'amount' => 45000,
+            'currency' => 'TZS',
+            'response_payload' => [
+                'error' => 'customer_identity',
+                'messages' => [
+                    'customer.lastname' => ['Customer last name is required for Snippe mobile money payments.'],
+                ],
+            ],
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->postJson("/api/v1/payments/start/{$order->id}", [
+            'provider' => PaymentMethod::Snippe->value,
+            'phone_number' => '0712345678',
+        ])->assertCreated();
+
+        $this->assertSame('processing', $response->json('data.status'));
+        $this->assertDatabaseCount('payment_transactions', 2);
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            $this->assertSame('SeppRise', $body['customer']['firstname'] ?? null);
+            $this->assertSame('Joseph', $body['customer']['lastname'] ?? null);
+
+            return true;
+        });
+
+        $shipping->refresh();
+        $this->assertSame('Warehouse', $shipping->first_name);
+        $this->assertSame('', $shipping->last_name);
+    }
+
+    public function test_active_snippe_recovery_does_not_create_a_new_transaction(): void
+    {
+        Http::fake([
+            'api.snippe.test/v1/payments/pi_still_active' => Http::response([
+                'status' => 'success',
+                'code' => 200,
+                'data' => ['reference' => 'pi_still_active', 'status' => 'pending'],
+            ]),
+            'api.snippe.test/v1/payments' => Http::response([
+                'status' => 'success',
+                'code' => 201,
+                'data' => ['reference' => 'pi_should_not_create', 'status' => 'pending'],
+            ], 201),
+        ]);
+
+        $user = User::factory()->create([
+            'first_name' => 'SeppRise',
+            'last_name' => 'Joseph',
+            'email' => 'sepprise.joseph@example.com',
+        ]);
+        $order = $this->createPayableOrder($user, ['total' => 45000]);
+
+        $existing = PaymentTransaction::factory()->processing()->create([
+            'order_id' => $order->id,
+            'provider' => PaymentProvider::Snippe,
+            'provider_reference' => 'pi_still_active',
+            'amount' => 45000,
+            'currency' => 'TZS',
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->postJson("/api/v1/payments/start/{$order->id}", [
+            'provider' => PaymentMethod::Snippe->value,
+            'phone_number' => '0712345678',
+        ])->assertCreated();
+
+        $this->assertSame($existing->id, $response->json('data.id'));
+        $this->assertDatabaseCount('payment_transactions', 1);
+
+        $createPosts = collect(Http::recorded())->filter(function (array $pair): bool {
+            /** @var Request $request */
+            $request = $pair[0];
+
+            return $request->method() === 'POST'
+                && rtrim($request->url(), '/') === 'https://api.snippe.test/v1/payments';
+        });
+
+        $this->assertCount(0, $createPosts);
+    }
+
+    public function test_cancelled_order_cannot_start_snippe_payment(): void
+    {
+        Http::fake();
+
+        $user = User::factory()->create([
+            'first_name' => 'SeppRise',
+            'last_name' => 'Joseph',
+            'email' => 'sepprise.joseph@example.com',
+        ]);
+        $order = $this->createPayableOrder($user, [
+            'total' => 45000,
+            'status' => OrderStatus::Cancelled,
+            'cancelled_at' => now(),
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/v1/payments/start/{$order->id}", [
+            'provider' => PaymentMethod::Snippe->value,
+            'phone_number' => '0712345678',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'business_rule_violated')
+            ->assertJsonValidationErrors(['order']);
+
+        Http::assertNothingSent();
+        $this->assertDatabaseCount('payment_transactions', 0);
     }
 
     public function test_create_response_without_data_id_is_valid(): void
@@ -903,6 +1123,56 @@ class SnippePaymentOrchestratorTest extends TestCase
         $this->assertSame('pi_no_id', $response->json('data.provider_reference'));
         $this->assertNull($response->json('data.external_transaction_id'));
         $this->assertSame($expiresAt, $response->json('data.response_payload.data.expires_at'));
+    }
+
+    private function assertRecipientDoesNotBlockSnippe(
+        string $recipientFirst,
+        string $recipientLast,
+        string $reference,
+    ): void {
+        Http::fake([
+            'api.snippe.test/v1/payments' => Http::response([
+                'status' => 'success',
+                'code' => 201,
+                'data' => ['reference' => $reference, 'status' => 'pending'],
+            ], 201),
+        ]);
+
+        $user = User::factory()->create([
+            'first_name' => 'SeppRise',
+            'last_name' => 'Joseph',
+            'name' => 'SeppRise Joseph',
+            'email' => 'sepprise.joseph@example.com',
+        ]);
+        $order = $this->createPayableOrder($user, ['total' => 45000]);
+
+        $shipping = ShippingAddress::factory()->create([
+            'order_id' => $order->id,
+            'user_id' => $user->id,
+            'first_name' => $recipientFirst,
+            'last_name' => $recipientLast,
+            'email' => 'recipient@example.com',
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/v1/payments/start/{$order->id}", [
+            'provider' => PaymentMethod::Snippe->value,
+            'phone_number' => '0712345678',
+        ])->assertCreated()->assertJsonPath('data.status', 'processing');
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            $this->assertSame('SeppRise', $body['customer']['firstname'] ?? null);
+            $this->assertSame('Joseph', $body['customer']['lastname'] ?? null);
+
+            return true;
+        });
+
+        $shipping->refresh();
+        $this->assertSame($recipientFirst, $shipping->first_name);
+        $this->assertSame($recipientLast, $shipping->last_name);
     }
 
     /**
