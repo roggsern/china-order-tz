@@ -5,8 +5,8 @@ namespace App\Services\Warehouse;
 use App\Enums\DeliveryType;
 use App\Enums\FulfillmentStatus;
 use App\Enums\FulfillmentStatusHistorySource;
-use App\Enums\OrderStatus;
 use App\Enums\NotificationEventType;
+use App\Enums\OrderStatus;
 use App\Enums\WarehouseJobStatus;
 use App\Events\Audit\WarehouseJobCreated;
 use App\Events\Audit\WarehouseStatusChanged;
@@ -17,6 +17,7 @@ use App\Models\WarehouseJob;
 use App\Services\Fulfillment\FulfillmentEngine;
 use App\Services\Fulfillment\FulfillmentStatusUpdateContext;
 use App\Services\Notifications\NotificationPlatform;
+use App\Services\Notifications\WhatsApp\PickupLocationResolver;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -31,6 +32,7 @@ class WarehouseEngine
         private readonly WarehouseJobNumberGenerator $numberGenerator,
         private readonly FulfillmentEngine $fulfillmentEngine,
         private readonly NotificationPlatform $notifications,
+        private readonly PickupLocationResolver $pickupLocations,
     ) {}
 
     /**
@@ -239,13 +241,30 @@ class WarehouseEngine
         }
 
         try {
-            $this->notifications->notifyCustomer($eventType, $user, [
+            $job->loadMissing('order.store');
+            $payload = [
                 'customer_name' => $user->name,
                 'order_number' => $job->order?->order_number,
                 'order_id' => $job->order_id,
                 'warehouse_job_id' => $job->id,
                 'warehouse_status' => $job->status?->value ?? (string) $job->status,
-            ]);
+            ];
+
+            if ($eventType === NotificationEventType::WarehouseReadyForPickup) {
+                $pickupLocation = $this->pickupLocations->forOrder($job->order);
+                if ($pickupLocation !== null) {
+                    $payload['pickup_location'] = $pickupLocation;
+                }
+            }
+
+            $key = $eventType->value.':'.($job->order_id ?: $job->id).':'.$user->id;
+            $this->notifications->notifyCustomer(
+                $eventType,
+                $user,
+                $payload,
+                idempotencyKey: $key,
+                correlationKey: $key,
+            );
         } catch (\Throwable $e) {
             Log::warning('notification.warehouse_publish_failed', [
                 'warehouse_job_id' => $job->id,

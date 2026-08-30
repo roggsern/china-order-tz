@@ -13,16 +13,17 @@ return [
     'event_channels' => [
         // Wave 6C — Tier A launch push set (append-only; preserve email/whatsapp).
         'order_created' => ['in_app', 'whatsapp', 'email', 'push'],
-        'order_cancelled' => ['in_app', 'push'],
+        'order_cancelled' => ['in_app', 'whatsapp', 'push'],
         'payment_confirmed' => ['in_app', 'whatsapp', 'email', 'push'],
+        'order_processing' => ['in_app', 'whatsapp', 'push'],
         'warehouse_picking_started' => ['in_app'],
         'warehouse_pick_assigned' => ['in_app'],
         'warehouse_pick_completed' => ['in_app'],
         'warehouse_packed' => ['in_app'],
         'warehouse_ready_to_ship' => ['in_app'],
-        'warehouse_ready_for_pickup' => ['in_app'],
+        'warehouse_ready_for_pickup' => ['in_app', 'whatsapp'],
         'warehouse_ready_for_delivery_arrangement' => ['in_app'],
-        'shipment_created' => ['in_app', 'push'],
+        'shipment_created' => ['in_app', 'whatsapp', 'push'],
         'shipment_arrived_tanzania' => ['in_app', 'whatsapp', 'email', 'push'],
         'company_handover_pickup_requested' => ['in_app'],
         'company_handover_delivery_requested' => ['in_app'],
@@ -78,40 +79,62 @@ return [
     ],
 
     'whatsapp' => [
-        // meta_cloud | dialog360 | twilio_whatsapp | ultramsg | greenapi
-        'driver' => env('WHATSAPP_PROVIDER', env('NOTIFICATION_WHATSAPP_DRIVER', 'meta_cloud')),
-        'configured' => (bool) env('NOTIFICATION_WHATSAPP_CONFIGURED', false),
-        'access_token' => env('WHATSAPP_ACCESS_TOKEN'),
-        'phone_number_id' => env('WHATSAPP_PHONE_NUMBER_ID'),
-        'business_account_id' => env('WHATSAPP_BUSINESS_ACCOUNT_ID'),
-        'api_version' => env('WHATSAPP_API_VERSION', 'v21.0'),
-        'default_language' => env('WHATSAPP_DEFAULT_LANGUAGE', 'en'),
-        'timeout' => (int) env('WHATSAPP_HTTP_TIMEOUT', 10),
-        'connect_timeout' => (int) env('WHATSAPP_HTTP_CONNECT_TIMEOUT', 5),
+        // Wave 1 production sender is Ghala only. Other driver names stay unconfigured.
+        'driver' => env('WHATSAPP_PROVIDER', env('NOTIFICATION_WHATSAPP_DRIVER', 'ghala')),
+        'configured' => (bool) env('GHALA_ENABLED', env('NOTIFICATION_WHATSAPP_CONFIGURED', false)),
+        'base_url' => env('GHALA_BASE_URL', 'https://v2.ghala.io'),
+        'access_token' => env('GHALA_ACCESS_TOKEN'),
+        'webhook_secret' => env('GHALA_WEBHOOK_SECRET'),
+        'webhook_replay_ttl_seconds' => (int) env('GHALA_WEBHOOK_REPLAY_TTL_SECONDS', 86400),
+        'default_language' => env('GHALA_TEMPLATE_LANGUAGE', env('WHATSAPP_DEFAULT_LANGUAGE', 'en_US')),
+        'timeout' => (int) env('GHALA_HTTP_TIMEOUT', env('WHATSAPP_HTTP_TIMEOUT', 10)),
+        'connect_timeout' => (int) env('GHALA_HTTP_CONNECT_TIMEOUT', env('WHATSAPP_HTTP_CONNECT_TIMEOUT', 5)),
+        'retry_attempts' => (int) env('GHALA_RETRY_ATTEMPTS', 3),
+        'retry_sleep_ms' => (int) env('GHALA_RETRY_SLEEP_MS', 200),
 
         /*
-        | Meta-approved template names + ordered body parameter keys from notification.data.
-        | These are NOT the DB notification_templates bodies used for in-app/email.
+        | Approved Utility template names + ordered body parameter keys from notification.data.
+        | These are NOT the DB notification_templates bodies used for in-app/email/push.
         */
         'templates' => [
             'order_created' => [
-                'name' => env('WHATSAPP_TEMPLATE_ORDER_CREATED', 'order_created'),
-                'language' => env('WHATSAPP_TEMPLATE_ORDER_CREATED_LANG'),
-                'body_params' => ['customer_name', 'order_number', 'order_total', 'currency'],
+                'name' => env('WHATSAPP_TEMPLATE_ORDER_CONFIRMATION', 'order_confirmation'),
+                'language' => env('WHATSAPP_TEMPLATE_ORDER_CONFIRMATION_LANG'),
+                'body_params' => ['customer_name', 'order_number', 'order_total'],
             ],
             'payment_confirmed' => [
-                'name' => env('WHATSAPP_TEMPLATE_PAYMENT_CONFIRMED', 'payment_confirmed'),
-                'language' => env('WHATSAPP_TEMPLATE_PAYMENT_CONFIRMED_LANG'),
-                'body_params' => ['customer_name', 'order_number', 'order_total', 'currency'],
+                'name' => env('WHATSAPP_TEMPLATE_PAYMENT_RECEIVED', 'payment_received'),
+                'language' => env('WHATSAPP_TEMPLATE_PAYMENT_RECEIVED_LANG'),
+                'body_params' => ['customer_name', 'order_total', 'order_number'],
+            ],
+            'order_processing' => [
+                'name' => env('WHATSAPP_TEMPLATE_ORDER_PROCESSING', 'order_processing'),
+                'language' => env('WHATSAPP_TEMPLATE_ORDER_PROCESSING_LANG'),
+                'body_params' => ['customer_name', 'order_number'],
             ],
             'shipment_arrived_tanzania' => [
-                'name' => env('WHATSAPP_TEMPLATE_SHIPMENT_ARRIVED_TANZANIA', 'shipment_arrived_tanzania'),
-                'language' => env('WHATSAPP_TEMPLATE_SHIPMENT_ARRIVED_TANZANIA_LANG'),
-                'body_params' => ['customer_name', 'order_number', 'location'],
+                'name' => env('WHATSAPP_TEMPLATE_ORDER_ARRIVED_TANZANIA', 'order_arrived_tanzania'),
+                'language' => env('WHATSAPP_TEMPLATE_ORDER_ARRIVED_TANZANIA_LANG'),
+                'body_params' => ['customer_name', 'order_number'],
+            ],
+            'warehouse_ready_for_pickup' => [
+                'name' => env('WHATSAPP_TEMPLATE_ORDER_READY_FOR_PICKUP', 'order_ready_for_pickup'),
+                'language' => env('WHATSAPP_TEMPLATE_ORDER_READY_FOR_PICKUP_LANG'),
+                'body_params' => ['customer_name', 'order_number', 'pickup_location'],
+            ],
+            'shipment_created' => [
+                'name' => env('WHATSAPP_TEMPLATE_ORDER_SHIPPED', 'order_shipped'),
+                'language' => env('WHATSAPP_TEMPLATE_ORDER_SHIPPED_LANG'),
+                'body_params' => ['customer_name', 'order_number', 'destination'],
             ],
             'order_delivered' => [
                 'name' => env('WHATSAPP_TEMPLATE_ORDER_DELIVERED', 'order_delivered'),
                 'language' => env('WHATSAPP_TEMPLATE_ORDER_DELIVERED_LANG'),
+                'body_params' => ['customer_name', 'order_number'],
+            ],
+            'order_cancelled' => [
+                'name' => env('WHATSAPP_TEMPLATE_ORDER_CANCELLED', 'order_cancelled'),
+                'language' => env('WHATSAPP_TEMPLATE_ORDER_CANCELLED_LANG'),
                 'body_params' => ['customer_name', 'order_number'],
             ],
         ],

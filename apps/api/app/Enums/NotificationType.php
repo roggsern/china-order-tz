@@ -7,6 +7,7 @@ enum NotificationType: string
     case OrderCreated = 'order_created';
     case OrderCancelled = 'order_cancelled';
     case PaymentConfirmed = 'payment_confirmed';
+    case OrderProcessing = 'order_processing';
     case ShipmentStatusUpdated = 'shipment_status_updated';
     case WarehousePickingStarted = 'warehouse_picking_started';
     case WarehousePacked = 'warehouse_packed';

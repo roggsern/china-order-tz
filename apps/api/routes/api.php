@@ -125,6 +125,7 @@ use App\Http\Controllers\PublicFeaturesController;
 use App\Http\Controllers\CustomerWishlistController;
 use App\Http\Controllers\CustomerProductReviewController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Webhooks\GhalaWebhookController;
 use App\Http\Controllers\Webhooks\NmbWebhookController;
 use App\Support\Ops\OperationalHealth;
 use Illuminate\Support\Facades\Route;
@@ -163,6 +164,9 @@ Route::get('/health', function () {
 });
 
 Route::post('/webhooks/nmb', [NmbWebhookController::class, 'receive'])
+    ->middleware('throttle:webhooks');
+
+Route::post('/webhooks/ghala', [GhalaWebhookController::class, 'receive'])
     ->middleware('throttle:webhooks');
 
 Route::post('/payments/nmb/callback', NmbPaymentCallbackController::class)

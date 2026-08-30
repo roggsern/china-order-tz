@@ -254,7 +254,7 @@ final class NotificationConfigurationResolver
                 ],
                 'whatsapp' => [
                     'configured' => (bool) config('notifications.whatsapp.configured', false),
-                    'driver' => (string) config('notifications.whatsapp.driver', 'meta_cloud'),
+                    'driver' => (string) config('notifications.whatsapp.driver', 'ghala'),
                 ],
                 'push' => [
                     'configured' => (bool) config('notifications.push.configured', false),

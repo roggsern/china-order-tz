@@ -31,6 +31,7 @@ class TransactionalPushEventEnablementTest extends TestCase
         NotificationEventType::OrderCreated,
         NotificationEventType::OrderCancelled,
         NotificationEventType::PaymentConfirmed,
+        NotificationEventType::OrderProcessing,
         NotificationEventType::ShipmentCreated,
         NotificationEventType::ShipmentArrivedTanzania,
         NotificationEventType::OrderDelivered,
@@ -126,7 +127,7 @@ class TransactionalPushEventEnablementTest extends TestCase
             config('notifications.event_channels.payment_confirmed'),
         );
         $this->assertSame(
-            ['in_app', 'push'],
+            ['in_app', 'whatsapp', 'push'],
             config('notifications.event_channels.order_cancelled'),
         );
         $this->assertSame(

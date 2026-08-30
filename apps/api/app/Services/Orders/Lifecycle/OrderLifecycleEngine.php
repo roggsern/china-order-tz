@@ -3,10 +3,13 @@
 namespace App\Services\Orders\Lifecycle;
 
 use App\Enums\FulfillmentStatus;
+use App\Enums\NotificationEventType;
 use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Models\OrderStatusHistory;
+use App\Services\Notifications\NotificationPlatform;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -16,6 +19,10 @@ use Illuminate\Validation\ValidationException;
  */
 class OrderLifecycleEngine
 {
+    public function __construct(
+        private readonly NotificationPlatform $notifications,
+    ) {}
+
     public function recordCreated(Order $order, OrderLifecycleContext $context): void
     {
         $status = $order->status instanceof OrderStatus
@@ -27,7 +34,9 @@ class OrderLifecycleEngine
 
     public function transition(Order $order, OrderStatus $to, OrderLifecycleContext $context): Order
     {
-        return DB::transaction(function () use ($order, $to, $context): Order {
+        $enteredProcessing = false;
+
+        $result = DB::transaction(function () use ($order, $to, $context, &$enteredProcessing): Order {
             /** @var Order $locked */
             $locked = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
 
@@ -79,7 +88,62 @@ class OrderLifecycleEngine
             $locked->fill($payload)->save();
             $this->writeHistory($locked, $from, $to, $context);
 
+            if ($to === OrderStatus::Processing) {
+                $enteredProcessing = true;
+            }
+
             return $locked->fresh() ?? $locked;
+        });
+
+        if ($enteredProcessing) {
+            $this->scheduleOrderProcessingNotification($result);
+        }
+
+        return $result;
+    }
+
+    private function scheduleOrderProcessingNotification(Order $order): void
+    {
+        $orderId = $order->id;
+
+        DB::afterCommit(function () use ($orderId): void {
+            $fresh = Order::query()->with('user')->find($orderId);
+            if ($fresh === null) {
+                return;
+            }
+
+            $status = $fresh->status instanceof OrderStatus
+                ? $fresh->status
+                : OrderStatus::tryFrom((string) $fresh->status);
+
+            if ($status !== OrderStatus::Processing) {
+                return;
+            }
+
+            $user = $fresh->user;
+            if ($user === null) {
+                return;
+            }
+
+            try {
+                $key = 'order_processing:'.$fresh->id.':'.$user->id;
+                $this->notifications->notifyCustomer(
+                    NotificationEventType::OrderProcessing,
+                    $user,
+                    [
+                        'customer_name' => $user->name,
+                        'order_number' => $fresh->order_number,
+                        'order_id' => $fresh->id,
+                    ],
+                    idempotencyKey: $key,
+                    correlationKey: $key,
+                );
+            } catch (\Throwable $e) {
+                Log::warning('notification.order_processing_failed', [
+                    'order_id' => $fresh->id,
+                    'message' => $e->getMessage(),
+                ]);
+            }
         });
     }
 

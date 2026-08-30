@@ -7,6 +7,7 @@ enum NotificationEventType: string
     case OrderCreated = 'order_created';
     case OrderCancelled = 'order_cancelled';
     case PaymentConfirmed = 'payment_confirmed';
+    case OrderProcessing = 'order_processing';
     case WarehousePickingStarted = 'warehouse_picking_started';
     case WarehousePickAssigned = 'warehouse_pick_assigned';
     case WarehousePickCompleted = 'warehouse_pick_completed';
@@ -67,6 +68,7 @@ enum NotificationEventType: string
             self::OrderCreated => 'Order Created',
             self::OrderCancelled => 'Order Cancelled',
             self::PaymentConfirmed => 'Payment Confirmed',
+            self::OrderProcessing => 'Order Processing',
             self::WarehousePickingStarted => 'Warehouse Picking Started',
             self::WarehousePickAssigned => 'Warehouse Pick Assigned',
             self::WarehousePickCompleted => 'Warehouse Pick Completed',

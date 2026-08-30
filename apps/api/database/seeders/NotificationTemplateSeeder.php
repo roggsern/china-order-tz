@@ -27,6 +27,13 @@ class NotificationTemplateSeeder extends Seeder
                 'channels' => [NotificationChannel::InApp, NotificationChannel::Email],
             ],
             [
+                'event' => NotificationEventType::OrderProcessing,
+                'name' => 'Order Processing',
+                'subject' => 'Order {{order_number}} is being prepared',
+                'body' => 'Hello {{customer_name}}, we have started processing order {{order_number}}.',
+                'channels' => [NotificationChannel::InApp],
+            ],
+            [
                 'event' => NotificationEventType::OrderCancelled,
                 'name' => 'Order Cancelled',
                 'subject' => 'Order {{order_number}} cancelled',
@@ -341,6 +348,12 @@ class NotificationTemplateSeeder extends Seeder
                 'name' => 'Payment Confirmed Push',
                 'subject' => 'Payment received',
                 'body' => 'Payment for order {{order_number}} was confirmed.',
+            ],
+            [
+                'event' => NotificationEventType::OrderProcessing,
+                'name' => 'Order Processing Push',
+                'subject' => 'Order in progress',
+                'body' => 'We have started preparing order {{order_number}}.',
             ],
             [
                 'event' => NotificationEventType::ShipmentCreated,

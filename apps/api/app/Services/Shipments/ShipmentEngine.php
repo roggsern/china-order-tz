@@ -9,6 +9,7 @@ use App\Models\Admin;
 use App\Models\Fulfillment;
 use App\Models\Shipment;
 use App\Services\Notifications\NotificationPlatform;
+use App\Services\Notifications\WhatsApp\ShipmentDestinationResolver;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -24,6 +25,7 @@ class ShipmentEngine
         private readonly ShipmentEligibilityService $eligibility,
         private readonly ShipmentNumberGenerator $numberGenerator,
         private readonly NotificationPlatform $notifications,
+        private readonly ShipmentDestinationResolver $destinations,
     ) {}
 
     /**
@@ -118,17 +120,27 @@ class ShipmentEngine
             $user = $shipment->order?->user ?? $shipment->fulfillment?->order?->user;
             if ($user !== null) {
                 try {
+                    $order = $shipment->order ?? $shipment->fulfillment?->order;
+                    $destination = $this->destinations->forShipment($shipment, $order);
+
+                    $payload = [
+                        'customer_name' => $user->name,
+                        'order_number' => $order?->order_number,
+                        'order_id' => $shipment->order_id,
+                        'shipment_number' => $shipment->shipment_number,
+                        'shipment_id' => $shipment->id,
+                    ];
+                    if ($destination !== null) {
+                        $payload['destination'] = $destination;
+                    }
+
+                    $key = 'shipment_created:'.$shipment->id.':'.$user->id;
                     $this->notifications->notifyCustomer(
                         NotificationEventType::ShipmentCreated,
                         $user,
-                        [
-                            'customer_name' => $user->name,
-                            'order_number' => $shipment->order?->order_number
-                                ?? $shipment->fulfillment?->order?->order_number,
-                            'order_id' => $shipment->order_id,
-                            'shipment_number' => $shipment->shipment_number,
-                            'shipment_id' => $shipment->id,
-                        ],
+                        $payload,
+                        idempotencyKey: $key,
+                        correlationKey: $key,
                     );
                 } catch (\Throwable $e) {
                     Log::warning('notification.shipment_created_failed', [

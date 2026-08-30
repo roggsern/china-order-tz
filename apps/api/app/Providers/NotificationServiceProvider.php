@@ -20,7 +20,15 @@ use App\Services\Notifications\Providers\InAppNotificationProvider;
 use App\Services\Notifications\Providers\PushNotificationProvider;
 use App\Services\Notifications\Providers\SMSNotificationProvider;
 use App\Services\Notifications\Providers\WhatsAppNotificationProvider;
-use App\Services\Notifications\WhatsApp\MetaWhatsAppTemplateMapper;
+use App\Services\Notifications\WhatsApp\GhalaWebhookProcessor;
+use App\Services\Notifications\WhatsApp\GhalaWebhookReplayGuard;
+use App\Services\Notifications\WhatsApp\GhalaWebhookSignatureVerifier;
+use App\Services\Notifications\WhatsApp\GhalaWhatsAppClient;
+use App\Services\Notifications\WhatsApp\GhalaWhatsAppTemplateMapper;
+use App\Services\Notifications\WhatsApp\PickupLocationResolver;
+use App\Services\Notifications\WhatsApp\ShipmentDestinationResolver;
+use App\Services\Notifications\WhatsApp\WhatsAppAmountFormatter;
+use App\Services\Notifications\WhatsApp\WhatsAppDestinationPhone;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
@@ -34,7 +42,15 @@ class NotificationServiceProvider extends ServiceProvider
         $this->app->singleton(NotificationConfigurationService::class);
         $this->app->singleton(NotificationDispatcher::class);
         $this->app->singleton(NotificationPlatform::class);
-        $this->app->singleton(MetaWhatsAppTemplateMapper::class);
+        $this->app->singleton(WhatsAppAmountFormatter::class);
+        $this->app->singleton(WhatsAppDestinationPhone::class);
+        $this->app->singleton(PickupLocationResolver::class);
+        $this->app->singleton(ShipmentDestinationResolver::class);
+        $this->app->singleton(GhalaWhatsAppTemplateMapper::class);
+        $this->app->singleton(GhalaWhatsAppClient::class);
+        $this->app->singleton(GhalaWebhookSignatureVerifier::class);
+        $this->app->singleton(GhalaWebhookReplayGuard::class);
+        $this->app->singleton(GhalaWebhookProcessor::class);
 
         $this->app->singleton(InAppNotificationProvider::class);
         $this->app->singleton(EmailNotificationProvider::class);

@@ -6,21 +6,23 @@ use App\Enums\NotificationChannel;
 use App\Models\Notification;
 use App\Models\User;
 use App\Services\Notifications\Contracts\NotificationChannelInterface;
-use App\Services\Notifications\WhatsApp\MetaWhatsAppTemplateMapper;
-use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Http\Client\RequestException;
-use Illuminate\Support\Facades\Http;
+use App\Services\Notifications\WhatsApp\GhalaWhatsAppClient;
+use App\Services\Notifications\WhatsApp\GhalaWhatsAppTemplateMapper;
+use App\Services\Notifications\WhatsApp\WhatsAppDestinationPhone;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
 
 /**
- * WhatsApp channel — Meta Cloud API outbound transactional templates.
+ * WhatsApp channel — Ghala Developer API outbound transactional templates.
+ * Meta Cloud direct sending is not active.
  */
 class WhatsAppNotificationProvider implements NotificationChannelInterface
 {
     public function __construct(
-        private readonly MetaWhatsAppTemplateMapper $templates,
+        private readonly GhalaWhatsAppTemplateMapper $templates,
+        private readonly GhalaWhatsAppClient $client,
+        private readonly WhatsAppDestinationPhone $phones,
     ) {}
 
     public function channel(): string
@@ -30,7 +32,7 @@ class WhatsAppNotificationProvider implements NotificationChannelInterface
 
     public function providerKey(): string
     {
-        return (string) config('notifications.whatsapp.driver', 'meta_cloud');
+        return (string) config('notifications.whatsapp.driver', 'ghala');
     }
 
     public function isConfigured(): bool
@@ -39,12 +41,12 @@ class WhatsAppNotificationProvider implements NotificationChannelInterface
             return false;
         }
 
-        if ($this->providerKey() !== 'meta_cloud') {
+        if ($this->providerKey() !== 'ghala') {
             return false;
         }
 
         return filled(config('notifications.whatsapp.access_token'))
-            && filled(config('notifications.whatsapp.phone_number_id'));
+            && filled(config('notifications.whatsapp.base_url'));
     }
 
     /**
@@ -67,13 +69,11 @@ class WhatsAppNotificationProvider implements NotificationChannelInterface
                 return $this->failure('Customer missing');
             }
 
-            $phone = trim((string) ($customer->phone ?? ''));
-            if ($phone === '') {
-                return $this->failure('Customer phone missing');
-            }
+            $destination = $this->phones->normalize($customer->phone);
+            if ($destination === null) {
+                $raw = trim((string) ($customer->phone ?? ''));
 
-            if (! $this->isValidE164($phone)) {
-                return $this->failure('Invalid E.164 phone');
+                return $this->failure($raw === '' ? 'Customer phone missing' : 'Invalid WhatsApp destination phone');
             }
 
             $mapped = $this->templates->map($notification);
@@ -81,92 +81,36 @@ class WhatsAppNotificationProvider implements NotificationChannelInterface
                 return $this->failure('WhatsApp template mapping missing for event');
             }
 
-            $this->persistRecipientSnapshot($notification, $phone, $mapped);
-
-            $payload = [
-                'messaging_product' => 'whatsapp',
-                'to' => ltrim($phone, '+'),
-                'type' => 'template',
-                'template' => [
-                    'name' => $mapped['name'],
-                    'language' => [
-                        'code' => $mapped['language'],
-                    ],
-                ],
-            ];
-
-            if ($mapped['body_parameters'] !== []) {
-                $payload['template']['components'] = [
-                    [
-                        'type' => 'body',
-                        'parameters' => array_map(
-                            static fn (string $text): array => [
-                                'type' => 'text',
-                                'text' => $text,
-                            ],
-                            $mapped['body_parameters'],
-                        ),
-                    ],
-                ];
+            $idempotencyKey = trim((string) ($notification->idempotency_key ?? ''));
+            if ($idempotencyKey === '') {
+                $idempotencyKey = implode(':', array_filter([
+                    (string) $notification->event_type,
+                    (string) ($notification->data['order_id'] ?? $notification->id),
+                    'whatsapp',
+                ]));
             }
 
-            $version = trim((string) config('notifications.whatsapp.api_version', 'v21.0'));
-            $phoneNumberId = (string) config('notifications.whatsapp.phone_number_id');
-            $url = sprintf(
-                'https://graph.facebook.com/%s/%s/messages',
-                $version !== '' ? $version : 'v21.0',
-                $phoneNumberId,
+            $this->persistRecipientSnapshot($notification, $destination, $mapped);
+
+            $result = $this->client->sendTemplate(
+                $destination,
+                $mapped['name'],
+                $mapped['language'],
+                $mapped['body_parameters'],
+                $idempotencyKey,
             );
 
-            $timeout = max(1, (int) config('notifications.whatsapp.timeout', 10));
-            $connectTimeout = max(1, (int) config('notifications.whatsapp.connect_timeout', 5));
-
-            $response = Http::withToken((string) config('notifications.whatsapp.access_token'))
-                ->acceptJson()
-                ->asJson()
-                ->timeout($timeout)
-                ->connectTimeout($connectTimeout)
-                ->post($url, $payload);
-
-            if ($response->successful()) {
-                $messageId = data_get($response->json(), 'messages.0.id');
-                if (! is_string($messageId) || $messageId === '') {
-                    return $this->failure('Meta response missing message id');
-                }
+            if ($result['success']) {
+                $this->persistProviderIds($notification, $result);
 
                 return [
                     'success' => true,
-                    'provider_message_id' => $messageId,
+                    'provider_message_id' => $result['provider_message_id'],
                     'error' => null,
                 ];
             }
 
-            $metaMessage = data_get($response->json(), 'error.message');
-            $metaCode = data_get($response->json(), 'error.code');
-            $detail = is_string($metaMessage) && $metaMessage !== ''
-                ? $metaMessage
-                : 'Meta WhatsApp API error';
-
-            return $this->failure(sprintf(
-                'Meta HTTP %d%s: %s',
-                $response->status(),
-                is_numeric($metaCode) ? ' (code '.$metaCode.')' : '',
-                $detail,
-            ));
-        } catch (ConnectionException $e) {
-            Log::warning('notification.whatsapp.connection_failed', [
-                'notification_id' => $notification->id,
-                'error' => $this->sanitize($e->getMessage()),
-            ]);
-
-            return $this->failure('Meta connection/timeout: '.$this->sanitize($e->getMessage()));
-        } catch (RequestException $e) {
-            Log::warning('notification.whatsapp.request_failed', [
-                'notification_id' => $notification->id,
-                'error' => $this->sanitize($e->getMessage()),
-            ]);
-
-            return $this->failure('Meta request failed: '.$this->sanitize($e->getMessage()));
+            return $this->failure((string) ($result['error'] ?? 'Delivery failed'));
         } catch (Throwable $e) {
             Log::warning('notification.whatsapp.send_failed', [
                 'notification_id' => $notification->id,
@@ -175,11 +119,6 @@ class WhatsAppNotificationProvider implements NotificationChannelInterface
 
             return $this->failure($this->sanitize($e->getMessage()));
         }
-    }
-
-    private function isValidE164(string $phone): bool
-    {
-        return (bool) preg_match('/^\+[1-9]\d{6,14}$/', $phone);
     }
 
     /**
@@ -191,6 +130,24 @@ class WhatsAppNotificationProvider implements NotificationChannelInterface
         $data['whatsapp_recipient_masked'] = $this->maskPhone($phone);
         $data['whatsapp_template'] = $mapped['name'];
         $data['whatsapp_language'] = $mapped['language'];
+        $data['whatsapp_provider'] = 'ghala';
+
+        $notification->forceFill(['data' => $data])->save();
+    }
+
+    /**
+     * @param  array{provider_message_id: string|null, wa_message_id: string|null, status: string|null}  $result
+     */
+    private function persistProviderIds(Notification $notification, array $result): void
+    {
+        $data = is_array($notification->data) ? $notification->data : [];
+        if (filled($result['wa_message_id'])) {
+            $data['whatsapp_wa_message_id'] = $result['wa_message_id'];
+        }
+        if (filled($result['status'])) {
+            $data['whatsapp_status'] = $result['status'];
+        }
+        $data['whatsapp_provider_id'] = $result['provider_message_id'];
 
         $notification->forceFill(['data' => $data])->save();
     }
@@ -222,6 +179,11 @@ class WhatsAppNotificationProvider implements NotificationChannelInterface
         $token = (string) config('notifications.whatsapp.access_token', '');
         if ($token !== '') {
             $message = str_replace($token, '[redacted]', $message);
+        }
+
+        $secret = (string) config('notifications.whatsapp.webhook_secret', '');
+        if ($secret !== '') {
+            $message = str_replace($secret, '[redacted]', $message);
         }
 
         $message = preg_replace('/Bearer\s+\S+/i', 'Bearer [redacted]', $message) ?? $message;
