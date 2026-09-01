@@ -7,6 +7,7 @@ final class PriceBreakdown
     /**
      * @param  list<PriceStageResult>  $stages
      * @param  array<string, mixed>|null  $volumePricing
+     * @param  array<string, mixed>|null  $purchaseQuantity
      */
     public function __construct(
         public readonly string $productId,
@@ -17,6 +18,7 @@ final class PriceBreakdown
         public readonly string $lineTotal,
         public readonly array $stages,
         public readonly ?array $volumePricing = null,
+        public readonly ?array $purchaseQuantity = null,
     ) {}
 
     /**
@@ -36,6 +38,7 @@ final class PriceBreakdown
                 $this->stages,
             ),
             'volume_pricing' => $this->volumePricing,
+            'purchase_quantity' => $this->purchaseQuantity,
         ];
     }
 }

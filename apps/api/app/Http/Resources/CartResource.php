@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Cart;
+use App\Services\Purchasing\PresentPurchaseQuantity;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -42,6 +43,10 @@ class CartResource extends JsonResource
             ),
             'subtotal' => $subtotal,
             'total' => $subtotal,
+            'purchase_quantity_blockers' => $this->when(
+                $this->relationLoaded('items'),
+                fn () => app(PresentPurchaseQuantity::class)->blockersForCartItems($this->items),
+            ),
             'updated_at' => $this->updated_at,
         ];
     }

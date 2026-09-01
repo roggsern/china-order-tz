@@ -24,7 +24,8 @@ class QuoteCustomerProductPriceAction
         $validated = $request->validated();
 
         // Quote is request-quantity only. Do not read the customer's cart:
-        // volume-tier aggregation across variants is a cart/checkout concern.
+        // volume-tier aggregation and purchase-quantity legality across variants
+        // are cart/checkout concerns. Quote purchase_quantity uses this request qty.
         return $this->resolvePrice->handle(
             $product->loadMissing(['productType', 'variants']),
             new PriceQuoteInput(

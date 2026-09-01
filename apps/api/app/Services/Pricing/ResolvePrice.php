@@ -8,6 +8,7 @@ use App\Services\Pricing\DTOs\CommercePricingContext;
 use App\Services\Pricing\DTOs\PriceBreakdown;
 use App\Services\Pricing\DTOs\PriceQuoteInput;
 use App\Services\Pricing\DTOs\PriceStageResult;
+use App\Services\Purchasing\PresentPurchaseQuantity;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -17,7 +18,8 @@ use Illuminate\Validation\ValidationException;
  * Public breakdown still exposes base → configuration → MOQ → reserved stages.
  *
  * Public PDP quote uses only the requested quantity. It does not inspect the
- * authenticated cart, so sibling variant lines are not aggregated here.
+ * authenticated cart, so sibling variant lines are not aggregated here for
+ * volume pricing or purchase-quantity presentation.
  * Cart/checkout/order apply same-product aggregation via ResolveCartPurchasable.
  */
 class ResolvePrice
@@ -25,6 +27,7 @@ class ResolvePrice
     public function __construct(
         private readonly CommercePricingResolver $commercePricingResolver,
         private readonly PresentVolumePricing $presentVolumePricing,
+        private readonly PresentPurchaseQuantity $presentPurchaseQuantity,
     ) {}
 
     public function handle(Product $product, PriceQuoteInput $input): PriceBreakdown
@@ -102,6 +105,12 @@ class ResolvePrice
             $resolved->currency,
         );
 
+        // Quote eligible quantity is the request quantity only — never the cart aggregate.
+        $purchaseQuantity = $this->presentPurchaseQuantity->present(
+            $product,
+            $input->quantity,
+        );
+
         return new PriceBreakdown(
             productId: $product->id,
             configurationId: $configuration?->id,
@@ -111,6 +120,7 @@ class ResolvePrice
             lineTotal: $lineTotal,
             stages: $stages,
             volumePricing: $volumePricing?->toArray(),
+            purchaseQuantity: $purchaseQuantity?->toArray(),
         );
     }
 

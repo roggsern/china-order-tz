@@ -9,6 +9,7 @@ use App\Services\Inventory\StockResolver;
 use App\Services\Pricing\CommercePricingResolver;
 use App\Services\Pricing\DTOs\CommercePricingContext;
 use App\Services\Pricing\PresentVolumePricing;
+use App\Services\Purchasing\PresentPurchaseQuantity;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -65,6 +66,7 @@ class CartItemResource extends JsonResource
             'product' => $productPayload,
             'variant' => $variantResource,
             'volume_pricing' => $this->volumePricing(),
+            'purchase_quantity' => $this->purchaseQuantity(),
         ];
     }
 
@@ -108,5 +110,24 @@ class CartItemResource extends JsonResource
             max(1, (int) $this->quantity),
             (string) ($this->currency ?? 'TZS'),
         )?->toArray();
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function purchaseQuantity(): ?array
+    {
+        $product = $this->relationLoaded('product') ? $this->product : null;
+        if ($product === null) {
+            return null;
+        }
+
+        $siblings = $this->relationLoaded('cart') && $this->cart !== null && $this->cart->relationLoaded('items')
+            ? $this->cart->items
+            : collect([$this->resource]);
+
+        $eligible = CartProductPricingQuantity::forProduct($siblings, (string) $this->product_id);
+
+        return app(PresentPurchaseQuantity::class)->present($product, $eligible)?->toArray();
     }
 }
