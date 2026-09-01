@@ -2,12 +2,17 @@
 
 namespace Tests\Feature\ProductShipping;
 
+use App\Enums\ProductLifecycleStatus;
 use App\Models\Admin;
+use App\Models\CatalogProductType;
+use App\Models\Category;
 use App\Models\CommerceChannel;
+use App\Models\Department;
 use App\Models\Product;
 use App\Models\ProductShippingOption;
+use App\Models\Supplier;
 use App\Models\User;
-use App\Enums\ProductLifecycleStatus;
+use App\Services\ProductShipping\ProductShippingOptionEngine;
 use Database\Seeders\ProductTypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -143,7 +148,7 @@ class ProductShippingOptionEngineTest extends TestCase
             'product_id' => $product->id,
         ]);
 
-        app(\App\Services\ProductShipping\ProductShippingOptionEngine::class)
+        app(ProductShippingOptionEngine::class)
             ->syncLegacyColumns($product->fresh());
 
         $product->refresh();
@@ -156,19 +161,24 @@ class ProductShippingOptionEngineTest extends TestCase
         $this->seed(ProductTypeSeeder::class);
         Sanctum::actingAs(Admin::factory()->create());
 
-        $category = \App\Models\Category::factory()->create();
-        $cpt = \App\Models\CatalogProductType::factory()->create([
-            'subcategory_id' => $category->id,
+        $department = Department::factory()->create();
+        $category = Category::factory()->forDepartment($department)->create(['parent_id' => null]);
+        $subcategory = Category::factory()->forDepartment($department)->create([
+            'parent_id' => $category->id,
+        ]);
+        $cpt = CatalogProductType::factory()->create([
+            'subcategory_id' => $subcategory->id,
             'is_active' => true,
         ]);
 
         $response = $this->postJson('/api/v1/admin/products', [
             'name' => 'Shipping Options Phone',
-            'category_id' => $category->id,
+            'category_id' => $subcategory->id,
             'catalog_product_type_id' => $cpt->id,
             'commerce_channel_id' => CommerceChannel::query()->where('code', 'CHINA_IMPORT')->value('id'),
+            'supplier_id' => Supplier::factory()->create(['is_active' => true, 'country' => 'CN'])->id,
             'price' => 200000,
-            'status' => true,
+            'status' => 'draft',
             'stock_quantity' => 3,
             'shipping_options' => [
                 [
