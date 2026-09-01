@@ -16,6 +16,7 @@ use App\Services\Inventory\DTOs\ReservationContext;
 use App\Services\Inventory\ReservationService;
 use App\Services\Promotions\DiscountResolver;
 use App\Services\Promotions\DTOs\DiscountResolution;
+use App\Services\Purchasing\AssertPurchaseQuantity;
 use App\Services\Storefront\VisitorIdentityService;
 use App\Support\Http\ApiResponse;
 use Illuminate\Support\Facades\DB;
@@ -37,6 +38,7 @@ class CheckoutOrchestrator
         private readonly DiscountResolver $discountResolver,
         private readonly ReservationService $reservationService,
         private readonly VisitorIdentityService $visitorIdentity,
+        private readonly AssertPurchaseQuantity $assertPurchaseQuantity,
     ) {}
 
     /**
@@ -325,6 +327,8 @@ class CheckoutOrchestrator
                 'currency' => $resolved['currency'],
             ])->save();
         }
+
+        $this->assertPurchaseQuantity->assertCart($cart);
 
         return [
             'subtotal' => $subtotal,

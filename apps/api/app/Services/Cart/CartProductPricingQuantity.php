@@ -5,10 +5,14 @@ namespace App\Services\Cart;
 use App\Models\CartItem;
 
 /**
- * Same-product quantity used only for volume-tier eligibility.
+ * Same-product_id quantity map for cart lines.
+ *
+ * Used as aggregation infrastructure for volume-tier eligibility and for
+ * purchase-quantity (MOQ / increment) legality. Those meanings stay separate:
+ * this class only sums quantities.
  *
  * Inventory, shipping, reservations, and fulfillment remain per line / SKU.
- * CommercePricingResolver must not query cart state — callers pass this value
+ * CommercePricingResolver must not query cart state — callers pass the map
  * through as the resolver's tier-eligibility quantity.
  */
 final class CartProductPricingQuantity

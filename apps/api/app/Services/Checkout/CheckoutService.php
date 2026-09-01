@@ -11,6 +11,7 @@ use App\Services\Cart\CartProductPricingQuantity;
 use App\Services\Cart\ResolveCartPurchasable;
 use App\Services\Commerce\CommerceChannelResolver;
 use App\Services\Profile\CustomerAddressService;
+use App\Services\Purchasing\AssertPurchaseQuantity;
 use App\Support\Http\ApiResponse;
 
 /**
@@ -24,6 +25,7 @@ class CheckoutService
         private readonly ResolveCartPurchasable $resolveCartPurchasable,
         private readonly CommerceChannelResolver $commerceChannelResolver,
         private readonly CustomerAddressService $customerAddresses,
+        private readonly AssertPurchaseQuantity $assertPurchaseQuantity,
     ) {}
 
     /**
@@ -84,6 +86,8 @@ class CheckoutService
 
     /**
      * Re-price every line through ResolveCartPurchasable (CommercePricingResolver + stock).
+     * Called only from prepare() — GET /checkout and POST /checkout/prepare.
+     * Those are checkout surfaces, not cart construction; hard MOQ is correct here.
      */
     private function refreshLinePricing(Cart $cart): string
     {
@@ -116,6 +120,8 @@ class CheckoutService
                 'currency' => $resolved['currency'],
             ])->save();
         }
+
+        $this->assertPurchaseQuantity->assertCart($cart);
 
         return $subtotal;
     }

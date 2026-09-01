@@ -7,16 +7,19 @@ use App\Enums\ProductCondition;
 use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductPricingModel;
 use App\Enums\ProductVisibility;
+use App\Enums\ShippingMethod;
 use App\Models\Concerns\HasUuidPrimaryKey;
 use App\Models\Concerns\InvalidatesChinaStorefrontDiscovery;
+use App\Services\Commerce\CommerceChannelResolver;
+use App\Services\ProductPurchasability\ProductPurchasabilityPolicy;
 use Database\Factories\ProductFactory;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Model;
 
 class Product extends Model
 {
@@ -40,6 +43,8 @@ class Product extends Model
         'short_description',
         'price',
         'pricing_model',
+        'minimum_order_quantity',
+        'order_increment',
         'air_shipping_price',
         'sea_shipping_price',
         'compare_at_price',
@@ -61,6 +66,8 @@ class Product extends Model
         return [
             'price' => 'decimal:2',
             'pricing_model' => ProductPricingModel::class,
+            'minimum_order_quantity' => 'integer',
+            'order_increment' => 'integer',
             'product_condition' => ProductCondition::class,
             'air_shipping_price' => 'decimal:2',
             'sea_shipping_price' => 'decimal:2',
@@ -113,7 +120,7 @@ class Product extends Model
         return $this->belongsTo(ProductType::class);
     }
 
-  /**
+    /**
      * Taxonomy Catalog Product Type (ADR 052).
      * Department → Category → Subcategory → CatalogProductType → Product.
      * Distinct from configuration-schema productType() (Configuration Template).
@@ -283,7 +290,7 @@ class Product extends Model
      */
     public function isPurchasable(): bool
     {
-        return app(\App\Services\ProductPurchasability\ProductPurchasabilityPolicy::class)
+        return app(ProductPurchasabilityPolicy::class)
             ->isPurchasable($this);
     }
 
@@ -292,7 +299,7 @@ class Product extends Model
      */
     public function isVisible(): bool
     {
-        return app(\App\Services\ProductPurchasability\ProductPurchasabilityPolicy::class)
+        return app(ProductPurchasabilityPolicy::class)
             ->isVisible($this);
     }
 
@@ -331,7 +338,7 @@ class Product extends Model
      */
     public function requiresChinaShipping(): bool
     {
-        $channel = app(\App\Services\Commerce\CommerceChannelResolver::class)
+        $channel = app(CommerceChannelResolver::class)
             ->resolveProductChannel($this);
 
         return CommerceChannelCode::tryFrom((string) $channel->code)
@@ -345,7 +352,7 @@ class Product extends Model
         if ($this->relationLoaded('shippingOptions')) {
             $option = $this->shippingOptions->first(
                 function (ProductShippingOption $o) use ($method): bool {
-                    $mode = $o->transport_mode instanceof \App\Enums\ShippingMethod
+                    $mode = $o->transport_mode instanceof ShippingMethod
                         ? $o->transport_mode->value
                         : (string) $o->transport_mode;
 

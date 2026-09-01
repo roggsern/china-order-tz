@@ -7,6 +7,7 @@ use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\User;
 use App\Services\Commerce\CommerceChannelResolver;
+use App\Services\Purchasing\AssertPurchaseQuantity;
 use Illuminate\Support\Facades\DB;
 
 class CartService
@@ -14,6 +15,7 @@ class CartService
     public function __construct(
         private readonly ResolveCartPurchasable $resolveCartPurchasable,
         private readonly CommerceChannelResolver $commerceChannelResolver,
+        private readonly AssertPurchaseQuantity $assertPurchaseQuantity,
     ) {}
 
     /**
@@ -42,6 +44,11 @@ class CartService
             $data['quantity'],
             $data['currency'] ?? 'TZS',
             $data['shipping_method'] ?? null,
+        );
+
+        $this->assertPurchaseQuantity->assertLegal(
+            $resolved['product'],
+            (int) $data['quantity'],
         );
 
         $cart = DB::transaction(function () use ($user, $resolved, $data): Cart {

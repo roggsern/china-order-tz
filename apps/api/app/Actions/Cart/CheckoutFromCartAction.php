@@ -15,6 +15,14 @@ use App\Services\Inventory\StockResolver;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * LEGACY / UNREACHABLE. Not bound to HTTP routes or OrderEngine.
+ *
+ * If this action is ever routed or reused, it MUST validate purchase quantity
+ * through AssertPurchaseQuantity / CheckoutOrchestrator (current product rules,
+ * same-product aggregate). Do not create orders from a cart that skips that
+ * authority. This slice does not add production behavior to dead code.
+ */
 class CheckoutFromCartAction
 {
     public function __construct(
