@@ -156,7 +156,7 @@ class QuoteCartPricingParityTest extends TestCase
      */
     private function makeSimpleProduct(array $overrides = [], int $stock = 10): Product
     {
-        $product = Product::factory()->create(array_merge([
+        $product = Product::factory()->tzLocal()->create(array_merge([
             'price' => 10000,
             'is_active' => true,
             'is_demo' => false,
@@ -184,7 +184,7 @@ class QuoteCartPricingParityTest extends TestCase
      */
     private function makeVariantProduct(float $retail, int $stock = 10): array
     {
-        $product = Product::factory()->create([
+        $product = Product::factory()->tzLocal()->create([
             'price' => 0,
             'is_active' => true,
             'is_demo' => false,

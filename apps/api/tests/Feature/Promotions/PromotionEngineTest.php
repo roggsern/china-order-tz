@@ -10,7 +10,6 @@ use App\Enums\PromotionType;
 use App\Models\Admin;
 use App\Models\Cart;
 use App\Models\CartItem;
-use App\Models\CustomerProfile;
 use App\Models\CustomerTag;
 use App\Models\OrderDiscountSnapshot;
 use App\Models\Promotion;
@@ -22,7 +21,6 @@ use App\Services\Crm\CustomerSegmentationService;
 use Database\Factories\Support\CatalogCartFixture;
 use Database\Seeders\CustomerTagSeeder;
 use Database\Seeders\RoleSeeder;
-use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -117,7 +115,9 @@ class PromotionEngineTest extends TestCase
             ->assertJsonPath('data.applied_promotion_code', 'WELCOME10')
             ->assertJsonPath('data.grand_total', '18000.00');
 
-        $this->applyCheckoutShippingChoice($sessionId);
+        $this->applyCheckoutShippingChoice($sessionId, [
+            'shipping_choice' => 'self_pickup',
+        ]);
 
         $orderId = $this->postJson("/api/v1/orders/from-checkout/{$sessionId}")
             ->assertCreated()
@@ -205,7 +205,9 @@ class PromotionEngineTest extends TestCase
             'checkout_session_id' => $sessionId,
         ])->assertOk()->assertJsonPath('data.discount_total', '1000.00');
 
-        $this->applyCheckoutShippingChoice($sessionId);
+        $this->applyCheckoutShippingChoice($sessionId, [
+            'shipping_choice' => 'self_pickup',
+        ]);
         $orderId = $this->postJson("/api/v1/orders/from-checkout/{$sessionId}")->assertCreated()->json('data.id');
         $this->assertDatabaseHas('promotion_usages', ['promotion_id' => $promoId, 'order_id' => $orderId]);
 

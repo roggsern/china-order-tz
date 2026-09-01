@@ -11,10 +11,10 @@ use App\Models\CatalogAttribute;
 use App\Models\CatalogAttributeOption;
 use App\Models\CatalogProductType;
 use App\Models\Category;
+use App\Models\ChinaCommercialStock;
 use App\Models\Department;
 use App\Models\Product;
 use App\Models\ProductVariant;
-use App\Models\VariantInventory;
 use App\Models\VariantPrice;
 use App\Services\Pricing\CommercePricingResolver;
 use App\Services\Pricing\DTOs\CommercePricingContext;
@@ -89,12 +89,12 @@ class PricingSourceOfTruthLockTest extends TestCase
             'minimum_quantity' => 1,
             'is_active' => true,
         ]);
-        VariantInventory::query()->create([
+        ChinaCommercialStock::query()->create([
+            'product_id' => $product->id,
             'product_variant_id' => $variant->id,
-            'warehouse_code' => 'MAIN',
-            'on_hand' => 5,
-            'reserved' => 0,
-            'is_active' => true,
+            'available_quantity' => 5,
+            'reserved_quantity' => 0,
+            'ordered_quantity' => 0,
         ]);
 
         return compact('product', 'variant', 'color', 'black');
