@@ -158,6 +158,8 @@ export type ProductConfiguration = {
   isPurchasable?: boolean;
 };
 
+import type { VolumePricing } from '@/src/features/pricing/mapVolumePricing';
+
 /** POST /products/{slug}/quote — authoritative priced unit for a configuration. */
 export type ProductQuote = {
   productId: string;
@@ -166,6 +168,7 @@ export type ProductQuote = {
   currency: string | null;
   unitPrice: string | number | null;
   lineTotal: string | number | null;
+  volumePricing: VolumePricing | null;
 };
 
 /** attributeId → valueId selections sent as selections[attr]=value */

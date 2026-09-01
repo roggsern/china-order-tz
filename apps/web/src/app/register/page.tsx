@@ -32,10 +32,10 @@ export default function RegisterPage() {
           </>
         ),
         subtitle:
-          "Create an account to unlock wholesale pricing, secure checkout, and trusted shipping from China to East Africa.",
+          "Create an account to unlock bulk pricing, secure checkout, and trusted shipping from China to East Africa.",
         trustItems: [
           { label: "Secure Checkout" },
-          { label: "Wholesale Pricing" },
+          { label: "Bulk Pricing" },
           { label: "Trusted Suppliers" },
           { label: "Fast Customer Support" },
         ],

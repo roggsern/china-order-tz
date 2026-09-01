@@ -6,6 +6,12 @@ import { PriceText } from '@/src/shared/ui/PriceText';
 import { listImageProps } from '@/src/shared/media/listImageProps';
 import { colors, radius, spacing, typography } from '@/src/shared/theme';
 import type { CartItem } from '../models/types';
+import {
+  parseVolumeMoney,
+  remainingToNextTier,
+  volumePricingUnlocked,
+} from '@/src/features/pricing/mapVolumePricing';
+import { formatCustomerMoney } from '@/src/shared/utils/formatCustomerMoney';
 
 type Props = {
   item: CartItem;
@@ -31,6 +37,10 @@ export function CartLineItemCard({
 
   const journeyTone =
     item.commerceChannelCode === 'TZ_LOCAL' ? 'success' : 'brand';
+
+  const savings = parseVolumeMoney(item.volumePricing?.savings_total);
+  const remaining = remainingToNextTier(item.volumePricing);
+  const unlocked = volumePricingUnlocked(item.volumePricing);
 
   return (
     <Card elevated style={styles.card}>
@@ -80,6 +90,33 @@ export function CartLineItemCard({
             currency={item.currency}
             accessibilityLabelPrefix="Line total"
           />
+
+          {item.volumePricing ? (
+            <View style={styles.bulk}>
+              <Text style={styles.bulkTitle}>Bulk Pricing</Text>
+              <Text style={styles.bulkBody}>
+                {item.volumePricing.eligible_quantity} total{' '}
+                {item.volumePricing.eligible_quantity === 1 ? 'piece' : 'pieces'}
+                {unlocked ? ' — bulk tier unlocked' : ''}
+              </Text>
+              {savings > 0.001 ? (
+                <Text style={styles.bulkSave}>
+                  You save {formatCustomerMoney(item.volumePricing.savings_total, item.currency)}
+                </Text>
+              ) : null}
+              {remaining != null && item.volumePricing.aggregates_variants ? (
+                <Text style={styles.bulkNext}>
+                  Add {remaining === 1 ? '1 more' : `${remaining} more`} of this product —
+                  any variant — to unlock the next bulk tier.
+                </Text>
+              ) : remaining != null ? (
+                <Text style={styles.bulkNext}>
+                  Add {remaining === 1 ? '1 more' : `${remaining} more`} to unlock the next
+                  bulk tier.
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
 
           <View style={styles.actions}>
             <View style={styles.qty}>
@@ -177,6 +214,31 @@ const styles = StyleSheet.create({
   },
   each: {
     ...typography.caption,
+  },
+  bulk: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  bulkTitle: {
+    ...typography.caption,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  bulkBody: {
+    marginTop: spacing.xxs,
+    ...typography.body,
+  },
+  bulkSave: {
+    marginTop: spacing.xxs,
+    ...typography.bodyStrong,
+    color: colors.success,
+  },
+  bulkNext: {
+    marginTop: spacing.xxs,
+    ...typography.caption,
+    color: colors.warning,
   },
   actions: {
     marginTop: spacing.md,

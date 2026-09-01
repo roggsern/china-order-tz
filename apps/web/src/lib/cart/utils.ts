@@ -9,6 +9,7 @@ import {
 } from "@/lib/catalog/variants";
 import { resolveVariantCartImage } from "@/lib/catalog/storefront-variant-media";
 import { calculateOrderSummary } from "@/lib/shipping/smart-engine";
+import { parseVolumeMoney } from "@/lib/pricing/volume-pricing";
 
 export { createCartItemId };
 
@@ -91,6 +92,9 @@ export function productToCartSnapshot(
 }
 
 export function getLineProductSavings(item: CartLineItem): number {
+  if (item.volumePricing) {
+    return parseVolumeMoney(item.volumePricing.savings_total);
+  }
   const compareAt = item.compareAtUnitPrice;
   if (typeof compareAt !== "number" || !Number.isFinite(compareAt) || compareAt <= item.unitPrice) {
     return 0;

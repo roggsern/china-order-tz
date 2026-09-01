@@ -30,6 +30,9 @@ export function CartTotals({ cart }: Props) {
           accessibilityLabelPrefix="Total"
         />
       </View>
+      <Text style={styles.shippingNote}>
+        Bulk discounts apply to product prices only. Shipping is calculated separately.
+      </Text>
     </Card>
   );
 }
@@ -73,5 +76,9 @@ const styles = StyleSheet.create({
   totalLabel: {
     ...typography.title,
     fontSize: 16,
+  },
+  shippingNote: {
+    marginTop: spacing.sm,
+    ...typography.caption,
   },
 });

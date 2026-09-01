@@ -220,3 +220,66 @@ test("mapServerCartItems falls back to product primary when variant media is mis
   const [line] = mapServerCartItems(cart);
   assert.equal(line.image.url, productPrimary);
 });
+
+test("mapServerCartItems maps server volume_pricing and compare-at without inventing payable price", () => {
+  const cart: ServerCart = {
+    id: "cart-1",
+    items: [
+      {
+        id: "item-1",
+        product_id: BASE_PRODUCT_ID,
+        product_variant_id: "019f7a6e-4d46-7376-aca4-aaaaaaaaaaaa",
+        quantity: 3,
+        unit_price: "8000.00",
+        price_snapshot: "8000.00",
+        product: {
+          id: BASE_PRODUCT_ID,
+          slug: "blouse",
+          name: "Blouse",
+          commerce_channel_code: "TZ_LOCAL",
+        },
+        volume_pricing: {
+          eligible_quantity: 10,
+          aggregates_variants: true,
+          current_tier: {
+            min_quantity: 10,
+            unit_price: "8000.00",
+            type: "fixed_unit",
+            discount_percent: null,
+            scope: "product",
+          },
+          next_tier: {
+            min_quantity: 50,
+            unit_price: "7000.00",
+            type: "fixed_unit",
+            discount_percent: null,
+            scope: "product",
+          },
+          quantity_to_next_tier: 40,
+          base_unit_price: "10000.00",
+          resolved_unit_price: "8000.00",
+          savings_per_unit: "2000.00",
+          savings_total: "6000.00",
+          currency: "TZS",
+          tiers: [
+            {
+              min_quantity: 10,
+              unit_price: "8000.00",
+              type: "fixed_unit",
+              discount_percent: null,
+              scope: "product",
+            },
+          ],
+        },
+      },
+    ],
+  };
+
+  const [mapped] = mapServerCartItems(cart);
+  assert.equal(mapped.unitPrice, 8000);
+  assert.equal(mapped.compareAtUnitPrice, 10000);
+  assert.equal(mapped.volumePricing?.eligible_quantity, 10);
+  assert.equal(mapped.volumePricing?.quantity_to_next_tier, 40);
+  assert.equal(mapped.volumePricing?.resolved_unit_price, "8000.00");
+  assert.equal(mapped.volumePricing?.savings_total, "6000.00");
+});

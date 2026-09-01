@@ -10,6 +10,8 @@ import {
 } from "@/lib/cart/display-totals";
 import { CartEmptyState } from "./CartEmptyState";
 import { CartItemRow } from "./CartItemRow";
+import { CartProductBulkBanner } from "./CartProductBulkBanner";
+import { cartLineProductKey, groupCartLinesByCatalogProduct } from "@/lib/cart/group-by-product";
 import { CartFrequentlyBoughtTogether } from "./CartFrequentlyBoughtTogether";
 import { CartMobileStickyCheckout } from "./CartMobileStickyCheckout";
 import { OrderSummary } from "./OrderSummary";
@@ -65,8 +67,16 @@ export function CartPageContent() {
             <section aria-label="Cart items" className="min-w-0 space-y-4">
               {hasItems ? (
                 <AnimatePresence initial={false}>
-                  {items.map((item) => (
-                    <CartItemRow key={item.id} item={item} />
+                  {groupCartLinesByCatalogProduct(items).map((group) => (
+                    <div
+                      key={cartLineProductKey(group[0]!)}
+                      className="space-y-3"
+                    >
+                      <CartProductBulkBanner items={group} />
+                      {group.map((item) => (
+                        <CartItemRow key={item.id} item={item} />
+                      ))}
+                    </div>
                   ))}
                 </AnimatePresence>
               ) : (

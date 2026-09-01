@@ -22,7 +22,7 @@ export function CartItemMoqHint({ hint, className = "" }: CartItemMoqHintProps) 
     >
       <p className="text-sm font-semibold leading-snug text-emerald-800">
         Add {hint.remainingQuantity} more{" "}
-        {hint.remainingQuantity === 1 ? "item" : "items"} to unlock wholesale pricing and
+        {hint.remainingQuantity === 1 ? "item" : "items"} to unlock bulk pricing and
         save {formatPrice(hint.totalSavings)}.
       </p>
       <p className="mt-1 text-xs text-emerald-700">
@@ -56,7 +56,7 @@ export function WholesaleUnlockedCard({
       <div className="border-b border-emerald-100 bg-emerald-100/70 px-4 py-3">
         <p className="text-base font-bold text-emerald-900">
           <span aria-hidden>🎉 </span>
-          Wholesale Pricing Unlocked
+          Bulk Pricing Unlocked
         </p>
       </div>
 

@@ -149,4 +149,33 @@ describe('resolveDisplayedProductPrice', () => {
     expect(displayed.currency).toBe('USD');
     expect(displayed.source).toBe('quote');
   });
+
+  it('uses server quote unit price for simple products', () => {
+    const quote = {
+      unitPrice: '8000.00',
+      currency: 'TZS',
+      lineTotal: '16000.00',
+      quantity: 2,
+      configurationId: null,
+      volumePricing: null,
+    } as ProductQuote;
+
+    expect(
+      resolveDisplayedProductPrice({
+        product,
+        configuration: {
+          hasConfigurations: false,
+          isComplete: true,
+          matchedConfigurationId: null,
+          matchedUnitPrice: null,
+        } as ProductConfiguration,
+        quote,
+        quoteLoading: false,
+      }),
+    ).toEqual({
+      amount: '8000.00',
+      currency: 'TZS',
+      source: 'quote',
+    });
+  });
 });

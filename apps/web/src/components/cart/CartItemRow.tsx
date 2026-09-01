@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import type { CartLineItem } from "@/lib/types/cart";
@@ -12,20 +12,15 @@ import {
   isChinaImportCartLine,
 } from "@/lib/cart/display-totals";
 import { getLineProductSavings, getLineTotal } from "@/lib/cart/utils";
-import {
-  discoverNextMoqTier,
-  quoteCartLine,
-  type CartMoqHint,
-} from "@/lib/cart/quote";
 import { ProductImageDisplay } from "@/components/catalog/ProductImageDisplay";
 import { useCartActions } from "@/lib/cart/context";
 import { CartItemShippingSelector, LocalDeliveryBadge } from "./CartItemShippingSelector";
 import { CartItemShippingSummary } from "./CartItemShippingSummary";
 import { CartItemQuantityControl } from "./CartItemQuantityControl";
 import { CartItemConfigurationSummary } from "./CartItemConfigurationSummary";
-import { MoqStatusCard } from "./CartItemMoqHint";
 import { CloseIcon } from "@/components/home/icons";
 import { showCartRemovedToast } from "@/lib/customer/customer-toast";
+import { parseVolumeMoney } from "@/lib/pricing/volume-pricing";
 
 interface CartItemRowProps {
   item: CartLineItem;
@@ -55,18 +50,20 @@ function cartItemRowPropsAreEqual(prev: CartItemRowProps, next: CartItemRowProps
     a.stock === b.stock &&
     a.configurationLabel === b.configurationLabel &&
     a.configurationSku === b.configurationSku &&
+    a.volumePricing?.eligible_quantity === b.volumePricing?.eligible_quantity &&
+    a.volumePricing?.resolved_unit_price === b.volumePricing?.resolved_unit_price &&
+    a.volumePricing?.quantity_to_next_tier === b.volumePricing?.quantity_to_next_tier &&
+    a.volumePricing?.current_tier?.min_quantity === b.volumePricing?.current_tier?.min_quantity &&
     JSON.stringify(a.selectedAttributes ?? []) === JSON.stringify(b.selectedAttributes ?? [])
   );
 }
 
 function CartItemRowComponent({ item }: CartItemRowProps) {
-  const { updateQuantity, updateLinePricing, removeItem, saveForLater } = useCartActions();
+  const { updateQuantity, removeItem, saveForLater } = useCartActions();
   const origin = getOriginLabel(item.origin);
   const [isUpdating, setIsUpdating] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [moqHint, setMoqHint] = useState<CartMoqHint | null>(null);
-  const quoteRequestRef = useRef(0);
 
   const maxQuantity = Math.min(item.stock, 99);
   const lineTotal = getLineTotal(item);
@@ -74,65 +71,8 @@ function CartItemRowComponent({ item }: CartItemRowProps) {
   const itemTotal =
     lineTotal + (item.origin === "tz" || isChinaImport ? 0 : item.shippingCost);
   const lineSavings = getLineProductSavings(item);
-  const hasConfiguration = Boolean(item.configurationId);
-
-  const refreshQuote = useCallback(
-    async (quantity: number) => {
-      if (!item.configurationId) {
-        setMoqHint(null);
-        return;
-      }
-
-      const requestId = ++quoteRequestRef.current;
-      setIsUpdating(true);
-
-      try {
-        const priced = await quoteCartLine({
-          slug: item.slug,
-          configurationId: item.configurationId,
-          quantity,
-        });
-
-        if (requestId !== quoteRequestRef.current) return;
-
-        updateLinePricing(item.id, {
-          unitPrice: priced.unitPrice,
-          compareAtUnitPrice: priced.compareAtUnitPrice,
-        });
-
-        const hint = await discoverNextMoqTier({
-          slug: item.slug,
-          configurationId: item.configurationId,
-          currentQuantity: quantity,
-          currentUnitPrice: priced.unitPrice,
-          stock: item.stock,
-        });
-
-        if (requestId !== quoteRequestRef.current) return;
-        setMoqHint(hint);
-      } catch {
-        if (requestId === quoteRequestRef.current) {
-          setMoqHint(null);
-        }
-      } finally {
-        if (requestId === quoteRequestRef.current) {
-          setIsUpdating(false);
-        }
-      }
-    },
-    [item.configurationId, item.id, item.slug, item.stock, updateLinePricing],
-  );
-
-  useEffect(() => {
-    if (!hasConfiguration) return;
-    void refreshQuote(item.quantity);
-    // Refresh on mount / configuration identity only — qty changes call refresh explicitly.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasConfiguration, item.configurationId, item.id]);
-
-  useEffect(() => {
-    setIsUpdating(false);
-  }, [item.quantity, item.shippingCost, item.shippingMethod, item.unitPrice]);
+  const serverSavings = parseVolumeMoney(item.volumePricing?.savings_total);
+  const displaySavings = serverSavings > 0.001 ? serverSavings : lineSavings;
 
   const handleQuantityChange = (nextQuantity: number) => {
     setErrorMessage(null);
@@ -144,13 +84,11 @@ function CartItemRowComponent({ item }: CartItemRowProps) {
 
     setIsUpdating(true);
     updateQuantity(item.id, nextQuantity);
-
-    if (hasConfiguration) {
-      void refreshQuote(nextQuantity);
-    } else {
-      setIsUpdating(false);
-    }
   };
+
+  useEffect(() => {
+    setIsUpdating(false);
+  }, [item.quantity, item.unitPrice, item.volumePricing?.eligible_quantity]);
 
   const handleRemove = () => {
     removeItem(item.id);
@@ -244,7 +182,7 @@ function CartItemRowComponent({ item }: CartItemRowProps) {
             <p className="text-lg font-extrabold tabular-nums text-red-600">
               {formatPrice(item.unitPrice)}
             </p>
-            {lineSavings > 0 &&
+            {displaySavings > 0 &&
             typeof item.compareAtUnitPrice === "number" &&
             item.compareAtUnitPrice > item.unitPrice ? (
               <p className="pb-0.5 text-sm font-medium text-zinc-400 line-through">
@@ -252,7 +190,7 @@ function CartItemRowComponent({ item }: CartItemRowProps) {
               </p>
             ) : null}
             <p className="pb-0.5 text-xs text-zinc-500">
-              {lineSavings > 0 ? "wholesale · per unit" : "per unit"}
+              {displaySavings > 0 ? "bulk price · per unit" : "per unit"}
             </p>
           </div>
         </div>
@@ -277,19 +215,10 @@ function CartItemRowComponent({ item }: CartItemRowProps) {
           {item.quantity >= maxQuantity && !errorMessage && (
             <p className="mt-2 text-xs text-zinc-500">Maximum quantity reached.</p>
           )}
-          <MoqStatusCard
-            className="mt-3 max-w-sm"
-            unlocked={
-              lineSavings > 0
-                ? { savingsAmount: lineSavings, unitPrice: item.unitPrice }
-                : null
-            }
-            hint={moqHint}
-          />
         </div>
 
         <div className="sm:min-w-[14rem] sm:text-left">
-          {lineSavings > 0 && typeof item.compareAtUnitPrice === "number" ? (
+          {displaySavings > 0 && typeof item.compareAtUnitPrice === "number" ? (
             <dl className="space-y-2 rounded-2xl border border-emerald-200 bg-emerald-50/50 px-4 py-3 text-sm">
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-zinc-600">Products (original subtotal)</dt>
@@ -298,9 +227,9 @@ function CartItemRowComponent({ item }: CartItemRowProps) {
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <dt className="font-medium text-emerald-800">Wholesale Discount</dt>
+                <dt className="font-medium text-emerald-800">Bulk Discount</dt>
                 <dd className="font-semibold tabular-nums text-emerald-700">
-                  −{formatPrice(lineSavings)}
+                  −{formatPrice(displaySavings)}
                 </dd>
               </div>
               {!isChinaImport && item.origin !== "tz" ? (

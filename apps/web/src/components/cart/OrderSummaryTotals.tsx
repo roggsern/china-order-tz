@@ -58,7 +58,7 @@ export function OrderSummaryTotals({
               </dd>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <dt className="font-medium text-emerald-800">Wholesale Discount</dt>
+              <dt className="font-medium text-emerald-800">Bulk Discount</dt>
               <dd className="font-semibold tabular-nums text-emerald-700">
                 −{formatPrice(moqDiscount)}
               </dd>

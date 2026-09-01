@@ -10,6 +10,7 @@ import { durationDaysFromSnapshots } from "@/lib/shipping/durations";
 import type { CartLineItem } from "@/lib/types/cart";
 import type { ProductOrigin } from "@/lib/types/catalog";
 import type { ShippingMethodCode } from "@/lib/shipping/types";
+import { mapVolumePricing, parseVolumeMoney } from "@/lib/pricing/volume-pricing";
 
 type ApiSuccessResponse<T> = {
   success?: boolean;
@@ -92,6 +93,7 @@ export type ServerCartItem = {
       value?: string | null;
     }> | null;
   } | null;
+  volume_pricing?: unknown;
 };
 
 export type ServerCart = {
@@ -258,6 +260,10 @@ function resolveSelectedAttributes(item: ServerCartItem) {
 export function mapServerCartItems(cart: ServerCart): CartLineItem[] {
   return (cart.items ?? []).map((item) => {
       const unitPrice = parseMoney(item.price_snapshot ?? item.unit_price);
+      const volumePricing = mapVolumePricing(item.volume_pricing);
+      const compareAt = volumePricing
+        ? parseVolumeMoney(volumePricing.base_unit_price)
+        : undefined;
       const attributes = resolveSelectedAttributes(item);
       const label =
         item.variant?.name?.trim() ||
@@ -289,6 +295,9 @@ export function mapServerCartItems(cart: ServerCart): CartLineItem[] {
         slug: item.product?.slug ?? item.product_id,
         name: item.product?.name ?? "Product",
         unitPrice,
+        compareAtUnitPrice:
+          typeof compareAt === "number" && compareAt > unitPrice + 0.001 ? compareAt : undefined,
+        volumePricing,
         origin: resolveServerCartProductOrigin(item.product),
         brand: item.product?.brand?.name,
         brandSlug: item.product?.brand?.slug,

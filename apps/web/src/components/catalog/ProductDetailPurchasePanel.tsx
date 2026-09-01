@@ -18,6 +18,7 @@ import {
   type StorefrontConfigurationSelection,
 } from "./ProductConfigurationPicker";
 import { ProductMoqStatusCard } from "./ProductMoqStatusCard";
+import { BulkPricingPanel } from "./BulkPricingPanel";
 import type { StorefrontPriceQuote } from "@/lib/catalog/storefront-configuration";
 import { isProductPurchaseUnavailable } from "@/lib/catalog/product-availability";
 
@@ -99,7 +100,7 @@ export function ProductDetailPurchasePanel({
     configurationId: configSelection.configurationId,
     quantity,
     stock: configSelection.hasConfigurations ? configSelection.stock : product.stock,
-    enabled: orderSummaryReady && Boolean(configSelection.configurationId),
+    enabled: orderSummaryReady,
   });
   const compareAtUnitPrice =
     moqDisplay.wholesaleApplied
@@ -155,17 +156,24 @@ export function ProductDetailPurchasePanel({
             max={quantityMax}
             min={1}
           />
-          <ProductMoqStatusCard
-            unlocked={
-              moqDisplay.wholesaleApplied && moqDisplay.moqDiscount > 0
-                ? {
-                    savingsAmount: moqDisplay.moqDiscount,
-                    unitPrice: moqDisplay.unitPrice ?? unitPrice,
-                  }
-                : null
-            }
-            hint={moqDisplay.moqHint}
+          <BulkPricingPanel
+            pricing={moqDisplay.volumePricing}
+            showVariantAggregationNote={Boolean(configSelection.hasConfigurations)}
+            showShippingNote
           />
+          {moqDisplay.volumePricing ? null : (
+            <ProductMoqStatusCard
+              unlocked={
+                moqDisplay.wholesaleApplied && moqDisplay.moqDiscount > 0
+                  ? {
+                      savingsAmount: moqDisplay.moqDiscount,
+                      unitPrice: moqDisplay.unitPrice ?? unitPrice,
+                    }
+                  : null
+              }
+              hint={moqDisplay.moqHint}
+            />
+          )}
         </div>
 
         <div className="flex flex-col gap-3">

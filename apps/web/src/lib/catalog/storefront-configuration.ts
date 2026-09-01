@@ -3,6 +3,7 @@ import {
   buildCatalogProductQuoteBffPath,
 } from "@/lib/api/catalog-proxy";
 import type { ProductFormSchemaAttribute } from "@/lib/types/catalog";
+import { mapVolumePricing, type VolumePricing } from "@/lib/pricing/volume-pricing";
 
 export type StorefrontConfigurationValue = {
   id: string;
@@ -73,6 +74,7 @@ export type StorefrontPriceQuote = {
     note?: string | null;
     meta?: Record<string, unknown>;
   }>;
+  volume_pricing?: VolumePricing | null;
 };
 
 export class StorefrontConfigurationApiError extends Error {
@@ -138,5 +140,8 @@ export async function fetchStorefrontQuote(input: {
     cache: "no-store",
   });
 
-  return parseJson<StorefrontPriceQuote>(response);
+  return parseJson<StorefrontPriceQuote>(response).then((data) => ({
+    ...data,
+    volume_pricing: mapVolumePricing(data.volume_pricing),
+  }));
 }

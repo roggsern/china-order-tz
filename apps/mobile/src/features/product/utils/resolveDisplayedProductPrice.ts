@@ -58,6 +58,18 @@ export function resolveDisplayedProductPrice(params: {
     };
   }
 
+  if (params.quoteLoading) {
+    return { amount: null, currency: null, source: 'pending' };
+  }
+
+  if (params.quote?.unitPrice != null) {
+    return {
+      amount: params.quote.unitPrice,
+      currency: params.quote.currency,
+      source: 'quote',
+    };
+  }
+
   return {
     amount: params.product.price,
     currency: null,

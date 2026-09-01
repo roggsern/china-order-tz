@@ -6,6 +6,7 @@ final class PriceBreakdown
 {
     /**
      * @param  list<PriceStageResult>  $stages
+     * @param  array<string, mixed>|null  $volumePricing
      */
     public function __construct(
         public readonly string $productId,
@@ -15,6 +16,7 @@ final class PriceBreakdown
         public readonly string $unitPrice,
         public readonly string $lineTotal,
         public readonly array $stages,
+        public readonly ?array $volumePricing = null,
     ) {}
 
     /**
@@ -33,6 +35,7 @@ final class PriceBreakdown
                 static fn (PriceStageResult $stage) => $stage->toArray(),
                 $this->stages,
             ),
+            'volume_pricing' => $this->volumePricing,
         ];
     }
 }

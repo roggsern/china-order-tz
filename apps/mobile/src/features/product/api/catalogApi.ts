@@ -129,7 +129,7 @@ export async function fetchProductConfiguration(
 /** POST /products/{slug}/quote — server pricing pipeline for matched configuration. */
 export async function fetchProductQuote(params: {
   productKey: string;
-  configurationId: string;
+  configurationId: string | null;
   quantity: number;
 }): Promise<ProductQuote> {
   const response = await apiClient.post<unknown>(

@@ -25,7 +25,7 @@ export function WholesalePricingBadge({
       >
         ✓
       </span>
-      Wholesale Pricing Applied
+      Bulk Pricing Applied
     </span>
   );
 }

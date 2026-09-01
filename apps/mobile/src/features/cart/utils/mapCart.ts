@@ -8,6 +8,7 @@ import type {
   UpdateCartItemPayload,
 } from '../models/types';
 import { formatCustomerMoney } from '@/src/shared/utils/formatCustomerMoney';
+import { mapVolumePricing } from '@/src/features/pricing/mapVolumePricing';
 import { journeyLabelFromChannel } from './journeyLabel';
 import { preferStorefrontImageSrcFromUnknown } from '@/src/shared/media/preferStorefrontImageSrc';
 
@@ -126,6 +127,7 @@ export function mapCartItem(raw: unknown): CartItem | null {
     variantName,
     variantSku,
     displayAttributes,
+    volumePricing: mapVolumePricing(data.volume_pricing),
   };
 }
 

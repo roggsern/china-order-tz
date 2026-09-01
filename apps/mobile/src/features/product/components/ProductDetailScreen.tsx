@@ -36,6 +36,7 @@ import { resolvePdpGalleryMediaFromPdpState } from '../utils/resolvePdpGalleryMe
 import { collectPdpVariantPrefetchUrls } from '../utils/pdpVariantMedia';
 import { prefetchPdpVariantMedia } from '../utils/prefetchPdpVariantMedia';
 import { AddToCartButton } from './AddToCartButton';
+import { BulkPricingCard } from './BulkPricingCard';
 import { ProductAvailabilityBadge } from './ProductAvailabilityBadge';
 import { ProductConfigurationSelector } from './ProductConfigurationSelector';
 import { ProductImageGallery } from './ProductImageGallery';
@@ -135,16 +136,18 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
   const reviewsQuery = useProductReviews(productSlug);
   const wishlist = useWishlistToggle(productId);
 
-  const matchedForQuote =
-    configStatus.loading || configStatus.error
-      ? null
-      : liveConfiguration?.matchedConfigurationId ?? null;
+  const quoteEnabled =
+    !configStatus.loading &&
+    !configStatus.error &&
+    (liveConfiguration?.hasConfigurations
+      ? Boolean(liveConfiguration.matchedConfigurationId)
+      : true);
 
   const quoteQuery = useProductQuote({
     productKey,
-    configurationId: matchedForQuote,
+    configurationId: liveConfiguration?.matchedConfigurationId ?? null,
     quantity,
-    enabled: Boolean(matchedForQuote),
+    enabled: quoteEnabled,
   });
 
   const handleConfigurationChange = useCallback(
@@ -231,7 +234,7 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
     configuration,
     configurationLoading: configStatus.loading,
     quote: quoteQuery.data ?? null,
-    quoteLoading: Boolean(matchedForQuote) && quoteQuery.isFetching,
+    quoteLoading: quoteEnabled && quoteQuery.isFetching,
   });
 
   const gallerySlides = resolvePdpGalleryMediaFromPdpState({
@@ -368,6 +371,12 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
           quantity={quantity}
           onChange={setQuantity}
           disabled={addToCartMutation.isPending || !enabled}
+        />
+
+        <BulkPricingCard
+          pricing={quoteQuery.data?.volumePricing ?? null}
+          showVariantAggregationNote={hasConfigurations}
+          showShippingNote
         />
 
         <AddToCartButton

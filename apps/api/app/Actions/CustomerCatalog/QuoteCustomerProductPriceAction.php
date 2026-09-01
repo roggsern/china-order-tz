@@ -26,7 +26,7 @@ class QuoteCustomerProductPriceAction
         // Quote is request-quantity only. Do not read the customer's cart:
         // volume-tier aggregation across variants is a cart/checkout concern.
         return $this->resolvePrice->handle(
-            $product->loadMissing(['productType']),
+            $product->loadMissing(['productType', 'variants']),
             new PriceQuoteInput(
                 productId: $product->id,
                 configurationId: $validated['configuration_id'] ?? null,

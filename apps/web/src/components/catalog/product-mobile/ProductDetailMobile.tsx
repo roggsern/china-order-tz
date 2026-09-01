@@ -22,6 +22,7 @@ import {
 import type { StorefrontPriceQuote } from "@/lib/catalog/storefront-configuration";
 import { isProductPurchaseUnavailable } from "@/lib/catalog/product-availability";
 import { ProductMoqStatusCard } from "../ProductMoqStatusCard";
+import { BulkPricingPanel } from "../BulkPricingPanel";
 import { ProductGalleryMobile } from "./ProductGalleryMobile";
 import { ProductMobileTabs } from "./ProductMobileTabs";
 import { ProductSupplierCard } from "./ProductSupplierCard";
@@ -100,7 +101,7 @@ export function ProductDetailMobile({
     configurationId: configSelection.configurationId,
     quantity,
     stock: configSelection.hasConfigurations ? configSelection.stock : product.stock,
-    enabled: orderSummaryReady && Boolean(configSelection.configurationId),
+    enabled: orderSummaryReady,
   });
   const compareAtUnitPrice = moqDisplay.wholesaleApplied
     ? moqDisplay.compareAtUnitPrice ?? undefined
@@ -186,18 +187,28 @@ export function ProductDetailMobile({
               Select a complete configuration to continue.
             </p>
           ) : (
-            <ProductMoqStatusCard
-              className="mt-3"
-              unlocked={
-                moqDisplay.wholesaleApplied && moqDisplay.moqDiscount > 0
-                  ? {
-                      savingsAmount: moqDisplay.moqDiscount,
-                      unitPrice: moqDisplay.unitPrice ?? unitPrice,
-                    }
-                  : null
-              }
-              hint={moqDisplay.moqHint}
-            />
+            <>
+              <BulkPricingPanel
+                className="mt-3"
+                pricing={moqDisplay.volumePricing}
+                showVariantAggregationNote={Boolean(configSelection.hasConfigurations)}
+                showShippingNote
+              />
+              {moqDisplay.volumePricing ? null : (
+                <ProductMoqStatusCard
+                  className="mt-3"
+                  unlocked={
+                    moqDisplay.wholesaleApplied && moqDisplay.moqDiscount > 0
+                      ? {
+                          savingsAmount: moqDisplay.moqDiscount,
+                          unitPrice: moqDisplay.unitPrice ?? unitPrice,
+                        }
+                      : null
+                  }
+                  hint={moqDisplay.moqHint}
+                />
+              )}
+            </>
           )}
         </div>
 

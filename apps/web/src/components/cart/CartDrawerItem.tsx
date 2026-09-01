@@ -1,79 +1,46 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { CartLineItem } from "@/lib/types/cart";
 import { formatPrice } from "@/lib/catalog/utils";
 import { getLineProductSavings } from "@/lib/cart/utils";
-import { quoteCartLine } from "@/lib/cart/quote";
 import { useCartActions } from "@/lib/cart/context";
 import { useCartDrawer } from "@/lib/cart/drawer-context";
 import { ProductImageDisplay } from "@/components/catalog/ProductImageDisplay";
-import { MoqStatusCard } from "./CartItemMoqHint";
 import { CartItemConfigurationSummary } from "./CartItemConfigurationSummary";
 import { MinusIcon, PlusIcon, TrashIcon } from "@/components/home/icons";
+import { parseVolumeMoney, volumePricingUnlocked } from "@/lib/pricing/volume-pricing";
 
 interface CartDrawerItemProps {
   item: CartLineItem;
 }
 
 export function CartDrawerItem({ item }: CartDrawerItemProps) {
-  const { updateQuantity, updateLinePricing, removeItem } = useCartActions();
+  const { updateQuantity, removeItem } = useCartActions();
   const { close } = useCartDrawer();
   const maxQuantity = Math.min(item.stock, 99);
   const [isUpdating, setIsUpdating] = useState(false);
-  const quoteRequestRef = useRef(0);
 
   const lineSavings = getLineProductSavings(item);
-  const wholesaleApplied = lineSavings > 0;
+  const bulkApplied = volumePricingUnlocked(item.volumePricing) || lineSavings > 0;
   const compareAt = item.compareAtUnitPrice;
-
-  const refreshQuote = useCallback(
-    async (quantity: number) => {
-      if (!item.configurationId) return;
-
-      const requestId = ++quoteRequestRef.current;
-      setIsUpdating(true);
-
-      try {
-        const priced = await quoteCartLine({
-          slug: item.slug,
-          configurationId: item.configurationId,
-          quantity,
-        });
-        if (requestId !== quoteRequestRef.current) return;
-
-        updateLinePricing(item.id, {
-          unitPrice: priced.unitPrice,
-          compareAtUnitPrice: priced.compareAtUnitPrice,
-        });
-      } catch {
-        // Keep last known cart price if quote fails.
-      } finally {
-        if (requestId === quoteRequestRef.current) {
-          setIsUpdating(false);
-        }
-      }
-    },
-    [item.configurationId, item.id, item.slug, updateLinePricing],
-  );
+  const savings = parseVolumeMoney(item.volumePricing?.savings_total) || lineSavings;
 
   useEffect(() => {
-    if (!item.configurationId) return;
-    void refreshQuote(item.quantity);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item.configurationId, item.id]);
+    setIsUpdating(false);
+  }, [item.quantity, item.unitPrice, item.volumePricing?.eligible_quantity]);
 
   const decrease = () => {
     const next = item.quantity - 1;
+    setIsUpdating(true);
     updateQuantity(item.id, next);
-    if (item.configurationId && next > 0) void refreshQuote(next);
   };
 
   const increase = () => {
     const next = Math.min(maxQuantity, item.quantity + 1);
+    setIsUpdating(true);
     updateQuantity(item.id, next);
-    if (item.configurationId) void refreshQuote(next);
   };
 
   return (
@@ -118,17 +85,17 @@ export function CartDrawerItem({ item }: CartDrawerItemProps) {
             <p className="text-sm font-bold tabular-nums text-red-600">
               {formatPrice(item.unitPrice)}
             </p>
-            {wholesaleApplied && typeof compareAt === "number" ? (
+            {bulkApplied && typeof compareAt === "number" ? (
               <p className="text-xs font-medium text-zinc-400 line-through">
                 {formatPrice(compareAt)}
               </p>
             ) : null}
           </div>
 
-          {wholesaleApplied ? (
+          {bulkApplied ? (
             <div className="mt-1.5">
               <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700">
-                Wholesale pricing applied
+                Bulk pricing applied
               </span>
             </div>
           ) : null}
@@ -163,7 +130,7 @@ export function CartDrawerItem({ item }: CartDrawerItemProps) {
             </div>
 
             <div className="text-right">
-              {wholesaleApplied && typeof compareAt === "number" ? (
+              {bulkApplied && typeof compareAt === "number" ? (
                 <p className="text-[11px] tabular-nums text-zinc-400 line-through">
                   {formatPrice(compareAt * item.quantity)}
                 </p>
@@ -171,19 +138,15 @@ export function CartDrawerItem({ item }: CartDrawerItemProps) {
               <p className="text-sm font-semibold tabular-nums text-zinc-900">
                 {formatPrice(item.unitPrice * item.quantity)}
               </p>
+              {savings > 0.001 ? (
+                <p className="text-[11px] font-medium text-emerald-700">
+                  Save {formatPrice(savings)}
+                </p>
+              ) : null}
             </div>
           </div>
         </div>
       </div>
-
-      <MoqStatusCard
-        className="mt-3"
-        unlocked={
-          wholesaleApplied
-            ? { savingsAmount: lineSavings, unitPrice: item.unitPrice }
-            : null
-        }
-      />
     </article>
   );
 }

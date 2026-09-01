@@ -24,6 +24,7 @@ class ResolvePrice
 {
     public function __construct(
         private readonly CommercePricingResolver $commercePricingResolver,
+        private readonly PresentVolumePricing $presentVolumePricing,
     ) {}
 
     public function handle(Product $product, PriceQuoteInput $input): PriceBreakdown
@@ -90,6 +91,17 @@ class ResolvePrice
 
         $lineTotal = number_format((float) $resolved->unitPrice * $input->quantity, 2, '.', '');
 
+        $baseUnitPrice = (string) ($resolved->meta['unit_price_before_moq'] ?? $resolved->unitPrice);
+        $volumePricing = $this->presentVolumePricing->present(
+            $product,
+            $configuration,
+            $input->quantity,
+            $baseUnitPrice,
+            $resolved->unitPrice,
+            $input->quantity,
+            $resolved->currency,
+        );
+
         return new PriceBreakdown(
             productId: $product->id,
             configurationId: $configuration?->id,
@@ -98,6 +110,7 @@ class ResolvePrice
             unitPrice: $resolved->unitPrice,
             lineTotal: $lineTotal,
             stages: $stages,
+            volumePricing: $volumePricing?->toArray(),
         );
     }
 

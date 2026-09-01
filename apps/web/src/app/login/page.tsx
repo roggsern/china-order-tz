@@ -27,7 +27,7 @@ export default function LoginPage() {
           </>
         ),
         subtitle:
-          "Sign in to checkout securely, unlock wholesale pricing, and track every order from China to your door.",
+          "Sign in to checkout securely, unlock bulk pricing, and track every order from China to your door.",
       }}
       card={{
         eyebrow: "Welcome back",

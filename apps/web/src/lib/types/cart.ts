@@ -6,6 +6,7 @@ import type {
   ProductVariantChoice,
 } from "@/lib/types/catalog";
 import type { ShippingMethodCode } from "@/lib/shipping/types";
+import type { VolumePricing } from "@/lib/pricing/volume-pricing";
 
 export type CartConfigurationAttribute = {
   name: string;
@@ -23,6 +24,8 @@ export type CartItemSnapshot = {
   unitPrice: number;
   /** Pre-MOQ / comparison unit price for savings display. */
   compareAtUnitPrice?: number;
+  /** Server volume-pricing presentation — never invent client payable math from this. */
+  volumePricing?: VolumePricing | null;
   origin: ProductOrigin;
   brand?: string;
   brandSlug?: string;

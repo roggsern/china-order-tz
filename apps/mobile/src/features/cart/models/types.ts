@@ -1,4 +1,5 @@
 import type { CommerceJourney } from '@/src/shared/types/commerce';
+import type { VolumePricing } from '@/src/features/pricing/mapVolumePricing';
 
 export type CartDisplayAttribute = {
   attribute: string;
@@ -27,6 +28,7 @@ export type CartItem = {
   variantName: string | null;
   variantSku: string | null;
   displayAttributes: CartDisplayAttribute[];
+  volumePricing?: VolumePricing | null;
 };
 
 export type Cart = {

@@ -56,7 +56,7 @@ export function LandedCostSummary({
             {!isReady
               ? "Finish choosing your options to see an accurate total."
               : wholesaleApplied
-                ? "Your total reflects the active wholesale tier."
+                ? "Your total reflects the active bulk price. Shipping is calculated separately."
                 : "Your running total with the selected shipping method."}
           </p>
         </div>
@@ -66,7 +66,7 @@ export function LandedCostSummary({
             role="status"
           >
             <span aria-hidden>✓</span>
-            Wholesale Tier Applied
+            Bulk Price Applied
           </span>
         ) : null}
       </div>
@@ -81,7 +81,7 @@ export function LandedCostSummary({
 
         {wholesaleApplied ? (
           <div className="flex items-center justify-between text-sm">
-            <dt className="font-medium text-emerald-800">Wholesale Saving</dt>
+            <dt className="font-medium text-emerald-800">Bulk Saving</dt>
             <dd className="font-semibold tabular-nums text-emerald-700">
               −{formatPrice(moqDiscount)}
             </dd>
@@ -114,7 +114,7 @@ export function LandedCostSummary({
 
       {wholesaleApplied ? (
         <p className="mt-3 text-center text-sm font-bold text-emerald-700">
-          You save {formatPrice(moqDiscount)} with wholesale pricing
+          You save {formatPrice(moqDiscount)} with bulk pricing
         </p>
       ) : null}
     </div>

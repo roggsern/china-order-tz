@@ -155,6 +155,8 @@ class CartAggregatedVolumePricingTest extends TestCase
         $this->assertSame('10000.00', $after->json('data.items.0.unit_price'));
         $this->assertSame(6, $after->json('data.items.0.quantity'));
         $this->assertSame('60000.00', $after->json('data.subtotal'));
+        $this->assertSame(6, $after->json('data.items.0.volume_pricing.eligible_quantity'));
+        $this->assertNull($after->json('data.items.0.volume_pricing.current_tier'));
     }
 
     public function test_different_products_never_aggregate(): void

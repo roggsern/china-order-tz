@@ -21,11 +21,11 @@ export function ProductMoqAvailableCard({
     >
       <p className="text-sm font-bold text-[#8b6914]">
         <span aria-hidden>🟡 </span>
-        Wholesale pricing available
+        Bulk pricing available
       </p>
       <p className="mt-2 text-sm font-semibold leading-snug text-zinc-800">
         Add {hint.remainingQuantity} more{" "}
-        {hint.remainingQuantity === 1 ? "item" : "items"} to unlock wholesale pricing.
+        {hint.remainingQuantity === 1 ? "item" : "items"} to unlock bulk pricing.
       </p>
       <p className="mt-1.5 text-sm font-semibold text-emerald-700">
         Save {formatPrice(hint.totalSavings)} when you reach {hint.targetQuantity}+ units.
@@ -56,19 +56,19 @@ export function ProductMoqUnlockedCard({
       <div className="border-b border-emerald-100 bg-emerald-100/70 px-4 py-3">
         <p className="text-sm font-bold text-emerald-900 sm:text-base">
           <span aria-hidden>✓ </span>
-          Wholesale pricing unlocked
+          Bulk pricing unlocked
         </p>
       </div>
 
       <div className="space-y-3 px-4 py-3.5">
         <p className="text-sm font-medium text-emerald-800">
-          You are now receiving wholesale pricing.
+          You are now receiving bulk pricing.
         </p>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700/80">
-              Wholesale price
+              Bulk price
             </p>
             <p className="mt-0.5 text-lg font-extrabold tabular-nums text-emerald-950">
               {formatPrice(unitPrice)}

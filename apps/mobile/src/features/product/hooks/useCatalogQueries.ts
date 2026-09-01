@@ -93,14 +93,14 @@ export function productConfigurationQueryKey(
 
 export function productQuoteQueryKey(params: {
   productKey: string;
-  configurationId: string;
+  configurationId: string | null;
   quantity: number;
 }) {
   return [
     'catalog',
     'quote',
     params.productKey,
-    params.configurationId,
+    params.configurationId ?? 'simple',
     params.quantity,
   ] as const;
 }
@@ -253,20 +253,19 @@ export function useProductQuote(params: {
   const enabled =
     (params.enabled ?? true) &&
     Boolean(params.productKey) &&
-    Boolean(params.configurationId) &&
     Number.isFinite(params.quantity) &&
     params.quantity >= 1;
 
   return useQuery({
     queryKey: productQuoteQueryKey({
       productKey: params.productKey ?? '',
-      configurationId: params.configurationId ?? '',
+      configurationId: params.configurationId,
       quantity: params.quantity,
     }),
     queryFn: () =>
       fetchProductQuote({
         productKey: params.productKey!,
-        configurationId: params.configurationId!,
+        configurationId: params.configurationId,
         quantity: params.quantity,
       }),
     enabled,

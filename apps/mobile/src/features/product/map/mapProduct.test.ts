@@ -4,6 +4,7 @@ import {
   mapProductConfiguration,
   mapProductDetail,
   mapProductListResponse,
+  mapProductQuote,
   pruneConfigurationSelections,
   buildConfigurationQuery,
 } from './mapProduct';
@@ -400,12 +401,85 @@ describe('mapCategory', () => {
   });
 
   it('leaves imageUrl empty when the catalog payload has no image', () => {
-    expect(
-      mapCategory({
+    expect(mapCategory({
         id: '3',
         name: 'Automotive',
         slug: 'automotive',
       })?.imageUrl,
     ).toBeNull();
+  });
+});
+
+describe('mapProductQuote', () => {
+  it('preserves server volume_pricing without inventing payable prices', () => {
+    const quote = mapProductQuote({
+      product_id: 'p1',
+      configuration_id: 'cfg-1',
+      quantity: 12,
+      currency: 'TZS',
+      unit_price: '8000.00',
+      line_total: '96000.00',
+      volume_pricing: {
+        eligible_quantity: 12,
+        aggregates_variants: true,
+        current_tier: {
+          min_quantity: 10,
+          unit_price: '8000.00',
+          type: 'fixed_unit',
+          discount_percent: null,
+          scope: 'product',
+        },
+        next_tier: {
+          min_quantity: 50,
+          unit_price: '7000.00',
+          type: 'fixed_unit',
+          discount_percent: null,
+          scope: 'product',
+        },
+        quantity_to_next_tier: 38,
+        base_unit_price: '10000.00',
+        resolved_unit_price: '8000.00',
+        savings_per_unit: '2000.00',
+        savings_total: '24000.00',
+        currency: 'TZS',
+        tiers: [
+          {
+            min_quantity: 10,
+            unit_price: '8000.00',
+            type: 'fixed_unit',
+            discount_percent: null,
+            scope: 'product',
+          },
+          {
+            min_quantity: 50,
+            unit_price: '7000.00',
+            type: 'fixed_unit',
+            discount_percent: null,
+            scope: 'product',
+          },
+        ],
+      },
+    });
+
+    expect(quote?.unitPrice).toBe('8000.00');
+    expect(quote?.volumePricing?.tiers).toHaveLength(2);
+    expect(quote?.volumePricing?.current_tier?.unit_price).toBe('8000.00');
+    expect(quote?.volumePricing?.quantity_to_next_tier).toBe(38);
+    expect(quote?.volumePricing?.resolved_unit_price).toBe('8000.00');
+    expect(quote?.volumePricing?.tiers[0]?.unit_price).toBe('8000.00');
+  });
+
+  it('does not invent volume pricing when the server omits it', () => {
+    const quote = mapProductQuote({
+      product_id: 'p1',
+      configuration_id: null,
+      quantity: 1,
+      currency: 'TZS',
+      unit_price: '10000.00',
+      line_total: '10000.00',
+    });
+
+    expect(quote?.volumePricing).toBeNull();
+    expect(quote?.unitPrice).toBe('10000.00');
   });
 });

@@ -332,7 +332,7 @@ export function ProductConfigurationGrid({
                     ) : null}
                     <th className="px-3 py-2.5 font-semibold">Barcode</th>
                     {allowsMoqPricing ? (
-                      <th className="px-3 py-2.5 font-semibold">Wholesale tiers</th>
+                      <th className="px-3 py-2.5 font-semibold">Bulk tiers</th>
                     ) : null}
                     <th className="px-3 py-2.5 font-semibold">
                       <span className="sr-only">Actions</span>

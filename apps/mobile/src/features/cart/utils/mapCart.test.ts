@@ -214,6 +214,45 @@ describe('mapCart / mapCartItem', () => {
     expect(item?.journeyLabel).toBe('Buy from TZ');
   });
 
+  it('preserves server volume_pricing on cart lines', () => {
+    const item = mapCartItem({
+      ...rawItem,
+      unit_price: '8000.00',
+      volume_pricing: {
+        eligible_quantity: 10,
+        aggregates_variants: true,
+        current_tier: {
+          min_quantity: 10,
+          unit_price: '8000.00',
+          type: 'fixed_unit',
+          discount_percent: null,
+          scope: 'product',
+        },
+        next_tier: null,
+        quantity_to_next_tier: null,
+        base_unit_price: '10000.00',
+        resolved_unit_price: '8000.00',
+        savings_per_unit: '2000.00',
+        savings_total: '4000.00',
+        currency: 'TZS',
+        tiers: [
+          {
+            min_quantity: 10,
+            unit_price: '8000.00',
+            type: 'fixed_unit',
+            discount_percent: null,
+            scope: 'product',
+          },
+        ],
+      },
+    });
+
+    expect(item?.unitPrice).toBe('8000.00');
+    expect(item?.volumePricing?.eligible_quantity).toBe(10);
+    expect(item?.volumePricing?.savings_total).toBe('4000.00');
+    expect(item?.volumePricing?.resolved_unit_price).toBe('8000.00');
+  });
+
   it('returns null for incomplete cart lines', () => {
     expect(mapCartItem({ quantity: 1 })).toBeNull();
   });

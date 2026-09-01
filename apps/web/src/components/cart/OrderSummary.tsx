@@ -35,7 +35,7 @@ export function OrderSummary({
         </p>
         <p className="mt-1 text-xs text-zinc-500">
           {(totals.moqDiscount ?? 0) > 0
-            ? "Volume pricing is applied — see your MOQ savings below."
+            ? "Bulk discounts apply to product prices only. Shipping is calculated separately."
             : "Products, shipping, and your running cart total."}
         </p>
 

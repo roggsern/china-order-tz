@@ -113,7 +113,7 @@ interface AuthHeroPanelProps {
 
 const DEFAULT_TRUST: AuthHeroTrustItem[] = [
   { label: "Secure Checkout" },
-  { label: "Wholesale Pricing" },
+  { label: "Bulk Pricing" },
   { label: "Trusted Suppliers" },
   { label: "Fast Customer Support" },
 ];

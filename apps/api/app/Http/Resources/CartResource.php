@@ -2,10 +2,11 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Cart;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/** @mixin \App\Models\Cart */
+/** @mixin Cart */
 class CartResource extends JsonResource
 {
     public function toArray(Request $request): array
@@ -14,6 +15,17 @@ class CartResource extends JsonResource
             $this->relationLoaded('items'),
             fn () => $this->subtotal(),
         );
+
+        if ($this->relationLoaded('items')) {
+            $this->resource->setRelation(
+                'items',
+                $this->items->map(function ($item) {
+                    $item->setRelation('cart', $this->resource);
+
+                    return $item;
+                }),
+            );
+        }
 
         return [
             'id' => $this->id,

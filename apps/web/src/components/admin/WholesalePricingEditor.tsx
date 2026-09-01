@@ -27,8 +27,8 @@ export function WholesalePricingEditor({
   tiers,
   onChange,
   basePrice,
-  title = "Wholesale pricing",
-  description = "Quantity tiers unlock lower unit prices at checkout and on the product page.",
+  title = "Bulk / Volume Pricing",
+  description = "Set quantity-based price breaks. For products with variants, quantities of different variants of the same product count together toward the tier. These discounts affect product price only; shipping is calculated separately.",
 }: WholesalePricingEditorProps) {
   function updateTier(index: number, patch: Partial<ProductPriceTierDraft>) {
     onChange(tiers.map((tier, i) => (i === index ? { ...tier, ...patch } : tier)));
@@ -82,7 +82,7 @@ export function WholesalePricingEditor({
             }}
             className="h-4 w-4 rounded border-zinc-300 text-[#c9a227] focus:ring-[#c9a227]"
           />
-          Enable wholesale tiers
+          Enable bulk / volume tiers
         </label>
       </div>
 

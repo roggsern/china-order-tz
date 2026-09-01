@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { formatPrice } from "@/lib/catalog/utils";
+import { mapVolumePricing, parseVolumeMoney } from "@/lib/pricing/volume-pricing";
 import {
   formatVariantDisplayLabel,
   mapVariantDisplayAttributes,
@@ -50,40 +51,16 @@ interface ProductConfigurationPickerProps {
 
 function resolveMoqSavings(quote: StorefrontPriceQuote | null) {
   if (!quote) return null;
-
-  const tier = quote.breakdown.find(
-    (stage) => stage.stage === "quantity_tier" && stage.applied,
-  );
-  if (!tier) return null;
-
-  const preTier =
-    quote.breakdown.find(
-      (stage) =>
-        stage.applied &&
-        (stage.stage === "configuration_override" || stage.stage === "base"),
-    ) ??
-    quote.breakdown.find(
-      (stage) =>
-        stage.stage === "configuration_override" || stage.stage === "base",
-    );
-
-  const before = Number.parseFloat(preTier?.unit_price ?? quote.unit_price);
-  const after = Number.parseFloat(quote.unit_price);
-  if (!Number.isFinite(before) || !Number.isFinite(after) || after >= before) {
-    return null;
-  }
-
-  const perUnit = before - after;
-  const total = perUnit * quote.quantity;
+  const volume = mapVolumePricing(quote.volume_pricing);
+  if (!volume || parseVolumeMoney(volume.savings_per_unit) <= 0.001) return null;
 
   return {
-    perUnit,
-    total,
-    before,
-    after,
-    minQuantity:
-      typeof tier.meta?.min_quantity === "number" ? tier.meta.min_quantity : null,
-    label: tier.label,
+    perUnit: parseVolumeMoney(volume.savings_per_unit),
+    total: parseVolumeMoney(volume.savings_total),
+    before: parseVolumeMoney(volume.base_unit_price),
+    after: parseVolumeMoney(volume.resolved_unit_price),
+    minQuantity: volume.current_tier?.min_quantity ?? null,
+    label: "Bulk pricing",
   };
 }
 
@@ -265,13 +242,11 @@ export function ProductConfigurationPicker({
     let cancelled = false;
 
     async function loadQuote() {
-      if (!experience?.has_configurations) {
-        setQuote(null);
-        onQuoteChange(null);
+      if (!experience) {
         return;
       }
 
-      if (!experience.matched_configuration_id || !experience.is_in_stock) {
+      if (experience.has_configurations && (!experience.matched_configuration_id || !experience.is_in_stock)) {
         setQuote(null);
         onQuoteChange(null);
         return;
@@ -280,7 +255,9 @@ export function ProductConfigurationPicker({
       try {
         const nextQuote = await fetchStorefrontQuote({
           slug: productSlug,
-          configurationId: experience.matched_configuration_id,
+          configurationId: experience.has_configurations
+            ? experience.matched_configuration_id
+            : null,
           quantity,
         });
         if (cancelled) return;
