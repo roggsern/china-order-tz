@@ -8,6 +8,7 @@ use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\CheckoutSession;
 use App\Models\User;
+use App\Services\Cart\CartProductPricingQuantity;
 use App\Services\Cart\CartService;
 use App\Services\Cart\ResolveCartPurchasable;
 use App\Services\Commerce\CommerceChannelResolver;
@@ -285,6 +286,7 @@ class CheckoutOrchestrator
 
         $currency = strtoupper((string) ($cart->currency ?: 'TZS'));
         $subtotal = '0.00';
+        $pricingQuantities = CartProductPricingQuantity::mapByProductId($cart->items);
 
         /** @var CartItem $item */
         foreach ($cart->items as $item) {
@@ -301,13 +303,17 @@ class CheckoutOrchestrator
                 ]);
             }
 
+            $aggregate = $pricingQuantities[(string) $item->product_id] ?? (int) $item->quantity;
+
             // RC1-C1 — always re-price via CommercePricingResolver (never trust stale snapshots).
+            // Volume tiers use same-product aggregate quantity; stock uses this line's quantity.
             $resolved = $this->resolveCartPurchasable->handle(
                 $item->product_id,
                 $item->product_variant_id,
                 (int) $item->quantity,
                 $currency,
                 null,
+                $aggregate,
             );
 
             $unit = (string) $resolved['unit_price'];

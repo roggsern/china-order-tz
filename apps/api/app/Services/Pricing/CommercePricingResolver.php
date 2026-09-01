@@ -214,6 +214,10 @@ final class CommercePricingResolver
 
     /**
      * MOQ / quantity tiers — identical for Quote and Cart (ADR 054 Decision 6).
+     *
+     * `$context->quantity` is tier-eligibility quantity. Cart/checkout may pass
+     * the combined quantity of all lines with the same product_id (different
+     * variants). Inventory quantity is never read here.
      */
     public function applyMoqExtension(
         CommercePriceResult $current,

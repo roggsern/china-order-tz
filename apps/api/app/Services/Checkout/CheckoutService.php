@@ -7,6 +7,7 @@ use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\DeliveryAddress;
 use App\Models\User;
+use App\Services\Cart\CartProductPricingQuantity;
 use App\Services\Cart\ResolveCartPurchasable;
 use App\Services\Commerce\CommerceChannelResolver;
 use App\Services\Profile\CustomerAddressService;
@@ -88,6 +89,7 @@ class CheckoutService
     {
         $currency = strtoupper((string) ($cart->currency ?: 'TZS'));
         $subtotal = '0.00';
+        $pricingQuantities = CartProductPricingQuantity::mapByProductId($cart->items);
 
         foreach ($cart->items as $item) {
             if ($item->quantity < 1) {
@@ -102,6 +104,7 @@ class CheckoutService
                 (int) $item->quantity,
                 $currency,
                 $item->shipping_method?->value,
+                $pricingQuantities[(string) $item->product_id] ?? (int) $item->quantity,
             );
 
             $unit = (string) $resolved['unit_price'];

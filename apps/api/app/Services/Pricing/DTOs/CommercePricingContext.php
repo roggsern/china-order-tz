@@ -5,6 +5,10 @@ namespace App\Services\Pricing\DTOs;
 /**
  * Resolution context for CommercePricingResolver (ADR 054).
  *
+ * `quantity` is volume-tier eligibility quantity, not inventory quantity.
+ * Cart/checkout callers may pass the combined same-product quantity across
+ * variant lines. Public PDP quote uses only the requested quantity (no cart).
+ *
  * Customer / channel / region / priceType are reserved for future stages.
  */
 final class CommercePricingContext

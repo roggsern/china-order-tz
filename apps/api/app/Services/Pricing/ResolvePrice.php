@@ -15,6 +15,10 @@ use Illuminate\Validation\ValidationException;
  *
  * Unit price is resolved solely by CommercePricingResolver (Quote = Cart).
  * Public breakdown still exposes base → configuration → MOQ → reserved stages.
+ *
+ * Public PDP quote uses only the requested quantity. It does not inspect the
+ * authenticated cart, so sibling variant lines are not aggregated here.
+ * Cart/checkout/order apply same-product aggregation via ResolveCartPurchasable.
  */
 class ResolvePrice
 {

@@ -17,7 +17,8 @@ use Illuminate\Validation\ValidationException;
  * Cart Engine purchasable resolution (ADR 053 / ADR 054 / ADR 055).
  *
  * Unit price: CommercePricingResolver (Catalog → Quote).
- * Stock: StockResolver (Catalog Stock read).
+ * Stock: StockResolver (Catalog Stock read) — always the line/SKU quantity.
+ * Pricing quantity: optional same-product aggregate for volume-tier eligibility.
  * Lifecycle / shipping / purchasability unchanged.
  */
 class ResolveCartPurchasable
@@ -44,6 +45,7 @@ class ResolveCartPurchasable
         int $quantity,
         string $currency = 'TZS',
         ?string $shippingMethod = null,
+        ?int $pricingQuantity = null,
     ): array {
         if ($quantity < 1) {
             $this->reject([
@@ -52,13 +54,29 @@ class ResolveCartPurchasable
         }
 
         $currency = strtoupper($currency);
+        $tierQuantity = ($pricingQuantity !== null && $pricingQuantity >= 1)
+            ? $pricingQuantity
+            : $quantity;
 
         if (filled($variantId)) {
-            return $this->resolveVariantLine($productId, (string) $variantId, $quantity, $currency, $shippingMethod);
+            return $this->resolveVariantLine(
+                $productId,
+                (string) $variantId,
+                $quantity,
+                $currency,
+                $shippingMethod,
+                $tierQuantity,
+            );
         }
 
         if (filled($productId)) {
-            return $this->resolveSimpleLine((string) $productId, $quantity, $currency, $shippingMethod);
+            return $this->resolveSimpleLine(
+                (string) $productId,
+                $quantity,
+                $currency,
+                $shippingMethod,
+                $tierQuantity,
+            );
         }
 
         $this->reject([
@@ -82,6 +100,7 @@ class ResolveCartPurchasable
         int $quantity,
         string $currency,
         ?string $shippingMethod,
+        int $pricingQuantity,
     ): array {
         $variant = ProductVariant::query()
             ->with(['product.commerceChannel', 'product.inventory', 'prices', 'inventories', 'inventory'])
@@ -130,7 +149,7 @@ class ResolveCartPurchasable
             $variant,
             new CommercePricingContext(
                 currency: $currency,
-                quantity: $quantity,
+                quantity: $pricingQuantity,
                 allowLegacyVariantFallback: true,
             ),
         );
@@ -184,6 +203,7 @@ class ResolveCartPurchasable
         int $quantity,
         string $currency,
         ?string $shippingMethod,
+        int $pricingQuantity,
     ): array {
         $product = Product::query()
             ->with(['commerceChannel', 'inventory', 'variants.prices', 'variants.inventories'])
@@ -208,7 +228,7 @@ class ResolveCartPurchasable
             null,
             new CommercePricingContext(
                 currency: $currency,
-                quantity: $quantity,
+                quantity: $pricingQuantity,
                 allowLegacyVariantFallback: true,
             ),
         );

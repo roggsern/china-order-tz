@@ -81,6 +81,8 @@ class CartService
 
     public function getCart(User $user): Cart
     {
+        // Read-only. Volume prices are persisted on cart mutations so GET does
+        // not write-on-read. Checkout/order independently reprice anyway.
         return $this->loadCart($this->resolveActiveCart($user));
     }
 
@@ -97,10 +99,11 @@ class CartService
      */
     public function addItem(User $user, array $data): Cart
     {
+        $incomingQuantity = (int) $data['quantity'];
         $resolved = $this->resolveCartPurchasable->handle(
             $data['product_id'] ?? null,
             $data['product_variant_id'] ?? $data['variant_id'] ?? $data['configuration_id'] ?? null,
-            $data['quantity'],
+            $incomingQuantity,
             $data['currency'] ?? 'TZS',
             $data['shipping_method'] ?? null,
         );
@@ -112,57 +115,53 @@ class CartService
         $this->commerceChannelResolver->assertCartSingleChannel($cart, $resolved['product']);
 
         $variantId = $resolved['variant']?->id;
+        $productId = $resolved['product']->id;
 
-        $existingQuery = CartItem::withTrashed()
-            ->where('cart_id', $cart->id);
+        return DB::transaction(function () use ($cart, $resolved, $incomingQuantity, $variantId, $productId): Cart {
+            $existingQuery = CartItem::withTrashed()
+                ->where('cart_id', $cart->id);
 
-        if ($variantId !== null) {
-            $existingQuery->where('product_variant_id', $variantId);
-        } else {
-            $existingQuery
-                ->where('product_id', $resolved['product']->id)
-                ->whereNull('product_variant_id');
-        }
-
-        $existingItem = $existingQuery->first();
-
-        if ($existingItem !== null) {
-            if ($existingItem->trashed()) {
-                $existingItem->restore();
+            if ($variantId !== null) {
+                $existingQuery->where('product_variant_id', $variantId);
+            } else {
+                $existingQuery
+                    ->where('product_id', $productId)
+                    ->whereNull('product_variant_id');
             }
 
-            $existingItem->update([
-                'product_id' => $resolved['product']->id,
-                'quantity' => $existingItem->quantity + $data['quantity'],
-                'unit_price' => $resolved['unit_price'],
-                'price_snapshot' => $resolved['unit_price'],
-                'currency' => $resolved['currency'],
-                'shipping_method' => $resolved['shipping_method'],
-                'shipping_price' => $resolved['shipping_price'],
-            ]);
+            $existingItem = $existingQuery->first();
 
-            // Re-validate merged quantity against inventory.
-            $this->resolveCartPurchasable->handle(
-                $resolved['product']->id,
-                $variantId,
-                (int) $existingItem->fresh()->quantity,
-                $resolved['currency'],
-                $data['shipping_method'] ?? null,
-            );
-        } else {
-            $cart->items()->create([
-                'product_id' => $resolved['product']->id,
-                'product_variant_id' => $variantId,
-                'quantity' => $data['quantity'],
-                'unit_price' => $resolved['unit_price'],
-                'price_snapshot' => $resolved['unit_price'],
-                'currency' => $resolved['currency'],
-                'shipping_method' => $resolved['shipping_method'],
-                'shipping_price' => $resolved['shipping_price'],
-            ]);
-        }
+            if ($existingItem !== null) {
+                if ($existingItem->trashed()) {
+                    $existingItem->restore();
+                }
 
-        return $this->loadCart($cart, includeVariantPresentation: false);
+                $existingItem->update([
+                    'product_id' => $productId,
+                    'quantity' => $existingItem->quantity + $incomingQuantity,
+                    'unit_price' => $resolved['unit_price'],
+                    'price_snapshot' => $resolved['unit_price'],
+                    'currency' => $resolved['currency'],
+                    'shipping_method' => $resolved['shipping_method'],
+                    'shipping_price' => $resolved['shipping_price'],
+                ]);
+            } else {
+                $cart->items()->create([
+                    'product_id' => $productId,
+                    'product_variant_id' => $variantId,
+                    'quantity' => $incomingQuantity,
+                    'unit_price' => $resolved['unit_price'],
+                    'price_snapshot' => $resolved['unit_price'],
+                    'currency' => $resolved['currency'],
+                    'shipping_method' => $resolved['shipping_method'],
+                    'shipping_price' => $resolved['shipping_price'],
+                ]);
+            }
+
+            $this->repriceProductLines($cart, $productId);
+
+            return $this->loadCart($cart, includeVariantPresentation: false);
+        });
     }
 
     public function updateItemQuantity(User $user, CartItem $item, int $quantity): Cart
@@ -170,22 +169,18 @@ class CartService
         $item->load(['cart', 'variant']);
         $this->authorizeCartItem($user, $item);
 
-        $resolved = $this->resolveCartPurchasable->handle(
-            $item->product_id,
-            $item->product_variant_id,
-            $quantity,
-            $item->currency ?? $item->cart->currency ?? 'TZS',
-            null,
-        );
+        $cart = $item->cart;
+        $productId = (string) $item->product_id;
 
-        $item->update([
-            'quantity' => $quantity,
-            'unit_price' => $resolved['unit_price'],
-            'price_snapshot' => $resolved['unit_price'],
-            'currency' => $resolved['currency'],
-        ]);
+        return DB::transaction(function () use ($item, $cart, $quantity, $productId): Cart {
+            $item->update([
+                'quantity' => $quantity,
+            ]);
 
-        return $this->loadCart($item->cart, includeVariantPresentation: false);
+            $this->repriceProductLines($cart, $productId);
+
+            return $this->loadCart($cart, includeVariantPresentation: false);
+        });
     }
 
     public function removeItem(User $user, CartItem $item): Cart
@@ -194,9 +189,14 @@ class CartService
         $this->authorizeCartItem($user, $item);
 
         $cart = $item->cart;
-        $item->forceDelete();
+        $productId = (string) $item->product_id;
 
-        return $this->loadCart($cart, includeVariantPresentation: false);
+        return DB::transaction(function () use ($item, $cart, $productId): Cart {
+            $item->forceDelete();
+            $this->repriceProductLines($cart, $productId);
+
+            return $this->loadCart($cart, includeVariantPresentation: false);
+        });
     }
 
     public function clearCart(User $user): Cart
@@ -290,6 +290,42 @@ class CartService
         }
 
         return $cart;
+    }
+
+    /**
+     * Re-price every line of a product using combined same-product quantity
+     * for volume-tier eligibility. Stock and shipping stay per line/SKU.
+     */
+    private function repriceProductLines(Cart $cart, string $productId): void
+    {
+        $items = CartItem::query()
+            ->where('cart_id', $cart->id)
+            ->where('product_id', $productId)
+            ->get();
+
+        if ($items->isEmpty()) {
+            return;
+        }
+
+        $aggregate = CartProductPricingQuantity::forProduct($items, $productId);
+        $currency = strtoupper((string) ($cart->currency ?: 'TZS'));
+
+        foreach ($items as $item) {
+            $resolved = $this->resolveCartPurchasable->handle(
+                $item->product_id,
+                $item->product_variant_id,
+                (int) $item->quantity,
+                $item->currency ?? $currency,
+                null,
+                $aggregate,
+            );
+
+            $item->forceFill([
+                'unit_price' => $resolved['unit_price'],
+                'price_snapshot' => $resolved['unit_price'],
+                'currency' => $resolved['currency'],
+            ])->save();
+        }
     }
 
     private function clearCheckoutSessions(User $user): void
