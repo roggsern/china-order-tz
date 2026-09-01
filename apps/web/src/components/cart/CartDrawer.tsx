@@ -13,6 +13,7 @@ import {
 import { useCartDrawer } from "@/lib/cart/drawer-context";
 import { resolveCheckoutRoute } from "@/lib/cart/checkout-navigation";
 import { clearCheckoutDraft } from "@/lib/checkout/draft";
+import { shouldBlockCheckoutCta } from "@/lib/purchasing/purchase-quantity";
 import { CloseIcon } from "@/components/home/icons";
 import { OrderSummaryTotals } from "./OrderSummaryTotals";
 import { CartDrawerItem } from "./CartDrawerItem";
@@ -37,7 +38,7 @@ export function CartDrawer() {
   const reduceMotion = useReducedMotion();
   const isDesktop = useIsDesktop();
   const { isOpen, drawerActive, close } = useCartDrawer();
-  const { items, totals, isHydrated, syncError } = useCartState();
+  const { items, totals, isHydrated, syncError, purchaseQuantityBlockers } = useCartState();
   const { clearSyncError } = useCartActions();
   const [mounted, setMounted] = useState(false);
   const displayTotals = useMemo(
@@ -57,6 +58,9 @@ export function CartDrawer() {
   const hiddenAxis = isDesktop ? { x: "100%", y: 0 } : { x: 0, y: "100%" };
 
   const handleCheckout = () => {
+    if (shouldBlockCheckoutCta(purchaseQuantityBlockers)) {
+      return;
+    }
     const route = resolveCheckoutRoute(items.length);
     if (!route) {
       return;
@@ -111,6 +115,7 @@ export function CartDrawer() {
           <DrawerFooter
             totals={displayTotals}
             hideShipping={hideShipping}
+            quantityBlocked={shouldBlockCheckoutCta(purchaseQuantityBlockers)}
             onCheckout={handleCheckout}
             onClose={close}
           />
@@ -216,11 +221,13 @@ function DrawerBody({
 function DrawerFooter({
   totals,
   hideShipping,
+  quantityBlocked,
   onCheckout,
   onClose,
 }: {
   totals: ReturnType<typeof useCartState>["totals"];
   hideShipping: boolean;
+  quantityBlocked: boolean;
   onCheckout: () => void;
   onClose: () => void;
 }) {
@@ -233,10 +240,22 @@ function DrawerFooter({
         hideShipping={hideShipping}
       />
 
+      {quantityBlocked ? (
+        <p className="mt-3 text-sm text-amber-800" role="status">
+          Update quantities to meet purchase requirements before checkout.
+        </p>
+      ) : null}
+
       <button
         type="button"
         onClick={onCheckout}
-        className="mt-4 flex w-full items-center justify-center rounded-xl bg-zinc-900 py-3.5 text-sm font-bold text-white transition hover:bg-[#c9a227] hover:text-zinc-900"
+        disabled={quantityBlocked}
+        title={
+          quantityBlocked
+            ? "Update quantities to meet purchase requirements before checkout."
+            : undefined
+        }
+        className="mt-4 flex w-full items-center justify-center rounded-xl bg-zinc-900 py-3.5 text-sm font-bold text-white transition hover:bg-[#c9a227] hover:text-zinc-900 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500 disabled:hover:bg-zinc-300 disabled:hover:text-zinc-500"
       >
         Proceed to Checkout
       </button>

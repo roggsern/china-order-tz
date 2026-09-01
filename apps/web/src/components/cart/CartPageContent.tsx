@@ -11,7 +11,9 @@ import {
 import { CartEmptyState } from "./CartEmptyState";
 import { CartItemRow } from "./CartItemRow";
 import { CartProductBulkBanner } from "./CartProductBulkBanner";
+import { CartPurchaseQuantityBanner } from "./CartPurchaseQuantityBanner";
 import { cartLineProductKey, groupCartLinesByCatalogProduct } from "@/lib/cart/group-by-product";
+import { selectBlockerForProduct } from "@/lib/purchasing/purchase-quantity";
 import { CartFrequentlyBoughtTogether } from "./CartFrequentlyBoughtTogether";
 import { CartMobileStickyCheckout } from "./CartMobileStickyCheckout";
 import { OrderSummary } from "./OrderSummary";
@@ -19,7 +21,7 @@ import { SavedForLaterRow } from "./SavedForLaterRow";
 import { CartPageSkeleton } from "@/components/ui/PageSkeletons";
 
 export function CartPageContent() {
-  const { items, savedForLater, totals, isHydrated } = useCart();
+  const { items, savedForLater, totals, isHydrated, purchaseQuantityBlockers } = useCart();
   const displayTotals = useMemo(
     () => resolveCartDisplayTotals(totals, items),
     [totals, items],
@@ -67,17 +69,30 @@ export function CartPageContent() {
             <section aria-label="Cart items" className="min-w-0 space-y-4">
               {hasItems ? (
                 <AnimatePresence initial={false}>
-                  {groupCartLinesByCatalogProduct(items).map((group) => (
+                  {groupCartLinesByCatalogProduct(items).map((group) => {
+                    const productId = group[0]?.catalogProductId ?? null;
+                    const blocker = selectBlockerForProduct(purchaseQuantityBlockers, productId);
+                    const aggregatesVariants = Boolean(
+                      group.some((item) => item.purchaseQuantity?.aggregates_variants) ||
+                        group.length > 1,
+                    );
+
+                    return (
                     <div
                       key={cartLineProductKey(group[0]!)}
                       className="space-y-3"
                     >
+                      <CartPurchaseQuantityBanner
+                        blocker={blocker}
+                        aggregatesVariants={aggregatesVariants}
+                      />
                       <CartProductBulkBanner items={group} />
                       {group.map((item) => (
                         <CartItemRow key={item.id} item={item} />
                       ))}
                     </div>
-                  ))}
+                    );
+                  })}
                 </AnimatePresence>
               ) : (
                 <CartEmptyState />

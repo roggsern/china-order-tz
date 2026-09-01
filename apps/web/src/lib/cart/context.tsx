@@ -8,6 +8,7 @@ import type {
   CartTotals,
   SavedForLaterItem,
 } from "@/lib/types/cart";
+import type { PurchaseQuantityBlocker } from "@/lib/purchasing/purchase-quantity";
 import type { ShippingMethodCode } from "@/lib/shipping/types";
 
 export type CartContextValue = {
@@ -17,6 +18,7 @@ export type CartContextValue = {
   totals: CartTotals;
   isHydrated: boolean;
   syncError: string | null;
+  purchaseQuantityBlockers: PurchaseQuantityBlocker[];
   clearSyncError: () => void;
   addToCart: (input: AddToCartInput) => Promise<AddToCartResult>;
   updateQuantity: (itemId: string, quantity: number) => void;
@@ -52,7 +54,7 @@ export type CartActionsValue = Pick<
 
 export type CartStateValue = Pick<
   CartContextValue,
-  "items" | "savedForLater" | "discount" | "totals" | "isHydrated" | "syncError"
+  "items" | "savedForLater" | "discount" | "totals" | "isHydrated" | "syncError" | "purchaseQuantityBlockers"
 >;
 
 export const CartContext = createContext<CartContextValue | null>(null);

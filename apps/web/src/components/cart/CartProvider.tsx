@@ -57,6 +57,8 @@ import {
   STALE_CART_AUTH_RECOVERY_MESSAGE,
 } from "@/lib/cart/sync-errors";
 import type { AddToCartResult } from "@/lib/cart/add-to-cart-ui";
+import type { MappedServerCart } from "@/lib/api/customer-cart";
+import { selectBlockerForProduct } from "@/lib/purchasing/purchase-quantity";
 import { filterLocalItemsForServerSync } from "@/lib/cart/sync-local-to-server";
 import { PRODUCTS_UPDATED_EVENT } from "@/lib/admin/product-storage";
 import { getCustomerApiToken } from "@/lib/api/customer-auth";
@@ -66,7 +68,7 @@ import {
   clearServerCartEngine,
   fetchServerCart,
   isServerCartItemId,
-  mapServerCartItems,
+  mapServerCart,
   removeServerCartItem,
   updateServerCartItemQuantity,
 } from "@/lib/api/customer-cart";
@@ -108,12 +110,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setSyncError(null);
   }, []);
 
-  const applyServerCart = useCallback((serverItems: CartLineItem[], prev: CartState): CartState => {
+  const applyServerCart = useCallback((mapped: MappedServerCart, prev: CartState): CartState => {
     serverModeRef.current = true;
     setSyncError(null);
     return normalizeCartState({
       ...prev,
-      items: serverItems,
+      items: mapped.items,
+      purchaseQuantityBlockers: mapped.purchaseQuantityBlockers,
       discount: 0,
     });
   }, []);
@@ -163,7 +166,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         }
 
         if ((serverCart.items?.length ?? 0) > 0) {
-          const mapped = mapServerCartItems(serverCart);
+          const mapped = mapServerCart(serverCart);
           const next = applyServerCart(mapped, validated);
           persistState(next);
           return next;
@@ -190,7 +193,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         try {
           const serverCart = await fetchServerCart(token);
           if ((serverCart.items?.length ?? 0) > 0) {
-            const next = applyServerCart(mapServerCartItems(serverCart), validated);
+            const next = applyServerCart(mapServerCart(serverCart), validated);
             persistState(next);
             return next;
           }
@@ -360,7 +363,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     async (token: string) => {
       try {
         const serverCart = await fetchServerCart(token);
-        updateState((prev) => applyServerCart(mapServerCartItems(serverCart), prev));
+        updateState((prev) => applyServerCart(mapServerCart(serverCart), prev));
       } catch {
         // Keep current UI state; syncError already surfaced.
       }
@@ -466,9 +469,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
             },
             token,
           );
-          updateState((prev) => applyServerCart(mapServerCartItems(serverCart), prev));
+          const mapped = mapServerCart(serverCart);
+          updateState((prev) => applyServerCart(mapped, prev));
           setSyncError(null);
-          return { ok: true };
+          return {
+            ok: true,
+            purchaseQuantityBlocker: selectBlockerForProduct(
+              mapped.purchaseQuantityBlockers,
+              catalogProductId,
+            ),
+          };
         } catch (error) {
           const resolution = resolveCartSyncFailure(
             error,
@@ -524,7 +534,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
                     ),
                     token,
                   );
-            updateState((prev) => applyServerCart(mapServerCartItems(serverCart), prev));
+            updateState((prev) => applyServerCart(mapServerCart(serverCart), prev));
           } catch (error) {
             if (isCustomerCartAuthError(error)) {
               clearStaleCustomerAuth();
@@ -621,7 +631,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         void (async () => {
           try {
             const serverCart = await removeServerCartItem(itemId, token);
-            updateState((prev) => applyServerCart(mapServerCartItems(serverCart), prev));
+            updateState((prev) => applyServerCart(mapServerCart(serverCart), prev));
           } catch (error) {
             if (isCustomerCartAuthError(error)) {
               clearStaleCustomerAuth();
@@ -800,6 +810,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       ...prev,
       items: [],
       discount: 0,
+      purchaseQuantityBlockers: [],
     }));
   }, [updateState]);
 
@@ -810,7 +821,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         try {
           const serverCart = await clearServerCartEngine(token);
           updateState((prev) =>
-            applyServerCart(mapServerCartItems(serverCart), {
+            applyServerCart(mapServerCart(serverCart), {
               ...prev,
               savedForLater: [],
               discount: 0,
@@ -858,8 +869,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
       totals,
       isHydrated,
       syncError,
+      purchaseQuantityBlockers: state.purchaseQuantityBlockers ?? [],
     }),
-    [state.items, state.savedForLater, state.discount, totals, isHydrated, syncError],
+    [
+      state.items,
+      state.savedForLater,
+      state.discount,
+      state.purchaseQuantityBlockers,
+      totals,
+      isHydrated,
+      syncError,
+    ],
   );
 
   const actionsValue = useMemo<CartActionsValue>(

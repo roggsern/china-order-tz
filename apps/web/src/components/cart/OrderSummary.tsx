@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import type { CartTotals } from "@/lib/types/cart";
-import { useCartActions } from "@/lib/cart/context";
+import { useCartActions, useCartState } from "@/lib/cart/context";
 import { OrderSummaryTotals } from "./OrderSummaryTotals";
 import { ProceedToCheckoutButton } from "./ProceedToCheckoutButton";
 import { CartTrustStrip } from "./CartTrustStrip";
+import { shouldBlockCheckoutCta } from "@/lib/purchasing/purchase-quantity";
 
 interface OrderSummaryProps {
   totals: CartTotals;
@@ -23,6 +24,8 @@ export function OrderSummary({
   hideShipping = false,
 }: OrderSummaryProps) {
   const { clearCart } = useCartActions();
+  const { purchaseQuantityBlockers } = useCartState();
+  const quantityBlocked = shouldBlockCheckoutCta(purchaseQuantityBlockers);
 
   return (
     <aside
@@ -48,6 +51,11 @@ export function OrderSummary({
 
         {showCheckoutAction && (
           <div className="mt-6 space-y-3">
+            {quantityBlocked ? (
+              <p className="text-sm text-amber-800" role="status">
+                Update quantities to meet purchase requirements before checkout.
+              </p>
+            ) : null}
             <ProceedToCheckoutButton className="mt-0" />
             <Link
               href="/products"

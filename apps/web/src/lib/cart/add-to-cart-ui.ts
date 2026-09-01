@@ -1,5 +1,11 @@
+import type { PurchaseQuantityBlocker } from "@/lib/purchasing/purchase-quantity";
+
 export type AddToCartResult =
-  | { ok: true; recoveredFromStaleAuth?: boolean }
+  | {
+      ok: true;
+      recoveredFromStaleAuth?: boolean;
+      purchaseQuantityBlocker?: PurchaseQuantityBlocker | null;
+    }
   | { ok: false; message: string };
 
 export const DEFAULT_ADD_TO_CART_FAILURE_MESSAGE = "Unable to add item to your cart.";

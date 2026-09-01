@@ -93,3 +93,17 @@ test("legacy product without channel and without freight resolves tz", () => {
 
   assert.equal(resolved.requiresChinaShipping, false);
 });
+
+test("place-order 422 keeps structured purchase quantity fields", async () => {
+  const ordersSource = await readFile(new URL("./customer-orders.ts", import.meta.url), "utf8");
+  const checkoutSource = await readFile(new URL("./customer-checkout.ts", import.meta.url), "utf8");
+
+  assert.match(ordersSource, /parsePurchaseQuantityCheckoutError/);
+  assert.match(ordersSource, /formatPurchaseQuantityCheckoutMessage/);
+  assert.match(ordersSource, /purchase_quantity_unsatisfied/);
+  assert.match(
+    checkoutSource,
+    /error instanceof CheckoutSessionApiError \|\| error instanceof CustomerOrdersApiError/,
+  );
+  assert.match(checkoutSource, /error\.purchaseQuantity/);
+});

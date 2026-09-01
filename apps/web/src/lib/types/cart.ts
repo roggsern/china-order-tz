@@ -7,6 +7,10 @@ import type {
 } from "@/lib/types/catalog";
 import type { ShippingMethodCode } from "@/lib/shipping/types";
 import type { VolumePricing } from "@/lib/pricing/volume-pricing";
+import type {
+  PurchaseQuantityBlocker,
+  PurchaseQuantityPresentation,
+} from "@/lib/purchasing/purchase-quantity";
 
 export type CartConfigurationAttribute = {
   name: string;
@@ -26,6 +30,8 @@ export type CartItemSnapshot = {
   compareAtUnitPrice?: number;
   /** Server volume-pricing presentation — never invent client payable math from this. */
   volumePricing?: VolumePricing | null;
+  /** Server purchase-quantity presentation for this product aggregate. */
+  purchaseQuantity?: PurchaseQuantityPresentation | null;
   origin: ProductOrigin;
   brand?: string;
   brandSlug?: string;
@@ -67,6 +73,8 @@ export type CartState = {
   items: CartLineItem[];
   savedForLater: SavedForLaterItem[];
   discount: number;
+  /** One checkout blocker per illegal product_id from the server cart. */
+  purchaseQuantityBlockers?: PurchaseQuantityBlocker[];
 };
 
 export type AddToCartInput = {

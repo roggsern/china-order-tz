@@ -5,6 +5,10 @@ import type { Product } from "@/lib/types/catalog";
 import { formatPrice } from "@/lib/catalog/utils";
 import { AddToCartButton } from "../AddToCartButton";
 import { BuyNowButton } from "../BuyNowButton";
+import {
+  formatBuyNowInterceptMessage,
+  type PurchaseQuantityPresentation,
+} from "@/lib/purchasing/purchase-quantity";
 
 interface ProductMobileStickyBarProps {
   product: Product;
@@ -21,6 +25,7 @@ interface ProductMobileStickyBarProps {
   needsConfiguration?: boolean;
   isOutOfStock?: boolean;
   purchaseUnavailable?: boolean;
+  purchaseQuantity?: PurchaseQuantityPresentation | null;
 }
 
 export function ProductMobileStickyBar({
@@ -38,8 +43,10 @@ export function ProductMobileStickyBar({
   needsConfiguration = false,
   isOutOfStock = false,
   purchaseUnavailable = false,
+  purchaseQuantity = null,
 }: ProductMobileStickyBarProps) {
   const reduceMotion = useReducedMotion();
+  const blockedMessage = formatBuyNowInterceptMessage(purchaseQuantity);
   const displayPrice =
     typeof quotedUnitPrice === "number" && Number.isFinite(quotedUnitPrice)
       ? quotedUnitPrice
@@ -57,6 +64,11 @@ export function ProductMobileStickyBar({
       className="fixed inset-x-0 bottom-0 z-[55] border-t border-zinc-100 bg-white/95 shadow-[0_-10px_36px_rgba(0,0,0,0.12)] backdrop-blur-md lg:hidden"
     >
       <div className="space-y-2.5 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        {blockedMessage ? (
+          <p className="text-[11px] leading-snug text-amber-800" role="status">
+            {blockedMessage}
+          </p>
+        ) : null}
         <div className="flex items-end justify-between gap-3">
           <div className="min-w-0">
             <AnimatePresence mode="wait">
@@ -103,6 +115,7 @@ export function ProductMobileStickyBar({
             quotedUnitPrice={displayPrice}
             compareAtUnitPrice={compareAtUnitPrice}
             stockOverride={stockOverride}
+            purchaseQuantity={purchaseQuantity}
           />
           <AddToCartButton
             product={product}

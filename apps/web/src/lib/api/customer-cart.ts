@@ -11,6 +11,11 @@ import type { CartLineItem } from "@/lib/types/cart";
 import type { ProductOrigin } from "@/lib/types/catalog";
 import type { ShippingMethodCode } from "@/lib/shipping/types";
 import { mapVolumePricing, parseVolumeMoney } from "@/lib/pricing/volume-pricing";
+import {
+  mapPurchaseQuantity,
+  mapPurchaseQuantityBlockers,
+  type PurchaseQuantityBlocker,
+} from "@/lib/purchasing/purchase-quantity";
 
 type ApiSuccessResponse<T> = {
   success?: boolean;
@@ -94,6 +99,7 @@ export type ServerCartItem = {
     }> | null;
   } | null;
   volume_pricing?: unknown;
+  purchase_quantity?: unknown;
 };
 
 export type ServerCart = {
@@ -105,6 +111,12 @@ export type ServerCart = {
   is_empty?: boolean;
   subtotal?: string | number;
   total?: string | number;
+  purchase_quantity_blockers?: unknown;
+};
+
+export type MappedServerCart = {
+  items: CartLineItem[];
+  purchaseQuantityBlockers: PurchaseQuantityBlocker[];
 };
 
 export class CustomerCartApiError extends Error {
@@ -298,6 +310,7 @@ export function mapServerCartItems(cart: ServerCart): CartLineItem[] {
         compareAtUnitPrice:
           typeof compareAt === "number" && compareAt > unitPrice + 0.001 ? compareAt : undefined,
         volumePricing,
+        purchaseQuantity: mapPurchaseQuantity(item.purchase_quantity),
         origin: resolveServerCartProductOrigin(item.product),
         brand: item.product?.brand?.name,
         brandSlug: item.product?.brand?.slug,
@@ -325,6 +338,13 @@ export function mapServerCartItems(cart: ServerCart): CartLineItem[] {
       }
       return withShipping;
     });
+}
+
+export function mapServerCart(cart: ServerCart): MappedServerCart {
+  return {
+    items: mapServerCartItems(cart),
+    purchaseQuantityBlockers: mapPurchaseQuantityBlockers(cart.purchase_quantity_blockers),
+  };
 }
 
 export async function fetchServerCart(token?: string | null): Promise<ServerCart> {

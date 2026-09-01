@@ -15,6 +15,7 @@ import {
   mapBackendSummaryToTotals,
   runBackendCheckoutFlow,
 } from "@/lib/api/customer-checkout";
+import { formatPurchaseQuantityCheckoutMessage } from "@/lib/purchasing/purchase-quantity";
 import { loadVisitorIdentity } from "@/lib/storefront/visitor-identity";
 import { saveLocalOrderFromBackendConfirmation } from "@/lib/checkout/backend-order";
 import {
@@ -579,6 +580,10 @@ export function CheckoutPageContent() {
         if (isAuthRequiredMessage(error.message) || error.statusCode === 401) {
           setNeedsAuth(true);
           setSubmitError(undefined);
+        } else if (error.code === "purchase_quantity_unsatisfied") {
+          setSubmitError(
+            formatPurchaseQuantityCheckoutMessage(error.purchaseQuantity) ?? error.message,
+          );
         } else if (/delivery address/i.test(error.message)) {
           setAddressError(CHECKOUT_DELIVERY_ADDRESS_REQUIRED);
           setSubmitError(undefined);

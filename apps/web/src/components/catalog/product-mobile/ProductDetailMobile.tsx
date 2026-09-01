@@ -23,6 +23,8 @@ import type { StorefrontPriceQuote } from "@/lib/catalog/storefront-configuratio
 import { isProductPurchaseUnavailable } from "@/lib/catalog/product-availability";
 import { ProductMoqStatusCard } from "../ProductMoqStatusCard";
 import { BulkPricingPanel } from "../BulkPricingPanel";
+import { ProductPurchaseQuantityGuidance } from "../ProductPurchaseQuantityGuidance";
+import { resolveQuotePurchaseQuantity } from "@/lib/purchasing/purchase-quantity";
 import { ProductGalleryMobile } from "./ProductGalleryMobile";
 import { ProductMobileTabs } from "./ProductMobileTabs";
 import { ProductSupplierCard } from "./ProductSupplierCard";
@@ -114,6 +116,7 @@ export function ProductDetailMobile({
     moqDisplay.wholesaleApplied && compareAtUnitPrice != null
       ? compareAtUnitPrice
       : product.oldPrice;
+  const purchaseQuantity = resolveQuotePurchaseQuantity(quote, quantity);
 
   useEffect(() => {
     trackRecentlyViewed(product);
@@ -188,6 +191,10 @@ export function ProductDetailMobile({
             </p>
           ) : (
             <>
+              <ProductPurchaseQuantityGuidance
+                className="mt-3"
+                presentation={purchaseQuantity}
+              />
               <BulkPricingPanel
                 className="mt-3"
                 pricing={moqDisplay.volumePricing}
@@ -217,6 +224,7 @@ export function ProductDetailMobile({
             product={product}
             quantity={quantity}
             disabled={!canAdd}
+            purchaseQuantity={purchaseQuantity}
             className="w-full"
             configurationId={configSelection.configurationId}
             configurationLabel={configSelection.label}
@@ -302,6 +310,7 @@ export function ProductDetailMobile({
         quotedUnitPrice={unitPrice}
         compareAtUnitPrice={compareAtUnitPrice}
         lineTotal={lineTotal}
+        purchaseQuantity={purchaseQuantity}
         needsConfiguration={needsConfiguration}
         isOutOfStock={isOutOfStock}
         stockOverride={

@@ -20,6 +20,7 @@ import { toApiShippingMethod } from "@/lib/checkout/shipping-choice";
 import { inferProductOrigin } from "@/lib/catalog/map-api-product";
 import { loadVisitorIdentity } from "@/lib/storefront/visitor-identity";
 import type { ProductOrigin } from "@/lib/types/catalog";
+import type { PurchaseQuantityBlocker } from "@/lib/purchasing/purchase-quantity";
 
 type ApiSuccessResponse<T> = {
   success?: boolean;
@@ -60,6 +61,8 @@ export class CustomerCheckoutApiError extends Error {
   constructor(
     message: string,
     public readonly statusCode?: number,
+    public readonly code?: string,
+    public readonly purchaseQuantity?: PurchaseQuantityBlocker | null,
   ) {
     super(message);
     this.name = "CustomerCheckoutApiError";
@@ -568,6 +571,14 @@ export async function runBackendCheckoutFlow(
       error instanceof CheckoutSessionApiError || error instanceof CustomerOrdersApiError
         ? error.statusCode
         : undefined;
-    throw new CustomerCheckoutApiError(message, statusCode);
+    const code =
+      error instanceof CheckoutSessionApiError || error instanceof CustomerOrdersApiError
+        ? error.code
+        : undefined;
+    const purchaseQuantity =
+      error instanceof CheckoutSessionApiError || error instanceof CustomerOrdersApiError
+        ? error.purchaseQuantity
+        : undefined;
+    throw new CustomerCheckoutApiError(message, statusCode, code, purchaseQuantity);
   }
 }

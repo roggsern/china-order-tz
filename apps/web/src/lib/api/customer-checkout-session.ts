@@ -1,9 +1,15 @@
 import { getCustomerApiToken } from "@/lib/api/customer-auth";
 import type { StorefrontVisitorIdentity } from "@/lib/storefront/visitor-identity";
+import {
+  formatPurchaseQuantityCheckoutMessage,
+  parsePurchaseQuantityCheckoutError,
+  type PurchaseQuantityBlocker,
+} from "@/lib/purchasing/purchase-quantity";
 
 type ApiSuccessResponse<T> = {
   success?: boolean;
   message?: string;
+  code?: string;
   data?: T;
   errors?: Record<string, string[]>;
 };
@@ -77,6 +83,8 @@ export class CheckoutSessionApiError extends Error {
     message: string,
     public readonly statusCode?: number,
     public readonly fieldErrors?: Record<string, string[]>,
+    public readonly code?: string,
+    public readonly purchaseQuantity?: PurchaseQuantityBlocker | null,
   ) {
     super(message);
     this.name = "CheckoutSessionApiError";
@@ -124,10 +132,18 @@ async function sessionApiFetch<T>(
   const payload = (await response.json()) as ApiSuccessResponse<T>;
 
   if (!response.ok || payload.success === false) {
+    const parsed = parsePurchaseQuantityCheckoutError(payload);
+    const structuredMessage =
+      parsed.code === "purchase_quantity_unsatisfied"
+        ? formatPurchaseQuantityCheckoutMessage(parsed.blocker) ??
+          formatApiErrorMessage(payload, fallbackError)
+        : formatApiErrorMessage(payload, fallbackError);
     throw new CheckoutSessionApiError(
-      formatApiErrorMessage(payload, fallbackError),
+      structuredMessage,
       response.status,
       payload.errors,
+      parsed.code ?? undefined,
+      parsed.blocker,
     );
   }
 

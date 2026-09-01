@@ -1,4 +1,5 @@
 import type { CartLineItem, CartState } from "@/lib/types/cart";
+import { mapPurchaseQuantity, mapPurchaseQuantityBlockers } from "@/lib/purchasing/purchase-quantity";
 import type { ShippingMethodCode } from "@/lib/shipping/types";
 import { normalizeDeliveryDays } from "@/lib/catalog/delivery";
 import { getSelectedSize, normalizeSelectedSize, normalizeVariantChoice } from "@/lib/catalog/variants";
@@ -11,6 +12,7 @@ export const EMPTY_CART_STATE: CartState = {
   items: [],
   savedForLater: [],
   discount: 0,
+  purchaseQuantityBlockers: [],
 };
 
 function isShippingMethodCode(value: unknown): value is ShippingMethodCode {
@@ -57,6 +59,7 @@ function normalizeCartLineItem(raw: Partial<CartLineItem> & CartLineItem): CartL
           ),
     estimatedDeliveryDays: normalizeDeliveryDays(raw.estimatedDeliveryDays) ?? "—",
     quantity: Math.max(1, raw.quantity ?? 1),
+    purchaseQuantity: mapPurchaseQuantity(raw.purchaseQuantity),
     selectedSize,
     variant,
   } as CartLineItem);
@@ -95,6 +98,7 @@ export function normalizeCartState(raw: Partial<CartState> | null | undefined): 
     items,
     savedForLater,
     discount: typeof raw.discount === "number" ? raw.discount : 0,
+    purchaseQuantityBlockers: mapPurchaseQuantityBlockers(raw.purchaseQuantityBlockers),
   };
 }
 

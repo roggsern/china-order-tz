@@ -11,6 +11,7 @@ import {
   showCustomerToast,
   showProductAddedToast,
 } from "@/lib/customer/customer-toast";
+import { formatAddToCartFollowUp } from "@/lib/purchasing/purchase-quantity";
 import { getCatalogProductImageSrc } from "@/lib/catalog/product-images";
 import {
   isProductPurchaseUnavailable,
@@ -78,15 +79,22 @@ export function AddToCartButton({
 
     setPending(true);
     void runAddToCartUi(addToCart, {
-      onSuccess: () => {
+      onSuccess: (result) => {
         openCartDrawer();
         setAdded(true);
+        const followUp = formatAddToCartFollowUp(result.purchaseQuantityBlocker);
         showProductAddedToast({
           productName: product.name,
           configurationLabel: configurationLabel.trim() || undefined,
           quantity,
           imageUrl: getCatalogProductImageSrc(product) || undefined,
         });
+        if (followUp) {
+          showCustomerToast({
+            variant: "info",
+            text: followUp,
+          });
+        }
         window.setTimeout(() => setAdded(false), 2000);
         setPending(false);
       },

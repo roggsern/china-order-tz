@@ -19,7 +19,9 @@ import {
 } from "./ProductConfigurationPicker";
 import { ProductMoqStatusCard } from "./ProductMoqStatusCard";
 import { BulkPricingPanel } from "./BulkPricingPanel";
+import { ProductPurchaseQuantityGuidance } from "./ProductPurchaseQuantityGuidance";
 import type { StorefrontPriceQuote } from "@/lib/catalog/storefront-configuration";
+import { resolveQuotePurchaseQuantity } from "@/lib/purchasing/purchase-quantity";
 import { isProductPurchaseUnavailable } from "@/lib/catalog/product-availability";
 
 interface ProductDetailPurchasePanelProps {
@@ -114,6 +116,7 @@ export function ProductDetailPurchasePanel({
     moqDisplay.wholesaleApplied && compareAtUnitPrice != null
       ? compareAtUnitPrice
       : product.oldPrice;
+  const purchaseQuantity = resolveQuotePurchaseQuantity(quote, quantity);
 
   return (
     <div className="min-w-0 lg:sticky lg:top-20 lg:self-start">
@@ -156,6 +159,7 @@ export function ProductDetailPurchasePanel({
             max={quantityMax}
             min={1}
           />
+          <ProductPurchaseQuantityGuidance presentation={purchaseQuantity} />
           <BulkPricingPanel
             pricing={moqDisplay.volumePricing}
             showVariantAggregationNote={Boolean(configSelection.hasConfigurations)}
@@ -181,6 +185,7 @@ export function ProductDetailPurchasePanel({
             product={product}
             quantity={quantity}
             disabled={!canAdd}
+            purchaseQuantity={purchaseQuantity}
             className="w-full"
             configurationId={configSelection.configurationId}
             configurationLabel={configSelection.label}

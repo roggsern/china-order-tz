@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  mapServerCart,
   mapServerCartItems,
   resolveServerCartProductOrigin,
   type ServerCart,
@@ -282,4 +283,187 @@ test("mapServerCartItems maps server volume_pricing and compare-at without inven
   assert.equal(mapped.volumePricing?.quantity_to_next_tier, 40);
   assert.equal(mapped.volumePricing?.resolved_unit_price, "8000.00");
   assert.equal(mapped.volumePricing?.savings_total, "6000.00");
+});
+
+test("mapServerCart maps purchase_quantity lines and one blocker per product", () => {
+  const cart: ServerCart = {
+    id: "cart-1",
+    purchase_quantity_blockers: [
+      {
+        product_id: BASE_PRODUCT_ID,
+        minimum_quantity: 6,
+        increment: 3,
+        eligible_quantity: 4,
+        minimum_satisfied: false,
+        increment_satisfied: true,
+        quantity_to_minimum: 2,
+        next_legal_quantity: 6,
+        blocks_checkout: true,
+      },
+    ],
+    items: [
+      {
+        id: "item-red",
+        product_id: BASE_PRODUCT_ID,
+        product_variant_id: "variant-red",
+        quantity: 2,
+        unit_price: 10000,
+        product: {
+          id: BASE_PRODUCT_ID,
+          slug: "phone",
+          name: "Phone",
+          commerce_channel_code: "TZ_LOCAL",
+        },
+        purchase_quantity: {
+          minimum_quantity: 6,
+          increment: 3,
+          eligible_quantity: 4,
+          aggregates_variants: true,
+          minimum_satisfied: false,
+          increment_satisfied: true,
+          quantity_to_minimum: 2,
+          next_legal_quantity: 6,
+          construction_complete: false,
+          blocks_checkout: true,
+        },
+      },
+      {
+        id: "item-blue",
+        product_id: BASE_PRODUCT_ID,
+        product_variant_id: "variant-blue",
+        quantity: 2,
+        unit_price: 10000,
+        product: {
+          id: BASE_PRODUCT_ID,
+          slug: "phone",
+          name: "Phone",
+          commerce_channel_code: "TZ_LOCAL",
+        },
+        purchase_quantity: {
+          minimum_quantity: 6,
+          increment: 3,
+          eligible_quantity: 4,
+          aggregates_variants: true,
+          minimum_satisfied: false,
+          increment_satisfied: true,
+          quantity_to_minimum: 2,
+          next_legal_quantity: 6,
+          construction_complete: false,
+          blocks_checkout: true,
+        },
+      },
+    ],
+  };
+
+  const mapped = mapServerCart(cart);
+  assert.equal(mapped.items.length, 2);
+  assert.equal(mapped.items[0]?.purchaseQuantity?.eligible_quantity, 4);
+  assert.equal(mapped.items[0]?.purchaseQuantity?.aggregates_variants, true);
+  assert.equal(mapped.purchaseQuantityBlockers.length, 1);
+  assert.equal(mapped.purchaseQuantityBlockers[0]?.product_id, BASE_PRODUCT_ID);
+});
+
+test("mapServerCart treats missing purchase_quantity as unrestricted", () => {
+  const cart: ServerCart = {
+    id: "cart-1",
+    items: [
+      {
+        id: "item-1",
+        product_id: BASE_PRODUCT_ID,
+        product_variant_id: null,
+        quantity: 1,
+        unit_price: 10000,
+        product: {
+          id: BASE_PRODUCT_ID,
+          slug: "plain",
+          name: "Plain",
+          commerce_channel_code: "CHINA_IMPORT",
+        },
+      },
+    ],
+  };
+
+  const mapped = mapServerCart(cart);
+  assert.equal(mapped.items[0]?.purchaseQuantity ?? null, null);
+  assert.deepEqual(mapped.purchaseQuantityBlockers, []);
+});
+
+test("cart line catalogProductId matches blocker product_id for grouping", () => {
+  const cart: ServerCart = {
+    id: "cart-1",
+    purchase_quantity_blockers: [
+      {
+        product_id: BASE_PRODUCT_ID,
+        minimum_quantity: 6,
+        increment: null,
+        eligible_quantity: 2,
+        minimum_satisfied: false,
+        increment_satisfied: true,
+        quantity_to_minimum: 4,
+        next_legal_quantity: 6,
+        blocks_checkout: true,
+      },
+    ],
+    items: [
+      {
+        id: "item-1",
+        product_id: BASE_PRODUCT_ID,
+        product_variant_id: "variant-red",
+        quantity: 2,
+        unit_price: 10000,
+        product: {
+          id: BASE_PRODUCT_ID,
+          slug: "phone",
+          name: "Phone",
+          commerce_channel_code: "CHINA_IMPORT",
+        },
+      },
+    ],
+  };
+
+  const mapped = mapServerCart(cart);
+  assert.equal(mapped.items[0]?.catalogProductId, BASE_PRODUCT_ID);
+  assert.equal(mapped.purchaseQuantityBlockers[0]?.product_id, mapped.items[0]?.catalogProductId);
+});
+
+test("malformed purchase_quantity degrades without breaking the cart", () => {
+  const cart: ServerCart = {
+    id: "cart-1",
+    purchase_quantity_blockers: [
+      { product_id: BASE_PRODUCT_ID, minimum_quantity: "6.5" },
+      {
+        product_id: "other-product",
+        minimum_quantity: 8,
+        increment: null,
+        eligible_quantity: 1,
+        minimum_satisfied: false,
+        increment_satisfied: true,
+        quantity_to_minimum: 7,
+        next_legal_quantity: 8,
+        blocks_checkout: true,
+      },
+    ],
+    items: [
+      {
+        id: "item-1",
+        product_id: BASE_PRODUCT_ID,
+        product_variant_id: null,
+        quantity: 2,
+        unit_price: 10000,
+        product: {
+          id: BASE_PRODUCT_ID,
+          slug: "plain",
+          name: "Plain",
+          commerce_channel_code: "TZ_LOCAL",
+        },
+        purchase_quantity: { minimum_quantity: 6 },
+      },
+    ],
+  };
+
+  const mapped = mapServerCart(cart);
+  assert.equal(mapped.items.length, 1);
+  assert.equal(mapped.items[0]?.purchaseQuantity ?? null, null);
+  assert.equal(mapped.purchaseQuantityBlockers.length, 1);
+  assert.equal(mapped.purchaseQuantityBlockers[0]?.product_id, "other-product");
 });

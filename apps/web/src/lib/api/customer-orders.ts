@@ -1,4 +1,9 @@
 import { getCustomerApiToken } from "@/lib/api/customer-auth";
+import {
+  formatPurchaseQuantityCheckoutMessage,
+  parsePurchaseQuantityCheckoutError,
+  type PurchaseQuantityBlocker,
+} from "@/lib/purchasing/purchase-quantity";
 import { resolveImageUrl } from "@/lib/catalog/product-images";
 import { getCustomerSession } from "@/lib/customer/session";
 import { fetchClientCatalogProducts } from "@/lib/catalog/client-catalog";
@@ -93,6 +98,8 @@ export class CustomerOrdersApiError extends Error {
   constructor(
     message: string,
     public readonly statusCode?: number,
+    public readonly code?: string,
+    public readonly purchaseQuantity?: PurchaseQuantityBlocker | null,
   ) {
     super(message);
     this.name = "CustomerOrdersApiError";
@@ -646,17 +653,26 @@ export async function createOrderFromCheckoutSession(
   const payload = (await response.json()) as {
     success?: boolean;
     message?: string;
-    data?: OrderEngineCreatedOrder;
+    code?: string;
+    data?: OrderEngineCreatedOrder | Record<string, unknown>;
   };
 
-  if (!response.ok || payload.success === false || !payload.data) {
+  if (!response.ok || payload.success === false || !payload.data || !("id" in payload.data)) {
+    const parsed = parsePurchaseQuantityCheckoutError(payload);
+    const fallback = payload.message ?? "Unable to create order from checkout session.";
+    const structuredMessage =
+      parsed.code === "purchase_quantity_unsatisfied"
+        ? formatPurchaseQuantityCheckoutMessage(parsed.blocker) ?? fallback
+        : fallback;
     throw new CustomerOrdersApiError(
-      payload.message ?? "Unable to create order from checkout session.",
+      structuredMessage,
       response.status,
+      parsed.code ?? payload.code,
+      parsed.blocker,
     );
   }
 
-  return payload.data;
+  return payload.data as OrderEngineCreatedOrder;
 }
 
 export async function fetchCustomerOrder(
