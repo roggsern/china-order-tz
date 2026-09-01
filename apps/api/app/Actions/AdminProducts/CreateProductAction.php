@@ -3,6 +3,8 @@
 namespace App\Actions\AdminProducts;
 
 use App\Enums\CommerceChannelCode;
+use App\Enums\ProductLifecycleStatus;
+use App\Enums\ProductPricingModel;
 use App\Enums\ProductVisibility;
 use App\Events\Audit\ProductCreated;
 use App\Events\Commerce\CommerceChannelAssigned;
@@ -18,8 +20,6 @@ use App\Services\Inventory\AdminInventoryApplicationService;
 use App\Services\Pricing\SyncConfigurationPriceTiers;
 use App\Services\ProductConfiguration\ResolveTypeFromCategory;
 use App\Services\ProductConfiguration\SyncProductConfigurations;
-use App\Enums\ProductLifecycleStatus;
-use App\Enums\ProductPricingModel;
 use App\Services\ProductPurchasability\ProductPurchasabilityPolicy;
 use App\Services\ProductShipping\ProductShippingOptionEngine;
 use App\Support\Catalog\ProductConditionResolver;
@@ -157,6 +157,8 @@ class CreateProductAction
                 'price' => $validated['price'] ?? 0,
                 'pricing_model' => ProductPricingModel::tryFromMixed($validated['pricing_model'] ?? null)
                     ?? ProductPricingModel::Simple,
+                'minimum_order_quantity' => $validated['minimum_order_quantity'] ?? null,
+                'order_increment' => $validated['order_increment'] ?? null,
                 'compare_at_price' => $validated['compare_at_price'] ?? null,
                 'cost_price' => $validated['cost_price'] ?? null,
                 'air_shipping_price' => $channelCode === CommerceChannelCode::ChinaImport

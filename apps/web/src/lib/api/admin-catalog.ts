@@ -1,5 +1,6 @@
 import { enrichApiCategoryFromStatic } from "@/lib/catalog/category-presentation";
 import { legacyNumericIdFromCatalogProductId as apiIdToNumericId } from "@/lib/admin/product-id-map";
+import { parseNullableInt, purchaseQuantityWriteFields } from "@/lib/admin/purchase-quantity-rules";
 import { resolveProductMediaUploadError } from "@/lib/admin/product-media-upload";
 import type {
   Category,
@@ -162,6 +163,8 @@ export type AdminApiProduct = {
   short_description?: string | null;
   price: string | number;
   pricing_model?: string | null;
+  minimum_order_quantity?: number | null;
+  order_increment?: number | null;
   compare_at_price?: string | number | null;
   cost_price?: string | number | null;
   commerce_channel_id?: string | null;
@@ -249,6 +252,8 @@ export type AdminCatalogProduct = {
   sku: string | null;
   price: number;
   pricingModel: "simple" | "variants";
+  minimumOrderQuantity: number | null;
+  orderIncrement: number | null;
   costPrice: number | null;
   shortDescription: string;
   description: string;
@@ -307,6 +312,8 @@ export type AdminCatalogProductWritePayload = {
   sku?: string | null;
   price?: number;
   pricing_model?: "simple" | "variant";
+  minimum_order_quantity?: number | null;
+  order_increment?: number | null;
   cost_price?: number | null;
   short_description?: string | null;
   description?: string | null;
@@ -657,6 +664,8 @@ export function mapAdminApiProductToProduct(product: AdminApiProduct): Product {
     featured: Boolean(product.is_featured),
     status: mapStatus(product.lifecycle_status, product.is_active),
     isDemo: Boolean(product.is_demo),
+    minimumOrderQuantity: parseNullableInt(product.minimum_order_quantity),
+    orderIncrement: parseNullableInt(product.order_increment),
     priceTiers: productPriceTiers,
     createdAt: product.created_at ?? undefined,
     configurations,
@@ -2205,6 +2214,8 @@ export type AdminProductCreatePayload = {
   is_featured?: boolean;
   is_demo?: boolean;
   lifecycle_status: "draft" | "active" | "out_of_stock" | "archived";
+  minimum_order_quantity?: number | null;
+  order_increment?: number | null;
   price_tiers?: Array<{
     min_quantity: number;
     tier_type: "fixed_unit" | "percent_off";
@@ -2357,6 +2368,7 @@ export function productFormDataToCreatePayload(
     is_featured: Boolean(data.featured),
     is_demo: Boolean(data.isDemo),
     lifecycle_status: lifecycleStatus,
+    ...purchaseQuantityWriteFields(data.minimumOrderQuantity, data.orderIncrement),
     price_tiers: hasConfigurations ? [] : productTiers,
     configurations: hasConfigurations
       ? data.configurations.map((row) => ({
@@ -2403,6 +2415,8 @@ export function mapAdminApiCatalogProduct(product: AdminApiProduct): AdminCatalo
     sku: product.sku ?? null,
     price: parseMoney(product.price),
     pricingModel: product.pricing_model === "variant" ? "variants" : "simple",
+    minimumOrderQuantity: parseNullableInt(product.minimum_order_quantity),
+    orderIncrement: parseNullableInt(product.order_increment),
     costPrice:
       product.cost_price == null || product.cost_price === ""
         ? null

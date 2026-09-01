@@ -10,6 +10,7 @@ import { ProductMediaManager } from "@/components/admin/ProductMediaManager";
 import { ProductShippingManager } from "@/components/admin/ProductShippingManager";
 import { ProductCommercialAvailabilityManager } from "@/components/admin/ProductCommercialAvailabilityManager";
 import { ProductSimplePricingFields } from "@/components/admin/ProductSimplePricingFields";
+import { PurchaseQuantityRulesEditor } from "@/components/admin/PurchaseQuantityRulesEditor";
 import { ProductStockManager } from "@/components/admin/ProductStockManager";
 import { ProductVariantsManager } from "@/components/admin/ProductVariantsManager";
 import { PublishReadinessChecklist } from "@/components/admin/PublishReadinessChecklist";
@@ -50,6 +51,8 @@ export type ProductCreationWizardFormState = {
   sku: string;
   price: number;
   costPrice: number | null;
+  minimumOrderQuantity: number | null;
+  orderIncrement: number | null;
   shortDescription: string;
   description: string;
   commerceJourney: CommerceJourney | "";
@@ -703,6 +706,19 @@ export function AdminProductCreationWizard({
               }))
             }
           />
+          <PurchaseQuantityRulesEditor
+            minimumOrderQuantity={form.minimumOrderQuantity}
+            orderIncrement={form.orderIncrement}
+            onMinimumOrderQuantityChange={(minimumOrderQuantity) =>
+              setForm((current) => ({ ...current, minimumOrderQuantity }))
+            }
+            onOrderIncrementChange={(orderIncrement) =>
+              setForm((current) => ({ ...current, orderIncrement }))
+            }
+            aggregatesVariants={false}
+            minimumInputId="wizard-minimum-order-quantity"
+            incrementInputId="wizard-order-increment"
+          />
           {form.commerceJourney === "china" && publishSellableVariantCount === 0 ? (
             <p className="text-xs text-sky-800">
               No variants. Commercial availability is managed at product level.
@@ -729,6 +745,19 @@ export function AdminProductCreationWizard({
 
       {currentStepId === "variants" && form.id ? (
         <div className="space-y-4">
+          <PurchaseQuantityRulesEditor
+            minimumOrderQuantity={form.minimumOrderQuantity}
+            orderIncrement={form.orderIncrement}
+            onMinimumOrderQuantityChange={(minimumOrderQuantity) =>
+              setForm((current) => ({ ...current, minimumOrderQuantity }))
+            }
+            onOrderIncrementChange={(orderIncrement) =>
+              setForm((current) => ({ ...current, orderIncrement }))
+            }
+            aggregatesVariants
+            minimumInputId="wizard-variant-minimum-order-quantity"
+            incrementInputId="wizard-variant-order-increment"
+          />
           {form.commerceJourney === "china" ? (
             <p className="text-xs text-sky-800">
               Stock is managed per variant. Set commercial availability on the Commercial Availability

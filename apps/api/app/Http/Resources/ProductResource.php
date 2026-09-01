@@ -2,8 +2,9 @@
 
 namespace App\Http\Resources;
 
-use App\Services\AdminProducts\AdminProductListSummaryPresenter;
 use App\Enums\ProductPricingModel;
+use App\Models\Product;
+use App\Services\AdminProducts\AdminProductListSummaryPresenter;
 use App\Services\Catalog\CustomerProductMediaResolver;
 use App\Services\Inventory\CatalogStockPresenter;
 use App\Services\ProductConfiguration\LegacyConfigurationProductDetector;
@@ -11,7 +12,7 @@ use App\Support\Catalog\ProductConditionResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/** @mixin \App\Models\Product */
+/** @mixin Product */
 class ProductResource extends JsonResource
 {
     public function toArray(Request $request): array
@@ -31,6 +32,12 @@ class ProductResource extends JsonResource
             'short_description' => $this->short_description,
             'price' => $this->price,
             'pricing_model' => $this->pricing_model?->value ?? ProductPricingModel::Simple->value,
+            'minimum_order_quantity' => $this->minimum_order_quantity !== null
+                ? (int) $this->minimum_order_quantity
+                : null,
+            'order_increment' => $this->order_increment !== null
+                ? (int) $this->order_increment
+                : null,
             'compare_at_price' => $this->compare_at_price,
             'cost_price' => $this->cost_price,
             'air_shipping_price' => $this->air_shipping_price,

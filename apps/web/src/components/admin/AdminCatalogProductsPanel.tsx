@@ -27,6 +27,8 @@ import { fetchAdminSuppliers, type AdminSupplier } from "@/lib/api/admin-procure
 import { PublishReadinessChecklist } from "@/components/admin/PublishReadinessChecklist";
 import { AdminProductBulkActionBar } from "@/components/admin/AdminProductBulkActionBar";
 import { AdminProductCreationWizard } from "@/components/admin/AdminProductCreationWizard";
+import { PurchaseQuantityRulesEditor } from "@/components/admin/PurchaseQuantityRulesEditor";
+import { ProductSimplePricingFields } from "@/components/admin/ProductSimplePricingFields";
 import { AdminProductSectionTabs } from "@/components/admin/AdminProductSectionTabs";
 import { AdminBrandAsyncSelect } from "@/components/admin/AdminBrandAsyncSelect";
 import { AdminCatalogProductTypeSelect } from "@/components/admin/AdminCatalogProductTypeSelect";
@@ -36,7 +38,6 @@ import { ProductForceDeleteDialog } from "@/components/admin/ProductForceDeleteD
 import { ProductMediaManager } from "@/components/admin/ProductMediaManager";
 import { ProductShippingManager } from "@/components/admin/ProductShippingManager";
 import { ProductCommercialAvailabilityManager } from "@/components/admin/ProductCommercialAvailabilityManager";
-import { ProductSimplePricingFields } from "@/components/admin/ProductSimplePricingFields";
 import { ProductStockManager } from "@/components/admin/ProductStockManager";
 import { ProductSpecificationsManager } from "@/components/admin/ProductSpecificationsManager";
 import { ProductVariantsManager } from "@/components/admin/ProductVariantsManager";
@@ -97,6 +98,10 @@ import {
   wizardSavePricingFields,
   type ProductCreationPricingModel,
 } from "@/lib/admin/product-creation-wizard";
+import {
+  purchaseQuantityFormErrors,
+  purchaseQuantityWriteFields,
+} from "@/lib/admin/purchase-quantity-rules";
 
 type CatalogProductsView = "active" | "deleted";
 
@@ -109,6 +114,8 @@ type ProductFormState = {
   sku: string;
   price: number;
   costPrice: number | null;
+  minimumOrderQuantity: number | null;
+  orderIncrement: number | null;
   shortDescription: string;
   description: string;
   commerceJourney: CommerceJourney | "";
@@ -132,6 +139,8 @@ const emptyForm = (): ProductFormState => ({
   sku: "",
   price: 0,
   costPrice: null,
+  minimumOrderQuantity: null,
+  orderIncrement: null,
   shortDescription: "",
   description: "",
   commerceJourney: "",
@@ -483,6 +492,8 @@ export function AdminCatalogProductsPanel() {
         sku: product.sku ?? "",
         price: product.price,
         costPrice: product.costPrice,
+        minimumOrderQuantity: product.minimumOrderQuantity,
+        orderIncrement: product.orderIncrement,
         shortDescription: product.shortDescription,
         description: product.description,
         commerceJourney:
@@ -902,6 +913,17 @@ export function AdminCatalogProductsPanel() {
       return false;
     }
 
+    const purchaseQuantityErrors = purchaseQuantityFormErrors(
+      form.minimumOrderQuantity,
+      form.orderIncrement,
+    );
+    const purchaseQuantityError =
+      purchaseQuantityErrors.minimumOrderQuantity ?? purchaseQuantityErrors.orderIncrement;
+    if (purchaseQuantityError) {
+      setActionError(purchaseQuantityError);
+      return false;
+    }
+
     if (form.id && form.status === "active" && publishReadiness && !publishReadiness.ready) {
       setActionError(
         `Cannot activate yet. Missing: ${formatPublishReadinessMissingLabels(publishReadiness)}.`,
@@ -977,6 +999,7 @@ export function AdminCatalogProductsPanel() {
           sku: form.sku.trim() || null,
           price: pricingFields.price,
           cost_price: pricingFields.cost_price,
+          ...purchaseQuantityWriteFields(form.minimumOrderQuantity, form.orderIncrement),
           short_description: form.shortDescription.trim() || null,
           description: form.description.trim() || null,
           status: form.id ? form.status : "draft",
@@ -1058,6 +1081,7 @@ export function AdminCatalogProductsPanel() {
         sku: form.sku.trim() || null,
         price: pricingFields.price,
         cost_price: pricingFields.cost_price,
+        ...purchaseQuantityWriteFields(form.minimumOrderQuantity, form.orderIncrement),
         short_description: form.shortDescription.trim() || null,
         description: form.description.trim() || null,
         status: "active",
@@ -1474,6 +1498,21 @@ export function AdminCatalogProductsPanel() {
                 costPriceId="product-cost-price"
                 onSellingPriceChange={(price) => setForm({ ...form, price })}
                 onCostPriceChange={(costPrice) => setForm({ ...form, costPrice })}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <PurchaseQuantityRulesEditor
+                minimumOrderQuantity={form.minimumOrderQuantity}
+                orderIncrement={form.orderIncrement}
+                onMinimumOrderQuantityChange={(minimumOrderQuantity) =>
+                  setForm({ ...form, minimumOrderQuantity })
+                }
+                onOrderIncrementChange={(orderIncrement) =>
+                  setForm({ ...form, orderIncrement })
+                }
+                aggregatesVariants={
+                  form.pricingModel === "variants" || publishVariants.length > 0
+                }
               />
             </div>
             {isChinaProduct && form.id && publishVariants.length === 0 ? (

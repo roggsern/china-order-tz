@@ -263,6 +263,10 @@ export type Product = {
   status: ProductStatus;
   /** Marks seed/demo catalog rows — excluded from storefront and analytics when true. */
   isDemo?: boolean;
+  /** Product-level purchase quantity rule (allowed checkout quantities). */
+  minimumOrderQuantity?: number | null;
+  /** Product-level purchase quantity increment after the minimum. */
+  orderIncrement?: number | null;
   /** Product-level wholesale / MOQ tiers (when no configurations). */
   priceTiers?: ProductPriceTierDraft[];
   createdAt?: string;
@@ -320,6 +324,10 @@ export type ProductFormData = {
   newArrival: boolean;
   status: ProductStatus;
   isDemo: boolean;
+  /** Product-level purchase quantity rule (allowed checkout quantities). */
+  minimumOrderQuantity: number | null;
+  /** Product-level purchase quantity increment after the minimum. */
+  orderIncrement: number | null;
   /** Enable product-level wholesale tiers (simple products) or edit per-config tiers. */
   wholesaleEnabled: boolean;
   priceTiers: ProductPriceTierDraft[];

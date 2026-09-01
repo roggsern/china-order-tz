@@ -3,6 +3,7 @@
 namespace App\Actions\AdminProducts;
 
 use App\Enums\CommerceChannelCode;
+use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductVisibility;
 use App\Events\Audit\ProductUpdated;
 use App\Events\Commerce\CommerceChannelAssigned;
@@ -12,14 +13,13 @@ use App\Models\CatalogProductType;
 use App\Models\Category;
 use App\Models\CommerceChannel;
 use App\Models\Product;
-use App\Services\Catalog\CustomerProductMediaResolver;
 use App\Services\Audit\ActivityLogFormatter;
+use App\Services\Catalog\CustomerProductMediaResolver;
 use App\Services\Catalog\GenerateProductSku;
 use App\Services\Inventory\AdminInventoryApplicationService;
 use App\Services\Pricing\SyncConfigurationPriceTiers;
 use App\Services\ProductConfiguration\ResolveTypeFromCategory;
 use App\Services\ProductConfiguration\SyncProductConfigurations;
-use App\Enums\ProductLifecycleStatus;
 use App\Services\ProductPurchasability\ProductPurchasabilityPolicy;
 use App\Services\ProductShipping\ProductShippingOptionEngine;
 use App\Support\Catalog\ProductConditionResolver;
@@ -75,6 +75,8 @@ class UpdateProductAction
                 'supplier_id',
                 'sku',
                 'price',
+                'minimum_order_quantity',
+                'order_increment',
                 'compare_at_price',
                 'cost_price',
                 'air_shipping_price',
@@ -455,7 +457,8 @@ class UpdateProductAction
     /**
      * @param  array<string, mixed>  $productData
      */
-    private function resolveEffectiveActiveLifecycle(Product $product, array $productData): bool {
+    private function resolveEffectiveActiveLifecycle(Product $product, array $productData): bool
+    {
         $isActive = array_key_exists('is_active', $productData)
             ? (bool) $productData['is_active']
             : (bool) $product->is_active;

@@ -628,19 +628,20 @@ class PurchaseQuantityCartCheckoutTest extends TestCase
         $this->assertArrayNotHasKey(0, $response->json('data.purchase_quantity'));
     }
 
-    public function test_admin_product_update_cannot_mass_assign_purchase_quantity_fields(): void
+    public function test_admin_product_update_ignores_unknown_purchase_quantity_aliases(): void
     {
         Sanctum::actingAs(Admin::factory()->create());
         $product = $this->simpleChinaProduct(10000, 20, null, null);
 
         $this->putJson('/api/v1/admin/products/'.$product->id, [
-            'name' => 'Renamed without MOQ grant',
-            'minimum_order_quantity' => 12,
-            'order_increment' => 3,
+            'name' => 'Renamed without unofficial MOQ keys',
+            'purchase_moq' => 12,
+            'moq' => 12,
+            'increment' => 3,
         ])->assertOk();
 
         $fresh = $product->fresh();
-        $this->assertSame('Renamed without MOQ grant', $fresh?->name);
+        $this->assertSame('Renamed without unofficial MOQ keys', $fresh?->name);
         $this->assertNull($fresh?->minimum_order_quantity);
         $this->assertNull($fresh?->order_increment);
     }

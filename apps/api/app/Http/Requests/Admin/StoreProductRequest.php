@@ -8,6 +8,7 @@ use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductPricingModel;
 use App\Enums\ProductVisibility;
 use App\Enums\ShippingMethod;
+use App\Http\Requests\Admin\Concerns\ValidatesPurchaseQuantityRules;
 use App\Http\Requests\Concerns\AuthorizesAdminPermission;
 use App\Http\Requests\Concerns\RejectsTzLocalChinaFreight;
 use App\Http\Requests\Concerns\ValidatesChinaImportProductSupplier;
@@ -24,6 +25,7 @@ class StoreProductRequest extends FormRequest
     use AuthorizesAdminPermission;
     use RejectsTzLocalChinaFreight;
     use ValidatesChinaImportProductSupplier;
+    use ValidatesPurchaseQuantityRules;
 
     protected function requiredPermission(): string
     {
@@ -38,6 +40,10 @@ class StoreProductRequest extends FormRequest
         return [
             'slug.unique' => 'This slug is already used by an active or deleted product. Choose another slug or permanently delete the trashed product first.',
             'sku.unique' => 'This SKU is already used by another product.',
+            'minimum_order_quantity.integer' => 'The minimum order quantity must be an integer.',
+            'minimum_order_quantity.min' => 'The minimum order quantity must be at least 1.',
+            'order_increment.integer' => 'The order increment must be an integer.',
+            'order_increment.min' => 'The order increment must be at least 1.',
         ];
     }
 
@@ -106,6 +112,7 @@ class StoreProductRequest extends FormRequest
             'configurations.*.price_tiers.*.tier_type' => ['sometimes', 'string', Rule::in(['fixed_unit', 'percent_off'])],
             'configurations.*.price_tiers.*.unit_price' => ['nullable', 'numeric', 'min:0'],
             'configurations.*.price_tiers.*.discount_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            ...$this->purchaseQuantityValidationRules(),
         ];
     }
 
@@ -169,6 +176,8 @@ class StoreProductRequest extends FormRequest
             $this->merge($htmlFields);
         }
 
+        $this->normalizePurchaseQuantityInput();
+
         if ($this->requestsCreateAsActive() && ! $this->adminCanPublishOnCreate()) {
             $this->forceDraftLifecycleForCreateOnlyAdmin();
         }
@@ -182,6 +191,8 @@ class StoreProductRequest extends FormRequest
                 ? CommerceChannel::query()->find($channelId)
                 : null;
             $channelCode = CommerceChannelCode::tryFrom((string) ($channel?->code ?? ''));
+
+            $this->validatePurchaseQuantityCrossField($validator);
 
             if ($channelCode === null) {
                 return;

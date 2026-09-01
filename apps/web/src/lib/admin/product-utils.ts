@@ -13,6 +13,7 @@ import { normalizeDeliveryDays } from "@/lib/catalog/delivery";
 import { productTypeToOrigin, resolveProductType } from "@/lib/catalog/product-type";
 import { normalizeProductVariants } from "@/lib/catalog/variants";
 import { slugify } from "@/lib/catalog/utils";
+import { purchaseQuantityFormErrors } from "@/lib/admin/purchase-quantity-rules";
 
 export function enrichProductForAdmin(product: Product): Product {
   const createdAt =
@@ -148,6 +149,8 @@ export function formDataToProduct(data: ProductFormData, id: number, createdAt?:
     newArrival: data.newArrival,
     status: data.status === "hidden" ? "archived" : data.status,
     isDemo: data.isDemo,
+    minimumOrderQuantity: data.minimumOrderQuantity,
+    orderIncrement: data.orderIncrement,
     priceTiers: data.priceTiers ?? [],
     createdAt: createdAt ?? new Date().toISOString(),
     variants: normalizeProductVariants(data.variants),
@@ -212,6 +215,8 @@ export function productToFormData(product: Product): ProductFormData {
           ? enriched.status
           : "active",
     isDemo: Boolean(enriched.isDemo),
+    minimumOrderQuantity: enriched.minimumOrderQuantity ?? null,
+    orderIncrement: enriched.orderIncrement ?? null,
     wholesaleEnabled: (enriched.priceTiers?.length ?? 0) > 0,
     priceTiers: enriched.priceTiers ?? [],
     images: enriched.images,
@@ -261,6 +266,8 @@ export function validateProductForm(data: ProductFormData): ProductValidationErr
       errors.seaCost = "Sea shipping price is required when Sea is available.";
     }
   }
+
+  Object.assign(errors, purchaseQuantityFormErrors(data.minimumOrderQuantity, data.orderIncrement));
 
   return errors;
 }

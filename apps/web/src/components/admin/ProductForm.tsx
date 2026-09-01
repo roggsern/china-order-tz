@@ -26,6 +26,7 @@ import { useAdminPermissions } from "@/hooks/use-admin-permissions";
 import { hasAdminPermission } from "@/lib/api/admin-me";
 import { ProductImageDisplay } from "@/components/catalog/ProductImageDisplay";
 import { WholesalePricingEditor } from "@/components/admin/WholesalePricingEditor";
+import { PurchaseQuantityRulesEditor } from "@/components/admin/PurchaseQuantityRulesEditor";
 import { getProductPrimaryImage } from "@/lib/catalog/product-images";
 import { RichTextEditor } from "@/components/admin/RichTextEditor";
 import { ToggleSwitch } from "@/components/admin/ToggleSwitch";
@@ -83,6 +84,8 @@ const defaultFormData: ProductFormData = {
   newArrival: false,
   status: "active",
   isDemo: false,
+  minimumOrderQuantity: null,
+  orderIncrement: null,
   wholesaleEnabled: false,
   priceTiers: [],
   images: [],
@@ -897,6 +900,16 @@ export function ProductForm({ initialData, isEditMode, onSubmit, onDeleteProduct
               </div>
             </section>
           )}
+
+          <PurchaseQuantityRulesEditor
+            minimumOrderQuantity={form.minimumOrderQuantity}
+            orderIncrement={form.orderIncrement}
+            onMinimumOrderQuantityChange={(value) => updateField("minimumOrderQuantity", value)}
+            onOrderIncrementChange={(value) => updateField("orderIncrement", value)}
+            aggregatesVariants={form.configurations.length > 0}
+            minimumInputId="minimumOrderQuantity"
+            incrementInputId="orderIncrement"
+          />
 
           {form.configurations.length === 0 ? (
             <section className="admin-card p-5">

@@ -2,11 +2,12 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Enums\CommerceChannelCode;
 use App\Enums\ProductCondition;
 use App\Enums\ProductLifecycleStatus;
 use App\Enums\ProductVisibility;
 use App\Enums\ShippingMethod;
-use App\Enums\CommerceChannelCode;
+use App\Http\Requests\Admin\Concerns\ValidatesPurchaseQuantityRules;
 use App\Http\Requests\Concerns\RejectsTzLocalChinaFreight;
 use App\Http\Requests\Concerns\ValidatesChinaImportProductSupplier;
 use App\Models\Admin;
@@ -23,6 +24,7 @@ class UpdateProductRequest extends FormRequest
 {
     use RejectsTzLocalChinaFreight;
     use ValidatesChinaImportProductSupplier;
+    use ValidatesPurchaseQuantityRules;
 
     public function authorize(): bool
     {
@@ -78,7 +80,7 @@ class UpdateProductRequest extends FormRequest
      */
     public function rules(): array
     {
-        /** @var \App\Models\Product $product */
+        /** @var Product $product */
         $product = $this->route('product');
 
         return [
@@ -135,6 +137,20 @@ class UpdateProductRequest extends FormRequest
             'configurations.*.price_tiers.*.tier_type' => ['sometimes', 'string', Rule::in(['fixed_unit', 'percent_off'])],
             'configurations.*.price_tiers.*.unit_price' => ['nullable', 'numeric', 'min:0'],
             'configurations.*.price_tiers.*.discount_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            ...$this->purchaseQuantityValidationRules(sometimes: true),
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'minimum_order_quantity.integer' => 'The minimum order quantity must be an integer.',
+            'minimum_order_quantity.min' => 'The minimum order quantity must be at least 1.',
+            'order_increment.integer' => 'The order increment must be an integer.',
+            'order_increment.min' => 'The order increment must be at least 1.',
         ];
     }
 
@@ -181,6 +197,8 @@ class UpdateProductRequest extends FormRequest
         if ($htmlFields !== []) {
             $this->merge($htmlFields);
         }
+
+        $this->normalizePurchaseQuantityInput();
     }
 
     public function withValidator(Validator $validator): void
@@ -210,6 +228,7 @@ class UpdateProductRequest extends FormRequest
 
             $this->rejectTzLocalChinaFreight($validator, $channelCode);
             $this->validateChinaImportSupplier($validator, $product);
+            $this->validatePurchaseQuantityCrossField($validator, $product);
 
             if ($channelCode !== CommerceChannelCode::TzLocal) {
                 return;

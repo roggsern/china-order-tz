@@ -28,7 +28,7 @@ export function WholesalePricingEditor({
   onChange,
   basePrice,
   title = "Bulk / Volume Pricing",
-  description = "Set quantity-based price breaks. For products with variants, quantities of different variants of the same product count together toward the tier. These discounts affect product price only; shipping is calculated separately.",
+  description = "Set quantity-based price breaks. For products with variants, quantities of different variants of the same product count together toward the tier. These discounts affect product price only; shipping is calculated separately. This does not restrict which quantities customers may buy — use Purchase Quantity Rules for allowed quantities.",
 }: WholesalePricingEditorProps) {
   function updateTier(index: number, patch: Partial<ProductPriceTierDraft>) {
     onChange(tiers.map((tier, i) => (i === index ? { ...tier, ...patch } : tier)));
