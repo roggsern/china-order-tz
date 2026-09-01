@@ -31,6 +31,11 @@ import type {
 } from '../models/types';
 import { canAddToCart, resolveAddToCartGate } from '../utils/canAddToCart';
 import { resolveDisplayedProductPrice } from '../utils/resolveDisplayedProductPrice';
+import {
+  formatAddToCartFollowUp,
+  resolveQuotePurchaseQuantity,
+  selectBlockerForProduct,
+} from '@/src/features/purchasing/purchaseQuantity';
 import { buildVariantGalleries } from '../utils/resolveMediaPreview';
 import { resolvePdpGalleryMediaFromPdpState } from '../utils/resolvePdpGalleryMedia';
 import { collectPdpVariantPrefetchUrls } from '../utils/pdpVariantMedia';
@@ -43,6 +48,7 @@ import { ProductImageGallery } from './ProductImageGallery';
 import { ProductInfoSections } from './ProductInfoSections';
 import { ProductVariantsList } from './ProductVariantsList';
 import { QuantitySelector } from './QuantitySelector';
+import { ProductPurchaseQuantityCard } from './ProductPurchaseQuantityCard';
 import {
   CatalogEmptyState,
   CatalogErrorState,
@@ -116,7 +122,7 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
     error: false,
   });
   const [feedback, setFeedback] = useState<{
-    type: 'success' | 'error';
+    type: 'success' | 'info' | 'error';
     message: string;
   } | null>(null);
 
@@ -229,11 +235,13 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
   });
   const enabled = gate.canAdd;
 
+  const quote = quoteQuery.data ?? null;
+  const purchaseQuantity = resolveQuotePurchaseQuantity(quote, quantity);
   const displayedPrice = resolveDisplayedProductPrice({
     product: detailProduct,
     configuration,
     configurationLoading: configStatus.loading,
-    quote: quoteQuery.data ?? null,
+    quote: quote,
     quoteLoading: quoteEnabled && quoteQuery.isFetching,
   });
 
@@ -286,15 +294,18 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
     }
 
     try {
-      await addToCartMutation.mutateAsync({
+      const cart = await addToCartMutation.mutateAsync({
         productId: detailProduct.id,
         productVariantId: hasConfigurations ? matchedConfigurationId : null,
         quantity,
         journey,
       });
+      const followUp = formatAddToCartFollowUp(
+        selectBlockerForProduct(cart.purchaseQuantityBlockers, detailProduct.id),
+      );
       setFeedback({
-        type: 'success',
-        message: 'Added to cart.',
+        type: followUp ? 'info' : 'success',
+        message: followUp ?? 'Added to cart.',
       });
     } catch (error) {
       if (isCartUnauthenticatedError(error)) {
@@ -373,8 +384,10 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
           disabled={addToCartMutation.isPending || !enabled}
         />
 
+        <ProductPurchaseQuantityCard presentation={purchaseQuantity} />
+
         <BulkPricingCard
-          pricing={quoteQuery.data?.volumePricing ?? null}
+          pricing={quote?.volumePricing ?? null}
           showVariantAggregationNote={hasConfigurations}
           showShippingNote
         />
@@ -403,8 +416,13 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
 
         {feedback ? (
           <Text
+            accessibilityLiveRegion="polite"
             style={
-              feedback.type === 'success' ? styles.successText : styles.errorText
+              feedback.type === 'error'
+                ? styles.errorText
+                : feedback.type === 'info'
+                  ? styles.infoText
+                  : styles.successText
             }
           >
             {feedback.message}
@@ -475,6 +493,11 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     ...typography.bodyStrong,
     color: colors.success,
+  },
+  infoText: {
+    marginTop: spacing.md,
+    ...typography.bodyStrong,
+    color: colors.warning,
   },
   errorText: {
     marginTop: spacing.md,

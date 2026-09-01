@@ -18,6 +18,7 @@ import type {
 import { isSupportedProductVideoUrl } from '../utils/productVideo';
 import { preferStorefrontImageSrcFromUnknown } from '@/src/shared/media/preferStorefrontImageSrc';
 import { mapVolumePricing } from '@/src/features/pricing/mapVolumePricing';
+import { mapPurchaseQuantity } from '@/src/features/purchasing/purchaseQuantity';
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
@@ -445,6 +446,7 @@ export function mapProductQuote(raw: unknown): ProductQuote | null {
     unitPrice: moneyField(data, 'unit_price'),
     lineTotal: moneyField(data, 'line_total'),
     volumePricing: mapVolumePricing(data.volume_pricing),
+    purchaseQuantity: mapPurchaseQuantity(data.purchase_quantity),
   };
 }
 

@@ -1,4 +1,5 @@
 import { ApiError, getSharedTransportErrorMessage } from '@/src/core/errors';
+import { purchaseQuantityMessageFromError } from '@/src/features/purchasing/purchaseQuantity';
 import {
   isPaymentInProgressError,
   paymentInProgressCustomerMessage,
@@ -7,6 +8,11 @@ import {
 export function getPaymentErrorMessage(error: unknown): string {
   const transport = getSharedTransportErrorMessage(error);
   if (transport) return transport;
+
+  const purchaseQuantityMessage = purchaseQuantityMessageFromError(error);
+  if (purchaseQuantityMessage) {
+    return purchaseQuantityMessage;
+  }
 
   if (isPaymentInProgressError(error)) {
     return paymentInProgressCustomerMessage();

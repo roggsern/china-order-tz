@@ -97,4 +97,49 @@ describe('getCheckoutErrorMessage', () => {
       ),
     ).toMatch(/timed out|totals changed/i);
   });
+
+  it('maps purchase_quantity_unsatisfied from structured data, not English API copy', () => {
+    expect(
+      getCheckoutErrorMessage(
+        new ApiError({
+          message: 'This product does not meet the purchase quantity rule.',
+          status: 422,
+          code: 'purchase_quantity_unsatisfied',
+          raw: {
+            code: 'purchase_quantity_unsatisfied',
+            message: 'This product does not meet the purchase quantity rule.',
+            data: {
+              purchase_quantity: {
+                product_id: 'p1',
+                minimum_quantity: 6,
+                increment: null,
+                eligible_quantity: 4,
+                minimum_satisfied: false,
+                increment_satisfied: true,
+                quantity_to_minimum: 2,
+                next_legal_quantity: 6,
+                blocks_checkout: true,
+              },
+            },
+          },
+        }),
+      ),
+    ).toBe('Add 2 more before checkout.');
+  });
+
+  it('falls back without crashing when purchase_quantity payload is missing', () => {
+    expect(
+      getCheckoutErrorMessage(
+        new ApiError({
+          message: 'This product does not meet the purchase quantity rule.',
+          status: 422,
+          code: 'purchase_quantity_unsatisfied',
+          raw: {
+            code: 'purchase_quantity_unsatisfied',
+            message: 'This product does not meet the purchase quantity rule.',
+          },
+        }),
+      ),
+    ).toBe('This product does not meet the purchase quantity rule.');
+  });
 });

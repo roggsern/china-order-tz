@@ -1,4 +1,6 @@
 import type { CommerceJourney } from '@/src/shared/types/commerce';
+import type { VolumePricing } from '@/src/features/pricing/mapVolumePricing';
+import type { PurchaseQuantityPresentation } from '@/src/features/purchasing/purchaseQuantity';
 
 export type ProductAvailabilityStatus = 'available' | 'out_of_stock' | 'unavailable' | (string & {});
 
@@ -158,8 +160,6 @@ export type ProductConfiguration = {
   isPurchasable?: boolean;
 };
 
-import type { VolumePricing } from '@/src/features/pricing/mapVolumePricing';
-
 /** POST /products/{slug}/quote — authoritative priced unit for a configuration. */
 export type ProductQuote = {
   productId: string;
@@ -169,6 +169,7 @@ export type ProductQuote = {
   unitPrice: string | number | null;
   lineTotal: string | number | null;
   volumePricing: VolumePricing | null;
+  purchaseQuantity: PurchaseQuantityPresentation | null;
 };
 
 /** attributeId → valueId selections sent as selections[attr]=value */

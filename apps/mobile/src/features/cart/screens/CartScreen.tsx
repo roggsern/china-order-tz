@@ -13,6 +13,7 @@ import { SecondaryButton } from '@/src/shared/ui/SecondaryButton';
 import { TrustStrip } from '@/src/shared/ui/TrustStrip';
 import { colors, spacing, typography } from '@/src/shared/theme';
 import { CartLineItemCard } from '../components/CartLineItemCard';
+import { CartPurchaseQuantityBanner } from '../components/CartPurchaseQuantityBanner';
 import { CartTotals } from '../components/CartTotals';
 import { ProceedToCheckoutButton } from '../components/ProceedToCheckoutButton';
 import {
@@ -23,6 +24,11 @@ import {
 } from '../hooks/useCart';
 import { buildLoginHref } from '../utils/authReturn';
 import { getCartErrorMessage } from '../utils/cartErrorMessage';
+import { groupCartLinesByProductId } from '../utils/groupByProduct';
+import {
+  selectBlockerForProduct,
+  shouldBlockCheckoutCta,
+} from '@/src/features/purchasing/purchaseQuantity';
 
 export function CartScreen() {
   const authStatus = useAuthStore((s) => s.status);
@@ -67,6 +73,9 @@ export function CartScreen() {
   const isEmpty = !cart || cart.isEmpty || items.length === 0;
   const mutating =
     updateMutation.isPending || removeMutation.isPending || clearMutation.isPending;
+  const purchaseQuantityBlockers = cart?.purchaseQuantityBlockers ?? [];
+  const quantityBlocked = shouldBlockCheckoutCta(purchaseQuantityBlockers);
+  const groupedItems = groupCartLinesByProductId(items);
 
   async function changeQuantity(itemId: string, quantity: number) {
     if (!cartActionLockRef.current.tryAcquire()) return;
@@ -172,16 +181,36 @@ export function CartScreen() {
           />
         ) : (
           <>
-            {items.map((item) => (
-              <CartLineItemCard
-                key={item.id}
-                item={item}
-                busy={busyItemId === item.id && mutating}
-                onIncrease={() => void changeQuantity(item.id, item.quantity + 1)}
-                onDecrease={() => void changeQuantity(item.id, item.quantity - 1)}
-                onRemove={() => void removeItem(item.id)}
-              />
-            ))}
+            {groupedItems.map((group) => {
+              const productId = group[0]?.productId ?? null;
+              const blocker = selectBlockerForProduct(
+                purchaseQuantityBlockers,
+                productId,
+              );
+              const aggregatesVariants = Boolean(
+                group.some((item) => item.purchaseQuantity?.aggregates_variants) ||
+                  group.length > 1,
+              );
+
+              return (
+                <View key={productId ?? group[0]?.id}>
+                  <CartPurchaseQuantityBanner
+                    blocker={blocker}
+                    aggregatesVariants={aggregatesVariants}
+                  />
+                  {group.map((item) => (
+                    <CartLineItemCard
+                      key={item.id}
+                      item={item}
+                      busy={busyItemId === item.id && mutating}
+                      onIncrease={() => void changeQuantity(item.id, item.quantity + 1)}
+                      onDecrease={() => void changeQuantity(item.id, item.quantity - 1)}
+                      onRemove={() => void removeItem(item.id)}
+                    />
+                  ))}
+                </View>
+              );
+            })}
 
             {cart ? <CartTotals cart={cart} /> : null}
             <SecondaryButton
@@ -191,7 +220,10 @@ export function CartScreen() {
               onPress={confirmClearCart}
               style={styles.clearButton}
             />
-            <ProceedToCheckoutButton disabled={isEmpty || mutating} />
+            <ProceedToCheckoutButton
+              disabled={isEmpty || mutating}
+              quantityBlocked={quantityBlocked}
+            />
             <TrustStrip
               title="Before you checkout"
               items={[

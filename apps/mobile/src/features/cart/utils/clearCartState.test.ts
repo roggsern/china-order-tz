@@ -32,6 +32,7 @@ const filled: Cart = {
   isEmpty: false,
   subtotal: '10',
   total: '10',
+  purchaseQuantityBlockers: [],
 };
 
 const empty: Cart = {

@@ -9,6 +9,10 @@ import type {
 } from '../models/types';
 import { formatCustomerMoney } from '@/src/shared/utils/formatCustomerMoney';
 import { mapVolumePricing } from '@/src/features/pricing/mapVolumePricing';
+import {
+  mapPurchaseQuantity,
+  mapPurchaseQuantityBlockers,
+} from '@/src/features/purchasing/purchaseQuantity';
 import { journeyLabelFromChannel } from './journeyLabel';
 import { preferStorefrontImageSrcFromUnknown } from '@/src/shared/media/preferStorefrontImageSrc';
 
@@ -128,6 +132,7 @@ export function mapCartItem(raw: unknown): CartItem | null {
     variantSku,
     displayAttributes,
     volumePricing: mapVolumePricing(data.volume_pricing),
+    purchaseQuantity: mapPurchaseQuantity(data.purchase_quantity),
   };
 }
 
@@ -152,6 +157,9 @@ export function mapCart(raw: unknown): Cart {
     isEmpty,
     subtotal: moneyField(data, 'subtotal'),
     total: moneyField(data, 'total'),
+    purchaseQuantityBlockers: mapPurchaseQuantityBlockers(
+      data.purchase_quantity_blockers,
+    ),
   };
 }
 

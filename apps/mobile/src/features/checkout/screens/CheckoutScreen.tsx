@@ -10,6 +10,8 @@ import { router } from 'expo-router';
 import { canSubmitInFlightAction } from '@/src/core/async/inFlightGuard';
 import { useAuthStore } from '@/src/core/auth';
 import { buildLoginHref } from '@/src/features/cart/utils/authReturn';
+import { useCart } from '@/src/features/cart/hooks/useCart';
+import { isCheckoutStartBlockedByPurchaseState } from '@/src/features/purchasing/purchaseQuantity';
 import { Badge } from '@/src/shared/ui/Badge';
 import { Card } from '@/src/shared/ui/Card';
 import { EmptyState } from '@/src/shared/ui/EmptyState';
@@ -68,6 +70,7 @@ type RecoveryOffer = {
 
 export function CheckoutScreen() {
   const authStatus = useAuthStore((s) => s.status);
+  const cartQuery = useCart();
   const prepareQuery = useCheckoutPrepare(authStatus === 'authenticated');
   const startMutation = useStartCheckoutSessionMutation();
   const refreshMutation = useRefreshCheckoutSessionMutation();
@@ -143,6 +146,13 @@ export function CheckoutScreen() {
   );
   const journeyLabel = journeyLabelFromCheckoutItems(prepare?.items ?? []);
   const readyForPayment = isReadyForPayment(session);
+  const cartLoaded = Boolean(cartQuery.data);
+  const quantityBlocked = isCheckoutStartBlockedByPurchaseState({
+    cartLoaded,
+    blockers: cartQuery.data?.purchaseQuantityBlockers,
+  });
+  const cartRequirementsPending =
+    authStatus === 'authenticated' && !cartLoaded && !cartQuery.isError;
 
   const progressStep: CheckoutProgressStep = !session
     ? 'review'
@@ -436,12 +446,22 @@ export function CheckoutScreen() {
         <CheckoutTotals prepare={prepare} session={session} />
 
         {!session ? (
-          <PrimaryButton
+          <>
+            {quantityBlocked ? (
+              <Text style={styles.error} accessibilityLiveRegion="polite">
+                {cartRequirementsPending
+                  ? 'Checking purchase requirements…'
+                  : !cartLoaded
+                    ? 'Unable to verify purchase requirements. Return to cart and try again.'
+                    : 'Update quantities to meet purchase requirements before checkout.'}
+              </Text>
+            ) : null}
+            <PrimaryButton
             label="Continue to checkout"
             loading={startMutation.isPending}
-            disabled={busy || Boolean(recoveryOffer)}
+            disabled={busy || Boolean(recoveryOffer) || quantityBlocked}
             onPress={() => {
-              if (!canSubmitInFlightAction(busy)) return;
+              if (!canSubmitInFlightAction(busy) || quantityBlocked) return;
               setActionError(null);
               startMutation.mutate(undefined, {
                 onSuccess: setSession,
@@ -450,6 +470,7 @@ export function CheckoutScreen() {
             }}
             style={styles.inlineButton}
           />
+          </>
         ) : (
           <Card elevated={false} style={styles.sessionBox}>
             <Text style={styles.cardTitle}>Your checkout</Text>
@@ -589,7 +610,12 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     ...typography.caption,
   },
-  error: { marginVertical: spacing.sm, ...typography.body, color: colors.error },
+  error: {
+    marginVertical: spacing.sm,
+    ...typography.body,
+    color: colors.error,
+    flexShrink: 1,
+  },
   addressCard: {
     backgroundColor: colors.backgroundMuted,
     borderColor: colors.border,

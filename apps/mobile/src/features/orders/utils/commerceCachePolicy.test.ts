@@ -26,6 +26,7 @@ const cart: Cart = {
   isEmpty: true,
   subtotal: '0',
   total: '0',
+  purchaseQuantityBlockers: [],
 };
 
 describe('commerce cache policy', () => {

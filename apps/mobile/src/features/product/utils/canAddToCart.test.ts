@@ -214,6 +214,16 @@ describe('resolveAddToCartGate', () => {
     expect(gate.label).toBe('Add to cart');
   });
 
+  it('quantity below a purchase minimum does not disable ATC', () => {
+    const gate = resolveAddToCartGate({
+      product,
+      configuration: simpleConfig,
+      quantity: 2,
+    });
+    expect(gate.canAdd).toBe(true);
+    expect(gate.label).toBe('Add to cart');
+  });
+
   it('product marked unavailable disables ATC for simple products', () => {
     const gate = resolveAddToCartGate({
       product: { ...product, isPurchasable: false },
@@ -247,5 +257,8 @@ describe('canAddToCart', () => {
     expect(canAddToCart({ product, configuration: simpleConfig, quantity: 0 })).toBe(
       false,
     );
+    expect(
+      canAddToCart({ product, configuration: simpleConfig, quantity: 2 }),
+    ).toBe(true);
   });
 });

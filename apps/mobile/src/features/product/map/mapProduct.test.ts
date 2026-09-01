@@ -469,6 +469,33 @@ describe('mapProductQuote', () => {
     expect(quote?.volumePricing?.tiers[0]?.unit_price).toBe('8000.00');
   });
 
+  it('preserves server purchase_quantity without inventing legality', () => {
+    const quote = mapProductQuote({
+      product_id: 'p1',
+      configuration_id: null,
+      quantity: 2,
+      currency: 'TZS',
+      unit_price: '10000.00',
+      line_total: '20000.00',
+      purchase_quantity: {
+        minimum_quantity: 6,
+        increment: null,
+        eligible_quantity: 2,
+        aggregates_variants: false,
+        minimum_satisfied: false,
+        increment_satisfied: true,
+        quantity_to_minimum: 4,
+        next_legal_quantity: 6,
+        construction_complete: false,
+        blocks_checkout: true,
+      },
+    });
+
+    expect(quote?.purchaseQuantity?.eligible_quantity).toBe(2);
+    expect(quote?.purchaseQuantity?.blocks_checkout).toBe(true);
+    expect(quote?.quantity).toBe(2);
+  });
+
   it('does not invent volume pricing when the server omits it', () => {
     const quote = mapProductQuote({
       product_id: 'p1',
@@ -481,5 +508,6 @@ describe('mapProductQuote', () => {
 
     expect(quote?.volumePricing).toBeNull();
     expect(quote?.unitPrice).toBe('10000.00');
+    expect(quote?.purchaseQuantity).toBeNull();
   });
 });

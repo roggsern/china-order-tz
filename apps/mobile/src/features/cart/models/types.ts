@@ -1,5 +1,9 @@
 import type { CommerceJourney } from '@/src/shared/types/commerce';
 import type { VolumePricing } from '@/src/features/pricing/mapVolumePricing';
+import type {
+  PurchaseQuantityBlocker,
+  PurchaseQuantityPresentation,
+} from '@/src/features/purchasing/purchaseQuantity';
 
 export type CartDisplayAttribute = {
   attribute: string;
@@ -29,6 +33,7 @@ export type CartItem = {
   variantSku: string | null;
   displayAttributes: CartDisplayAttribute[];
   volumePricing?: VolumePricing | null;
+  purchaseQuantity?: PurchaseQuantityPresentation | null;
 };
 
 export type Cart = {
@@ -41,6 +46,8 @@ export type Cart = {
   /** Server-computed totals — do not recalculate client-side. */
   subtotal: string | number | null;
   total: string | number | null;
+  /** One checkout blocker per illegal product_id from the server cart. */
+  purchaseQuantityBlockers: PurchaseQuantityBlocker[];
 };
 
 /** @deprecated Prefer Cart — kept for M3.6 call sites that only need totals. */

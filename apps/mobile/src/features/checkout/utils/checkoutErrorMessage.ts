@@ -1,9 +1,15 @@
 import { ApiError, getSharedTransportErrorMessage } from '@/src/core/errors';
+import { purchaseQuantityMessageFromError } from '@/src/features/purchasing/purchaseQuantity';
 import { isStaleOrExpiredCheckoutError } from './mapCheckout';
 
 export function getCheckoutErrorMessage(error: unknown): string {
   const transport = getSharedTransportErrorMessage(error);
   if (transport) return transport;
+
+  const purchaseQuantityMessage = purchaseQuantityMessageFromError(error);
+  if (purchaseQuantityMessage) {
+    return purchaseQuantityMessage;
+  }
 
   if (!(error instanceof ApiError)) {
     return 'Unable to continue checkout. Please try again.';

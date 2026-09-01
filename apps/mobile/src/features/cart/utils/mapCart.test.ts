@@ -200,6 +200,141 @@ describe('mapCart / mapCartItem', () => {
       subtotal: '30000',
       total: '30000',
     });
+    expect(cart.purchaseQuantityBlockers).toEqual([]);
+    expect(cart.items[0]?.purchaseQuantity ?? null).toBeNull();
+  });
+
+  it('maps purchase_quantity lines and one blocker per product', () => {
+    const cart = mapCart({
+      id: 'cart-1',
+      purchase_quantity_blockers: [
+        {
+          product_id: 'prod-1',
+          minimum_quantity: 6,
+          increment: null,
+          eligible_quantity: 4,
+          minimum_satisfied: false,
+          increment_satisfied: true,
+          quantity_to_minimum: 2,
+          next_legal_quantity: 6,
+          blocks_checkout: true,
+        },
+        {
+          product_id: 'prod-1',
+          minimum_quantity: 6,
+          increment: null,
+          eligible_quantity: 4,
+          minimum_satisfied: false,
+          increment_satisfied: true,
+          quantity_to_minimum: 2,
+          next_legal_quantity: 6,
+          blocks_checkout: true,
+        },
+      ],
+      items: [
+        {
+          ...rawItem,
+          id: 'item-red',
+          product_variant_id: 'var-red',
+          purchase_quantity: {
+            minimum_quantity: 6,
+            increment: null,
+            eligible_quantity: 4,
+            aggregates_variants: true,
+            minimum_satisfied: false,
+            increment_satisfied: true,
+            quantity_to_minimum: 2,
+            next_legal_quantity: 6,
+            construction_complete: false,
+            blocks_checkout: true,
+          },
+        },
+        {
+          ...rawItem,
+          id: 'item-blue',
+          product_variant_id: 'var-blue',
+          purchase_quantity: {
+            minimum_quantity: 6,
+            increment: null,
+            eligible_quantity: 4,
+            aggregates_variants: true,
+            minimum_satisfied: false,
+            increment_satisfied: true,
+            quantity_to_minimum: 2,
+            next_legal_quantity: 6,
+            construction_complete: false,
+            blocks_checkout: true,
+          },
+        },
+      ],
+    });
+
+    expect(cart.items).toHaveLength(2);
+    expect(cart.items[0]?.productId).toBe('prod-1');
+    expect(cart.items[0]?.purchaseQuantity?.eligible_quantity).toBe(4);
+    expect(cart.purchaseQuantityBlockers).toHaveLength(1);
+    expect(cart.purchaseQuantityBlockers[0]?.product_id).toBe(
+      cart.items[0]?.productId,
+    );
+    expect(cart.items[0]?.productId).not.toBe(cart.items[0]?.productVariantId);
+    expect(cart.items[1]?.productId).toBe('prod-1');
+    expect(cart.items[1]?.productVariantId).toBe('var-blue');
+  });
+
+  it('maps product_id as catalog identity for China and TZ, simple and configurable', () => {
+    const chinaSimple = mapCartItem({
+      ...rawItem,
+      product_variant_id: null,
+      variant: null,
+    });
+    expect(chinaSimple?.productId).toBe('prod-1');
+    expect(chinaSimple?.productVariantId).toBeNull();
+    expect(chinaSimple?.commerceChannelCode).toBe('CHINA_IMPORT');
+
+    const chinaConfigurable = mapCartItem(rawItem);
+    expect(chinaConfigurable?.productId).toBe('prod-1');
+    expect(chinaConfigurable?.productVariantId).toBe('var-1');
+    expect(chinaConfigurable?.productId).not.toBe('var-1');
+
+    const tzSimple = mapCartItem({
+      ...rawItem,
+      product_variant_id: null,
+      variant: null,
+      product: {
+        ...rawItem.product,
+        commerce_channel_code: 'TZ_LOCAL',
+      },
+    });
+    expect(tzSimple?.productId).toBe('prod-1');
+    expect(tzSimple?.commerceChannelCode).toBe('TZ_LOCAL');
+
+    const tzConfigurable = mapCartItem({
+      ...rawItem,
+      product: {
+        ...rawItem.product,
+        commerce_channel_code: 'TZ_LOCAL',
+      },
+    });
+    expect(tzConfigurable?.productId).toBe('prod-1');
+    expect(tzConfigurable?.productVariantId).toBe('var-1');
+    expect(tzConfigurable?.productId).not.toBe(tzConfigurable?.productVariantId);
+  });
+
+  it('malformed purchase_quantity degrades without breaking the cart', () => {
+    const cart = mapCart({
+      id: 'cart-1',
+      purchase_quantity_blockers: [{ product_id: 'prod-1', minimum_quantity: '6.5' }],
+      items: [
+        {
+          ...rawItem,
+          purchase_quantity: { minimum_quantity: 6 },
+        },
+      ],
+    });
+
+    expect(cart.items).toHaveLength(1);
+    expect(cart.items[0]?.purchaseQuantity ?? null).toBeNull();
+    expect(cart.purchaseQuantityBlockers).toEqual([]);
   });
 
   it('maps TZ_LOCAL journey label from channel code', () => {
