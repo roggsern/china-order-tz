@@ -28,6 +28,7 @@ import { PublishReadinessChecklist } from "@/components/admin/PublishReadinessCh
 import { AdminProductBulkActionBar } from "@/components/admin/AdminProductBulkActionBar";
 import { AdminProductCreationWizard } from "@/components/admin/AdminProductCreationWizard";
 import { PurchaseQuantityRulesEditor } from "@/components/admin/PurchaseQuantityRulesEditor";
+import { WholesalePricingEditor } from "@/components/admin/WholesalePricingEditor";
 import { ProductSimplePricingFields } from "@/components/admin/ProductSimplePricingFields";
 import { AdminProductSectionTabs } from "@/components/admin/AdminProductSectionTabs";
 import { AdminBrandAsyncSelect } from "@/components/admin/AdminBrandAsyncSelect";
@@ -102,6 +103,11 @@ import {
   purchaseQuantityFormErrors,
   purchaseQuantityWriteFields,
 } from "@/lib/admin/purchase-quantity-rules";
+import {
+  firstVolumePricingFormError,
+  volumePricingWriteFields,
+} from "@/lib/admin/volume-pricing-tiers";
+import type { ProductPriceTierDraft } from "@/lib/types/catalog";
 
 type CatalogProductsView = "active" | "deleted";
 
@@ -116,6 +122,10 @@ type ProductFormState = {
   costPrice: number | null;
   minimumOrderQuantity: number | null;
   orderIncrement: number | null;
+  wholesaleEnabled: boolean;
+  priceTiers: ProductPriceTierDraft[];
+  wholesaleLoaded: boolean;
+  hasConfigurationPriceTiers: boolean;
   shortDescription: string;
   description: string;
   commerceJourney: CommerceJourney | "";
@@ -141,6 +151,10 @@ const emptyForm = (): ProductFormState => ({
   costPrice: null,
   minimumOrderQuantity: null,
   orderIncrement: null,
+  wholesaleEnabled: false,
+  priceTiers: [],
+  wholesaleLoaded: true,
+  hasConfigurationPriceTiers: false,
   shortDescription: "",
   description: "",
   commerceJourney: "",
@@ -494,6 +508,10 @@ export function AdminCatalogProductsPanel() {
         costPrice: product.costPrice,
         minimumOrderQuantity: product.minimumOrderQuantity,
         orderIncrement: product.orderIncrement,
+        wholesaleEnabled: product.priceTiers.length > 0,
+        priceTiers: product.priceTiers,
+        wholesaleLoaded: false,
+        hasConfigurationPriceTiers: product.hasConfigurationPriceTiers,
         shortDescription: product.shortDescription,
         description: product.description,
         commerceJourney:
@@ -550,6 +568,17 @@ export function AdminCatalogProductsPanel() {
 
         setPublishContext(product);
         setPublishVariants(variantsPayload.variants);
+        setForm((previous) =>
+          previous && previous.id === product.id && !previous.wholesaleLoaded
+            ? {
+                ...previous,
+                wholesaleEnabled: product.priceTiers.length > 0,
+                priceTiers: product.priceTiers,
+                wholesaleLoaded: true,
+                hasConfigurationPriceTiers: product.hasConfigurationPriceTiers,
+              }
+            : previous,
+        );
 
         const catalogImages = media.filter((item) => item.type === "image");
         setPublishHasCatalogImage(catalogImages.length > 0);
@@ -924,6 +953,15 @@ export function AdminCatalogProductsPanel() {
       return false;
     }
 
+    const volumePricingError = firstVolumePricingFormError(
+      form.wholesaleEnabled,
+      form.priceTiers,
+    );
+    if (volumePricingError) {
+      setActionError(volumePricingError);
+      return false;
+    }
+
     if (form.id && form.status === "active" && publishReadiness && !publishReadiness.ready) {
       setActionError(
         `Cannot activate yet. Missing: ${formatPublishReadinessMissingLabels(publishReadiness)}.`,
@@ -1000,6 +1038,11 @@ export function AdminCatalogProductsPanel() {
           price: pricingFields.price,
           cost_price: pricingFields.cost_price,
           ...purchaseQuantityWriteFields(form.minimumOrderQuantity, form.orderIncrement),
+          ...volumePricingWriteFields({
+            loaded: form.wholesaleLoaded,
+            enabled: form.wholesaleEnabled,
+            tiers: form.priceTiers,
+          }),
           short_description: form.shortDescription.trim() || null,
           description: form.description.trim() || null,
           status: form.id ? form.status : "draft",
@@ -1069,6 +1112,15 @@ export function AdminCatalogProductsPanel() {
       return;
     }
 
+    const volumePricingError = firstVolumePricingFormError(
+      form.wholesaleEnabled,
+      form.priceTiers,
+    );
+    if (volumePricingError) {
+      setActionError(volumePricingError);
+      return;
+    }
+
     setSaving(true);
     setActionError(null);
     try {
@@ -1082,6 +1134,11 @@ export function AdminCatalogProductsPanel() {
         price: pricingFields.price,
         cost_price: pricingFields.cost_price,
         ...purchaseQuantityWriteFields(form.minimumOrderQuantity, form.orderIncrement),
+        ...volumePricingWriteFields({
+          loaded: form.wholesaleLoaded,
+          enabled: form.wholesaleEnabled,
+          tiers: form.priceTiers,
+        }),
         short_description: form.shortDescription.trim() || null,
         description: form.description.trim() || null,
         status: "active",
@@ -1514,6 +1571,26 @@ export function AdminCatalogProductsPanel() {
                   form.pricingModel === "variants" || publishVariants.length > 0
                 }
               />
+              <div className="mt-4">
+                <WholesalePricingEditor
+                  enabled={form.wholesaleEnabled}
+                  onEnabledChange={(wholesaleEnabled) =>
+                    setForm({ ...form, wholesaleEnabled })
+                  }
+                  tiers={form.priceTiers}
+                  onChange={(priceTiers) => setForm({ ...form, priceTiers })}
+                  basePrice={form.price}
+                  aggregatesVariants={
+                    form.pricingModel === "variants" || publishVariants.length > 0
+                  }
+                  disabled={Boolean(form.id) && !form.wholesaleLoaded}
+                  configurationTiersNote={
+                    form.hasConfigurationPriceTiers
+                      ? "This product also has variant-specific volume tiers. Saving here updates product-level thresholds only and does not delete those variant rows."
+                      : null
+                  }
+                />
+              </div>
             </div>
             {isChinaProduct && form.id && publishVariants.length === 0 ? (
               <div className="sm:col-span-2">

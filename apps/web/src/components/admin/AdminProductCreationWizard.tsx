@@ -11,6 +11,7 @@ import { ProductShippingManager } from "@/components/admin/ProductShippingManage
 import { ProductCommercialAvailabilityManager } from "@/components/admin/ProductCommercialAvailabilityManager";
 import { ProductSimplePricingFields } from "@/components/admin/ProductSimplePricingFields";
 import { PurchaseQuantityRulesEditor } from "@/components/admin/PurchaseQuantityRulesEditor";
+import { WholesalePricingEditor } from "@/components/admin/WholesalePricingEditor";
 import { ProductStockManager } from "@/components/admin/ProductStockManager";
 import { ProductVariantsManager } from "@/components/admin/ProductVariantsManager";
 import { PublishReadinessChecklist } from "@/components/admin/PublishReadinessChecklist";
@@ -44,6 +45,7 @@ import {
   type CommerceJourney,
 } from "@/lib/api/admin-catalog";
 import type { AdminSupplier } from "@/lib/api/admin-procurement";
+import type { ProductPriceTierDraft } from "@/lib/types/catalog";
 
 export type ProductCreationWizardFormState = {
   id?: string;
@@ -53,6 +55,10 @@ export type ProductCreationWizardFormState = {
   costPrice: number | null;
   minimumOrderQuantity: number | null;
   orderIncrement: number | null;
+  wholesaleEnabled: boolean;
+  priceTiers: ProductPriceTierDraft[];
+  wholesaleLoaded: boolean;
+  hasConfigurationPriceTiers: boolean;
   shortDescription: string;
   description: string;
   commerceJourney: CommerceJourney | "";
@@ -719,6 +725,17 @@ export function AdminProductCreationWizard({
             minimumInputId="wizard-minimum-order-quantity"
             incrementInputId="wizard-order-increment"
           />
+          <WholesalePricingEditor
+            enabled={form.wholesaleEnabled}
+            onEnabledChange={(wholesaleEnabled) =>
+              setForm((current) => ({ ...current, wholesaleEnabled }))
+            }
+            tiers={form.priceTiers}
+            onChange={(priceTiers) => setForm((current) => ({ ...current, priceTiers }))}
+            basePrice={form.price}
+            aggregatesVariants={false}
+            disabled={Boolean(form.id) && !form.wholesaleLoaded}
+          />
           {form.commerceJourney === "china" && publishSellableVariantCount === 0 ? (
             <p className="text-xs text-sky-800">
               No variants. Commercial availability is managed at product level.
@@ -757,6 +774,22 @@ export function AdminProductCreationWizard({
             aggregatesVariants
             minimumInputId="wizard-variant-minimum-order-quantity"
             incrementInputId="wizard-variant-order-increment"
+          />
+          <WholesalePricingEditor
+            enabled={form.wholesaleEnabled}
+            onEnabledChange={(wholesaleEnabled) =>
+              setForm((current) => ({ ...current, wholesaleEnabled }))
+            }
+            tiers={form.priceTiers}
+            onChange={(priceTiers) => setForm((current) => ({ ...current, priceTiers }))}
+            basePrice={form.price}
+            aggregatesVariants
+            disabled={Boolean(form.id) && !form.wholesaleLoaded}
+            configurationTiersNote={
+              form.hasConfigurationPriceTiers
+                ? "This product also has variant-specific volume tiers. Saving here updates product-level thresholds only and does not delete those variant rows."
+                : null
+            }
           />
           {form.commerceJourney === "china" ? (
             <p className="text-xs text-sky-800">

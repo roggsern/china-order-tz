@@ -23,7 +23,7 @@ export type AdminProductEditUrlDecision = {
  * Required before canonical redirect from link builders:
  * - catalog UUID
  * - explicit legacy-configuration flag
- * - explicit wholesale tier presence flags (product + configuration)
+ * - explicit wholesale flags (product-level tiers are canonical; configuration-level stay legacy)
  * - catalog product type field present (null = known missing, blocks via policy)
  */
 export function isAdminProductEditLinkContextComplete(
@@ -83,9 +83,8 @@ export function legacyEditPolicyFromCatalogProduct(
     id: product.id,
     catalogProductTypeId: product.catalogProductTypeId,
     legacyConfigurationProduct: product.legacyConfigurationProduct,
-    // Catalog list rows do not include tier data — leave wholesale flags unknown.
-    hasProductPriceTiers: undefined,
-    hasConfigurationPriceTiers: undefined,
+    hasProductPriceTiers: product.priceTiers.some((tier) => tier.minQuantity >= 1),
+    hasConfigurationPriceTiers: product.hasConfigurationPriceTiers,
   };
 }
 

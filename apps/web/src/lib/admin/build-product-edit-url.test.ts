@@ -72,7 +72,7 @@ test("Case 1: complete safe product => canonical URL", () => {
   );
 });
 
-test("Case 2: AdminCatalogProduct missing policy fields => legacy URL", () => {
+test("Case 2: AdminCatalogProduct list rows map volume flags and open canonical when product-level only", () => {
   const catalogProduct: AdminCatalogProduct = {
     id: CATALOG_UUID,
     name: "Catalog Phone",
@@ -115,15 +115,27 @@ test("Case 2: AdminCatalogProduct missing policy fields => legacy URL", () => {
     legacyConfigurationProduct: false,
     isDemo: false,
     deletedAt: null,
+    priceTiers: [
+      {
+        minQuantity: 10,
+        tierType: "fixed_unit",
+        unitPrice: 8000,
+        discountPercent: null,
+      },
+    ],
+    hasConfigurationPriceTiers: false,
   };
 
   const link = legacyEditPolicyFromCatalogProduct(catalogProduct);
-  assert.equal(link.hasProductPriceTiers, undefined);
-  assert.equal(link.hasConfigurationPriceTiers, undefined);
+  assert.equal(link.hasProductPriceTiers, true);
+  assert.equal(link.hasConfigurationPriceTiers, false);
 
   const decision = resolveAdminProductEditUrl(catalogProduct);
-  assert.equal(decision.reason, "incomplete_product_context");
-  assert.equal(decision.url, `/admin/products/${LEGACY_NUMERIC_ID}/edit`);
+  assert.equal(decision.reason, "safe_for_canonical");
+  assert.equal(
+    decision.url,
+    `/admin/products?edit=${encodeURIComponent(CATALOG_UUID)}`,
+  );
 });
 
 test("Case 3: missing legacy flag => legacy URL", () => {
@@ -194,6 +206,14 @@ test("known policy blockers still stay legacy after complete context", () => {
       ...COMPLETE_SAFE_LINK,
       hasProductPriceTiers: true,
     }).reason,
+    "safe_for_canonical",
+  );
+
+  assert.equal(
+    resolveAdminProductEditUrl({
+      ...COMPLETE_SAFE_LINK,
+      hasConfigurationPriceTiers: true,
+    }).reason,
     "wholesale_pricing",
   );
 });
@@ -220,5 +240,14 @@ test("Case 6: direct numeric legacy URL target preserved when policy blocks redi
     ...COMPLETE_SAFE_LINK,
     hasProductPriceTiers: true,
   });
-  assert.equal(wholesale.url, `/admin/products/${LEGACY_NUMERIC_ID}/edit`);
+  assert.equal(
+    wholesale.url,
+    `/admin/products?edit=${encodeURIComponent(CATALOG_UUID)}`,
+  );
+
+  const configurationWholesale = resolveAdminProductEditUrl({
+    ...COMPLETE_SAFE_LINK,
+    hasConfigurationPriceTiers: true,
+  });
+  assert.equal(configurationWholesale.url, `/admin/products/${LEGACY_NUMERIC_ID}/edit`);
 });

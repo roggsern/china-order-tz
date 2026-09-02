@@ -1,6 +1,12 @@
 "use client";
 
 import type { ProductPriceTierDraft } from "@/lib/types/catalog";
+import {
+  VOLUME_PRICING_EDITOR_DESCRIPTION,
+  VOLUME_PRICING_EDITOR_TITLE,
+  firstVolumePricingFormError,
+  inferredVolumeRangeLabels,
+} from "@/lib/admin/volume-pricing-tiers";
 
 interface WholesalePricingEditorProps {
   enabled: boolean;
@@ -10,13 +16,20 @@ interface WholesalePricingEditorProps {
   basePrice: number;
   title?: string;
   description?: string;
+  aggregatesVariants?: boolean;
+  configurationTiersNote?: string | null;
+  disabled?: boolean;
 }
 
-function emptyTier(basePrice: number): ProductPriceTierDraft {
+function formatTzs(amount: number): string {
+  return `TZS ${Math.round(amount).toLocaleString("en-US")}`;
+}
+
+function starterTier(basePrice: number, minQuantity: number): ProductPriceTierDraft {
   return {
-    minQuantity: 5,
+    minQuantity,
     tierType: "fixed_unit",
-    unitPrice: Math.max(0, Math.round(basePrice * 0.93)),
+    unitPrice: Math.max(0, Math.round(basePrice * 0.8)),
     discountPercent: null,
   };
 }
@@ -27,29 +40,27 @@ export function WholesalePricingEditor({
   tiers,
   onChange,
   basePrice,
-  title = "Bulk / Volume Pricing",
-  description = "Set quantity-based price breaks. For products with variants, quantities of different variants of the same product count together toward the tier. These discounts affect product price only; shipping is calculated separately. This does not restrict which quantities customers may buy — use Purchase Quantity Rules for allowed quantities.",
+  title = VOLUME_PRICING_EDITOR_TITLE,
+  description = VOLUME_PRICING_EDITOR_DESCRIPTION,
+  aggregatesVariants = false,
+  configurationTiersNote = null,
+  disabled = false,
 }: WholesalePricingEditorProps) {
   function updateTier(index: number, patch: Partial<ProductPriceTierDraft>) {
     onChange(tiers.map((tier, i) => (i === index ? { ...tier, ...patch } : tier)));
   }
 
   function addTier() {
-    const lastMin = tiers[tiers.length - 1]?.minQuantity ?? 1;
-    onChange([
-      ...tiers,
-      {
-        minQuantity: lastMin + 5,
-        tierType: "fixed_unit",
-        unitPrice: Math.max(0, Math.round(basePrice * 0.9)),
-        discountPercent: null,
-      },
-    ]);
+    const lastMin = tiers[tiers.length - 1]?.minQuantity ?? 5;
+    onChange([...tiers, starterTier(basePrice, lastMin + 10)]);
   }
 
   function removeTier(index: number) {
     onChange(tiers.filter((_, i) => i !== index));
   }
+
+  const rangeLabels = enabled ? inferredVolumeRangeLabels(tiers, formatTzs) : [];
+  const formError = firstVolumePricingFormError(enabled, tiers);
 
   return (
     <section className="admin-card space-y-4 p-5">
@@ -57,24 +68,22 @@ export function WholesalePricingEditor({
         <div>
           <h2 className="text-sm font-semibold text-zinc-900">{title}</h2>
           <p className="mt-1 text-xs text-zinc-500">{description}</p>
+          {aggregatesVariants ? (
+            <p className="mt-1 text-xs text-zinc-500">
+              Different variants of this product count together toward these thresholds.
+            </p>
+          ) : null}
         </div>
         <label className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-700">
           <input
             type="checkbox"
             checked={enabled}
+            disabled={disabled}
             onChange={(event) => {
               const next = event.target.checked;
               onEnabledChange(next);
               if (next && tiers.length === 0) {
-                onChange([
-                  {
-                    minQuantity: 1,
-                    tierType: "fixed_unit",
-                    unitPrice: basePrice,
-                    discountPercent: null,
-                  },
-                  emptyTier(basePrice),
-                ]);
+                onChange([starterTier(basePrice, 10)]);
               }
               if (!next) {
                 onChange([]);
@@ -98,6 +107,7 @@ export function WholesalePricingEditor({
                 <input
                   type="number"
                   min={1}
+                  disabled={disabled}
                   value={tier.minQuantity}
                   onChange={(event) =>
                     updateTier(index, { minQuantity: Number(event.target.value) || 1 })
@@ -106,8 +116,9 @@ export function WholesalePricingEditor({
                 />
               </div>
               <div className="sm:col-span-3">
-                <label className="admin-label">Type</label>
+                <label className="admin-label">Pricing type</label>
                 <select
+                  disabled={disabled}
                   value={tier.tierType}
                   onChange={(event) => {
                     const nextType = event.target.value as ProductPriceTierDraft["tierType"];
@@ -129,6 +140,7 @@ export function WholesalePricingEditor({
                   <input
                     type="number"
                     min={0}
+                    disabled={disabled}
                     value={tier.unitPrice ?? ""}
                     onChange={(event) =>
                       updateTier(index, { unitPrice: Number(event.target.value) || 0 })
@@ -144,6 +156,7 @@ export function WholesalePricingEditor({
                     min={0}
                     max={100}
                     step={0.01}
+                    disabled={disabled}
                     value={tier.discountPercent ?? ""}
                     onChange={(event) =>
                       updateTier(index, {
@@ -157,6 +170,7 @@ export function WholesalePricingEditor({
               <div className="flex items-end sm:col-span-3">
                 <button
                   type="button"
+                  disabled={disabled}
                   onClick={() => removeTier(index)}
                   className="admin-btn-secondary w-full"
                 >
@@ -166,10 +180,27 @@ export function WholesalePricingEditor({
             </div>
           ))}
 
-          <button type="button" onClick={addTier} className="admin-btn-secondary">
-            Add tier
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={addTier}
+            className="admin-btn-secondary"
+          >
+            Add pricing tier
           </button>
+
+          {rangeLabels.length > 0 ? (
+            <p className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
+              Customer unit price: {rangeLabels.join("; ")}. Quantities between thresholds stay valid.
+            </p>
+          ) : null}
+
+          {formError ? <p className="text-xs text-red-600">{formError}</p> : null}
         </div>
+      ) : null}
+
+      {configurationTiersNote ? (
+        <p className="text-xs text-amber-800">{configurationTiersNote}</p>
       ) : null}
     </section>
   );

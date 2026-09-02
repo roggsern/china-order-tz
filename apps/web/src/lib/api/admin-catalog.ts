@@ -1,6 +1,11 @@
 import { enrichApiCategoryFromStatic } from "@/lib/catalog/category-presentation";
 import { legacyNumericIdFromCatalogProductId as apiIdToNumericId } from "@/lib/admin/product-id-map";
 import { parseNullableInt, purchaseQuantityWriteFields } from "@/lib/admin/purchase-quantity-rules";
+import {
+  hasConfigurationPriceTiers,
+  mapProductLevelPriceTiers,
+  mapTierDraftToPayload,
+} from "@/lib/admin/volume-pricing-tiers";
 import { resolveProductMediaUploadError } from "@/lib/admin/product-media-upload";
 import type {
   Category,
@@ -301,6 +306,10 @@ export type AdminCatalogProduct = {
   legacyConfigurationProduct: boolean;
   isDemo: boolean;
   deletedAt: string | null;
+  /** Product-level volume tiers (`configuration_id` null). */
+  priceTiers: import("@/lib/types/catalog").ProductPriceTierDraft[];
+  /** Variant-scoped volume tiers exist; edited only on the legacy configuration grid. */
+  hasConfigurationPriceTiers: boolean;
 };
 
 export type AdminCatalogProductWritePayload = {
@@ -324,6 +333,12 @@ export type AdminCatalogProductWritePayload = {
   sort_order?: number;
   commerce_channel_id?: string | null;
   store_id?: string | null;
+  price_tiers?: Array<{
+    min_quantity: number;
+    tier_type: "fixed_unit" | "percent_off";
+    unit_price?: number | null;
+    discount_percent?: number | null;
+  }>;
 };
 
 export function buildAdminCatalogLifecycleWritePayload(
@@ -2162,30 +2177,6 @@ export async function deleteAdminProduct(catalogProductId: string): Promise<void
   }
 }
 
-function mapTierDraftToPayload(
-  tier: import("@/lib/types/catalog").ProductPriceTierDraft,
-): {
-  min_quantity: number;
-  tier_type: "fixed_unit" | "percent_off";
-  unit_price?: number | null;
-  discount_percent?: number | null;
-} {
-  if (tier.tierType === "percent_off") {
-    return {
-      min_quantity: Math.max(1, Math.floor(tier.minQuantity || 1)),
-      tier_type: "percent_off",
-      discount_percent: Math.max(0, Math.min(100, Number(tier.discountPercent) || 0)),
-      unit_price: null,
-    };
-  }
-
-  return {
-    min_quantity: Math.max(1, Math.floor(tier.minQuantity || 1)),
-    tier_type: "fixed_unit",
-    unit_price: Math.max(0, Number(tier.unitPrice) || 0),
-    discount_percent: null,
-  };
-}
 
 /** Laravel POST /api/v1/admin/products body (via BFF). */
 export type AdminProductCreatePayload = {
@@ -2314,10 +2305,9 @@ export function productFormDataToCreatePayload(
         ? data.status
         : "active";
 
-  const productTiers =
-    !hasConfigurations && data.wholesaleEnabled
-      ? data.priceTiers.filter((tier) => tier.minQuantity >= 1).map(mapTierDraftToPayload)
-      : [];
+  const productTiers = data.wholesaleEnabled
+    ? data.priceTiers.filter((tier) => tier.minQuantity >= 1).map(mapTierDraftToPayload)
+    : [];
 
   return {
     name: data.name.trim(),
@@ -2369,7 +2359,7 @@ export function productFormDataToCreatePayload(
     is_demo: Boolean(data.isDemo),
     lifecycle_status: lifecycleStatus,
     ...purchaseQuantityWriteFields(data.minimumOrderQuantity, data.orderIncrement),
-    price_tiers: hasConfigurations ? [] : productTiers,
+    ...(hasConfigurations ? {} : { price_tiers: productTiers }),
     configurations: hasConfigurations
       ? data.configurations.map((row) => ({
           id: row.id,
@@ -2484,6 +2474,11 @@ export function mapAdminApiCatalogProduct(product: AdminApiProduct): AdminCatalo
     legacyConfigurationProduct: product.legacy_configuration_product === true,
     isDemo: product.is_demo === true,
     deletedAt: product.deleted_at ?? null,
+    priceTiers: mapProductLevelPriceTiers(product.price_tiers),
+    hasConfigurationPriceTiers: hasConfigurationPriceTiers(
+      product.price_tiers,
+      product.configurations ?? product.variants,
+    ),
   };
 }
 

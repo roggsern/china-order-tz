@@ -46,12 +46,12 @@ test("Case 3: missing catalog product type => redirect false", () => {
   });
 });
 
-test("Case 4: wholesale tiers => redirect false with wholesale_pricing", () => {
+test("Case 4: product-level volume tiers stay canonical; configuration tiers stay legacy", () => {
   const productTiers = canRedirectLegacyProduct({
     ...SAFE_PRODUCT,
     hasProductPriceTiers: true,
   });
-  assert.deepEqual(productTiers, { redirect: false, reason: "wholesale_pricing" });
+  assert.deepEqual(productTiers, { redirect: true, reason: "safe_for_canonical" });
 
   const configurationTiers = canRedirectLegacyProduct({
     ...SAFE_PRODUCT,

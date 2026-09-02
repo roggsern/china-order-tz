@@ -23,7 +23,7 @@ class SyncProductPriceTiersRequest extends FormRequest
     {
         return [
             'configuration_id' => ['nullable', 'uuid', 'exists:product_variants,id'],
-            'price_tiers' => ['required', 'array'],
+            'price_tiers' => ['present', 'array'],
             'price_tiers.*.min_quantity' => ['required', 'integer', 'min:1'],
             'price_tiers.*.tier_type' => ['sometimes', 'string', Rule::in(['fixed_unit', 'percent_off'])],
             'price_tiers.*.unit_price' => ['nullable', 'numeric', 'min:0'],
