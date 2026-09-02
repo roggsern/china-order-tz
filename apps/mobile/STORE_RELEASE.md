@@ -11,8 +11,8 @@ This document is operational, not marketing copy. It does not create store recor
 | iOS bundle id | `com.chinaordertz.mobile` |
 | Scheme | `chinaordertz` |
 | Marketing version | `0.1.0` |
-| Android versionCode | `2` |
-| iOS buildNumber | `2` |
+| Android versionCode | `3` |
+| iOS buildNumber | `3` |
 | Expo SDK | 57 |
 | EAS project id | `c6ec7c64-8518-4e96-8df5-ac5d5a88f545` |
 | Privacy policy | https://chinaordertz.com/privacy |

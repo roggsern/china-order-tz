@@ -7,8 +7,8 @@ describe('release config', () => {
     expect(appJson.expo.ios.bundleIdentifier).toBe('com.chinaordertz.mobile');
     expect(appJson.expo.scheme).toBe('chinaordertz');
     expect(appJson.expo.version).toBe('0.1.0');
-    expect(appJson.expo.android.versionCode).toBe(2);
-    expect(appJson.expo.ios.buildNumber).toBe('2');
+    expect(appJson.expo.android.versionCode).toBe(3);
+    expect(appJson.expo.ios.buildNumber).toBe('3');
   });
 
   it('declares App Store encryption as exempt / standard encryption only', () => {

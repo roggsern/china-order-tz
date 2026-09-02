@@ -1,8 +1,8 @@
 # EAS / app version ownership
 
 - Semantic version (`expo.version`): owned by `app.json` — currently **0.1.0**
-- Android `versionCode`: owned by `app.json` — currently **2** (not auto-bumped)
-- iOS `CFBundleVersion` (`ios.buildNumber`): owned by `app.json` — currently **"2"**
+- Android `versionCode`: owned by `app.json` — currently **3** (not auto-bumped)
+- iOS `CFBundleVersion` (`ios.buildNumber`): owned by `app.json` — currently **"3"**
 - `eas.json` `cli.appVersionSource`: **local**
 
 ## First store / TestFlight recommendation
