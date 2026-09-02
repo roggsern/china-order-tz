@@ -1574,11 +1574,16 @@ export function AdminCatalogProductsPanel() {
               <div className="mt-4">
                 <WholesalePricingEditor
                   enabled={form.wholesaleEnabled}
-                  onEnabledChange={(wholesaleEnabled) =>
-                    setForm({ ...form, wholesaleEnabled })
-                  }
+                  onEnabledChange={(wholesaleEnabled) => {
+                    setForm((current) =>
+                      current ? { ...current, wholesaleEnabled } : current,
+                    );
+                    setActionError(null);
+                  }}
                   tiers={form.priceTiers}
-                  onChange={(priceTiers) => setForm({ ...form, priceTiers })}
+                  onChange={(priceTiers) =>
+                    setForm((current) => (current ? { ...current, priceTiers } : current))
+                  }
                   basePrice={form.price}
                   aggregatesVariants={
                     form.pricingModel === "variants" || publishVariants.length > 0

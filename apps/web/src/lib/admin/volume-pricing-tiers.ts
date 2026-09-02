@@ -97,6 +97,35 @@ export function mapTierDraftToPayload(tier: ProductPriceTierDraft): VolumePriceT
   };
 }
 
+export function starterVolumePricingTier(
+  basePrice: number,
+  minQuantity = 10,
+): ProductPriceTierDraft {
+  return {
+    minQuantity,
+    tierType: "fixed_unit",
+    unitPrice: Math.max(0, Math.round(basePrice * 0.8)),
+    discountPercent: null,
+  };
+}
+
+/** Disabled keeps draft rows in UI state; save still sends an explicit product-level clear. */
+export function applyVolumePricingEnabledChange(options: {
+  nextEnabled: boolean;
+  tiers: ProductPriceTierDraft[];
+  basePrice: number;
+}): { enabled: boolean; tiers: ProductPriceTierDraft[] } {
+  if (!options.nextEnabled) {
+    return { enabled: false, tiers: options.tiers };
+  }
+
+  if (options.tiers.length === 0) {
+    return { enabled: true, tiers: [starterVolumePricingTier(options.basePrice)] };
+  }
+
+  return { enabled: true, tiers: options.tiers };
+}
+
 export function volumePricingWriteFields(options: {
   loaded: boolean;
   enabled: boolean;

@@ -1,12 +1,26 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { purchaseQuantityWriteFields } from "./purchase-quantity-rules";
 import {
   VOLUME_PRICING_EDITOR_TITLE,
+  applyVolumePricingEnabledChange,
   firstVolumePricingFormError,
   inferredVolumeRangeLabels,
   mapProductLevelPriceTiers,
+  starterVolumePricingTier,
   volumePricingWriteFields,
 } from "./volume-pricing-tiers";
+import type { ProductPriceTierDraft } from "@/lib/types/catalog";
+
+const existingTiers: ProductPriceTierDraft[] = [
+  { minQuantity: 10, tierType: "fixed_unit", unitPrice: 8000, discountPercent: null },
+  { minQuantity: 50, tierType: "fixed_unit", unitPrice: 6000, discountPercent: null },
+  { minQuantity: 100, tierType: "fixed_unit", unitPrice: 5000, discountPercent: null },
+];
+
+function canSaveVolumePricing(enabled: boolean, tiers: ProductPriceTierDraft[]): boolean {
+  return firstVolumePricingFormError(enabled, tiers) === undefined;
+}
 
 test("canonical editor title is Bulk / Volume Pricing", () => {
   assert.equal(VOLUME_PRICING_EDITOR_TITLE, "Bulk / Volume Pricing");
@@ -96,14 +110,170 @@ test("volumePricingFormErrors rejects duplicates, missing prices, and empty enab
   assert.equal(firstVolumePricingFormError(false, []), undefined);
 });
 
-test("inferred ranges describe 10–49 and 50+ without inventing max_quantity", () => {
+test("existing product with tiers can disable Bulk / Volume Pricing", () => {
+  const next = applyVolumePricingEnabledChange({
+    nextEnabled: false,
+    tiers: existingTiers,
+    basePrice: 10000,
+  });
+
+  assert.equal(next.enabled, false);
+  assert.equal(next.tiers, existingTiers);
+  assert.equal(firstVolumePricingFormError(next.enabled, next.tiers), undefined);
+  assert.equal(canSaveVolumePricing(next.enabled, next.tiers), true);
+  assert.deepEqual(
+    volumePricingWriteFields({
+      loaded: true,
+      enabled: next.enabled,
+      tiers: next.tiers,
+    }).price_tiers,
+    [],
+  );
+});
+
+test("disabled editor with zero tiers has no validation error and can save", () => {
+  assert.equal(firstVolumePricingFormError(false, []), undefined);
+  assert.equal(canSaveVolumePricing(false, []), true);
+  assert.deepEqual(
+    volumePricingWriteFields({ loaded: true, enabled: false, tiers: [] }).price_tiers,
+    [],
+  );
+});
+
+test("disabled save explicitly clears product-level price tiers only", () => {
+  const productLevelClear = volumePricingWriteFields({
+    loaded: true,
+    enabled: false,
+    tiers: existingTiers,
+  });
+  assert.deepEqual(productLevelClear.price_tiers, []);
+  assert.equal(
+    JSON.stringify(productLevelClear).includes("configuration"),
+    false,
+  );
+
+  const mapped = mapProductLevelPriceTiers([
+    {
+      min_quantity: 10,
+      unit_price: "8000.00",
+      tier_type: "fixed_unit",
+      configuration_id: null,
+    },
+    {
+      min_quantity: 5,
+      unit_price: "7000.00",
+      tier_type: "fixed_unit",
+      configuration_id: "cfg-red",
+    },
+  ]);
+  assert.equal(mapped.length, 1);
+  assert.equal(mapped[0]?.minQuantity, 10);
+});
+
+test("enabled editor with zero tiers remains invalid", () => {
+  assert.equal(
+    firstVolumePricingFormError(true, []),
+    "Add at least one bulk pricing tier, or disable bulk / volume pricing.",
+  );
+  assert.equal(canSaveVolumePricing(true, []), false);
+});
+
+test("removing the final tier then unchecking Enable clears the validation error", () => {
+  let enabled = true;
+  let tiers = existingTiers;
+
+  tiers = [];
+  assert.equal(
+    firstVolumePricingFormError(enabled, tiers),
+    "Add at least one bulk pricing tier, or disable bulk / volume pricing.",
+  );
+
+  const next = applyVolumePricingEnabledChange({
+    nextEnabled: false,
+    tiers,
+    basePrice: 10000,
+  });
+  enabled = next.enabled;
+  tiers = next.tiers;
+
+  assert.equal(enabled, false);
+  assert.deepEqual(tiers, []);
+  assert.equal(firstVolumePricingFormError(enabled, tiers), undefined);
+  assert.equal(canSaveVolumePricing(enabled, tiers), true);
+});
+
+test("re-enabling restores preserved drafts or inserts a starter tier", () => {
+  const preserved = applyVolumePricingEnabledChange({
+    nextEnabled: false,
+    tiers: existingTiers,
+    basePrice: 10000,
+  });
+  const restored = applyVolumePricingEnabledChange({
+    nextEnabled: true,
+    tiers: preserved.tiers,
+    basePrice: 10000,
+  });
+  assert.equal(restored.enabled, true);
+  assert.equal(restored.tiers, existingTiers);
+  assert.equal(canSaveVolumePricing(restored.enabled, restored.tiers), true);
+
+  const emptied = applyVolumePricingEnabledChange({
+    nextEnabled: false,
+    tiers: [],
+    basePrice: 10000,
+  });
+  const started = applyVolumePricingEnabledChange({
+    nextEnabled: true,
+    tiers: emptied.tiers,
+    basePrice: 10000,
+  });
+  assert.equal(started.enabled, true);
+  assert.deepEqual(started.tiers, [starterVolumePricingTier(10000)]);
+  assert.equal(started.tiers[0]?.minQuantity, 10);
+  assert.equal(canSaveVolumePricing(started.enabled, started.tiers), true);
+});
+
+test("disabling volume pricing does not change purchase quantity rules", () => {
+  const quantity = purchaseQuantityWriteFields(6, 3);
+  const volume = volumePricingWriteFields({
+    loaded: true,
+    enabled: false,
+    tiers: existingTiers,
+  });
+  const payload = { ...quantity, ...volume };
+
+  assert.equal(payload.minimum_order_quantity, 6);
+  assert.equal(payload.order_increment, 3);
+  assert.deepEqual(payload.price_tiers, []);
+  assert.deepEqual(purchaseQuantityWriteFields(6, 3), quantity);
+});
+
+test("disable toggle does not emit a second empty-tiers update that would restore enabled", () => {
+  const snapshot = { enabled: true, tiers: [] as ProductPriceTierDraft[] };
+  const next = applyVolumePricingEnabledChange({
+    nextEnabled: false,
+    tiers: snapshot.tiers,
+    basePrice: 10000,
+  });
+
+  assert.equal(next.tiers, snapshot.tiers);
+
+  const staleOverwrite = { ...snapshot, tiers: [] };
+  assert.equal(staleOverwrite.enabled, true);
+
+  const applied = { ...snapshot, enabled: next.enabled };
+  assert.equal(applied.enabled, false);
+});
+
+test("inferred ranges describe 10–49, 50–99, and 100+ without inventing max_quantity", () => {
   const labels = inferredVolumeRangeLabels(
-    [
-      { minQuantity: 10, tierType: "fixed_unit", unitPrice: 8000, discountPercent: null },
-      { minQuantity: 50, tierType: "fixed_unit", unitPrice: 6000, discountPercent: null },
-    ],
+    existingTiers,
     (amount) => `TZS ${amount.toLocaleString("en-US")}`,
   );
 
-  assert.deepEqual(labels, ["10–49 uses TZS 8,000", "50+ uses TZS 6,000"]);
+  assert.deepEqual(labels, [
+    "10–49 uses TZS 8,000",
+    "50–99 uses TZS 6,000",
+    "100+ uses TZS 5,000",
+  ]);
 });

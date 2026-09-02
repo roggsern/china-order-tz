@@ -4,8 +4,10 @@ import type { ProductPriceTierDraft } from "@/lib/types/catalog";
 import {
   VOLUME_PRICING_EDITOR_DESCRIPTION,
   VOLUME_PRICING_EDITOR_TITLE,
+  applyVolumePricingEnabledChange,
   firstVolumePricingFormError,
   inferredVolumeRangeLabels,
+  starterVolumePricingTier,
 } from "@/lib/admin/volume-pricing-tiers";
 
 interface WholesalePricingEditorProps {
@@ -23,15 +25,6 @@ interface WholesalePricingEditorProps {
 
 function formatTzs(amount: number): string {
   return `TZS ${Math.round(amount).toLocaleString("en-US")}`;
-}
-
-function starterTier(basePrice: number, minQuantity: number): ProductPriceTierDraft {
-  return {
-    minQuantity,
-    tierType: "fixed_unit",
-    unitPrice: Math.max(0, Math.round(basePrice * 0.8)),
-    discountPercent: null,
-  };
 }
 
 export function WholesalePricingEditor({
@@ -52,7 +45,7 @@ export function WholesalePricingEditor({
 
   function addTier() {
     const lastMin = tiers[tiers.length - 1]?.minQuantity ?? 5;
-    onChange([...tiers, starterTier(basePrice, lastMin + 10)]);
+    onChange([...tiers, starterVolumePricingTier(basePrice, lastMin + 10)]);
   }
 
   function removeTier(index: number) {
@@ -80,13 +73,14 @@ export function WholesalePricingEditor({
             checked={enabled}
             disabled={disabled}
             onChange={(event) => {
-              const next = event.target.checked;
-              onEnabledChange(next);
-              if (next && tiers.length === 0) {
-                onChange([starterTier(basePrice, 10)]);
-              }
-              if (!next) {
-                onChange([]);
+              const next = applyVolumePricingEnabledChange({
+                nextEnabled: event.target.checked,
+                tiers,
+                basePrice,
+              });
+              onEnabledChange(next.enabled);
+              if (next.tiers !== tiers) {
+                onChange(next.tiers);
               }
             }}
             className="h-4 w-4 rounded border-zinc-300 text-[#c9a227] focus:ring-[#c9a227]"
