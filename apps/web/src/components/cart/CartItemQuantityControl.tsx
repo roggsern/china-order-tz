@@ -7,7 +7,8 @@ interface CartItemQuantityControlProps {
   quantity: number;
   onChange: (quantity: number) => void;
   min?: number;
-  max?: number;
+  /** Available sellable stock. Required so callers cannot silently default to 99. */
+  max: number;
   isUpdating?: boolean;
   disabled?: boolean;
 }
@@ -16,7 +17,7 @@ export function CartItemQuantityControl({
   quantity,
   onChange,
   min = 1,
-  max = 99,
+  max,
   isUpdating = false,
   disabled = false,
 }: CartItemQuantityControlProps) {

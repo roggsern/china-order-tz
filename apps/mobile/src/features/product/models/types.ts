@@ -60,6 +60,8 @@ export type CatalogProductCard = {
   availabilityStatus?: ProductAvailabilityStatus | null;
   unavailabilityReason?: string | null;
   inStock?: boolean | null;
+  /** Server available quantity when present — purchase max only, never invented. */
+  stock?: number | null;
   commerceChannelCode?: string | null;
   commerceSourceLabel?: string | null;
   category?: CatalogCategory | null;

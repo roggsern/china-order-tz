@@ -62,6 +62,32 @@ class VolumePricingPresentationTest extends TestCase
             ->assertJsonPath('data.volume_pricing.savings_total', '24000.00');
     }
 
+    public function test_quote_applies_hundred_plus_volume_tier_at_99_100_and_101(): void
+    {
+        $product = $this->simpleProduct(25000);
+        Inventory::query()
+            ->where('product_id', $product->id)
+            ->update(['quantity' => 250]);
+        $this->productTier($product, 10, 23000);
+        $this->productTier($product, 50, 20000);
+        $this->productTier($product, 100, 15000);
+
+        $this->postJson("/api/v1/products/{$product->slug}/quote", ['quantity' => 99])
+            ->assertOk()
+            ->assertJsonPath('data.unit_price', '20000.00')
+            ->assertJsonPath('data.volume_pricing.current_tier.min_quantity', 50);
+
+        $this->postJson("/api/v1/products/{$product->slug}/quote", ['quantity' => 100])
+            ->assertOk()
+            ->assertJsonPath('data.unit_price', '15000.00')
+            ->assertJsonPath('data.volume_pricing.current_tier.min_quantity', 100);
+
+        $this->postJson("/api/v1/products/{$product->slug}/quote", ['quantity' => 101])
+            ->assertOk()
+            ->assertJsonPath('data.unit_price', '15000.00')
+            ->assertJsonPath('data.volume_pricing.current_tier.min_quantity', 100);
+    }
+
     public function test_highest_tier_has_no_next_tier(): void
     {
         $product = $this->simpleProduct(10000);

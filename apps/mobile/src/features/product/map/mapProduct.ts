@@ -152,6 +152,9 @@ export function mapProductCard(raw: unknown): CatalogProductCard | null {
     availabilityStatus: stringField(data, 'availability_status'),
     unavailabilityReason: stringField(data, 'unavailability_reason'),
     inStock: boolField(data, 'in_stock'),
+    stock: typeof data.stock === 'number' && Number.isFinite(data.stock)
+      ? Math.floor(data.stock)
+      : null,
     commerceChannelCode: stringField(data, 'commerce_channel_code'),
     commerceSourceLabel: stringField(data, 'commerce_source_label'),
     category: mapCategory(data.category),

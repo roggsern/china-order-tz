@@ -21,6 +21,7 @@ import {
 } from "../ProductConfigurationPicker";
 import type { StorefrontPriceQuote } from "@/lib/catalog/storefront-configuration";
 import { isProductPurchaseUnavailable } from "@/lib/catalog/product-availability";
+import { sellablePurchaseMax } from "@/lib/catalog/sellable-purchase-max";
 import { ProductMoqStatusCard } from "../ProductMoqStatusCard";
 import { BulkPricingPanel } from "../BulkPricingPanel";
 import { ProductPurchaseQuantityGuidance } from "../ProductPurchaseQuantityGuidance";
@@ -44,7 +45,7 @@ export function ProductDetailMobile({
   relatedProducts,
 }: ProductDetailMobileProps) {
   const [quantity, setQuantity] = useState(1);
-  const [quantityMax, setQuantityMax] = useState(Math.min(Math.max(product.stock, 0), 99));
+  const [quantityMax, setQuantityMax] = useState(sellablePurchaseMax(product.stock));
   const [selectedColorSlug, setSelectedColorSlug] = useState<string | null>(null);
   const [configSelection, setConfigSelection] = useState<StorefrontConfigurationSelection>({
     configurationId: null,
@@ -74,8 +75,11 @@ export function ProductDetailMobile({
   }, []);
 
   const handleQuantityMaxChange = useCallback((max: number) => {
-    setQuantityMax(Math.min(Math.max(1, max), 99));
-    setQuantity((current) => Math.min(current, Math.max(1, max)));
+    const nextMax = sellablePurchaseMax(max);
+    setQuantityMax(nextMax);
+    if (nextMax >= 1) {
+      setQuantity((current) => Math.min(current, nextMax));
+    }
   }, []);
 
   const unitPrice = quote ? Number.parseFloat(quote.unit_price) : product.price;

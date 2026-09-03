@@ -35,8 +35,21 @@ describe('mapProductCard', () => {
       isPurchasable: true,
       availabilityStatus: 'available',
       inStock: true,
+      stock: null,
       commerceChannelCode: 'CHINA_IMPORT',
     });
+  });
+
+  it('maps numeric available stock when the API provides it', () => {
+    const product = mapProductCard({
+      id: 'p1',
+      slug: 'widget',
+      name: 'Widget',
+      price: '25000',
+      stock: 250,
+      in_stock: true,
+    });
+    expect(product?.stock).toBe(250);
   });
 
   it('prefers display_url for catalog card images', () => {

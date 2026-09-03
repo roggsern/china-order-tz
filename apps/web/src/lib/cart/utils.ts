@@ -10,6 +10,7 @@ import {
 import { resolveVariantCartImage } from "@/lib/catalog/storefront-variant-media";
 import { calculateOrderSummary } from "@/lib/shipping/smart-engine";
 import { parseVolumeMoney } from "@/lib/pricing/volume-pricing";
+import { sellablePurchaseMax } from "@/lib/catalog/sellable-purchase-max";
 
 export { createCartItemId };
 
@@ -121,8 +122,12 @@ export function calculateCartTotals(state: CartState): CartTotals {
 }
 
 export function clampQuantity(quantity: number, stock: number): number {
-  const max = Math.max(0, Math.min(stock, 99));
-  return Math.max(1, Math.min(max, quantity));
+  const max = sellablePurchaseMax(stock);
+  const requested = Number.isFinite(quantity) ? Math.floor(quantity) : 1;
+  if (max < 1) {
+    return 1;
+  }
+  return Math.max(1, Math.min(max, requested));
 }
 
 export function getLineTotal(item: CartLineItem): number {

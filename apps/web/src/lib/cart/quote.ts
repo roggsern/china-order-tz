@@ -97,6 +97,27 @@ function uniqueSorted(values: number[]): number[] {
     .sort((a, b) => a - b);
 }
 
+const MOQ_PROBE_BREAKPOINTS = [25, 30, 40, 50, 100] as const;
+
+/**
+ * Bounded probe set for MOQ / volume-tier discovery.
+ * Upper bound is available stock — never an invented 99 ceiling, never 1..stock.
+ */
+export function buildMoqProbeQuantities(stock: number, currentQuantity: number): number[] {
+  if (typeof stock !== "number" || !Number.isFinite(stock) || stock < 1) {
+    return [];
+  }
+
+  const maxQty = Math.floor(stock);
+  return uniqueSorted([
+    1,
+    currentQuantity,
+    ...Array.from({ length: Math.min(maxQty, 20) }, (_, index) => index + 1),
+    ...MOQ_PROBE_BREAKPOINTS,
+    maxQty,
+  ]).filter((qty) => qty <= maxQty);
+}
+
 /**
  * Discover the primary MOQ (highest discounting min_quantity) from quote engine tiers.
  * Uses quantity_tier.meta.min_quantity from probed quotes — no hardcoded thresholds.
@@ -108,19 +129,8 @@ export async function discoverMoqPlan(input: {
   stock: number;
 }): Promise<DiscoveredMoqPlan | null> {
   const { slug, configurationId, currentQuantity, stock } = input;
-  const maxQty = Math.min(Math.max(1, stock), 99);
-
-  // Probe enough quantities to surface every tier breakpoint the engine can apply.
-  const probeQuantities = uniqueSorted([
-    1,
-    currentQuantity,
-    ...Array.from({ length: Math.min(maxQty, 20) }, (_, index) => index + 1),
-    25,
-    30,
-    40,
-    50,
-    maxQty,
-  ]).filter((qty) => qty <= maxQty);
+  const probeQuantities = buildMoqProbeQuantities(stock, currentQuantity);
+  if (probeQuantities.length === 0) return null;
 
   const quotes = await Promise.all(
     probeQuantities.map(async (quantity) => {

@@ -5,7 +5,8 @@ type Props = {
   quantity: number;
   onChange: (quantity: number) => void;
   min?: number;
-  max?: number;
+  /** Available sellable stock. Required so callers cannot silently default to 99. */
+  max: number;
   disabled?: boolean;
 };
 
@@ -13,7 +14,7 @@ export function QuantitySelector({
   quantity,
   onChange,
   min = 1,
-  max = 99,
+  max,
   disabled,
 }: Props) {
   return (

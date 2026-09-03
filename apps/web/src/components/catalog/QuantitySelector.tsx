@@ -6,7 +6,8 @@ interface QuantitySelectorProps {
   quantity: number;
   onChange: (quantity: number) => void;
   min?: number;
-  max?: number;
+  /** Available sellable stock. Required so callers cannot silently default to 99. */
+  max: number;
   variant?: "default" | "mobile";
 }
 
@@ -14,7 +15,7 @@ export function QuantitySelector({
   quantity,
   onChange,
   min = 1,
-  max = 99,
+  max,
   variant = "default",
 }: QuantitySelectorProps) {
   const decrease = () => onChange(Math.max(min, quantity - 1));

@@ -12,6 +12,7 @@ import {
   isChinaImportCartLine,
 } from "@/lib/cart/display-totals";
 import { getLineProductSavings, getLineTotal } from "@/lib/cart/utils";
+import { sellablePurchaseMax } from "@/lib/catalog/sellable-purchase-max";
 import { ProductImageDisplay } from "@/components/catalog/ProductImageDisplay";
 import { useCartActions } from "@/lib/cart/context";
 import { CartItemShippingSelector, LocalDeliveryBadge } from "./CartItemShippingSelector";
@@ -65,7 +66,7 @@ function CartItemRowComponent({ item }: CartItemRowProps) {
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const maxQuantity = Math.min(item.stock, 99);
+  const maxQuantity = sellablePurchaseMax(item.stock);
   const lineTotal = getLineTotal(item);
   const isChinaImport = isChinaImportCartLine(item);
   const itemTotal =

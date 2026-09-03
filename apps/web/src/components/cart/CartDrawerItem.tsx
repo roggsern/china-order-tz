@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { CartLineItem } from "@/lib/types/cart";
 import { formatPrice } from "@/lib/catalog/utils";
 import { getLineProductSavings } from "@/lib/cart/utils";
+import { sellablePurchaseMax } from "@/lib/catalog/sellable-purchase-max";
 import { useCartActions } from "@/lib/cart/context";
 import { useCartDrawer } from "@/lib/cart/drawer-context";
 import { ProductImageDisplay } from "@/components/catalog/ProductImageDisplay";
@@ -19,7 +20,7 @@ interface CartDrawerItemProps {
 export function CartDrawerItem({ item }: CartDrawerItemProps) {
   const { updateQuantity, removeItem } = useCartActions();
   const { close } = useCartDrawer();
-  const maxQuantity = Math.min(item.stock, 99);
+  const maxQuantity = sellablePurchaseMax(item.stock);
   const [isUpdating, setIsUpdating] = useState(false);
 
   const lineSavings = getLineProductSavings(item);

@@ -30,6 +30,7 @@ import type {
   ProductDetailParams,
 } from '../models/types';
 import { canAddToCart, resolveAddToCartGate } from '../utils/canAddToCart';
+import { resolvePdpQuantityMax } from '../utils/resolvePdpQuantityMax';
 import { resolveDisplayedProductPrice } from '../utils/resolveDisplayedProductPrice';
 import {
   formatAddToCartFollowUp,
@@ -142,6 +143,16 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
   const reviewsQuery = useProductReviews(productSlug);
   const wishlist = useWishlistToggle(productId);
 
+  const quantityMax = useMemo(
+    () =>
+      resolvePdpQuantityMax({
+        product: detailQuery.data,
+        configuration: liveConfiguration,
+      }),
+    [detailQuery.data, liveConfiguration],
+  );
+  const boundedQuantity = quantityMax >= 1 ? Math.min(quantity, quantityMax) : quantity;
+
   const quoteEnabled =
     !configStatus.loading &&
     !configStatus.error &&
@@ -152,7 +163,7 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
   const quoteQuery = useProductQuote({
     productKey,
     configurationId: liveConfiguration?.matchedConfigurationId ?? null,
-    quantity,
+    quantity: boundedQuantity,
     enabled: quoteEnabled,
   });
 
@@ -230,13 +241,13 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
     configuration,
     configurationLoading: configStatus.loading,
     configurationError: configStatus.error,
-    quantity,
+    quantity: boundedQuantity,
     submitting: addToCartMutation.isPending,
   });
   const enabled = gate.canAdd;
 
   const quote = quoteQuery.data ?? null;
-  const purchaseQuantity = resolveQuotePurchaseQuantity(quote, quantity);
+  const purchaseQuantity = resolveQuotePurchaseQuantity(quote, boundedQuantity);
   const displayedPrice = resolveDisplayedProductPrice({
     product: detailProduct,
     configuration,
@@ -274,7 +285,7 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
       configuration,
       configurationLoading: configStatus.loading,
       configurationError: configStatus.error,
-      quantity,
+      quantity: boundedQuantity,
       submitting: addToCartMutation.isPending,
     })) {
       return;
@@ -297,7 +308,7 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
       const cart = await addToCartMutation.mutateAsync({
         productId: detailProduct.id,
         productVariantId: hasConfigurations ? matchedConfigurationId : null,
-        quantity,
+        quantity: boundedQuantity,
         journey,
       });
       const followUp = formatAddToCartFollowUp(
@@ -379,8 +390,9 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
         />
 
         <QuantitySelector
-          quantity={quantity}
+          quantity={boundedQuantity}
           onChange={setQuantity}
+          max={quantityMax}
           disabled={addToCartMutation.isPending || !enabled}
         />
 

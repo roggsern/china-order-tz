@@ -23,6 +23,7 @@ import { ProductPurchaseQuantityGuidance } from "./ProductPurchaseQuantityGuidan
 import type { StorefrontPriceQuote } from "@/lib/catalog/storefront-configuration";
 import { resolveQuotePurchaseQuantity } from "@/lib/purchasing/purchase-quantity";
 import { isProductPurchaseUnavailable } from "@/lib/catalog/product-availability";
+import { sellablePurchaseMax } from "@/lib/catalog/sellable-purchase-max";
 
 interface ProductDetailPurchasePanelProps {
   product: Product;
@@ -42,7 +43,7 @@ export function ProductDetailPurchasePanel({
   onMediaPreviewConfigurationIdChange,
 }: ProductDetailPurchasePanelProps) {
   const [quantity, setQuantity] = useState(1);
-  const [quantityMax, setQuantityMax] = useState(Math.min(Math.max(product.stock, 0), 99));
+  const [quantityMax, setQuantityMax] = useState(sellablePurchaseMax(product.stock));
   const [configSelection, setConfigSelection] = useState<StorefrontConfigurationSelection>({
     configurationId: null,
     mediaPreviewConfigurationId: null,
@@ -71,8 +72,11 @@ export function ProductDetailPurchasePanel({
   }, []);
 
   const handleQuantityMaxChange = useCallback((max: number) => {
-    setQuantityMax(Math.min(Math.max(1, max), 99));
-    setQuantity((current) => Math.min(current, Math.max(1, max)));
+    const nextMax = sellablePurchaseMax(max);
+    setQuantityMax(nextMax);
+    if (nextMax >= 1) {
+      setQuantity((current) => Math.min(current, nextMax));
+    }
   }, []);
 
   const unitPrice = quote

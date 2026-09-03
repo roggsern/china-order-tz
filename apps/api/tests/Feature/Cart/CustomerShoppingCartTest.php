@@ -368,6 +368,36 @@ class CustomerShoppingCartTest extends TestCase
             ->assertJsonPath('code', 'business_rule_violated');
     }
 
+    public function test_can_add_quantity_100_when_available_stock_is_250(): void
+    {
+        $user = User::factory()->create();
+        ['variant' => $variant] = CatalogCartFixture::purchasable(10000, 250);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/v1/cart/items', [
+            'product_variant_id' => $variant->id,
+            'quantity' => 100,
+        ])->assertCreated()
+            ->assertJsonPath('data.items.0.quantity', 100);
+    }
+
+    public function test_cannot_add_quantity_100_when_available_stock_is_50(): void
+    {
+        $user = User::factory()->create();
+        ['variant' => $variant] = CatalogCartFixture::purchasable(10000, 50);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/v1/cart/items', [
+            'product_variant_id' => $variant->id,
+            'quantity' => 100,
+        ])->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'business_rule_violated')
+            ->assertJsonValidationErrors(['quantity']);
+    }
+
     public function test_cannot_add_more_than_available_inventory(): void
     {
         $user = User::factory()->create();

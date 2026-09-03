@@ -3,10 +3,12 @@
 /**
  * Legacy product-detail actions (hardcoded size/color/storage).
  * The live PDP uses ProductDetailPurchasePanel / ProductDetailMobile with
- * ProductConfigurationPicker instead. Kept only for non-PDP references.
+ * ProductConfigurationPicker instead. Still exported from catalog/index but
+ * unused by current product routes — purchase max is stock-only if reached.
  */
 import { useState } from "react";
 import type { Product } from "@/lib/types/catalog";
+import { sellablePurchaseMax } from "@/lib/catalog/sellable-purchase-max";
 import { QuantitySelector } from "./QuantitySelector";
 import { AddToCartButton } from "./AddToCartButton";
 import { BuyNowButton } from "./BuyNowButton";
@@ -25,7 +27,7 @@ export function ProductDetailActions({ product }: ProductDetailActionsProps) {
       <QuantitySelector
         quantity={quantity}
         onChange={setQuantity}
-        max={Math.min(product.stock, 99)}
+        max={sellablePurchaseMax(product.stock)}
       />
 
       <div className="flex flex-col gap-3 sm:flex-row">
