@@ -46,7 +46,7 @@ test("Case 3: missing catalog product type => redirect false", () => {
   });
 });
 
-test("Case 4: product-level volume tiers stay canonical; configuration tiers stay legacy", () => {
+test("Case 4: product-level and variant-scoped volume tiers stay canonical", () => {
   const productTiers = canRedirectLegacyProduct({
     ...SAFE_PRODUCT,
     hasProductPriceTiers: true,
@@ -57,7 +57,7 @@ test("Case 4: product-level volume tiers stay canonical; configuration tiers sta
     ...SAFE_PRODUCT,
     hasConfigurationPriceTiers: true,
   });
-  assert.deepEqual(configurationTiers, { redirect: false, reason: "wholesale_pricing" });
+  assert.deepEqual(configurationTiers, { redirect: true, reason: "safe_for_canonical" });
 });
 
 test("Case 5: soft blockers only still allow redirect (documented, not blocking)", () => {

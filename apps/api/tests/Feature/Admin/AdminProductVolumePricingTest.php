@@ -12,6 +12,9 @@ use App\Models\ConfigurationPriceTier;
 use App\Models\Department;
 use App\Models\Inventory;
 use App\Models\Product;
+use App\Models\ProductVariant;
+use App\Models\VariantPrice;
+use App\Enums\VariantPriceType;
 use Database\Factories\Support\CatalogCartFixture;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -208,14 +211,172 @@ class AdminProductVolumePricingTest extends TestCase
         }
     }
 
+    public function test_variant_a_tiers_save_to_a_only(): void
+    {
+        Sanctum::actingAs(Admin::factory()->create());
+        ['product' => $product, 'variant' => $variantA] = CatalogCartFixture::purchasable(2000000, 50);
+        $variantB = $this->addVariant($product);
+
+        $this->syncVariantTiers($product, $variantA, [
+            ['min_quantity' => 10, 'tier_type' => 'fixed_unit', 'unit_price' => 1900000],
+        ]);
+        $this->syncVariantTiers($product, $variantB, [
+            ['min_quantity' => 10, 'tier_type' => 'fixed_unit', 'unit_price' => 2150000],
+        ]);
+
+        $this->assertSame(
+            1,
+            ConfigurationPriceTier::query()
+                ->where('product_variant_id', $variantA->id)
+                ->count(),
+        );
+        $this->assertDatabaseHas('configuration_price_tiers', [
+            'product_id' => $product->id,
+            'product_variant_id' => $variantA->id,
+            'min_quantity' => 10,
+            'unit_price' => '1900000.00',
+        ]);
+        $this->assertDatabaseHas('configuration_price_tiers', [
+            'product_id' => $product->id,
+            'product_variant_id' => $variantB->id,
+            'min_quantity' => 10,
+            'unit_price' => '2150000.00',
+        ]);
+    }
+
+    public function test_clearing_variant_a_does_not_clear_variant_b(): void
+    {
+        Sanctum::actingAs(Admin::factory()->create());
+        ['product' => $product, 'variant' => $variantA] = CatalogCartFixture::purchasable(2000000, 50);
+        $variantB = $this->addVariant($product);
+        $this->syncVariantTiers($product, $variantA, [
+            ['min_quantity' => 10, 'tier_type' => 'fixed_unit', 'unit_price' => 1900000],
+        ]);
+        $this->syncVariantTiers($product, $variantB, [
+            ['min_quantity' => 10, 'tier_type' => 'fixed_unit', 'unit_price' => 2150000],
+        ]);
+
+        $this->syncVariantTiers($product, $variantA, []);
+
+        $this->assertDatabaseMissing('configuration_price_tiers', [
+            'product_id' => $product->id,
+            'product_variant_id' => $variantA->id,
+        ]);
+        $this->assertDatabaseHas('configuration_price_tiers', [
+            'product_id' => $product->id,
+            'product_variant_id' => $variantB->id,
+            'min_quantity' => 10,
+            'unit_price' => '2150000.00',
+        ]);
+    }
+
+    public function test_variant_scoped_rows_survive_product_level_edits_and_product_level_survives_variant_edits(): void
+    {
+        Sanctum::actingAs(Admin::factory()->create());
+        ['product' => $product, 'variant' => $variantA] = CatalogCartFixture::purchasable(2000000, 50);
+        $variantB = $this->addVariant($product);
+        $this->productTier($product, 10, 1800000);
+        $this->syncVariantTiers($product, $variantA, [
+            ['min_quantity' => 10, 'tier_type' => 'fixed_unit', 'unit_price' => 1900000],
+        ]);
+        $this->syncVariantTiers($product, $variantB, [
+            ['min_quantity' => 10, 'tier_type' => 'fixed_unit', 'unit_price' => 2150000],
+        ]);
+
+        $this->syncProductLevelTiers($product, [
+            ['min_quantity' => 10, 'tier_type' => 'percent_off', 'discount_percent' => 10],
+        ]);
+
+        $this->assertDatabaseHas('configuration_price_tiers', [
+            'product_id' => $product->id,
+            'product_variant_id' => $variantA->id,
+            'unit_price' => '1900000.00',
+        ]);
+        $this->assertDatabaseHas('configuration_price_tiers', [
+            'product_id' => $product->id,
+            'product_variant_id' => $variantB->id,
+            'unit_price' => '2150000.00',
+        ]);
+
+        $this->syncVariantTiers($product, $variantA, [
+            ['min_quantity' => 50, 'tier_type' => 'fixed_unit', 'unit_price' => 1800000],
+        ]);
+
+        $this->assertDatabaseHas('configuration_price_tiers', [
+            'product_id' => $product->id,
+            'product_variant_id' => null,
+            'min_quantity' => 10,
+            'discount_percent' => '10.00',
+        ]);
+        $this->assertDatabaseHas('configuration_price_tiers', [
+            'product_id' => $product->id,
+            'product_variant_id' => $variantB->id,
+            'unit_price' => '2150000.00',
+        ]);
+    }
+
+    public function test_volume_sync_does_not_touch_legacy_variant_prices_wholesale(): void
+    {
+        Sanctum::actingAs(Admin::factory()->create());
+        ['product' => $product, 'variant' => $variant] = CatalogCartFixture::purchasable(2000000, 50);
+
+        $wholesale = VariantPrice::query()->create([
+            'product_variant_id' => $variant->id,
+            'price_type' => VariantPriceType::Wholesale,
+            'currency' => 'TZS',
+            'amount' => 1750000,
+            'minimum_quantity' => 10,
+            'is_active' => true,
+        ]);
+
+        $this->syncProductLevelTiers($product, [
+            ['min_quantity' => 10, 'tier_type' => 'percent_off', 'discount_percent' => 10],
+        ]);
+        $this->syncVariantTiers($product, $variant, [
+            ['min_quantity' => 10, 'tier_type' => 'fixed_unit', 'unit_price' => 1900000],
+        ]);
+
+        $this->assertDatabaseHas('variant_prices', [
+            'id' => $wholesale->id,
+            'product_variant_id' => $variant->id,
+            'price_type' => VariantPriceType::Wholesale->value,
+            'amount' => '1750000.00',
+            'minimum_quantity' => 10,
+        ]);
+    }
+
     /**
-     * @param  list<array{min_quantity: int, tier_type: string, unit_price: int}>  $tiers
+     * @param  list<array{min_quantity: int, tier_type: string, unit_price?: int, discount_percent?: int}>  $tiers
      */
     private function syncProductLevelTiers(Product $product, array $tiers): \Illuminate\Testing\TestResponse
     {
         return $this->putJson('/api/v1/admin/products/'.$product->id.'/price-tiers', [
             'price_tiers' => $tiers,
         ])->assertOk();
+    }
+
+    /**
+     * @param  list<array{min_quantity: int, tier_type: string, unit_price?: int, discount_percent?: int}>  $tiers
+     */
+    private function syncVariantTiers(
+        Product $product,
+        ProductVariant $variant,
+        array $tiers,
+    ): \Illuminate\Testing\TestResponse {
+        return $this->putJson('/api/v1/admin/products/'.$product->id.'/price-tiers', [
+            'configuration_id' => $variant->id,
+            'price_tiers' => $tiers,
+        ])->assertOk();
+    }
+
+    private function addVariant(Product $product): ProductVariant
+    {
+        return ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'is_active' => true,
+            'is_default' => false,
+            'price' => null,
+        ]);
     }
 
     private function assertQuote(string $slug, int $quantity, string $unitPrice, ?int $currentMin): void

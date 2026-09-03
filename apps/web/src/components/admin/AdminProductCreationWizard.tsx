@@ -46,6 +46,11 @@ import {
 } from "@/lib/api/admin-catalog";
 import type { AdminSupplier } from "@/lib/api/admin-procurement";
 import type { ProductPriceTierDraft } from "@/lib/types/catalog";
+import {
+  VOLUME_PRICING_CREATE_VARIANT_NOTE,
+  VOLUME_PRICING_SEPARATION_NOTE,
+} from "@/lib/admin/volume-pricing-shape";
+import type { VariantVolumeDraft, VolumePricingView } from "@/lib/admin/volume-pricing-tiers";
 
 export type ProductCreationWizardFormState = {
   id?: string;
@@ -59,6 +64,12 @@ export type ProductCreationWizardFormState = {
   priceTiers: ProductPriceTierDraft[];
   wholesaleLoaded: boolean;
   hasConfigurationPriceTiers: boolean;
+  volumeView: VolumePricingView;
+  volumeWriteProduct: boolean;
+  variantVolume: Record<string, VariantVolumeDraft>;
+  variantVolumeInitial: Record<string, VariantVolumeDraft>;
+  variantVolumeLoaded: boolean;
+  variantRetailMinor: Record<string, number | null>;
   shortDescription: string;
   description: string;
   commerceJourney: CommerceJourney | "";
@@ -735,6 +746,7 @@ export function AdminProductCreationWizard({
             basePrice={form.price}
             aggregatesVariants={false}
             disabled={Boolean(form.id) && !form.wholesaleLoaded}
+            contextNotes={[VOLUME_PRICING_SEPARATION_NOTE]}
           />
           {form.commerceJourney === "china" && publishSellableVariantCount === 0 ? (
             <p className="text-xs text-sky-800">
@@ -785,6 +797,8 @@ export function AdminProductCreationWizard({
             basePrice={form.price}
             aggregatesVariants
             disabled={Boolean(form.id) && !form.wholesaleLoaded}
+            allowedTierTypes={["percent_off"]}
+            contextNotes={[VOLUME_PRICING_SEPARATION_NOTE, VOLUME_PRICING_CREATE_VARIANT_NOTE]}
             configurationTiersNote={
               form.hasConfigurationPriceTiers
                 ? "This product also has variant-specific volume tiers. Saving here updates product-level thresholds only and does not delete those variant rows."

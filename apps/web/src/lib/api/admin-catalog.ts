@@ -5,6 +5,9 @@ import {
   hasConfigurationPriceTiers,
   mapProductLevelPriceTiers,
   mapTierDraftToPayload,
+  mapVariantVolumeSchedules,
+  mapApiPriceTierToDraft,
+  sortVolumeTiers,
 } from "@/lib/admin/volume-pricing-tiers";
 import { resolveProductMediaUploadError } from "@/lib/admin/product-media-upload";
 import type {
@@ -144,6 +147,7 @@ export type AdminApiConfiguration = {
   name?: string | null;
   price?: string | number | null;
   barcode?: string | null;
+  is_active?: boolean;
   attribute_values?: AdminApiAttributeValue[];
   inventory?: AdminApiInventory | null;
   price_tiers?: AdminApiPriceTier[];
@@ -308,7 +312,9 @@ export type AdminCatalogProduct = {
   deletedAt: string | null;
   /** Product-level volume tiers (`configuration_id` null). */
   priceTiers: import("@/lib/types/catalog").ProductPriceTierDraft[];
-  /** Variant-scoped volume tiers exist; edited only on the legacy configuration grid. */
+  /** Variant-scoped volume tiers keyed by variant / configuration id. */
+  variantVolumeSchedules: Record<string, import("@/lib/types/catalog").ProductPriceTierDraft[]>;
+  /** Variant-scoped volume tiers exist. */
   hasConfigurationPriceTiers: boolean;
 };
 
@@ -2475,6 +2481,10 @@ export function mapAdminApiCatalogProduct(product: AdminApiProduct): AdminCatalo
     isDemo: product.is_demo === true,
     deletedAt: product.deleted_at ?? null,
     priceTiers: mapProductLevelPriceTiers(product.price_tiers),
+    variantVolumeSchedules: mapVariantVolumeSchedules(
+      product.price_tiers,
+      product.configurations ?? product.variants,
+    ),
     hasConfigurationPriceTiers: hasConfigurationPriceTiers(
       product.price_tiers,
       product.configurations ?? product.variants,
@@ -2576,6 +2586,30 @@ export async function updateAdminCatalogProduct(
     "Unable to update product.",
   );
   return mapAdminApiCatalogProduct(data);
+}
+
+export type AdminProductPriceTiersSyncPayload = {
+  configuration_id?: string | null;
+  price_tiers: Array<{
+    min_quantity: number;
+    tier_type: "fixed_unit" | "percent_off";
+    unit_price?: number | null;
+    discount_percent?: number | null;
+  }>;
+};
+
+export async function syncAdminProductPriceTiers(
+  productId: string,
+  payload: AdminProductPriceTiersSyncPayload,
+): Promise<import("@/lib/types/catalog").ProductPriceTierDraft[]> {
+  const data = await mutateAdminJson<AdminApiPriceTier[]>(
+    `/api/admin/products/${encodeURIComponent(productId)}/price-tiers`,
+    "PUT",
+    payload,
+    "Unable to save bulk / volume pricing.",
+  );
+
+  return sortVolumeTiers((data ?? []).map(mapApiPriceTierToDraft));
 }
 
 export async function deleteAdminCatalogProduct(id: string): Promise<void> {

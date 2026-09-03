@@ -130,11 +130,11 @@ export function listLegacyEditSoftBlockers(
  * | uuid_unresolved                | Cannot open canonical panel without catalog UUID            |
  * | legacy_configuration_product | Configuration Template grid only exists in ProductForm      |
  * | missing_catalog_product_type   | Canonical editor requires catalog product type assignment   |
- * | wholesale_pricing              | Per-configuration volume tiers remain legacy-only            |
+ * | wholesale_pricing              | Reserved; variant-scoped volume tiers are canonical         |
  *
- * Product-level Bulk / Volume Pricing is editable on the canonical catalog editor.
- * Soft blockers (weight, compare-at, demo, out_of_stock, rich text) are documented
- * via `listLegacyEditSoftBlockers()` but do not block redirect.
+ * Product-level and variant-scoped Bulk / Volume Pricing are editable on the
+ * canonical catalog editor. Soft blockers (weight, compare-at, demo, out_of_stock,
+ * rich text) are documented via `listLegacyEditSoftBlockers()` but do not block redirect.
  */
 export function canRedirectLegacyProduct(
   product: LegacyEditPolicyProduct,
@@ -154,11 +154,6 @@ export function canRedirectLegacyProduct(
   if (!product.catalogProductTypeId?.trim()) {
     // Canonical Details tab, publish readiness, and taxonomy require CPT.
     return { redirect: false, reason: "missing_catalog_product_type" };
-  }
-
-  if (product.hasConfigurationPriceTiers) {
-    // Per-configuration volume rows still live on ProductConfigurationGrid.
-    return { redirect: false, reason: "wholesale_pricing" };
   }
 
   return { redirect: true, reason: "safe_for_canonical" };

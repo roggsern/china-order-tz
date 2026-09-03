@@ -130,6 +130,8 @@ test("mapAdminApiCatalogProduct maps product-level volume tiers and ignores conf
   assert.equal(mapped.priceTiers[0]?.minQuantity, 10);
   assert.equal(mapped.priceTiers[1]?.minQuantity, 50);
   assert.equal(mapped.hasConfigurationPriceTiers, true);
+  assert.equal(mapped.variantVolumeSchedules["cfg-red"]?.length, 1);
+  assert.equal(mapped.variantVolumeSchedules["cfg-red"]?.[0]?.minQuantity, 5);
 });
 
 function legacyForm(overrides: Partial<ProductFormData> = {}): ProductFormData {

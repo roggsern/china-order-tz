@@ -27,8 +27,8 @@ import { fetchAdminSuppliers, type AdminSupplier } from "@/lib/api/admin-procure
 import { PublishReadinessChecklist } from "@/components/admin/PublishReadinessChecklist";
 import { AdminProductBulkActionBar } from "@/components/admin/AdminProductBulkActionBar";
 import { AdminProductCreationWizard } from "@/components/admin/AdminProductCreationWizard";
+import { CanonicalVolumePricingSection } from "@/components/admin/CanonicalVolumePricingSection";
 import { PurchaseQuantityRulesEditor } from "@/components/admin/PurchaseQuantityRulesEditor";
-import { WholesalePricingEditor } from "@/components/admin/WholesalePricingEditor";
 import { ProductSimplePricingFields } from "@/components/admin/ProductSimplePricingFields";
 import { AdminProductSectionTabs } from "@/components/admin/AdminProductSectionTabs";
 import { AdminBrandAsyncSelect } from "@/components/admin/AdminBrandAsyncSelect";
@@ -73,8 +73,10 @@ import {
   fetchAdminProductVariants,
   fetchAdminProductShippingOptions,
   fetchAdminStores,
+  fetchAdminVariantPrices,
   resolveAdminCommerceChannelId,
   restoreAdminCatalogProduct,
+  syncAdminProductPriceTiers,
   updateAdminCatalogProduct,
   type AdminApiCommerceChannel,
   type AdminBrand,
@@ -104,9 +106,22 @@ import {
   purchaseQuantityWriteFields,
 } from "@/lib/admin/purchase-quantity-rules";
 import {
-  firstVolumePricingFormError,
+  canonicalVolumePricingValidationError,
+  collectVariantVolumeWrites,
+  emptyVariantVolumeDraft,
+  productVolumeWriteShouldInclude,
+  starterVolumePricingTier,
+  variantVolumeDraftFromTiers,
   volumePricingWriteFields,
+  type VariantVolumeDraft,
+  type VolumePricingView,
 } from "@/lib/admin/volume-pricing-tiers";
+import {
+  activeRetailAmountTzs,
+  classifyVolumePriceShape,
+  initialVolumePricingView,
+  productVolumeAllowedTierTypes,
+} from "@/lib/admin/volume-pricing-shape";
 import type { ProductPriceTierDraft } from "@/lib/types/catalog";
 
 type CatalogProductsView = "active" | "deleted";
@@ -126,6 +141,12 @@ type ProductFormState = {
   priceTiers: ProductPriceTierDraft[];
   wholesaleLoaded: boolean;
   hasConfigurationPriceTiers: boolean;
+  volumeView: VolumePricingView;
+  volumeWriteProduct: boolean;
+  variantVolume: Record<string, VariantVolumeDraft>;
+  variantVolumeInitial: Record<string, VariantVolumeDraft>;
+  variantVolumeLoaded: boolean;
+  variantRetailMinor: Record<string, number | null>;
   shortDescription: string;
   description: string;
   commerceJourney: CommerceJourney | "";
@@ -155,6 +176,12 @@ const emptyForm = (): ProductFormState => ({
   priceTiers: [],
   wholesaleLoaded: true,
   hasConfigurationPriceTiers: false,
+  volumeView: "product",
+  volumeWriteProduct: true,
+  variantVolume: {},
+  variantVolumeInitial: {},
+  variantVolumeLoaded: true,
+  variantRetailMinor: {},
   shortDescription: "",
   description: "",
   commerceJourney: "",
@@ -172,6 +199,62 @@ const emptyForm = (): ProductFormState => ({
   sortOrder: 0,
   isFeatured: false,
 });
+
+function classifyPanelVolumeShape(
+  form: ProductFormState,
+  variants: AdminProductVariant[],
+) {
+  return classifyVolumePriceShape({
+    pricingModel: form.pricingModel,
+    variants: variants.map((variant) => ({
+      variantId: variant.id,
+      isActive: variant.isActive,
+      amountMinor: form.variantVolumeLoaded
+        ? (form.variantRetailMinor[variant.id] ?? null)
+        : null,
+    })),
+    productLevelTiers: form.priceTiers,
+  });
+}
+
+function productVolumePayload(form: ProductFormState) {
+  if (
+    !productVolumeWriteShouldInclude({
+      view: form.volumeView,
+      writeProduct: form.volumeWriteProduct,
+    })
+  ) {
+    return {};
+  }
+
+  return volumePricingWriteFields({
+    loaded: form.wholesaleLoaded,
+    enabled: form.wholesaleEnabled,
+    tiers: form.priceTiers,
+  });
+}
+
+async function persistVariantVolumeScopes(
+  productId: string,
+  form: ProductFormState,
+  variants: AdminProductVariant[],
+) {
+  const shape = classifyPanelVolumeShape(form, variants);
+  const writes = collectVariantVolumeWrites({
+    view: form.volumeView,
+    loaded: form.variantVolumeLoaded,
+    relevantVariantIds: shape.relevantVariantIds,
+    drafts: form.variantVolume,
+    initial: form.variantVolumeInitial,
+  });
+
+  for (const write of writes) {
+    await syncAdminProductPriceTiers(productId, {
+      configuration_id: write.configurationId,
+      price_tiers: write.priceTiers,
+    });
+  }
+}
 
 const PAGE_SIZE = 15;
 
@@ -512,6 +595,12 @@ export function AdminCatalogProductsPanel() {
         priceTiers: product.priceTiers,
         wholesaleLoaded: false,
         hasConfigurationPriceTiers: product.hasConfigurationPriceTiers,
+        volumeView: "product",
+        volumeWriteProduct: true,
+        variantVolume: {},
+        variantVolumeInitial: {},
+        variantVolumeLoaded: false,
+        variantRetailMinor: {},
         shortDescription: product.shortDescription,
         description: product.description,
         commerceJourney:
@@ -562,20 +651,69 @@ export function AdminCatalogProductsPanel() {
           fetchAdminProductSpecifications(form.id!).catch(() => []),
         ]);
 
+        const variantRetailMinor: Record<string, number | null> = {};
+        await Promise.all(
+          variantsPayload.variants
+            .filter((variant) => variant.isActive)
+            .map(async (variant) => {
+              try {
+                const prices = await fetchAdminVariantPrices(variant.id);
+                variantRetailMinor[variant.id] = activeRetailAmountTzs(prices);
+              } catch {
+                variantRetailMinor[variant.id] = null;
+              }
+            }),
+        );
+
         if (cancelled) {
           return;
         }
 
+        const variantVolume: Record<string, VariantVolumeDraft> = {};
+        const variantVolumeInitial: Record<string, VariantVolumeDraft> = {};
+        for (const variant of variantsPayload.variants) {
+          const draft = variantVolumeDraftFromTiers(
+            product.variantVolumeSchedules[variant.id] ?? [],
+          );
+          variantVolume[variant.id] = draft;
+          variantVolumeInitial[variant.id] = {
+            enabled: draft.enabled,
+            tiers: draft.tiers.map((tier) => ({ ...tier })),
+          };
+        }
+
+        const volumeShape = classifyVolumePriceShape({
+          pricingModel: product.pricingModel,
+          variants: variantsPayload.variants.map((variant) => ({
+            variantId: variant.id,
+            isActive: variant.isActive,
+            amountMinor: variant.isActive ? (variantRetailMinor[variant.id] ?? null) : null,
+          })),
+          productLevelTiers: product.priceTiers,
+        });
+        const volumeView = initialVolumePricingView({
+          shape: volumeShape,
+          hasVariantSchedules: product.hasConfigurationPriceTiers,
+        });
+
         setPublishContext(product);
         setPublishVariants(variantsPayload.variants);
         setForm((previous) =>
-          previous && previous.id === product.id && !previous.wholesaleLoaded
+          previous &&
+          previous.id === product.id &&
+          (!previous.wholesaleLoaded || !previous.variantVolumeLoaded)
             ? {
                 ...previous,
                 wholesaleEnabled: product.priceTiers.length > 0,
                 priceTiers: product.priceTiers,
                 wholesaleLoaded: true,
                 hasConfigurationPriceTiers: product.hasConfigurationPriceTiers,
+                variantVolume,
+                variantVolumeInitial,
+                variantVolumeLoaded: true,
+                variantRetailMinor,
+                volumeView,
+                volumeWriteProduct: volumeView !== "keep" && volumeView !== "variant",
               }
             : previous,
         );
@@ -953,10 +1091,16 @@ export function AdminCatalogProductsPanel() {
       return false;
     }
 
-    const volumePricingError = firstVolumePricingFormError(
-      form.wholesaleEnabled,
-      form.priceTiers,
-    );
+    const volumeShape = classifyPanelVolumeShape(form, publishVariants);
+    const volumePricingError = canonicalVolumePricingValidationError({
+      view: form.volumeView,
+      writeProduct: form.volumeWriteProduct,
+      productEnabled: form.wholesaleEnabled,
+      productTiers: form.priceTiers,
+      allowedProductTierTypes: productVolumeAllowedTierTypes(volumeShape),
+      relevantVariantIds: volumeShape.relevantVariantIds,
+      variantDrafts: form.variantVolume,
+    });
     if (volumePricingError) {
       setActionError(volumePricingError);
       return false;
@@ -1038,11 +1182,7 @@ export function AdminCatalogProductsPanel() {
           price: pricingFields.price,
           cost_price: pricingFields.cost_price,
           ...purchaseQuantityWriteFields(form.minimumOrderQuantity, form.orderIncrement),
-          ...volumePricingWriteFields({
-            loaded: form.wholesaleLoaded,
-            enabled: form.wholesaleEnabled,
-            tiers: form.priceTiers,
-          }),
+          ...productVolumePayload(form),
           short_description: form.shortDescription.trim() || null,
           description: form.description.trim() || null,
           status: form.id ? form.status : "draft",
@@ -1074,6 +1214,7 @@ export function AdminCatalogProductsPanel() {
     try {
       if (form.id) {
         await updateAdminCatalogProduct(form.id, payload);
+        await persistVariantVolumeScopes(form.id, form, publishVariants);
         if (!useWizardFlow) {
           setForm(null);
         }
@@ -1112,10 +1253,16 @@ export function AdminCatalogProductsPanel() {
       return;
     }
 
-    const volumePricingError = firstVolumePricingFormError(
-      form.wholesaleEnabled,
-      form.priceTiers,
-    );
+    const volumeShape = classifyPanelVolumeShape(form, publishVariants);
+    const volumePricingError = canonicalVolumePricingValidationError({
+      view: form.volumeView,
+      writeProduct: form.volumeWriteProduct,
+      productEnabled: form.wholesaleEnabled,
+      productTiers: form.priceTiers,
+      allowedProductTierTypes: productVolumeAllowedTierTypes(volumeShape),
+      relevantVariantIds: volumeShape.relevantVariantIds,
+      variantDrafts: form.variantVolume,
+    });
     if (volumePricingError) {
       setActionError(volumePricingError);
       return;
@@ -1134,11 +1281,7 @@ export function AdminCatalogProductsPanel() {
         price: pricingFields.price,
         cost_price: pricingFields.cost_price,
         ...purchaseQuantityWriteFields(form.minimumOrderQuantity, form.orderIncrement),
-        ...volumePricingWriteFields({
-          loaded: form.wholesaleLoaded,
-          enabled: form.wholesaleEnabled,
-          tiers: form.priceTiers,
-        }),
+        ...productVolumePayload(form),
         short_description: form.shortDescription.trim() || null,
         description: form.description.trim() || null,
         status: "active",
@@ -1164,6 +1307,7 @@ export function AdminCatalogProductsPanel() {
           },
         ),
       });
+      await persistVariantVolumeScopes(form.id, form, publishVariants);
       setForm(null);
       await reload();
     } catch (err) {
@@ -1572,28 +1716,104 @@ export function AdminCatalogProductsPanel() {
                 }
               />
               <div className="mt-4">
-                <WholesalePricingEditor
-                  enabled={form.wholesaleEnabled}
-                  onEnabledChange={(wholesaleEnabled) => {
+                <CanonicalVolumePricingSection
+                  shape={classifyPanelVolumeShape(form, publishVariants)}
+                  shapeLoaded={!form.id || (form.wholesaleLoaded && form.variantVolumeLoaded)}
+                  variants={publishVariants}
+                  variantRetailMinor={form.variantRetailMinor}
+                  productEnabled={form.wholesaleEnabled}
+                  productTiers={form.priceTiers}
+                  onProductEnabledChange={(wholesaleEnabled) => {
                     setForm((current) =>
                       current ? { ...current, wholesaleEnabled } : current,
                     );
                     setActionError(null);
                   }}
-                  tiers={form.priceTiers}
-                  onChange={(priceTiers) =>
+                  onProductTiersChange={(priceTiers) =>
                     setForm((current) => (current ? { ...current, priceTiers } : current))
                   }
-                  basePrice={form.price}
-                  aggregatesVariants={
-                    form.pricingModel === "variants" || publishVariants.length > 0
+                  productBasePrice={form.price}
+                  productEditorDisabled={
+                    Boolean(form.id) && (!form.wholesaleLoaded || !form.variantVolumeLoaded)
                   }
-                  disabled={Boolean(form.id) && !form.wholesaleLoaded}
-                  configurationTiersNote={
-                    form.hasConfigurationPriceTiers
-                      ? "This product also has variant-specific volume tiers. Saving here updates product-level thresholds only and does not delete those variant rows."
-                      : null
-                  }
+                  volumeView={form.volumeView}
+                  onVolumeViewChange={(volumeView) => {
+                    setForm((current) =>
+                      current
+                        ? {
+                            ...current,
+                            volumeView,
+                            volumeWriteProduct: volumeView === "product",
+                          }
+                        : current,
+                    );
+                    setActionError(null);
+                  }}
+                  onKeepExisting={() => {
+                    setForm((current) =>
+                      current
+                        ? { ...current, volumeView: "keep", volumeWriteProduct: false }
+                        : current,
+                    );
+                    setActionError(null);
+                  }}
+                  onReplaceWithPercent={() => {
+                    setForm((current) =>
+                      current
+                        ? {
+                            ...current,
+                            volumeView: "product",
+                            volumeWriteProduct: true,
+                            wholesaleEnabled: true,
+                            priceTiers: [
+                              starterVolumePricingTier(current.price, 10, "percent_off"),
+                            ],
+                          }
+                        : current,
+                    );
+                    setActionError(null);
+                  }}
+                  onMoveToVariantPricing={() => {
+                    setForm((current) =>
+                      current
+                        ? { ...current, volumeView: "variant", volumeWriteProduct: false }
+                        : current,
+                    );
+                    setActionError(null);
+                  }}
+                  onClearProductSchedule={() => {
+                    setForm((current) =>
+                      current
+                        ? {
+                            ...current,
+                            wholesaleEnabled: false,
+                            volumeWriteProduct: true,
+                            volumeView:
+                              current.volumeView === "keep" ? "product" : current.volumeView,
+                          }
+                        : current,
+                    );
+                    setActionError(null);
+                  }}
+                  variantDrafts={form.variantVolume}
+                  onVariantDraftChange={(variantId, patch) => {
+                    setForm((current) => {
+                      if (!current) {
+                        return current;
+                      }
+                      const previous =
+                        current.variantVolume[variantId] ?? emptyVariantVolumeDraft();
+                      return {
+                        ...current,
+                        variantVolume: {
+                          ...current.variantVolume,
+                          [variantId]: { ...previous, ...patch },
+                        },
+                      };
+                    });
+                  }}
+                  hasConfigurationPriceTiers={form.hasConfigurationPriceTiers}
+                  onClearActionError={() => setActionError(null)}
                 />
               </div>
             </div>

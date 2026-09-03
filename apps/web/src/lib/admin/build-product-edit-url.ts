@@ -23,7 +23,7 @@ export type AdminProductEditUrlDecision = {
  * Required before canonical redirect from link builders:
  * - catalog UUID
  * - explicit legacy-configuration flag
- * - explicit wholesale flags (product-level tiers are canonical; configuration-level stay legacy)
+ * - explicit wholesale flags (volume tiers are canonical at both scopes)
  * - catalog product type field present (null = known missing, blocks via policy)
  */
 export function isAdminProductEditLinkContextComplete(

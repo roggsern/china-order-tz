@@ -1,4 +1,7 @@
 import type { ProductPriceTierDraft } from "@/lib/types/catalog";
+import type { VolumePricingView } from "./volume-pricing-shape";
+
+export type { VolumePricingView };
 
 export const VOLUME_PRICING_EDITOR_TITLE = "Bulk / Volume Pricing";
 
@@ -97,10 +100,22 @@ export function mapTierDraftToPayload(tier: ProductPriceTierDraft): VolumePriceT
   };
 }
 
+export type VolumePricingTierType = ProductPriceTierDraft["tierType"];
+
 export function starterVolumePricingTier(
   basePrice: number,
   minQuantity = 10,
+  tierType: VolumePricingTierType = "fixed_unit",
 ): ProductPriceTierDraft {
+  if (tierType === "percent_off") {
+    return {
+      minQuantity,
+      tierType: "percent_off",
+      unitPrice: null,
+      discountPercent: 10,
+    };
+  }
+
   return {
     minQuantity,
     tierType: "fixed_unit",
@@ -114,13 +129,17 @@ export function applyVolumePricingEnabledChange(options: {
   nextEnabled: boolean;
   tiers: ProductPriceTierDraft[];
   basePrice: number;
+  starterTierType?: VolumePricingTierType;
 }): { enabled: boolean; tiers: ProductPriceTierDraft[] } {
   if (!options.nextEnabled) {
     return { enabled: false, tiers: options.tiers };
   }
 
   if (options.tiers.length === 0) {
-    return { enabled: true, tiers: [starterVolumePricingTier(options.basePrice)] };
+    return {
+      enabled: true,
+      tiers: [starterVolumePricingTier(options.basePrice, 10, options.starterTierType ?? "fixed_unit")],
+    };
   }
 
   return { enabled: true, tiers: options.tiers };
@@ -149,6 +168,7 @@ export function volumePricingWriteFields(options: {
 export function volumePricingFormErrors(
   enabled: boolean,
   tiers: ProductPriceTierDraft[],
+  options?: { allowedTierTypes?: VolumePricingTierType[] },
 ): VolumePricingFormErrors {
   if (!enabled) {
     return {};
@@ -156,6 +176,16 @@ export function volumePricingFormErrors(
 
   if (tiers.length === 0) {
     return { form: "Add at least one bulk pricing tier, or disable bulk / volume pricing." };
+  }
+
+  const allowed = options?.allowedTierTypes;
+  if (allowed && allowed.length > 0) {
+    const disallowed = tiers.find((tier) => !allowed.includes(tier.tierType));
+    if (disallowed) {
+      return {
+        form: "Use percentage off. A fixed unit price would override variant retail differences.",
+      };
+    }
   }
 
   const seen = new Map<number, number>();
@@ -204,9 +234,162 @@ export function volumePricingFormErrors(
 export function firstVolumePricingFormError(
   enabled: boolean,
   tiers: ProductPriceTierDraft[],
+  options?: { allowedTierTypes?: VolumePricingTierType[] },
 ): string | undefined {
-  const errors = volumePricingFormErrors(enabled, tiers);
+  const errors = volumePricingFormErrors(enabled, tiers, options);
   return errors.form ?? errors.tiers?.find((message) => Boolean(message));
+}
+
+export type VariantVolumeDraft = {
+  enabled: boolean;
+  tiers: ProductPriceTierDraft[];
+};
+
+export function emptyVariantVolumeDraft(): VariantVolumeDraft {
+  return { enabled: false, tiers: [] };
+}
+
+export function variantVolumeDraftFromTiers(tiers: ProductPriceTierDraft[]): VariantVolumeDraft {
+  const sorted = sortVolumeTiers(tiers);
+  return { enabled: sorted.length > 0, tiers: sorted };
+}
+
+export function mapVariantVolumeSchedules(
+  productTiers: AdminApiVolumePriceTier[] | undefined,
+  configurationRows: Array<{ id: string; price_tiers?: AdminApiVolumePriceTier[] }> | undefined,
+): Record<string, ProductPriceTierDraft[]> {
+  const schedules: Record<string, ProductPriceTierDraft[]> = {};
+
+  for (const row of configurationRows ?? []) {
+    schedules[row.id] = sortVolumeTiers((row.price_tiers ?? []).map(mapApiPriceTierToDraft));
+  }
+
+  for (const tier of productTiers ?? []) {
+    const configurationId = tier.configuration_id;
+    if (!configurationId) {
+      continue;
+    }
+
+    const draft = mapApiPriceTierToDraft(tier);
+    const existing = schedules[configurationId] ?? [];
+    const alreadyMapped = draft.id
+      ? existing.some((row) => row.id === draft.id)
+      : existing.some(
+          (row) =>
+            row.minQuantity === draft.minQuantity &&
+            row.tierType === draft.tierType &&
+            row.unitPrice === draft.unitPrice &&
+            row.discountPercent === draft.discountPercent,
+        );
+    if (!alreadyMapped) {
+      schedules[configurationId] = sortVolumeTiers([...existing, draft]);
+    }
+  }
+
+  return schedules;
+}
+
+function serializeVariantVolumeDraft(draft: VariantVolumeDraft): string {
+  return JSON.stringify({
+    enabled: draft.enabled,
+    tiers: sortVolumeTiers(draft.tiers).map((tier) => ({
+      minQuantity: tier.minQuantity,
+      tierType: tier.tierType,
+      unitPrice: tier.unitPrice,
+      discountPercent: tier.discountPercent,
+    })),
+  });
+}
+
+export function variantVolumeDraftsEqual(
+  left: VariantVolumeDraft | undefined,
+  right: VariantVolumeDraft | undefined,
+): boolean {
+  return (
+    serializeVariantVolumeDraft(left ?? emptyVariantVolumeDraft()) ===
+    serializeVariantVolumeDraft(right ?? emptyVariantVolumeDraft())
+  );
+}
+
+export function variantVolumeWriteFields(draft: VariantVolumeDraft): VolumePriceTierPayload[] {
+  if (!draft.enabled) {
+    return [];
+  }
+
+  return sortVolumeTiers(draft.tiers)
+    .filter((tier) => tier.minQuantity >= 1)
+    .map(mapTierDraftToPayload);
+}
+
+export type VariantVolumeWrite = {
+  configurationId: string;
+  priceTiers: VolumePriceTierPayload[];
+};
+
+export function collectVariantVolumeWrites(options: {
+  view: VolumePricingView;
+  loaded: boolean;
+  relevantVariantIds: string[];
+  drafts: Record<string, VariantVolumeDraft>;
+  initial: Record<string, VariantVolumeDraft>;
+}): VariantVolumeWrite[] {
+  if (!options.loaded || options.view !== "variant") {
+    return [];
+  }
+
+  return options.relevantVariantIds.flatMap((variantId) => {
+    const draft = options.drafts[variantId] ?? emptyVariantVolumeDraft();
+    const initial = options.initial[variantId] ?? emptyVariantVolumeDraft();
+    if (variantVolumeDraftsEqual(draft, initial)) {
+      return [];
+    }
+
+    return [{ configurationId: variantId, priceTiers: variantVolumeWriteFields(draft) }];
+  });
+}
+
+export function productVolumeWriteShouldInclude(options: {
+  view: VolumePricingView;
+  writeProduct: boolean;
+}): boolean {
+  return options.view !== "keep" && options.writeProduct;
+}
+
+export function canonicalVolumePricingValidationError(options: {
+  view: VolumePricingView;
+  writeProduct: boolean;
+  productEnabled: boolean;
+  productTiers: ProductPriceTierDraft[];
+  allowedProductTierTypes?: VolumePricingTierType[];
+  relevantVariantIds: string[];
+  variantDrafts: Record<string, VariantVolumeDraft>;
+}): string | undefined {
+  if (options.view === "keep") {
+    return undefined;
+  }
+
+  if (options.view === "product" || options.writeProduct) {
+    const error = firstVolumePricingFormError(
+      options.productEnabled,
+      options.productTiers,
+      { allowedTierTypes: options.allowedProductTierTypes },
+    );
+    if (error) {
+      return error;
+    }
+  }
+
+  if (options.view === "variant") {
+    for (const variantId of options.relevantVariantIds) {
+      const draft = options.variantDrafts[variantId] ?? emptyVariantVolumeDraft();
+      const error = firstVolumePricingFormError(draft.enabled, draft.tiers);
+      if (error) {
+        return error;
+      }
+    }
+  }
+
+  return undefined;
 }
 
 export function inferredVolumeRangeLabels(

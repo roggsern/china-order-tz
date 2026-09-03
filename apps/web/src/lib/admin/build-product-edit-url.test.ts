@@ -123,6 +123,7 @@ test("Case 2: AdminCatalogProduct list rows map volume flags and open canonical 
         discountPercent: null,
       },
     ],
+    variantVolumeSchedules: {},
     hasConfigurationPriceTiers: false,
   };
 
@@ -214,7 +215,7 @@ test("known policy blockers still stay legacy after complete context", () => {
       ...COMPLETE_SAFE_LINK,
       hasConfigurationPriceTiers: true,
     }).reason,
-    "wholesale_pricing",
+    "safe_for_canonical",
   );
 });
 
@@ -249,5 +250,8 @@ test("Case 6: direct numeric legacy URL target preserved when policy blocks redi
     ...COMPLETE_SAFE_LINK,
     hasConfigurationPriceTiers: true,
   });
-  assert.equal(configurationWholesale.url, `/admin/products/${LEGACY_NUMERIC_ID}/edit`);
+  assert.equal(
+    configurationWholesale.url,
+    `/admin/products?edit=${encodeURIComponent(CATALOG_UUID)}`,
+  );
 });

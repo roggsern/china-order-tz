@@ -20,7 +20,10 @@ interface WholesalePricingEditorProps {
   description?: string;
   aggregatesVariants?: boolean;
   configurationTiersNote?: string | null;
+  contextNotes?: string[];
   disabled?: boolean;
+  allowedTierTypes?: ProductPriceTierDraft["tierType"][];
+  embedded?: boolean;
 }
 
 function formatTzs(amount: number): string {
@@ -37,15 +40,24 @@ export function WholesalePricingEditor({
   description = VOLUME_PRICING_EDITOR_DESCRIPTION,
   aggregatesVariants = false,
   configurationTiersNote = null,
+  contextNotes = [],
   disabled = false,
+  allowedTierTypes,
+  embedded = false,
 }: WholesalePricingEditorProps) {
+  const allowed =
+    allowedTierTypes && allowedTierTypes.length > 0
+      ? allowedTierTypes
+      : (["fixed_unit", "percent_off"] as ProductPriceTierDraft["tierType"][]);
+  const starterTierType = allowed.includes("fixed_unit") ? "fixed_unit" : "percent_off";
+
   function updateTier(index: number, patch: Partial<ProductPriceTierDraft>) {
     onChange(tiers.map((tier, i) => (i === index ? { ...tier, ...patch } : tier)));
   }
 
   function addTier() {
     const lastMin = tiers[tiers.length - 1]?.minQuantity ?? 5;
-    onChange([...tiers, starterVolumePricingTier(basePrice, lastMin + 10)]);
+    onChange([...tiers, starterVolumePricingTier(basePrice, lastMin + 10, starterTierType)]);
   }
 
   function removeTier(index: number) {
@@ -53,10 +65,10 @@ export function WholesalePricingEditor({
   }
 
   const rangeLabels = enabled ? inferredVolumeRangeLabels(tiers, formatTzs) : [];
-  const formError = firstVolumePricingFormError(enabled, tiers);
+  const formError = firstVolumePricingFormError(enabled, tiers, { allowedTierTypes: allowed });
 
   return (
-    <section className="admin-card space-y-4 p-5">
+    <section className={embedded ? "space-y-4" : "admin-card space-y-4 p-5"}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-zinc-900">{title}</h2>
@@ -77,6 +89,7 @@ export function WholesalePricingEditor({
                 nextEnabled: event.target.checked,
                 tiers,
                 basePrice,
+                starterTierType,
               });
               onEnabledChange(next.enabled);
               if (next.tiers !== tiers) {
@@ -124,8 +137,12 @@ export function WholesalePricingEditor({
                   }}
                   className="admin-input mt-1"
                 >
-                  <option value="fixed_unit">Fixed unit price</option>
-                  <option value="percent_off">Percentage off</option>
+                  {allowed.includes("fixed_unit") ? (
+                    <option value="fixed_unit">Fixed unit price</option>
+                  ) : null}
+                  {allowed.includes("percent_off") ? (
+                    <option value="percent_off">Percentage off</option>
+                  ) : null}
                 </select>
               </div>
               {tier.tierType === "fixed_unit" ? (
@@ -196,6 +213,11 @@ export function WholesalePricingEditor({
       {configurationTiersNote ? (
         <p className="text-xs text-amber-800">{configurationTiersNote}</p>
       ) : null}
+      {contextNotes.map((note) => (
+        <p key={note} className="text-xs text-zinc-600">
+          {note}
+        </p>
+      ))}
     </section>
   );
 }

@@ -4,10 +4,15 @@ import { purchaseQuantityWriteFields } from "./purchase-quantity-rules";
 import {
   VOLUME_PRICING_EDITOR_TITLE,
   applyVolumePricingEnabledChange,
+  canonicalVolumePricingValidationError,
+  collectVariantVolumeWrites,
+  emptyVariantVolumeDraft,
   firstVolumePricingFormError,
   inferredVolumeRangeLabels,
   mapProductLevelPriceTiers,
+  productVolumeWriteShouldInclude,
   starterVolumePricingTier,
+  variantVolumeDraftFromTiers,
   volumePricingWriteFields,
 } from "./volume-pricing-tiers";
 import type { ProductPriceTierDraft } from "@/lib/types/catalog";
@@ -276,4 +281,154 @@ test("inferred ranges describe 10–49, 50–99, and 100+ without inventing max_
     "50–99 uses TZS 6,000",
     "100+ uses TZS 5,000",
   ]);
+});
+
+const variantATiers: ProductPriceTierDraft[] = [
+  { minQuantity: 10, tierType: "fixed_unit", unitPrice: 1_900_000, discountPercent: null },
+];
+const variantBTiers: ProductPriceTierDraft[] = [
+  { minQuantity: 10, tierType: "fixed_unit", unitPrice: 2_150_000, discountPercent: null },
+];
+
+test("variant A dirty save emits A only", () => {
+  const initialA = variantVolumeDraftFromTiers(variantATiers);
+  const initialB = variantVolumeDraftFromTiers(variantBTiers);
+  const writes = collectVariantVolumeWrites({
+    view: "variant",
+    loaded: true,
+    relevantVariantIds: ["a", "b"],
+    drafts: {
+      a: variantVolumeDraftFromTiers([
+        { minQuantity: 10, tierType: "fixed_unit", unitPrice: 1_800_000, discountPercent: null },
+      ]),
+      b: initialB,
+    },
+    initial: { a: initialA, b: initialB },
+  });
+
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0]?.configurationId, "a");
+  assert.deepEqual(writes[0]?.priceTiers, [
+    { min_quantity: 10, tier_type: "fixed_unit", unit_price: 1_800_000, discount_percent: null },
+  ]);
+});
+
+test("variant B dirty save emits B only", () => {
+  const initialA = variantVolumeDraftFromTiers(variantATiers);
+  const initialB = variantVolumeDraftFromTiers(variantBTiers);
+  const writes = collectVariantVolumeWrites({
+    view: "variant",
+    loaded: true,
+    relevantVariantIds: ["a", "b"],
+    drafts: {
+      a: initialA,
+      b: variantVolumeDraftFromTiers([
+        { minQuantity: 10, tierType: "fixed_unit", unitPrice: 2_000_000, discountPercent: null },
+      ]),
+    },
+    initial: { a: initialA, b: initialB },
+  });
+
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0]?.configurationId, "b");
+});
+
+test("clearing A emits empty tiers for A and does not include B", () => {
+  const initialA = variantVolumeDraftFromTiers(variantATiers);
+  const initialB = variantVolumeDraftFromTiers(variantBTiers);
+  const writes = collectVariantVolumeWrites({
+    view: "variant",
+    loaded: true,
+    relevantVariantIds: ["a", "b"],
+    drafts: {
+      a: emptyVariantVolumeDraft(),
+      b: initialB,
+    },
+    initial: { a: initialA, b: initialB },
+  });
+
+  assert.deepEqual(writes, [{ configurationId: "a", priceTiers: [] }]);
+});
+
+test("product-level edits do not emit variant-scoped writes", () => {
+  const drafts = {
+    a: variantVolumeDraftFromTiers(variantATiers),
+    b: variantVolumeDraftFromTiers(variantBTiers),
+  };
+  assert.deepEqual(
+    collectVariantVolumeWrites({
+      view: "product",
+      loaded: true,
+      relevantVariantIds: ["a", "b"],
+      drafts,
+      initial: drafts,
+    }),
+    [],
+  );
+});
+
+test("variant-level edits omit product-level writes unless explicitly requested", () => {
+  assert.equal(productVolumeWriteShouldInclude({ view: "variant", writeProduct: false }), false);
+  assert.equal(productVolumeWriteShouldInclude({ view: "product", writeProduct: true }), true);
+});
+
+test("keep view does not silently delete existing product-level fixed_unit tiers", () => {
+  assert.equal(productVolumeWriteShouldInclude({ view: "keep", writeProduct: false }), false);
+  assert.equal(productVolumeWriteShouldInclude({ view: "keep", writeProduct: true }), false);
+  assert.equal(
+    canonicalVolumePricingValidationError({
+      view: "keep",
+      writeProduct: false,
+      productEnabled: true,
+      productTiers: existingTiers,
+      relevantVariantIds: ["a", "b"],
+      variantDrafts: {},
+    }),
+    undefined,
+  );
+});
+
+test("explicit product-level clear still writes empty product tiers only", () => {
+  assert.deepEqual(
+    volumePricingWriteFields({
+      loaded: true,
+      enabled: false,
+      tiers: existingTiers,
+    }).price_tiers,
+    [],
+  );
+  assert.deepEqual(
+    collectVariantVolumeWrites({
+      view: "product",
+      loaded: true,
+      relevantVariantIds: ["a", "b"],
+      drafts: {
+        a: variantVolumeDraftFromTiers(variantATiers),
+        b: variantVolumeDraftFromTiers(variantBTiers),
+      },
+      initial: {
+        a: variantVolumeDraftFromTiers(variantATiers),
+        b: variantVolumeDraftFromTiers(variantBTiers),
+      },
+    }),
+    [],
+  );
+});
+
+test("switching modes does not emit destructive writes for the other scope", () => {
+  const drafts = {
+    a: variantVolumeDraftFromTiers(variantATiers),
+    b: variantVolumeDraftFromTiers(variantBTiers),
+  };
+  assert.deepEqual(
+    collectVariantVolumeWrites({
+      view: "product",
+      loaded: true,
+      relevantVariantIds: ["a", "b"],
+      drafts,
+      initial: drafts,
+    }),
+    [],
+  );
+  assert.equal(productVolumeWriteShouldInclude({ view: "variant", writeProduct: false }), false);
 });
