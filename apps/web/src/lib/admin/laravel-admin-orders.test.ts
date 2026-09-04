@@ -244,6 +244,33 @@ describe("laravel admin order operational mapping", () => {
     assert.notEqual(order.items[0]?.name, "Changed After Purchase");
   });
 
+  it("maps a slim index item that has no nested product resource", () => {
+    const order = mapLaravelAdminOrderPayloadToWebOrder({
+      data: {
+        ...BASE_ORDER,
+        items: [
+          {
+            id: "item-1",
+            product_id: 42,
+            product_name_snapshot: "Purchased Snapshot Name",
+            product_image_snapshot: "https://cdn.example.test/order-snapshot.jpg",
+            variant_name_snapshot: "Black • 128GB",
+            sku_snapshot: "SNAP-SKU",
+            quantity: 2,
+            unit_price_snapshot: "15000.00",
+            shipping_mode_snapshot: "sea",
+          },
+        ],
+      },
+    });
+
+    assert.ok(order);
+    assert.equal(order.items[0]?.name, "Purchased Snapshot Name");
+    assert.equal(order.items[0]?.image.url, "https://cdn.example.test/order-snapshot.jpg");
+    assert.equal(order.items[0]?.configurationLabel, "Black • 128GB");
+    assert.equal(order.items.length, 1);
+  });
+
   it("does not regress paid order status rendering", () => {
     const order = mapLaravelAdminOrderPayloadToWebOrder({
       data: {

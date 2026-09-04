@@ -17,6 +17,7 @@ use App\Http\Requests\Admin\IndexAdminOrdersRequest;
 use App\Http\Requests\Admin\PayOrderRequest;
 use App\Http\Requests\Admin\ShowOrderRequest;
 use App\Http\Requests\Admin\StoreOrderRequest;
+use App\Http\Resources\AdminOrderIndexResource;
 use App\Http\Resources\OrderResource;
 use App\Http\Resources\RefundTransactionResource;
 use App\Models\Order;
@@ -31,7 +32,7 @@ class AdminOrderController extends Controller
     ): AnonymousResourceCollection {
         $validated = $request->validated();
 
-        return OrderResource::collection($action->handle([
+        return AdminOrderIndexResource::collection($action->handle([
             'status' => $validated['status'] ?? null,
             'q' => $validated['q'] ?? null,
             'commerce_channel' => $validated['commerce_channel'] ?? null,

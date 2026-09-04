@@ -59,16 +59,42 @@ describe("admin orders canonical pagination source contracts", () => {
     assert.ok(provider.includes("listMeta"));
     assert.ok(provider.includes("setListPage"));
     assert.ok(provider.includes("applyAdminOrdersListFilters"));
-    assert.ok(provider.includes("fetchAdminOrdersSnapshot(listQueryRef.current)"));
+    assert.ok(provider.includes("shouldApplyAdminOrdersListResponse"));
+    assert.ok(provider.includes("fetchAdminOrdersSnapshot(requestedQuery)"));
+    assert.doesNotMatch(provider, /fetchAdminProducts/);
+    assert.doesNotMatch(provider, /fetchAllPaginated/);
 
     assert.ok(table.includes("setListPage"));
     assert.ok(table.includes("listMeta.total"));
+    assert.ok(table.includes("Loading page ${requestedPage}"));
+    assert.ok(table.includes("pageOrders.map"));
     assert.doesNotMatch(table, /PAGE_SIZE/);
+    assert.doesNotMatch(table, /disabled=\{isListLoading\}/);
+    assert.doesNotMatch(table, /fetchAdminProducts/);
   });
 
   it("uses server total for the Orders index header rather than the current page slice", () => {
     const page = readWeb("app/admin/orders/page.tsx");
     assert.ok(page.includes("listMeta.total"));
     assert.doesNotMatch(page, /analytics\.totalOrders/);
+  });
+
+  it("does not refetch the admin catalog when orders pagination state changes", () => {
+    const layout = readWeb("app/admin/layout.tsx");
+    const productsProvider = readWeb("components/admin/AdminProductsProvider.tsx");
+    const ordersProvider = readWeb("components/admin/AdminOrdersProvider.tsx");
+    const table = readWeb("components/admin/AdminOrderTable.tsx");
+    const action = readFileSync(
+      join(process.cwd(), "..", "api", "app", "Actions", "AdminOrders", "GetAdminOrdersAction.php"),
+      "utf8",
+    );
+
+    assert.ok(layout.includes("AdminProductsProvider"));
+    assert.ok(productsProvider.includes("[isAuthenticated, isReady, loadProducts]"));
+    assert.doesNotMatch(productsProvider, /listQuery/);
+    assert.doesNotMatch(ordersProvider, /fetchAdminProducts/);
+    assert.doesNotMatch(table, /fetchAdminProducts/);
+    assert.doesNotMatch(action, /items\.product/);
+    assert.ok(action.includes("'items'"));
   });
 });

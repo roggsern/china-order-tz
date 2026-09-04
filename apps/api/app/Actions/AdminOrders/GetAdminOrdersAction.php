@@ -15,6 +15,10 @@ class GetAdminOrdersAction
     public const MAX_PER_PAGE = 100;
 
     /**
+     * Admin list is a historical snapshot. Do not eager-load live catalog
+     * relations (product, variants, media) — ProductResource serialization
+     * is what made pagination take ~6s. Show uses a separate action.
+     *
      * @param  array{
      *   status?: string|null,
      *   q?: string|null,
@@ -28,10 +32,8 @@ class GetAdminOrdersAction
             ->with([
                 'user',
                 'commerceChannel',
-                'items.product.images',
+                'items',
                 'payments',
-                'refundTransactions',
-                'statusHistory',
             ])
             ->latest();
 

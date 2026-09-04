@@ -7,9 +7,19 @@ import {
 import { getAdminOrdersPollIntervalMs } from "@/lib/admin/realtime-config";
 import { fetchAdminOrdersSnapshot } from "@/lib/admin/admin-orders-ws";
 import { getActiveAdminOrdersListQuery } from "@/lib/admin/admin-orders-pagination";
+import {
+  clearAdminOrdersListQueryInFlight,
+  markAdminOrdersListQueryInFlight,
+  serializeAdminOrdersListQuery,
+  shouldApplyAdminOrdersPollSnapshot,
+  shouldStartAdminOrdersPoll,
+} from "@/lib/admin/admin-orders-list-request";
 
-async function fetchServerOrders(): Promise<{ orders: Order[]; ok: boolean }> {
-  const result = await fetchAdminOrdersSnapshot(getActiveAdminOrdersListQuery());
+async function fetchServerOrders(query = getActiveAdminOrdersListQuery()): Promise<{
+  orders: Order[];
+  ok: boolean;
+}> {
+  const result = await fetchAdminOrdersSnapshot(query);
   return { orders: result.orders, ok: result.ok };
 }
 
@@ -46,14 +56,36 @@ export function subscribeAdminOrdersPolling(handlers: AdminOrdersWsHandlers): ()
       return;
     }
 
-    const result = await fetchServerOrders();
-
-    if (disposed) {
+    const query = getActiveAdminOrdersListQuery();
+    const requestedQueryKey = serializeAdminOrdersListQuery(query);
+    if (!shouldStartAdminOrdersPoll(requestedQueryKey)) {
+      scheduleNextPoll();
       return;
     }
 
-    cycle = applyAdminOrdersPollResult(cycle, result, handlers);
-    scheduleNextPoll();
+    markAdminOrdersListQueryInFlight(requestedQueryKey);
+
+    try {
+      const result = await fetchServerOrders(query);
+
+      if (disposed) {
+        return;
+      }
+
+      if (
+        !shouldApplyAdminOrdersPollSnapshot({
+          requestedQueryKey,
+          activeQueryKey: serializeAdminOrdersListQuery(getActiveAdminOrdersListQuery()),
+        })
+      ) {
+        return;
+      }
+
+      cycle = applyAdminOrdersPollResult(cycle, result, handlers);
+    } finally {
+      clearAdminOrdersListQueryInFlight(requestedQueryKey);
+      scheduleNextPoll();
+    }
   };
 
   const onVisibilityChange = () => {

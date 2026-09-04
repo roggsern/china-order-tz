@@ -75,7 +75,8 @@ export function AdminOrderTable() {
   );
 
   const isSearchPending = search.trim() !== debouncedSearch.trim();
-  const currentPage = listMeta.current_page || listQuery.page || 1;
+  const requestedPage = listQuery.page || listMeta.current_page || 1;
+  const currentPage = listMeta.current_page || requestedPage;
   const totalPages = Math.max(1, listMeta.last_page || 1);
   const perPage = listMeta.per_page || ADMIN_ORDERS_DEFAULT_PER_PAGE;
   const pageScopedFilters = brandFilter !== "all" || categoryFilter !== "all";
@@ -150,8 +151,8 @@ export function AdminOrderTable() {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            disabled={currentPage <= 1 || isListLoading}
-            onClick={() => setListPage(currentPage - 1)}
+            disabled={requestedPage <= 1}
+            onClick={() => setListPage(requestedPage - 1)}
             className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-40"
           >
             Previous
@@ -161,11 +162,11 @@ export function AdminOrderTable() {
                 <button
                   key={pageNumber}
                   type="button"
-                  disabled={isListLoading}
+                  disabled={pageNumber === requestedPage && isListLoading}
                   onClick={() => setListPage(pageNumber)}
-                  aria-current={pageNumber === currentPage ? "page" : undefined}
+                  aria-current={pageNumber === requestedPage ? "page" : undefined}
                   className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
-                    pageNumber === currentPage
+                    pageNumber === requestedPage
                       ? "border-zinc-900 bg-zinc-900 text-white"
                       : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50"
                   }`}
@@ -176,8 +177,8 @@ export function AdminOrderTable() {
             : null}
           <button
             type="button"
-            disabled={currentPage >= totalPages || isListLoading}
-            onClick={() => setListPage(currentPage + 1)}
+            disabled={requestedPage >= totalPages}
+            onClick={() => setListPage(requestedPage + 1)}
             className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-40"
           >
             Next
@@ -241,13 +242,13 @@ export function AdminOrderTable() {
             {pageScopedFilters
               ? `${pageOrders.length} on this page`
               : `${listMeta.total} result${listMeta.total === 1 ? "" : "s"}`}
-            {totalPages > 1 ? ` · page ${currentPage} of ${totalPages}` : ""}
-            {isListLoading ? " · loading" : ""}
+            {totalPages > 1 ? ` · page ${requestedPage} of ${totalPages}` : ""}
+            {isListLoading ? ` · Loading page ${requestedPage}…` : ""}
           </p>
         </div>
       </div>
 
-      <div role="tabpanel">
+      <div role="tabpanel" aria-busy={isListLoading} className="relative">
         {pageOrders.length === 0 ? (
           <>
             <div className="flex flex-col items-center px-6 py-16 text-center">

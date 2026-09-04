@@ -49,6 +49,13 @@ import {
   type AdminOrdersListMeta,
   type AdminOrdersListQuery,
 } from "@/lib/admin/admin-orders-pagination";
+import {
+  clearAdminOrdersListQueryInFlight,
+  markAdminOrdersListQueryInFlight,
+  resetAdminOrdersListInFlight,
+  serializeAdminOrdersListQuery,
+  shouldApplyAdminOrdersListResponse,
+} from "@/lib/admin/admin-orders-list-request";
 import type { AdminOrderListFilter } from "@/lib/payment/order-filters";
 import type { AdminOrderSourceFilter } from "@/lib/admin/order-query-filters";
 
@@ -109,6 +116,7 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
   const highlightTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const hydratedRef = useRef(false);
   const wsConnectedRef = useRef(false);
+  const listRequestGenerationRef = useRef(0);
 
   ordersRef.current = orders;
   listQueryRef.current = listQuery;
@@ -235,6 +243,8 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const resetOrdersSession = useCallback(() => {
+    listRequestGenerationRef.current += 1;
+    resetAdminOrdersListInFlight();
     hydratedRef.current = false;
     prevOrderIdsRef.current = new Set();
     ordersRef.current = [];
@@ -249,20 +259,34 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
 
   const bootstrapOrdersRef = useRef<() => Promise<void>>(async () => {});
   bootstrapOrdersRef.current = async () => {
+    const requestedQuery = listQueryRef.current;
+    const queryKey = serializeAdminOrdersListQuery(requestedQuery);
+    const generation = ++listRequestGenerationRef.current;
+    markAdminOrdersListQueryInFlight(queryKey);
     setIsListLoading(true);
-    const result = await fetchAdminOrdersSnapshot(listQueryRef.current);
-    const next = applyAdminOrdersFetchResult(
-      { hydrated: hydratedRef.current, orders: ordersRef.current, meta: listMeta },
-      result,
-    );
 
-    if (!next.applied) {
-      setIsListLoading(false);
-      return;
+    try {
+      const result = await fetchAdminOrdersSnapshot(requestedQuery);
+      if (!shouldApplyAdminOrdersListResponse(generation, listRequestGenerationRef.current)) {
+        return;
+      }
+
+      const next = applyAdminOrdersFetchResult(
+        { hydrated: hydratedRef.current, orders: ordersRef.current, meta: listMeta },
+        result,
+      );
+
+      if (!next.applied) {
+        return;
+      }
+
+      applySnapshot(next.orders, next.meta);
+    } finally {
+      clearAdminOrdersListQueryInFlight(queryKey);
+      if (shouldApplyAdminOrdersListResponse(generation, listRequestGenerationRef.current)) {
+        setIsListLoading(false);
+      }
     }
-
-    applySnapshot(next.orders, next.meta);
-    setIsListLoading(false);
   };
 
   useEffect(() => {
