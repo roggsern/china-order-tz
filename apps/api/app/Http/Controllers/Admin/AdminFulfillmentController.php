@@ -2,23 +2,26 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\DeliveryType;
+use App\Enums\FulfillmentStatus;
+use App\Enums\FulfillmentStatusHistorySource;
+use App\Enums\PurchaseOrderStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\IndexFulfillmentAssigneesRequest;
 use App\Http\Requests\Admin\IndexFulfillmentsRequest;
+use App\Http\Requests\Admin\UpdateFulfillmentAssignmentRequest;
 use App\Http\Requests\Admin\UpdateFulfillmentStatusRequest;
 use App\Http\Resources\FulfillmentOperationalReadModelResource;
 use App\Http\Resources\FulfillmentResource;
-use App\Enums\DeliveryType;
-use App\Enums\FulfillmentStatus;
-use App\Enums\PurchaseOrderStatus;
+use App\Models\Admin;
 use App\Models\Fulfillment;
 use App\Models\Order;
-use App\Enums\FulfillmentStatusHistorySource;
+use App\Services\Fulfillment\CompanyShippingHandoverService;
+use App\Services\Fulfillment\FulfillmentAssigneeQuery;
 use App\Services\Fulfillment\FulfillmentEngine;
 use App\Services\Fulfillment\FulfillmentOperationalReadModelBuilder;
-use App\Services\Fulfillment\FulfillmentBulkActionService;
-use App\Services\Fulfillment\CompanyShippingHandoverService;
-use App\Services\Fulfillment\LocalFulfillmentCompletionService;
 use App\Services\Fulfillment\FulfillmentStatusUpdateContext;
+use App\Services\Fulfillment\LocalFulfillmentCompletionService;
 use App\Support\Admin\AdminPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -58,6 +61,16 @@ class AdminFulfillmentController extends Controller
             ->additional(['success' => true]);
     }
 
+    public function assignees(
+        IndexFulfillmentAssigneesRequest $request,
+        FulfillmentAssigneeQuery $assignees,
+    ): JsonResponse {
+        return response()->json([
+            'success' => true,
+            'data' => $assignees->list(),
+        ]);
+    }
+
     public function create(Order $order, FulfillmentEngine $engine): JsonResponse
     {
         $this->authorize(AdminPermissions::ORDERS_FULFILL);
@@ -86,7 +99,7 @@ class AdminFulfillmentController extends Controller
         UpdateFulfillmentStatusRequest $request,
         FulfillmentEngine $engine,
     ): JsonResponse {
-        /** @var \App\Models\Admin|null $admin */
+        /** @var Admin|null $admin */
         $admin = Auth::user();
 
         $validated = $request->validated();
@@ -97,13 +110,34 @@ class AdminFulfillmentController extends Controller
             $validated,
             new FulfillmentStatusUpdateContext(
                 source: FulfillmentStatusHistorySource::Admin,
-                admin: $admin instanceof \App\Models\Admin ? $admin : null,
+                admin: $admin instanceof Admin ? $admin : null,
             ),
         );
 
         return response()->json([
             'success' => true,
             'message' => 'Fulfillment status updated.',
+            'data' => new FulfillmentResource($updated),
+        ]);
+    }
+
+    public function updateAssignment(
+        Fulfillment $fulfillment,
+        UpdateFulfillmentAssignmentRequest $request,
+        FulfillmentEngine $engine,
+    ): JsonResponse {
+        /** @var Admin $admin */
+        $admin = Auth::user();
+
+        $updated = $engine->assign(
+            $fulfillment,
+            $request->validated('assigned_to'),
+            $admin,
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Fulfillment assignment updated.',
             'data' => new FulfillmentResource($updated),
         ]);
     }
@@ -137,14 +171,10 @@ class AdminFulfillmentController extends Controller
             : DeliveryType::tryFrom((string) ($deliveryType ?? ''));
 
         $message = match ($deliveryType) {
-            DeliveryType::SelfPickup, DeliveryType::NegotiatedDelivery =>
-                'Use POST /admin/fulfillments/{fulfillment}/complete-local to mark Buy From TZ orders completed.',
-            DeliveryType::CustomerAgent =>
-                'Use POST /admin/orders/{order}/customer-agent/handover to complete customer agent delivery.',
-            DeliveryType::CompanyShipping =>
-                'Use the company handover pickup or delivery completion endpoints to finish company shipping orders.',
-            default =>
-                'Direct delivered status is not allowed. Use the appropriate completion action for this delivery type.',
+            DeliveryType::SelfPickup, DeliveryType::NegotiatedDelivery => 'Use POST /admin/fulfillments/{fulfillment}/complete-local to mark Buy From TZ orders completed.',
+            DeliveryType::CustomerAgent => 'Use POST /admin/orders/{order}/customer-agent/handover to complete customer agent delivery.',
+            DeliveryType::CompanyShipping => 'Use the company handover pickup or delivery completion endpoints to finish company shipping orders.',
+            default => 'Direct delivered status is not allowed. Use the appropriate completion action for this delivery type.',
         };
 
         throw ValidationException::withMessages([
@@ -158,12 +188,12 @@ class AdminFulfillmentController extends Controller
     ): JsonResponse {
         $this->authorize(AdminPermissions::ORDERS_FULFILL);
 
-        /** @var \App\Models\Admin|null $admin */
+        /** @var Admin|null $admin */
         $admin = Auth::user();
 
         $updated = $completion->complete(
             $fulfillment,
-            $admin instanceof \App\Models\Admin ? $admin : null,
+            $admin instanceof Admin ? $admin : null,
         );
 
         return response()->json([
@@ -179,12 +209,12 @@ class AdminFulfillmentController extends Controller
     ): JsonResponse {
         $this->authorize(AdminPermissions::ORDERS_FULFILL);
 
-        /** @var \App\Models\Admin|null $admin */
+        /** @var Admin|null $admin */
         $admin = Auth::user();
 
         $updated = $handover->completePickup(
             $fulfillment,
-            $admin instanceof \App\Models\Admin ? $admin : null,
+            $admin instanceof Admin ? $admin : null,
         );
 
         return response()->json([
@@ -200,12 +230,12 @@ class AdminFulfillmentController extends Controller
     ): JsonResponse {
         $this->authorize(AdminPermissions::ORDERS_FULFILL);
 
-        /** @var \App\Models\Admin|null $admin */
+        /** @var Admin|null $admin */
         $admin = Auth::user();
 
         $updated = $handover->completeDelivery(
             $fulfillment,
-            $admin instanceof \App\Models\Admin ? $admin : null,
+            $admin instanceof Admin ? $admin : null,
         );
 
         return response()->json([

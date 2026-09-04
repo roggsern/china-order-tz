@@ -233,3 +233,37 @@ export async function updateAdminFulfillmentStatus(
     "Unable to update fulfillment status.",
   );
 }
+
+export type FulfillmentAssigneeOption = {
+  id: string;
+  name: string;
+  email?: string | null;
+};
+
+export async function fetchFulfillmentAssignees(): Promise<FulfillmentAssigneeOption[]> {
+  const payload = await adminFetchPayload<FulfillmentAssigneeOption[]>(
+    "/api/admin/fulfillments/assignees",
+    { method: "GET", headers: { Accept: "application/json" } },
+    "Unable to load fulfillment assignees.",
+  );
+
+  return Array.isArray(payload.data) ? payload.data : [];
+}
+
+export async function updateAdminFulfillmentAssignment(
+  id: string,
+  assignedTo: string | null,
+): Promise<AdminFulfillment> {
+  return adminFetch<AdminFulfillment>(
+    `/api/admin/fulfillments/${encodeURIComponent(id)}/assignment`,
+    {
+      method: "PATCH",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ assigned_to: assignedTo }),
+    },
+    "Unable to update fulfillment assignment.",
+  );
+}

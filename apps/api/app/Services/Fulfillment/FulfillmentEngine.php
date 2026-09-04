@@ -5,12 +5,13 @@ namespace App\Services\Fulfillment;
 use App\Enums\FulfillmentStatus;
 use App\Enums\FulfillmentStrategy;
 use App\Enums\OrderStatus;
+use App\Events\Audit\FulfillmentAssignedAudit;
+use App\Models\Admin;
 use App\Models\Fulfillment;
 use App\Models\Order;
 use App\Services\Fulfillment\Contracts\FulfillmentStrategyInterface;
-use App\Services\Fulfillment\FulfillmentStatusHistoryRecorder;
-use App\Services\Fulfillment\FulfillmentStatusUpdateContext;
 use App\Services\Orders\Lifecycle\OrderLifecycleEngine;
+use App\Services\Warehouse\WarehouseEngine;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -76,7 +77,7 @@ class FulfillmentEngine
 
             $strategy->bootstrap($fulfillment);
 
-            app(\App\Services\Warehouse\WarehouseEngine::class)
+            app(WarehouseEngine::class)
                 ->createForFulfillment($fulfillment);
 
             return $fulfillment->fresh(['order.user', 'assignee', 'warehouseJob']) ?? $fulfillment;
@@ -113,7 +114,7 @@ class FulfillmentEngine
         array $input,
         ?FulfillmentStatusUpdateContext $context = null,
     ): Fulfillment {
-        $context ??= new FulfillmentStatusUpdateContext();
+        $context ??= new FulfillmentStatusUpdateContext;
 
         return DB::transaction(function () use ($fulfillment, $input, $context): Fulfillment {
             /** @var Fulfillment $locked */
@@ -192,6 +193,32 @@ class FulfillmentEngine
             }
 
             return $fresh->fresh(['order.user', 'assignee']) ?? $fresh;
+        });
+    }
+
+    public function assign(Fulfillment $fulfillment, ?string $assignedTo, Admin $actor): Fulfillment
+    {
+        return DB::transaction(function () use ($fulfillment, $assignedTo, $actor): Fulfillment {
+            /** @var Fulfillment $locked */
+            $locked = Fulfillment::query()->whereKey($fulfillment->id)->lockForUpdate()->firstOrFail();
+
+            $previousId = $locked->assigned_to !== null ? (string) $locked->assigned_to : null;
+            $nextId = $assignedTo !== null && $assignedTo !== '' ? (string) $assignedTo : null;
+
+            if ($previousId === $nextId) {
+                return $locked->fresh(['order.user', 'assignee']) ?? $locked;
+            }
+
+            $previous = $previousId !== null ? Admin::query()->find($previousId) : null;
+            $next = $nextId !== null ? Admin::query()->find($nextId) : null;
+
+            $locked->assigned_to = $nextId;
+            $locked->save();
+
+            $fresh = $locked->fresh(['order.user', 'assignee']) ?? $locked;
+            event(FulfillmentAssignedAudit::fromAssignment($fresh, $previous, $next, $actor));
+
+            return $fresh;
         });
     }
 

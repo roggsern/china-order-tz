@@ -2,14 +2,12 @@
 
 namespace App\Http\Requests\Admin;
 
-use App\Enums\FulfillmentStatus;
 use App\Http\Requests\Concerns\AuthorizesAdminPermission;
 use App\Rules\EligibleFulfillmentAssignee;
 use App\Support\Admin\AdminPermissions;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
-class UpdateFulfillmentStatusRequest extends FormRequest
+class UpdateFulfillmentAssignmentRequest extends FormRequest
 {
     use AuthorizesAdminPermission;
 
@@ -24,9 +22,12 @@ class UpdateFulfillmentStatusRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'status' => ['sometimes', 'required', Rule::enum(FulfillmentStatus::class)],
-            'assigned_to' => ['sometimes', 'nullable', 'uuid', new EligibleFulfillmentAssignee],
-            'notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'assigned_to' => [
+                'present',
+                'nullable',
+                'uuid',
+                new EligibleFulfillmentAssignee,
+            ],
         ];
     }
 }

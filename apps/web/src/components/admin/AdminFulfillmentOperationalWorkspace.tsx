@@ -1,7 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { AdminFulfillmentAssignmentControl } from "@/components/admin/AdminFulfillmentAssignmentControl";
 import { AdminFulfillmentNextActionsPanel } from "@/components/admin/AdminFulfillmentNextActionsPanel";
+import { hasAdminPermission } from "@/lib/api/admin-me";
+import { useAdminPermissions } from "@/hooks/use-admin-permissions";
 import Link from "next/link";
 import { ProductImageDisplay } from "@/components/catalog/ProductImageDisplay";
 import {
@@ -224,6 +227,8 @@ export function AdminFulfillmentOperationalWorkspace({
   model,
   onRefresh,
 }: AdminFulfillmentOperationalWorkspaceProps) {
+  const { permissions } = useAdminPermissions();
+  const canManageAssignment = hasAdminPermission(permissions, "orders.fulfill");
   const product = model.order?.product;
   const timelineSteps = buildFulfillmentTimelineSteps(model);
   const showChina = isChinaImportStrategy(model.fulfillment.strategy);
@@ -298,10 +303,16 @@ export function AdminFulfillmentOperationalWorkspace({
             >
               {statusLabel}
             </span>
-            <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-zinc-700 ring-1 ring-zinc-200">
-              {model.fulfillment.assignee?.name ?? "Unassigned"}
-            </span>
           </div>
+        </div>
+
+        <div className="mt-4">
+          <AdminFulfillmentAssignmentControl
+            fulfillmentId={model.fulfillment.id}
+            assignedTo={model.fulfillment.assigned_to}
+            assignee={model.fulfillment.assignee ?? null}
+            canManage={canManageAssignment}
+          />
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">

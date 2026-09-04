@@ -160,6 +160,7 @@ enum ActivityEventType: string
     case CmsNavigationItemDeleted = 'cms_navigation_item_deleted';
     case CmsNavigationItemsReordered = 'cms_navigation_items_reordered';
     case FulfillmentBulkActionCompleted = 'fulfillment_bulk_action_completed';
+    case FulfillmentAssigned = 'fulfillment_assigned';
     case CompanyShippingHandoverCompleted = 'company_shipping_handover_completed';
     case SettingsUpdated = 'settings_updated';
     case ShippingRateUpdated = 'shipping_rate_updated';
@@ -336,6 +337,7 @@ enum ActivityEventType: string
             self::CmsNavigationItemDeleted => 'CMS Navigation Item Deleted',
             self::CmsNavigationItemsReordered => 'CMS Navigation Items Reordered',
             self::FulfillmentBulkActionCompleted => 'Fulfillment Bulk Action Completed',
+            self::FulfillmentAssigned => 'Fulfillment Assigned',
             self::CompanyShippingHandoverCompleted => 'Company Shipping Handover Completed',
             self::SettingsUpdated => 'Settings Updated',
             self::ShippingRateUpdated => 'Shipping Rate Updated',
@@ -514,6 +516,7 @@ enum ActivityEventType: string
             self::CmsNavigationItemDeleted => 'deleted',
             self::CmsNavigationItemsReordered => 'reordered',
             self::FulfillmentBulkActionCompleted => 'bulk_completed',
+            self::FulfillmentAssigned => 'assigned',
             self::CompanyShippingHandoverCompleted => 'completed',
             self::SettingsUpdated => 'updated',
             self::ShippingRateUpdated => 'updated',

@@ -6,6 +6,7 @@ use App\Models\Concerns\HasUuidPrimaryKey;
 use App\Services\Devices\DevicePushTokenService;
 use App\Support\Admin\AdminPermissions;
 use Database\Factories\AdminFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -129,5 +130,26 @@ class Admin extends Authenticatable
     public function canAdmin(string $permission): bool
     {
         return $this->hasAdminPermission($permission);
+    }
+
+    public function isEligibleFulfillmentAssignee(): bool
+    {
+        return $this->hasAdminPermission(AdminPermissions::ORDERS_FULFILL);
+    }
+
+    /**
+     * @param  Builder<Admin>  $query
+     * @return Builder<Admin>
+     */
+    public function scopeEligibleFulfillmentAssignees(Builder $query): Builder
+    {
+        return $query
+            ->where('is_active', true)
+            ->where(function (Builder $inner): void {
+                $inner->where('is_super_admin', true)
+                    ->orWhereHas('role.permissions', function (Builder $permissions): void {
+                        $permissions->where('slug', AdminPermissions::ORDERS_FULFILL);
+                    });
+            });
     }
 }
