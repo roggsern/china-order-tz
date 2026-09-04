@@ -5,8 +5,22 @@ import { PAYMENT_STATUS } from "@/lib/types/payment";
 import { backendMethodToStorefrontCode } from "@/lib/checkout/payment-availability";
 import type { ShippingMethodCode } from "@/lib/shipping/types";
 import { durationDaysFromSnapshots } from "@/lib/shipping/durations";
-import { EMPTY_SHIPPING_ADDRESS } from "@/lib/types/checkout";
+import { EMPTY_SHIPPING_ADDRESS, type ShippingAddress } from "@/lib/types/checkout";
 import { applyResolvedImageToOrderLineItem } from "@/lib/order/resolve-order-item-image";
+
+type LaravelAdminShippingAddress = {
+  first_name?: string | null;
+  last_name?: string | null;
+  full_name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address_line_1?: string | null;
+  address_line_2?: string | null;
+  city?: string | null;
+  region?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+};
 
 type LaravelAdminOrderItem = {
   id?: string;
@@ -64,7 +78,16 @@ type LaravelAdminOrder = {
     status?: string;
     method?: string;
     reference?: string | null;
+    paid_at?: string | null;
   }>;
+  payment?: {
+    payment_status?: string | null;
+    payment_method?: string | null;
+    provider?: string | null;
+    reference?: string | null;
+    paid_at?: string | null;
+  } | null;
+  shipping_address?: LaravelAdminShippingAddress | null;
   items?: LaravelAdminOrderItem[] | null;
 };
 
@@ -90,6 +113,58 @@ function mapLaravelPaymentMethod(method: string | undefined): PaymentMethodCode 
   }
 
   return backendMethodToStorefrontCode(method.trim().toLowerCase());
+}
+
+function mapLaravelShippingAddress(
+  raw: LaravelAdminShippingAddress | null | undefined,
+): ShippingAddress {
+  if (!raw) {
+    return { ...EMPTY_SHIPPING_ADDRESS };
+  }
+
+  const recipientName =
+    raw.full_name?.trim() ||
+    [raw.first_name, raw.last_name].filter((part) => part?.trim()).join(" ").trim() ||
+    undefined;
+
+  return {
+    recipientName,
+    phone: raw.phone?.trim() || undefined,
+    email: raw.email?.trim() || undefined,
+    addressLine1: raw.address_line_1?.trim() ?? "",
+    addressLine2: raw.address_line_2?.trim() ?? "",
+    city: raw.city?.trim() ?? "",
+    region: raw.region?.trim() ?? "",
+    postalCode: raw.postal_code?.trim() ?? "",
+    country: raw.country?.trim() || EMPTY_SHIPPING_ADDRESS.country,
+  };
+}
+
+function mapAdminPaymentFields(row: LaravelAdminOrder): {
+  paymentMethod: PaymentMethodCode | null;
+  paymentProvider: string | null;
+  paymentReference: string | null;
+  paymentPaidAt: string | null;
+} {
+  const snapshot = row.payment;
+  if (snapshot && typeof snapshot === "object") {
+    return {
+      paymentMethod: mapLaravelPaymentMethod(snapshot.payment_method ?? undefined),
+      paymentProvider: snapshot.provider?.trim() || null,
+      paymentReference: snapshot.reference?.trim() || null,
+      paymentPaidAt: snapshot.paid_at?.trim() || row.paid_at?.trim() || null,
+    };
+  }
+
+  const legacy = row.payments?.[0];
+  const method = mapLaravelPaymentMethod(legacy?.method);
+
+  return {
+    paymentMethod: method,
+    paymentProvider: (legacy?.method ?? "").trim().toLowerCase() === "cash" ? "office" : null,
+    paymentReference: legacy?.reference?.trim() || null,
+    paymentPaidAt: legacy?.paid_at?.trim() || row.paid_at?.trim() || null,
+  };
 }
 
 function mapPaymentStatus(order: LaravelAdminOrder): PaymentStatus {
@@ -220,13 +295,16 @@ export function mapLaravelAdminOrderToWebOrder(row: LaravelAdminOrder): Order {
   const [firstName, ...rest] = customerName.split(/\s+/);
   const lastName = rest.join(" ") || "";
   const primaryShippingMethod = items[0]?.shippingMethod ?? null;
+  const paymentFields = mapAdminPaymentFields(row);
 
   return normalizeOrder({
     id: row.id,
     orderNumber: row.order_number ?? row.id,
     paymentStatus: mapPaymentStatus(row),
-    paymentMethod: mapLaravelPaymentMethod(row.payments?.[0]?.method),
-    paymentReference: row.payments?.[0]?.reference ?? null,
+    paymentMethod: paymentFields.paymentMethod,
+    paymentProvider: paymentFields.paymentProvider,
+    paymentReference: paymentFields.paymentReference,
+    paymentPaidAt: paymentFields.paymentPaidAt,
     status: mapBackendStatus(row.status),
     createdAt,
     updatedAt,
@@ -236,7 +314,7 @@ export function mapLaravelAdminOrderToWebOrder(row: LaravelAdminOrder): Order {
       email: row.user?.email ?? "",
       phone: row.user?.phone ?? "",
     },
-    shippingAddress: { ...EMPTY_SHIPPING_ADDRESS },
+    shippingAddress: mapLaravelShippingAddress(row.shipping_address),
     orderNotes: row.notes ?? "",
     items,
     cartSnapshot: {

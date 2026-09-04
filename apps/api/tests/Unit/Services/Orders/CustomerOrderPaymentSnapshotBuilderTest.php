@@ -13,6 +13,7 @@ use App\Models\PaymentTransaction;
 use App\Models\User;
 use App\Services\Orders\CustomerOrderPaymentSnapshotBuilder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class CustomerOrderPaymentSnapshotBuilderTest extends TestCase
@@ -127,5 +128,39 @@ class CustomerOrderPaymentSnapshotBuilderTest extends TestCase
         $this->assertSame('TZS', $snapshot['currency']);
         $this->assertNotNull($snapshot['paid_at']);
         $this->assertNull($snapshot['initiated_at']);
+    }
+
+    public function test_paid_at_falls_back_from_transaction_to_payment_to_order(): void
+    {
+        $user = User::factory()->create();
+        $orderPaidAt = now()->subHours(3);
+        $paymentPaidAt = now()->subHours(2);
+
+        $order = Order::factory()->create([
+            'user_id' => $user->id,
+            'status' => OrderStatus::Paid,
+            'paid_at' => $orderPaidAt,
+        ]);
+
+        Payment::factory()->create([
+            'order_id' => $order->id,
+            'user_id' => $user->id,
+            'method' => PaymentMethod::Cash,
+            'status' => PaymentStatus::Paid,
+            'paid_at' => $paymentPaidAt,
+        ]);
+
+        PaymentTransaction::factory()->create([
+            'order_id' => $order->id,
+            'provider' => PaymentProvider::Snippe,
+            'status' => PaymentTransactionStatus::Successful,
+            'completed_at' => null,
+            'merchant_reference' => 'COTZ-PAY-NO-COMPLETED',
+        ]);
+
+        $order->load(['payments', 'paymentTransactions']);
+        $snapshot = app(CustomerOrderPaymentSnapshotBuilder::class)->build($order);
+
+        $this->assertSame($paymentPaidAt->timestamp, Carbon::parse($snapshot['paid_at'])->timestamp);
     }
 }

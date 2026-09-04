@@ -46,7 +46,10 @@ test("paid NMB payment renders provider, reference, amount, and paid date fields
     fields.map((field) => field.label),
     ["Method", "Provider", "Reference", "Amount", "Paid"],
   );
-  assert.equal(formatPaymentProviderLabel("nmb"), "NMB Bank");
+  assert.equal(fields.find((field) => field.label === "Method")?.value, "NMB Bank");
+  assert.equal(formatPaymentProviderLabel("nmb"), "NMB");
+  assert.equal(formatPaymentProviderLabel("snippe"), "Snippe");
+  assert.equal(formatPaymentProviderLabel("office"), "Cash / Office");
   assert.equal(fields.find((field) => field.label === "Reference")?.value, "COTZ-PAY-NMB-001");
   assert.match(fields.find((field) => field.label === "Amount")?.value ?? "", /TZS\s*10,?000/);
   assert.ok(fields.find((field) => field.label === "Paid")?.value);

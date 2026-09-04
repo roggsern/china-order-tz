@@ -336,7 +336,9 @@ export function AdminOrderDetailContent({ orderId }: AdminOrderDetailContentProp
                 totals={displayOrder.totals}
                 paymentStatus={displayOrder.paymentStatus}
                 paymentMethod={displayOrder.paymentMethod ?? undefined}
+                paymentProvider={displayOrder.paymentProvider}
                 paymentReference={displayOrder.paymentReference}
+                paymentPaidAt={displayOrder.paymentPaidAt}
               />
             </div>
             <p className="mt-3 text-lg font-bold text-zinc-900">

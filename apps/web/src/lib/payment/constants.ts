@@ -138,6 +138,22 @@ export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   card: "Visa / Mastercard",
 };
 
+/** Distinct from method labels: how the customer paid vs which rail collected it. */
+export const PAYMENT_PROVIDER_LABELS: Record<string, string> = {
+  snippe: "Snippe",
+  nmb: "NMB",
+  office: "Cash / Office",
+  cash: "Cash / Office",
+  selcom: "Selcom",
+  mpesa: "M-Pesa",
+  stripe: "Stripe",
+  flutterwave: "Flutterwave",
+  pesapal: "Pesapal",
+  crdb: "CRDB",
+  mix_by_yas: "Mixx by Yas",
+  airtel_money: "Airtel Money",
+};
+
 export const PAYMENT_STATUS_LABELS: Record<string, string> = {
   pending: "Pending",
   pending_payment: "Pending Payment",

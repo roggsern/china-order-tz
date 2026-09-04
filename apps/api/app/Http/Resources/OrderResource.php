@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Enums\OrderStatus;
+use App\Services\Orders\AdminOrderPaymentSnapshotPresenter;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -45,9 +46,18 @@ class OrderResource extends JsonResource
             'coupon' => new CouponResource($this->whenLoaded('coupon')),
             'items' => OrderItemResource::collection($this->whenLoaded('items')),
             'payments' => PaymentResource::collection($this->whenLoaded('payments')),
+            'payment' => $this->when(
+                $this->relationLoaded('paymentTransactions'),
+                fn () => app(AdminOrderPaymentSnapshotPresenter::class)->present($this->resource),
+            ),
             'fulfillment' => new FulfillmentResource($this->whenLoaded('fulfillment')),
             'delivery_option' => new DeliveryOptionResource($this->whenLoaded('deliveryOption')),
-            'shipping_address' => new ShippingAddressResource($this->whenLoaded('shippingAddress')),
+            'shipping_address' => $this->when(
+                $this->relationLoaded('shippingAddress'),
+                fn () => $this->shippingAddress
+                    ? new ShippingAddressResource($this->shippingAddress)
+                    : null,
+            ),
             'refund_transactions' => RefundTransactionResource::collection($this->whenLoaded('refundTransactions')),
             'status_history' => $this->whenLoaded('statusHistory'),
             'created_at' => $this->created_at,

@@ -115,7 +115,7 @@ class CustomerOrderPaymentSnapshotBuilder
             ?? $this->resolveLatestActiveTransaction($order);
 
         if ($transaction !== null) {
-            return $this->fromPaymentTransaction($transaction);
+            return $this->fromPaymentTransaction($transaction, $order);
         }
 
         $payment = $this->resolveLatestPayment($order);
@@ -186,7 +186,7 @@ class CustomerOrderPaymentSnapshotBuilder
      *     initiated_at: Carbon|null,
      * }
      */
-    private function fromPaymentTransaction(PaymentTransaction $transaction): array
+    private function fromPaymentTransaction(PaymentTransaction $transaction, Order $order): array
     {
         $provider = $transaction->provider instanceof PaymentProvider
             ? $transaction->provider->value
@@ -194,11 +194,17 @@ class CustomerOrderPaymentSnapshotBuilder
 
         return [
             'payment_method' => $provider,
-            'reference' => $transaction->merchant_reference,
+            'reference' => filled($transaction->merchant_reference)
+                ? (string) $transaction->merchant_reference
+                : (filled($transaction->provider_reference) ? (string) $transaction->provider_reference : null),
             'provider' => $provider,
             'amount' => $this->formatAmount($transaction->amount),
             'currency' => strtoupper((string) ($transaction->currency ?: 'TZS')),
-            'paid_at' => $transaction->completed_at,
+            'paid_at' => $this->coalescePaidAt(
+                $transaction->completed_at,
+                $this->resolveLatestPayment($order)?->paid_at,
+                $order->paid_at,
+            ),
             'initiated_at' => $transaction->initiated_at,
         ];
     }
@@ -226,7 +232,7 @@ class CustomerOrderPaymentSnapshotBuilder
             'provider' => null,
             'amount' => $this->formatAmount($payment->amount ?? $order->grand_total ?? $order->total),
             'currency' => strtoupper((string) ($payment->currency ?: $order->currency ?: 'TZS')),
-            'paid_at' => $payment->paid_at,
+            'paid_at' => $this->coalescePaidAt($payment->paid_at, $order->paid_at),
             'initiated_at' => $payment->initiated_at,
         ];
     }
@@ -250,9 +256,24 @@ class CustomerOrderPaymentSnapshotBuilder
             'provider' => null,
             'amount' => $this->formatAmount($order->grand_total ?? $order->total),
             'currency' => strtoupper((string) ($order->currency ?: 'TZS')),
-            'paid_at' => $order->paid_at,
+            'paid_at' => $this->coalescePaidAt($order->paid_at),
             'initiated_at' => null,
         ];
+    }
+
+    private function coalescePaidAt(mixed ...$candidates): mixed
+    {
+        foreach ($candidates as $candidate) {
+            if ($candidate instanceof \DateTimeInterface) {
+                return $candidate;
+            }
+
+            if (is_string($candidate) && trim($candidate) !== '') {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 
     private function formatAmount(mixed $amount): string

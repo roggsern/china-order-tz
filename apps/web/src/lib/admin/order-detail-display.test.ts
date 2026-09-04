@@ -142,6 +142,14 @@ describe("order-detail-display", () => {
       }),
       false,
     );
+    assert.equal(
+      isShippingAddressEmpty({
+        ...EMPTY_SHIPPING_ADDRESS,
+        recipientName: "Asha Nyerere",
+        phone: "0712000000",
+      }),
+      false,
+    );
   });
 
   it("uses shipping configuration message constant", () => {

@@ -24,6 +24,8 @@ export type StatusTrackState = "completed" | "current" | "upcoming" | "cancelled
 
 export function isShippingAddressEmpty(address: ShippingAddress): boolean {
   const fields = [
+    address.recipientName,
+    address.phone,
     address.addressLine1,
     address.addressLine2,
     address.city,
@@ -33,6 +35,9 @@ export function isShippingAddressEmpty(address: ShippingAddress): boolean {
 
   return fields.every((value) => !value?.trim());
 }
+
+export const NO_SHIPPING_ADDRESS_CAPTURED_MESSAGE =
+  "No shipping address was captured at checkout.";
 
 export function resolveAdminPaymentStatusStep(order: Order): AdminPaymentStatusStepId {
   if (order.paymentStatus === PAYMENT_STATUS.FAILED) {

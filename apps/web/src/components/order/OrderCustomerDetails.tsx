@@ -1,7 +1,10 @@
 "use client";
 
 import type { CustomerInformation, ShippingAddress } from "@/lib/types/checkout";
-import { isShippingAddressEmpty } from "@/lib/admin/order-detail-display";
+import {
+  isShippingAddressEmpty,
+  NO_SHIPPING_ADDRESS_CAPTURED_MESSAGE,
+} from "@/lib/admin/order-detail-display";
 
 interface OrderCustomerDetailsProps {
   customer: CustomerInformation;
@@ -36,9 +39,13 @@ export function OrderCustomerDetails({
         </p>
         <div className="mt-3 text-sm text-zinc-600">
           {addressMissing ? (
-            <p className="italic text-zinc-500">No shipping address snapshot available</p>
+            <p className="italic text-zinc-500">{NO_SHIPPING_ADDRESS_CAPTURED_MESSAGE}</p>
           ) : (
             <div className="space-y-1.5">
+              {shippingAddress.recipientName ? (
+                <p className="font-semibold text-zinc-900">{shippingAddress.recipientName}</p>
+              ) : null}
+              {shippingAddress.phone ? <p>{shippingAddress.phone}</p> : null}
               {shippingAddress.addressLine1 ? <p>{shippingAddress.addressLine1}</p> : null}
               {shippingAddress.addressLine2 ? <p>{shippingAddress.addressLine2}</p> : null}
               {(shippingAddress.city || shippingAddress.region) && (

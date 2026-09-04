@@ -1,6 +1,6 @@
 import { formatPrice } from "@/lib/catalog/utils";
 import { formatTrackingTimestamp } from "@/lib/order/tracking-format";
-import { PAYMENT_METHOD_LABELS } from "@/lib/payment/constants";
+import { PAYMENT_METHOD_LABELS, PAYMENT_PROVIDER_LABELS } from "@/lib/payment/constants";
 import type { PaymentMethodCode, PaymentStatus } from "@/lib/types/payment";
 
 export type OrderPaymentSummaryInput = {
@@ -20,7 +20,7 @@ export type OrderPaymentSummaryField = {
 
 export function formatPaymentProviderLabel(provider: string): string {
   const normalized = provider.trim().toLowerCase();
-  return PAYMENT_METHOD_LABELS[normalized] ?? provider.trim();
+  return PAYMENT_PROVIDER_LABELS[normalized] ?? PAYMENT_METHOD_LABELS[normalized] ?? provider.trim();
 }
 
 export function formatPaymentAmount(amount: number, currency?: string | null): string {
