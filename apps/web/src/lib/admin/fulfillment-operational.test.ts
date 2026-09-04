@@ -18,6 +18,8 @@ import {
   resolveAdminCustomerReceivingChoiceLabel,
   resolveAdminFulfillmentPresentationStatus,
   resolveAdminShipmentPresentationStatus,
+  resolveFulfillmentQueueCustomerName,
+  resolveFulfillmentQueueCustomerPhone,
 } from "@/lib/admin/fulfillment-operational";
 
 const NOW = Date.parse("2026-07-27T08:00:00.000Z");
@@ -43,6 +45,7 @@ function makeListRow(overrides: Partial<AdminFulfillment> = {}): AdminFulfillmen
         id: "u1",
         name: "Jane Doe",
         email: "jane@example.com",
+        phone: "+255757121318",
       },
     },
     ...overrides,
@@ -61,6 +64,60 @@ describe("fulfillment-operational queue mapping", () => {
     assert.equal(row.requiredAction, "Start warehouse processing");
     assert.equal(row.ageLabel, "24h");
     assert.equal(row.customerName, "Jane Doe");
+    assert.equal(row.customerPhone, "+255757121318");
+    assert.equal(row.assignedLabel, "Unassigned");
+  });
+
+  it("maps customer phone when present and omits it when missing", () => {
+    const withPhone = mapAdminFulfillmentToQueueRow(
+      makeListRow({
+        order: {
+          id: "ord-1",
+          order_number: "COTZ-20260725-000001",
+          source: "buy_from_tz",
+          product: { name: "iPhone 16 Pro", quantity: 1 },
+          customer: {
+            id: "u1",
+            name: "Lela Mwakyusa",
+            email: "lela@example.com",
+            phone: "+255757121318",
+          },
+        },
+      }),
+      NOW,
+    );
+    const withoutPhone = mapAdminFulfillmentToQueueRow(
+      makeListRow({
+        order: {
+          id: "ord-2",
+          order_number: "COTZ-20260725-000002",
+          source: "buy_from_tz",
+          product: { name: "iPhone 16 Pro", quantity: 1 },
+          customer: { id: "u2", name: "Jane Doe", email: "jane@example.com" },
+        },
+      }),
+      NOW,
+    );
+    const missingCustomer = mapAdminFulfillmentToQueueRow(
+      makeListRow({
+        order: {
+          id: "ord-3",
+          order_number: "COTZ-20260725-000003",
+          source: "buy_from_tz",
+          product: { name: "iPhone 16 Pro", quantity: 1 },
+        },
+      }),
+      NOW,
+    );
+
+    assert.equal(withPhone.customerName, "Lela Mwakyusa");
+    assert.equal(withPhone.customerPhone, "+255757121318");
+    assert.equal(withoutPhone.customerName, "Jane Doe");
+    assert.equal(withoutPhone.customerPhone, null);
+    assert.equal(missingCustomer.customerName, "Unknown customer");
+    assert.equal(missingCustomer.customerPhone, null);
+    assert.equal(resolveFulfillmentQueueCustomerName("  "), "Unknown customer");
+    assert.equal(resolveFulfillmentQueueCustomerPhone("   "), null);
   });
 
   it("filters queue rows by search query", () => {
@@ -89,6 +146,15 @@ describe("fulfillment-operational queue mapping", () => {
 
     assert.equal(filtered.length, 1);
     assert.equal(filtered[0]?.customerName, "John Smith");
+
+    const byPhone = filterQueueRows(rows, {
+      journey: "all",
+      status: "all",
+      actionRequired: "all",
+      search: "255757121318",
+    });
+    assert.equal(byPhone.length, 1);
+    assert.equal(byPhone[0]?.customerName, "Jane Doe");
   });
 
   it("computes queue summary cards from existing row state", () => {

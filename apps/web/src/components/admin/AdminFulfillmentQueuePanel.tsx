@@ -165,6 +165,10 @@ function QueueMobileCard({
             <div className="min-w-0">
               <p className="font-mono text-sm font-bold text-zinc-900">{row.orderNumber}</p>
               <p className="mt-1 truncate text-sm text-zinc-600">{row.productName}</p>
+              <p className="mt-1 truncate text-sm font-medium text-zinc-900">{row.customerName}</p>
+              {row.customerPhone ? (
+                <p className="truncate text-xs text-zinc-500">{row.customerPhone}</p>
+              ) : null}
             </div>
             <QueueIndicatorBadge indicator={indicator} />
           </div>
@@ -560,11 +564,11 @@ export function AdminFulfillmentQueuePanel() {
                     </th>
                     <th className="w-[10%] px-3 py-3 font-semibold">Order</th>
                     <th className="w-[17%] px-3 py-3 font-semibold">Product</th>
+                    <th className="w-[11%] px-3 py-3 font-semibold">Customer</th>
                     <th className="w-[11%] px-3 py-3 font-semibold">Journey</th>
                     <th className="w-[11%] px-3 py-3 font-semibold">Stage</th>
                     <th className="w-[7%] px-3 py-3 font-semibold">Age</th>
                     <th className="w-[15%] px-3 py-3 font-semibold">Required action</th>
-                    <th className="w-[11%] px-3 py-3 font-semibold">Assigned</th>
                     <th className="w-[14%] px-3 py-3 font-semibold">Action</th>
                   </tr>
                 </thead>
@@ -599,6 +603,12 @@ export function AdminFulfillmentQueuePanel() {
                           <QueueProductCell row={row} />
                         </td>
                         <td className="px-3 py-3">
+                          <p className="truncate font-medium text-zinc-900">{row.customerName}</p>
+                          {row.customerPhone ? (
+                            <p className="mt-0.5 truncate text-xs text-zinc-500">{row.customerPhone}</p>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-3">
                           <span className="text-xs font-semibold text-zinc-700">
                             {row.journeyLabel}
                           </span>
@@ -619,7 +629,6 @@ export function AdminFulfillmentQueuePanel() {
                         <td className="px-3 py-3 text-sm font-medium text-zinc-800">
                           {row.requiredAction}
                         </td>
-                        <td className="px-3 py-3 text-sm text-zinc-600">{row.assignedLabel}</td>
                         <td className="px-3 py-3">
                           <Link
                             href={`/admin/fulfillments/${encodeURIComponent(row.id)}`}

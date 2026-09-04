@@ -118,6 +118,7 @@ export type FulfillmentQueueRow = {
   orderId: string;
   orderNumber: string;
   customerName: string;
+  customerPhone: string | null;
   productName: string;
   productVariant?: string;
   productQuantity: number;
@@ -702,6 +703,7 @@ export function matchesQueueSearch(row: FulfillmentQueueRow, query: string): boo
   const haystack = [
     row.orderNumber,
     row.customerName,
+    row.customerPhone ?? "",
     row.productName,
     row.productVariant ?? "",
     row.requiredAction,
@@ -894,6 +896,16 @@ export function resolveRequiredAction(input: RequiredActionInput): {
   return { label: "Review fulfilment", category: "needs_warehouse" };
 }
 
+export function resolveFulfillmentQueueCustomerName(name?: string | null): string {
+  const trimmed = name?.trim() ?? "";
+  return trimmed.length > 0 ? trimmed : "Unknown customer";
+}
+
+export function resolveFulfillmentQueueCustomerPhone(phone?: string | null): string | null {
+  const trimmed = phone?.trim() ?? "";
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 export function mapAdminFulfillmentToQueueRow(
   row: AdminFulfillment,
   now = Date.now(),
@@ -907,7 +919,8 @@ export function mapAdminFulfillmentToQueueRow(
     id: row.id,
     orderId: row.order_id,
     orderNumber: row.order?.order_number ?? "—",
-    customerName: row.order?.customer?.name ?? "—",
+    customerName: resolveFulfillmentQueueCustomerName(row.order?.customer?.name),
+    customerPhone: resolveFulfillmentQueueCustomerPhone(row.order?.customer?.phone),
     productName: product?.name ?? "—",
     productVariant: product?.variant_label ?? undefined,
     productQuantity: product?.quantity ?? 0,
@@ -953,7 +966,8 @@ export function mapOperationalModelToQueueRow(
     id: model.fulfillment.id,
     orderId: model.order?.id ?? "",
     orderNumber: model.order?.order_number ?? "—",
-    customerName: model.order?.customer?.name ?? "—",
+    customerName: resolveFulfillmentQueueCustomerName(model.order?.customer?.name),
+    customerPhone: resolveFulfillmentQueueCustomerPhone(model.order?.customer?.phone),
     productName: product?.name ?? "—",
     productVariant: product?.variant_label ?? undefined,
     productQuantity: product?.quantity ?? 0,
