@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\IndexFulfillmentAssigneesRequest;
 use App\Http\Requests\Admin\IndexFulfillmentsRequest;
 use App\Http\Requests\Admin\UpdateFulfillmentAssignmentRequest;
+use App\Http\Requests\Admin\UpdateFulfillmentBulkAssignmentRequest;
 use App\Http\Requests\Admin\UpdateFulfillmentStatusRequest;
 use App\Http\Resources\FulfillmentOperationalReadModelResource;
 use App\Http\Resources\FulfillmentResource;
@@ -18,6 +19,7 @@ use App\Models\Fulfillment;
 use App\Models\Order;
 use App\Services\Fulfillment\CompanyShippingHandoverService;
 use App\Services\Fulfillment\FulfillmentAssigneeQuery;
+use App\Services\Fulfillment\FulfillmentBulkAssignmentService;
 use App\Services\Fulfillment\FulfillmentEngine;
 use App\Services\Fulfillment\FulfillmentOperationalReadModelBuilder;
 use App\Services\Fulfillment\FulfillmentStatusUpdateContext;
@@ -139,6 +141,26 @@ class AdminFulfillmentController extends Controller
             'success' => true,
             'message' => 'Fulfillment assignment updated.',
             'data' => new FulfillmentResource($updated),
+        ]);
+    }
+
+    public function bulkAssignment(
+        UpdateFulfillmentBulkAssignmentRequest $request,
+        FulfillmentBulkAssignmentService $bulkAssignment,
+    ): JsonResponse {
+        /** @var Admin $admin */
+        $admin = Auth::user();
+
+        $result = $bulkAssignment->assign(
+            $admin,
+            $request->validated('fulfillment_ids'),
+            $request->validated('assigned_to'),
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Fulfillment assignments updated.',
+            'data' => $result,
         ]);
     }
 

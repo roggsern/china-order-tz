@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ProductImageDisplay } from "@/components/catalog/ProductImageDisplay";
 import { AdminFulfillmentBulkActionBar } from "@/components/admin/AdminFulfillmentBulkActionBar";
+import { AdminFulfillmentBulkAssignmentBar } from "@/components/admin/AdminFulfillmentBulkAssignmentBar";
 import { AdminRefreshStatusBar } from "@/components/admin/AdminRefreshStatusBar";
 import { mapAdminFulfillmentToBulkSelectionContext } from "@/lib/admin/fulfillment-bulk";
 import {
@@ -31,10 +32,13 @@ import {
 import { aggregateQueueSummaryCards } from "@/lib/admin/fulfillment-queue-summary";
 import {
   clearTableSelection,
+  pruneSelectionToVisible,
   resolveTableSelectionState,
+  resolveVisibleSelectedIds,
   toggleSelectAllVisible,
   toggleTableSelection,
 } from "@/lib/admin/table-selection";
+import { hasAdminPermission } from "@/lib/api/admin-me";
 import { useAdminPermissions } from "@/hooks/use-admin-permissions";
 import { useAdminAutoRefresh } from "@/hooks/use-admin-auto-refresh";
 import { preserveSelectionAfterRefresh } from "@/lib/admin/admin-auto-refresh";
@@ -242,6 +246,7 @@ export function AdminFulfillmentQueuePanel() {
   const [totalRows, setTotalRows] = useState(0);
   const [summaryCards, setSummaryCards] = useState(() => computeQueueSummaryCards([]));
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => clearTableSelection());
+  const [assignmentSuccess, setAssignmentSuccess] = useState<string | null>(null);
 
   const serverFilters = useMemo(
     () =>
@@ -384,14 +389,39 @@ export function AdminFulfillmentQueuePanel() {
   ]);
 
   const visibleIds = useMemo(() => queueRows.map((row) => row.id), [queueRows]);
+  const visibleSelectedIds = useMemo(
+    () => resolveVisibleSelectedIds(selectedIds, visibleIds),
+    [selectedIds, visibleIds],
+  );
   const selection = resolveTableSelectionState(selectedIds, visibleIds);
   const selectedBulkRows = useMemo(
     () =>
       rows
-        .filter((row) => selectedIds.has(row.id))
+        .filter((row) => visibleSelectedIds.includes(row.id))
         .map((row) => mapAdminFulfillmentToBulkSelectionContext(row)),
-    [rows, selectedIds],
+    [rows, visibleSelectedIds],
   );
+  const hadExistingAssignee = useMemo(
+    () =>
+      rows.some((row) => visibleSelectedIds.includes(row.id) && Boolean(row.assigned_to)),
+    [rows, visibleSelectedIds],
+  );
+
+  useEffect(() => {
+    setSelectedIds((current) => {
+      const next = pruneSelectionToVisible(current, visibleIds);
+      if (next.size === current.size && [...next].every((id) => current.has(id))) {
+        return current;
+      }
+      return next;
+    });
+  }, [visibleIds]);
+
+  useEffect(() => {
+    if (visibleSelectedIds.length > 0) {
+      setAssignmentSuccess(null);
+    }
+  }, [visibleSelectedIds.length]);
 
   const handleSummaryClick = (key: QueueSummaryKey) => {
     setSummaryFocus((current) => (current === key ? null : key));
@@ -525,9 +555,30 @@ export function AdminFulfillmentQueuePanel() {
         </p>
       ) : null}
 
+      {assignmentSuccess ? (
+        <p
+          className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
+          role="status"
+        >
+          {assignmentSuccess}
+        </p>
+      ) : null}
+
       <div className="admin-card mt-5 overflow-hidden">
+        <AdminFulfillmentBulkAssignmentBar
+          selectedIds={selectedIds}
+          visibleIds={visibleIds}
+          canManage={hasAdminPermission(permissions, "orders.fulfill")}
+          hadExistingAssignee={hadExistingAssignee}
+          onSuccess={(message) => {
+            setAssignmentSuccess(message);
+            setSelectedIds(clearTableSelection());
+            void reloadPage();
+            void reloadSummary();
+          }}
+        />
         <AdminFulfillmentBulkActionBar
-          selectedCount={selection.selectedCount}
+          selectedCount={visibleSelectedIds.length}
           selectedRows={selectedBulkRows}
           permissions={permissions}
           onClearSelection={() => setSelectedIds(clearTableSelection())}
@@ -664,8 +715,8 @@ export function AdminFulfillmentQueuePanel() {
             <p className="text-xs text-zinc-500">
               Showing page {page} of {lastPage} · {totalRows} fulfilment
               {totalRows === 1 ? "" : "s"} total
-              {selection.selectedCount > 0
-                ? ` · ${selection.selectedCount} selected on this page`
+              {visibleSelectedIds.length > 0
+                ? ` · ${visibleSelectedIds.length} selected on this page`
                 : ""}
             </p>
             <div className="flex items-center gap-2">

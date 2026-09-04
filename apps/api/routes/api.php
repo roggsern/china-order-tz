@@ -778,6 +778,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin', 'admin.active'])->prefix('adm
     Route::get('/fulfillments', [AdminFulfillmentController::class, 'index']);
     Route::get('/fulfillments/assignees', [AdminFulfillmentController::class, 'assignees']);
     Route::post('/fulfillments/bulk-action', [AdminFulfillmentBulkController::class, 'execute']);
+    Route::patch('/fulfillments/bulk-assignment', [AdminFulfillmentController::class, 'bulkAssignment']);
     Route::post('/fulfillments/create/{order}', [AdminFulfillmentController::class, 'create']);
     Route::get('/fulfillments/{fulfillment}', [AdminFulfillmentController::class, 'show']);
     Route::get('/fulfillments/{fulfillment}/operational', [AdminFulfillmentController::class, 'operationalView']);

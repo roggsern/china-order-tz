@@ -4,6 +4,7 @@ import {
   clearTableSelection,
   pruneSelectionToVisible,
   resolveTableSelectionState,
+  resolveVisibleSelectedIds,
   toggleSelectAllVisible,
   toggleTableSelection,
 } from "@/lib/admin/table-selection";
@@ -38,5 +39,11 @@ describe("table selection helpers", () => {
     const selected = new Set(["ff-1", "ff-2", "ff-3"]);
     const pruned = pruneSelectionToVisible(selected, ["ff-2", "ff-4"]);
     assert.deepEqual([...pruned], ["ff-2"]);
+  });
+
+  it("derives bulk payloads from visible selected ids only", () => {
+    const selected = new Set(["ff-1", "ff-hidden", "ff-2"]);
+    const visible = ["ff-1", "ff-2"];
+    assert.deepEqual(resolveVisibleSelectedIds(selected, visible), ["ff-1", "ff-2"]);
   });
 });

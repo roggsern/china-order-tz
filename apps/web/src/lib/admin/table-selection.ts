@@ -69,3 +69,10 @@ export function resolveTableSelectionState<TId extends string | number>(
     selectedCount: selectedIds.size,
   };
 }
+
+export function resolveVisibleSelectedIds<TId extends string | number>(
+  selectedIds: Set<TId>,
+  visibleIds: readonly TId[],
+): TId[] {
+  return visibleIds.filter((id) => selectedIds.has(id));
+}
