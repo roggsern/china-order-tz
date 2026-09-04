@@ -2,10 +2,13 @@ import type { Order } from "@/lib/types/order";
 import { normalizeOrder } from "@/lib/types/order";
 import { paymentService } from "@/lib/payment/PaymentService";
 import { isAdminLocalOrderAuthorityEnabled } from "@/lib/config/env";
+import { type AdminOrdersFetchResult } from "@/lib/admin/admin-orders-fetch";
+import { fetchAdminOrdersPage } from "@/lib/api/admin-orders";
 import {
-  isAdminOrdersAuthFailureStatus,
-  type AdminOrdersFetchResult,
-} from "@/lib/admin/admin-orders-fetch";
+  ADMIN_ORDERS_DEFAULT_PER_PAGE,
+  emptyAdminOrdersListMeta,
+  type AdminOrdersListQuery,
+} from "@/lib/admin/admin-orders-pagination";
 import {
   ADMIN_ORDERS_WS_INITIAL_RECONNECT_MS,
   ADMIN_ORDERS_WS_MAX_RECONNECT_MS,
@@ -288,65 +291,34 @@ export function mergeOrderLists(serverOrders: Order[], localOrders: Order[]): Or
   return [...merged.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-export async function fetchAdminOrdersSnapshot(): Promise<AdminOrdersFetchResult> {
+export async function fetchAdminOrdersSnapshot(
+  query: Partial<AdminOrdersListQuery> = {},
+): Promise<AdminOrdersFetchResult> {
   const localAuthority = isAdminLocalOrderAuthorityEnabled();
-  const localOrders =
-    localAuthority && typeof window !== "undefined" ? paymentService.listOrders() : [];
+  const result = await fetchAdminOrdersPage(query);
 
-  try {
-    const response = await fetch("/api/admin/orders", { cache: "no-store" });
-    if (!response.ok) {
-      if (localAuthority) {
-        return {
-          ok: true,
-          status: response.status,
-          unauthenticated: false,
-          orders: localOrders,
-        };
-      }
+  if (result.ok) {
+    return result;
+  }
 
-      return {
-        ok: false,
-        status: response.status,
-        unauthenticated: isAdminOrdersAuthFailureStatus(response.status),
-        orders: [],
-      };
-    }
-
-    const payload = (await response.json()) as {
-      orders?: Order[];
-      authority?: string;
-    };
-    const serverOrders = payload.orders ?? [];
-
-    const orders =
-      payload.authority === "laravel" || !localAuthority
-        ? serverOrders.map((order) => normalizeOrder(order))
-        : mergeOrderLists(serverOrders, localOrders);
-
+  if (localAuthority && typeof window !== "undefined") {
+    const localOrders = paymentService.listOrders();
+    const perPage = query.perPage ?? ADMIN_ORDERS_DEFAULT_PER_PAGE;
     return {
       ok: true,
-      status: response.status,
+      status: result.status,
       unauthenticated: false,
-      orders,
-    };
-  } catch {
-    if (localAuthority) {
-      return {
-        ok: true,
-        status: null,
-        unauthenticated: false,
-        orders: localOrders,
-      };
-    }
-
-    return {
-      ok: false,
-      status: null,
-      unauthenticated: false,
-      orders: [],
+      orders: localOrders,
+      meta: {
+        ...emptyAdminOrdersListMeta(perPage),
+        total: localOrders.length,
+        from: localOrders.length > 0 ? 1 : null,
+        to: localOrders.length > 0 ? localOrders.length : null,
+      },
     };
   }
+
+  return result;
 }
 
 /** @deprecated Prefer fetchAdminOrdersSnapshot so auth failures are not treated as empty lists. */

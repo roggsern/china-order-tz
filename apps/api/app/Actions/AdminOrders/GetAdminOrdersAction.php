@@ -10,11 +10,16 @@ use Illuminate\Database\Eloquent\Builder;
 
 class GetAdminOrdersAction
 {
+    public const DEFAULT_PER_PAGE = 20;
+
+    public const MAX_PER_PAGE = 100;
+
     /**
      * @param  array{
      *   status?: string|null,
      *   q?: string|null,
-     *   commerce_channel?: string|null
+     *   commerce_channel?: string|null,
+     *   per_page?: int|string|null
      * }  $filters
      */
     public function handle(array $filters = []): LengthAwarePaginator
@@ -34,7 +39,17 @@ class GetAdminOrdersAction
         $this->applySearchFilter($query, $filters['q'] ?? null);
         $this->applyCommerceChannelFilter($query, $filters['commerce_channel'] ?? null);
 
-        return $query->paginate(15);
+        return $query->paginate($this->resolvePerPage($filters['per_page'] ?? null));
+    }
+
+    private function resolvePerPage(int|string|null $perPage): int
+    {
+        $value = (int) ($perPage ?? self::DEFAULT_PER_PAGE);
+        if ($value < 1) {
+            return self::DEFAULT_PER_PAGE;
+        }
+
+        return min($value, self::MAX_PER_PAGE);
     }
 
     private function applyStatusFilter(Builder $query, ?string $status): void
@@ -44,16 +59,27 @@ class GetAdminOrdersAction
         }
 
         $normalized = strtolower(trim($status));
-        if (OrderStatus::tryFrom($normalized) === null && $normalized !== 'all') {
+        if ($normalized === 'all') {
+            return;
+        }
+
+        if ($normalized === OrderStatus::Pending->value) {
+            $query->whereIn('status', [
+                OrderStatus::Pending->value,
+                OrderStatus::PendingPayment->value,
+            ]);
+
+            return;
+        }
+
+        if (OrderStatus::tryFrom($normalized) === null) {
             // Unknown filter — return empty rather than inventing status.
             $query->whereRaw('1 = 0');
 
             return;
         }
 
-        if ($normalized !== 'all') {
-            $query->where('status', $normalized);
-        }
+        $query->where('status', $normalized);
     }
 
     /**
@@ -72,9 +98,10 @@ class GetAdminOrdersAction
 
         $like = '%'.$this->escapeLike($term).'%';
 
-        $query->where(function (Builder $builder) use ($like): void {
+        $query->where(function (Builder $builder) use ($like, $term): void {
             $builder
                 ->where('order_number', 'like', $like)
+                ->orWhere('id', $term)
                 ->orWhereHas('user', function (Builder $user) use ($like): void {
                     $user
                         ->where('email', 'like', $like)

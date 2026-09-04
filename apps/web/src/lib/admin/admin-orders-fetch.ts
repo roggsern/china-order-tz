@@ -1,15 +1,18 @@
 import type { Order } from "@/lib/types/order";
+import { type AdminOrdersListMeta } from "@/lib/admin/admin-orders-pagination";
 
 export type AdminOrdersFetchResult = {
   ok: boolean;
   status: number | null;
   unauthenticated: boolean;
   orders: Order[];
+  meta: AdminOrdersListMeta;
 };
 
 export type AdminOrdersBootstrapState = {
   hydrated: boolean;
   orders: Order[];
+  meta: AdminOrdersListMeta;
 };
 
 export function shouldBootstrapAdminOrders(input: {
@@ -31,6 +34,7 @@ export function applyAdminOrdersFetchResult(
     return {
       hydrated: current.hydrated,
       orders: current.orders,
+      meta: current.meta,
       applied: false,
       authFailure: result.unauthenticated,
     };
@@ -39,6 +43,7 @@ export function applyAdminOrdersFetchResult(
   return {
     hydrated: true,
     orders: result.orders,
+    meta: result.meta,
     applied: true,
     authFailure: false,
   };

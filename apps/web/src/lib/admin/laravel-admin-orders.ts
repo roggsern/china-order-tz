@@ -287,3 +287,21 @@ export function mapLaravelOrdersPayloadToAdminOrders(payload: unknown): Order[] 
     .filter((row): row is LaravelAdminOrder => !!row && typeof row === "object" && "id" in row)
     .map((row) => mapLaravelAdminOrderToWebOrder(row));
 }
+
+export function mapLaravelAdminOrderPayloadToWebOrder(payload: unknown): Order | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const root = payload as {
+    data?: unknown;
+    order?: unknown;
+  };
+
+  const candidate = root.data ?? root.order ?? payload;
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate) || !("id" in candidate)) {
+    return null;
+  }
+
+  return mapLaravelAdminOrderToWebOrder(candidate as LaravelAdminOrder);
+}

@@ -40,16 +40,36 @@ import { DELIVERY_STATUS } from "@/lib/delivery/types";
 import { paymentService } from "@/lib/payment/PaymentService";
 import { updateOrderById } from "@/lib/payment/order-storage";
 import { isAdminLocalOrderAuthorityEnabled } from "@/lib/config/env";
+import {
+  applyAdminOrdersListFilters,
+  applyAdminOrdersListPage,
+  defaultAdminOrdersListQuery,
+  emptyAdminOrdersListMeta,
+  setActiveAdminOrdersListQuery,
+  type AdminOrdersListMeta,
+  type AdminOrdersListQuery,
+} from "@/lib/admin/admin-orders-pagination";
+import type { AdminOrderListFilter } from "@/lib/payment/order-filters";
+import type { AdminOrderSourceFilter } from "@/lib/admin/order-query-filters";
 
 type AdminOrdersContextValue = {
   orders: Order[];
+  listMeta: AdminOrdersListMeta;
+  listQuery: AdminOrdersListQuery;
   isHydrated: boolean;
+  isListLoading: boolean;
   isLive: boolean;
   wsConnected: boolean;
   realtimeTransport: AdminRealtimeTransport;
   lastSyncedAt: Date | null;
   newOrderIds: ReadonlySet<string>;
   refreshOrders: () => void;
+  setListPage: (page: number) => void;
+  setListFilters: (filters: {
+    status?: AdminOrderListFilter;
+    search?: string;
+    source?: AdminOrderSourceFilter;
+  }) => void;
   markPaymentReceived: (orderId: string) => void;
   markOrderShipped: (orderId: string) => Promise<void>;
   markOrderDelivered: (orderId: string) => Promise<void>;
@@ -73,7 +93,10 @@ function findOrderById(orders: Order[], orderId: string): Order | undefined {
 export function AdminOrdersProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, isReady } = useAdminAuth();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [listMeta, setListMeta] = useState<AdminOrdersListMeta>(() => emptyAdminOrdersListMeta());
+  const [listQuery, setListQuery] = useState<AdminOrdersListQuery>(() => defaultAdminOrdersListQuery());
   const [isHydrated, setIsHydrated] = useState(false);
+  const [isListLoading, setIsListLoading] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const [realtimeTransport] = useState<AdminRealtimeTransport>(() => getAdminRealtimeTransport());
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
@@ -81,12 +104,15 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
 
   const ordersRef = useRef<Order[]>([]);
+  const listQueryRef = useRef(listQuery);
   const prevOrderIdsRef = useRef<Set<string>>(new Set());
   const highlightTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const hydratedRef = useRef(false);
   const wsConnectedRef = useRef(false);
 
   ordersRef.current = orders;
+  listQueryRef.current = listQuery;
+  setActiveAdminOrdersListQuery(listQuery);
 
   const setWsConnectedIfChanged = useCallback((connected: boolean) => {
     if (wsConnectedRef.current === connected) {
@@ -143,6 +169,19 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
 
   const handleOrderUpsert = useCallback(
     (order: Order, isCreate: boolean) => {
+      const onFirstPage = listQueryRef.current.page <= 1;
+      const alreadyVisible = ordersRef.current.some((entry) => entry.id === order.id);
+      if (!alreadyVisible && !(isCreate && onFirstPage)) {
+        if (isCreate) {
+          setListMeta((current) => ({
+            ...current,
+            total: current.total + 1,
+            last_page: Math.max(current.last_page, Math.ceil((current.total + 1) / current.per_page)),
+          }));
+        }
+        return;
+      }
+
       trackNewOrderIds(order, isCreate);
       prevOrderIdsRef.current.add(order.id);
 
@@ -180,10 +219,13 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
   const handleOrderPatchRef = useRef(handleOrderPatch);
   handleOrderPatchRef.current = handleOrderPatch;
 
-  const applySnapshot = useCallback((nextOrders: Order[]) => {
+  const applySnapshot = useCallback((nextOrders: Order[], nextMeta?: AdminOrdersListMeta) => {
     prevOrderIdsRef.current = new Set(nextOrders.map((order) => order.id));
     ordersRef.current = nextOrders;
     setOrders(nextOrders);
+    if (nextMeta) {
+      setListMeta(nextMeta);
+    }
     setLastSyncedAt(new Date());
 
     if (!hydratedRef.current) {
@@ -197,24 +239,30 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
     prevOrderIdsRef.current = new Set();
     ordersRef.current = [];
     setOrders([]);
+    setListMeta(emptyAdminOrdersListMeta());
+    setListQuery(defaultAdminOrdersListQuery());
     setIsHydrated(false);
+    setIsListLoading(false);
     setLastSyncedAt(null);
     setWsConnectedIfChanged(false);
   }, [setWsConnectedIfChanged]);
 
   const bootstrapOrdersRef = useRef<() => Promise<void>>(async () => {});
   bootstrapOrdersRef.current = async () => {
-    const result = await fetchAdminOrdersSnapshot();
+    setIsListLoading(true);
+    const result = await fetchAdminOrdersSnapshot(listQueryRef.current);
     const next = applyAdminOrdersFetchResult(
-      { hydrated: hydratedRef.current, orders: ordersRef.current },
+      { hydrated: hydratedRef.current, orders: ordersRef.current, meta: listMeta },
       result,
     );
 
     if (!next.applied) {
+      setIsListLoading(false);
       return;
     }
 
-    applySnapshot(next.orders);
+    applySnapshot(next.orders, next.meta);
+    setIsListLoading(false);
   };
 
   useEffect(() => {
@@ -224,14 +272,6 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
       }
       return;
     }
-
-    let cancelled = false;
-
-    void bootstrapOrdersRef.current().then(() => {
-      if (cancelled) {
-        return;
-      }
-    });
 
     const subscription = subscribeAdminOrdersRealtime({
       onConnected: () => setWsConnectedIfChanged(true),
@@ -271,7 +311,6 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
     const highlightTimers = highlightTimersRef.current;
 
     return () => {
-      cancelled = true;
       subscription.unsubscribe();
 
       for (const timer of highlightTimers.values()) {
@@ -280,6 +319,15 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
       highlightTimers.clear();
     };
   }, [applySnapshot, isAuthenticated, isReady, resetOrdersSession, setWsConnectedIfChanged]);
+
+  useEffect(() => {
+    if (!shouldBootstrapAdminOrders({ isReady, isAuthenticated })) {
+      return;
+    }
+
+    setActiveAdminOrdersListQuery(listQuery);
+    void bootstrapOrdersRef.current();
+  }, [isAuthenticated, isReady, listQuery]);
 
   const refreshOrders = useCallback(() => {
     void bootstrapOrdersRef.current();
@@ -426,6 +474,21 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
     [isBulkUpdating],
   );
 
+  const setListPage = useCallback((page: number) => {
+    setListQuery((current) => applyAdminOrdersListPage(current, page));
+  }, []);
+
+  const setListFilters = useCallback(
+    (filters: {
+      status?: AdminOrderListFilter;
+      search?: string;
+      source?: AdminOrderSourceFilter;
+    }) => {
+      setListQuery((current) => applyAdminOrdersListFilters(current, filters));
+    },
+    [],
+  );
+
   const getOrder = useCallback(
     (orderNumber: string) => orders.find((order) => order.orderNumber === orderNumber),
     [orders],
@@ -439,13 +502,18 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AdminOrdersContextValue>(
     () => ({
       orders,
+      listMeta,
+      listQuery,
       isHydrated,
+      isListLoading,
       isLive: wsConnected,
       wsConnected,
       realtimeTransport,
       lastSyncedAt,
       newOrderIds,
       refreshOrders,
+      setListPage,
+      setListFilters,
       markPaymentReceived,
       markOrderProcessing,
       markOrderShipped,
@@ -460,12 +528,17 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
     }),
     [
       orders,
+      listMeta,
+      listQuery,
       isHydrated,
+      isListLoading,
       wsConnected,
       realtimeTransport,
       lastSyncedAt,
       newOrderIds,
       refreshOrders,
+      setListPage,
+      setListFilters,
       markPaymentReceived,
       markOrderProcessing,
       markOrderShipped,

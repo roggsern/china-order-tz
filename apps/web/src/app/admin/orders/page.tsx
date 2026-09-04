@@ -11,8 +11,15 @@ import { formatAdminRefreshPolicyLabel } from "@/lib/admin/admin-refresh-policy"
 import { formatPrice } from "@/lib/catalog/utils";
 
 export default function AdminOrdersPage() {
-  const { orders, isHydrated, lastSyncedAt, refreshOrders, wsConnected, realtimeTransport } =
-    useAdminOrders();
+  const {
+    orders,
+    listMeta,
+    isHydrated,
+    lastSyncedAt,
+    refreshOrders,
+    wsConnected,
+    realtimeTransport,
+  } = useAdminOrders();
   const analytics = useMemo(() => computeOrderAnalytics(orders), [orders]);
 
   return (
@@ -40,7 +47,7 @@ export default function AdminOrdersPage() {
       <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <AdminStatCard
           label="Total orders"
-          value={isHydrated ? analytics.totalOrders : "—"}
+          value={isHydrated ? listMeta.total : "—"}
           variant="dark"
           livePulse
         />

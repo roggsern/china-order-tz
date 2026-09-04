@@ -12,7 +12,6 @@ import { ADMIN_SEARCH_DEBOUNCE_MS } from "@/lib/admin/admin-search-utils";
 import {
   ADMIN_ORDER_LIST_FILTERS,
   type AdminOrderListFilter,
-  countOrdersByListFilter,
 } from "@/lib/payment/order-filters";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { AdminFilterChips } from "@/components/admin/AdminFilterChips";
@@ -22,8 +21,7 @@ import { PaymentStatusBadge } from "@/components/payment/PaymentStatusBadge";
 import { OrderStatusBadge } from "@/components/order/OrderStatusBadge";
 import { OrderLiveStatusIndicator } from "@/components/admin/OrderLiveStatusIndicator";
 import { AdminOrderProductCell } from "@/components/admin/AdminOrderProductCell";
-
-const PAGE_SIZE = 20;
+import { ADMIN_ORDERS_DEFAULT_PER_PAGE } from "@/lib/admin/admin-orders-pagination";
 
 function formatOrderDate(timestamp: string): string {
   return new Intl.DateTimeFormat("en-TZ", {
@@ -37,40 +35,51 @@ function shortenOrderId(orderId: string): string {
 }
 
 export function AdminOrderTable() {
-  const { orders, isHydrated, newOrderIds } = useAdminOrders();
-  const [activeFilter, setActiveFilter] = useState<AdminOrderListFilter>("all");
-  const [sourceFilter, setSourceFilter] = useState<AdminOrderSourceFilter>("all");
+  const {
+    orders,
+    listMeta,
+    listQuery,
+    isHydrated,
+    isListLoading,
+    newOrderIds,
+    setListPage,
+    setListFilters,
+  } = useAdminOrders();
+  const [activeFilter, setActiveFilter] = useState<AdminOrderListFilter>(listQuery.status ?? "all");
+  const [sourceFilter, setSourceFilter] = useState<AdminOrderSourceFilter>(listQuery.source ?? "all");
   const [brandFilter, setBrandFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(listQuery.search ?? "");
   const debouncedSearch = useDebouncedValue(search, ADMIN_SEARCH_DEBOUNCE_MS);
-  const [page, setPage] = useState(1);
 
-  const filterCounts = useMemo(() => countOrdersByListFilter(orders), [orders]);
+  useEffect(() => {
+    setListFilters({
+      status: activeFilter,
+      source: sourceFilter,
+      search: debouncedSearch,
+    });
+  }, [activeFilter, sourceFilter, debouncedSearch, setListFilters]);
 
-  const filterOptions = useMemo(() => extractAdminOrderFilterOptions(orders), [orders]);
+  useEffect(() => {
+    setBrandFilter("all");
+    setCategoryFilter("all");
+  }, [activeFilter, sourceFilter, debouncedSearch]);
 
-  const filtered = useMemo(
+  const pageOrders = useMemo(
     () =>
       filterAdminOrders(orders, {
-        status: activeFilter,
-        source: sourceFilter,
         brand: brandFilter === "all" ? undefined : brandFilter,
         category: categoryFilter === "all" ? undefined : categoryFilter,
-        search: debouncedSearch,
       }),
-    [orders, activeFilter, sourceFilter, brandFilter, categoryFilter, debouncedSearch],
+    [orders, brandFilter, categoryFilter],
   );
 
   const isSearchPending = search.trim() !== debouncedSearch.trim();
-
-  useEffect(() => {
-    setPage(1);
-  }, [activeFilter, sourceFilter, brandFilter, categoryFilter, debouncedSearch]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const currentPage = listMeta.current_page || listQuery.page || 1;
+  const totalPages = Math.max(1, listMeta.last_page || 1);
+  const perPage = listMeta.per_page || ADMIN_ORDERS_DEFAULT_PER_PAGE;
+  const pageScopedFilters = brandFilter !== "all" || categoryFilter !== "all";
+  const filterOptions = useMemo(() => extractAdminOrderFilterOptions(orders), [orders]);
 
   if (!isHydrated) {
     return (
@@ -86,33 +95,12 @@ export function AdminOrderTable() {
   const statusChips = ADMIN_ORDER_LIST_FILTERS.map((filter) => ({
     id: filter.id,
     label: filter.label,
-    count: filterCounts[filter.id],
   }));
 
   const sourceChips = [
-    {
-      id: "all",
-      label: "All Orders",
-      count: filterAdminOrders(orders, { status: activeFilter, search: debouncedSearch }).length,
-    },
-    {
-      id: "china",
-      label: "Order from China",
-      count: filterAdminOrders(orders, {
-        status: activeFilter,
-        source: "china",
-        search: debouncedSearch,
-      }).length,
-    },
-    {
-      id: "local",
-      label: "Buy From TZ",
-      count: filterAdminOrders(orders, {
-        status: activeFilter,
-        source: "local",
-        search: debouncedSearch,
-      }).length,
-    },
+    { id: "all", label: "All Orders" },
+    { id: "china", label: "Order from China" },
+    { id: "local", label: "Buy From TZ" },
   ];
 
   const brandChips = [
@@ -120,21 +108,16 @@ export function AdminOrderTable() {
       id: "all",
       label: "All Brands",
       count: filterAdminOrders(orders, {
-        status: activeFilter,
-        source: sourceFilter,
+        brand: undefined,
         category: categoryFilter === "all" ? undefined : categoryFilter,
-        search: debouncedSearch,
       }).length,
     },
     ...filterOptions.brands.map((brand) => ({
       id: brand.slug,
       label: brand.label,
       count: filterAdminOrders(orders, {
-        status: activeFilter,
-        source: sourceFilter,
         brand: brand.slug,
         category: categoryFilter === "all" ? undefined : categoryFilter,
-        search: debouncedSearch,
       }).length,
     })),
   ];
@@ -144,24 +127,64 @@ export function AdminOrderTable() {
       id: "all",
       label: "All Categories",
       count: filterAdminOrders(orders, {
-        status: activeFilter,
-        source: sourceFilter,
         brand: brandFilter === "all" ? undefined : brandFilter,
-        search: debouncedSearch,
       }).length,
     },
     ...filterOptions.categories.map((category) => ({
       id: category.slug,
       label: category.label,
       count: filterAdminOrders(orders, {
-        status: activeFilter,
-        source: sourceFilter,
         brand: brandFilter === "all" ? undefined : brandFilter,
         category: category.slug,
-        search: debouncedSearch,
       }).length,
     })),
   ];
+
+  const paginationBar =
+    listMeta.total > perPage ? (
+      <div className="flex flex-col gap-3 border-t border-zinc-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs text-zinc-500">
+          Showing {listMeta.from ?? (currentPage - 1) * perPage + 1}–
+          {listMeta.to ?? Math.min(currentPage * perPage, listMeta.total)} of {listMeta.total}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={currentPage <= 1 || isListLoading}
+            onClick={() => setListPage(currentPage - 1)}
+            className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-40"
+          >
+            Previous
+          </button>
+          {totalPages <= 10
+            ? Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+                <button
+                  key={pageNumber}
+                  type="button"
+                  disabled={isListLoading}
+                  onClick={() => setListPage(pageNumber)}
+                  aria-current={pageNumber === currentPage ? "page" : undefined}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+                    pageNumber === currentPage
+                      ? "border-zinc-900 bg-zinc-900 text-white"
+                      : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50"
+                  }`}
+                >
+                  {pageNumber}
+                </button>
+              ))
+            : null}
+          <button
+            type="button"
+            disabled={currentPage >= totalPages || isListLoading}
+            onClick={() => setListPage(currentPage + 1)}
+            className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-40"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    ) : null;
 
   return (
     <div className="admin-card overflow-hidden">
@@ -204,9 +227,9 @@ export function AdminOrderTable() {
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search order ID, customer, product, or category"
+              placeholder="Search order number, customer name, email, or phone"
               className="admin-input w-full"
-              aria-label="Search orders by ID, customer, product, or category"
+              aria-label="Search orders by number, customer name, email, or phone"
             />
             {isSearchPending && (
               <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-zinc-400">
@@ -215,27 +238,33 @@ export function AdminOrderTable() {
             )}
           </div>
           <p className="text-xs text-zinc-500 sm:ml-auto">
-            {filtered.length} result{filtered.length === 1 ? "" : "s"}
-            {filtered.length > PAGE_SIZE ? ` · page ${currentPage} of ${totalPages}` : ""}
+            {pageScopedFilters
+              ? `${pageOrders.length} on this page`
+              : `${listMeta.total} result${listMeta.total === 1 ? "" : "s"}`}
+            {totalPages > 1 ? ` · page ${currentPage} of ${totalPages}` : ""}
+            {isListLoading ? " · loading" : ""}
           </p>
         </div>
       </div>
 
       <div role="tabpanel">
-        {filtered.length === 0 ? (
-          <div className="flex flex-col items-center px-6 py-16 text-center">
-            <span className="text-4xl" aria-hidden>
-              📋
-            </span>
-            <p className="mt-4 text-sm font-medium text-zinc-700">
-              No {activeFilterMeta?.label.toLowerCase()} orders
-            </p>
-            <p className="mt-1 text-xs text-zinc-500">{activeFilterMeta?.description}</p>
-          </div>
+        {pageOrders.length === 0 ? (
+          <>
+            <div className="flex flex-col items-center px-6 py-16 text-center">
+              <span className="text-4xl" aria-hidden>
+                📋
+              </span>
+              <p className="mt-4 text-sm font-medium text-zinc-700">
+                No {activeFilterMeta?.label.toLowerCase()} orders
+              </p>
+              <p className="mt-1 text-xs text-zinc-500">{activeFilterMeta?.description}</p>
+            </div>
+            {paginationBar}
+          </>
         ) : (
           <>
             <div className="space-y-3 p-4 lg:hidden">
-              {paginated.map((order) => (
+              {pageOrders.map((order) => (
                 <OrderCard key={order.id} order={order} isNew={newOrderIds.has(order.id)} />
               ))}
             </div>
@@ -268,39 +297,14 @@ export function AdminOrderTable() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100">
-                  {paginated.map((order) => (
+                  {pageOrders.map((order) => (
                     <OrderRow key={order.id} order={order} isNew={newOrderIds.has(order.id)} />
                   ))}
                 </tbody>
               </table>
             </div>
 
-            {filtered.length > PAGE_SIZE && (
-              <div className="flex flex-col gap-3 border-t border-zinc-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs text-zinc-500">
-                  Showing {(currentPage - 1) * PAGE_SIZE + 1}–
-                  {Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length}
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    disabled={currentPage <= 1}
-                    onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                    className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-40"
-                  >
-                    Previous
-                  </button>
-                  <button
-                    type="button"
-                    disabled={currentPage >= totalPages}
-                    onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-                    className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-40"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            )}
+            {paginationBar}
           </>
         )}
       </div>

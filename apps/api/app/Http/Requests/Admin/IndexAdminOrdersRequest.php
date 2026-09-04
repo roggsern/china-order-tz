@@ -24,6 +24,7 @@ class IndexAdminOrdersRequest extends FormRequest
     {
         return [
             'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
             'status' => ['sometimes', 'nullable', 'string', 'max:64'],
             'q' => ['sometimes', 'nullable', 'string', 'max:100'],
             'commerce_channel' => [

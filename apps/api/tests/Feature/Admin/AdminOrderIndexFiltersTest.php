@@ -58,7 +58,7 @@ class AdminOrderIndexFiltersTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('meta.per_page', 15);
+            ->assertJsonPath('meta.per_page', 20);
 
         $row = collect($response->json('data'))->firstWhere('id', $order->id);
         $this->assertNotNull($row);
@@ -108,6 +108,26 @@ class AdminOrderIndexFiltersTest extends TestCase
         $response->assertOk();
         $ids = collect($response->json('data'))->pluck('id')->all();
         $this->assertSame([$match->id], $ids);
+    }
+
+    public function test_search_by_exact_order_id(): void
+    {
+        $match = $this->makeOrder([
+            'order_number' => 'COT-SEARCH-ID-1',
+            'status' => OrderStatus::Paid,
+            'commerce_channel_id' => $this->china->id,
+        ]);
+        $this->makeOrder([
+            'order_number' => 'COT-SEARCH-ID-2',
+            'status' => OrderStatus::Paid,
+            'commerce_channel_id' => $this->local->id,
+        ]);
+
+        Sanctum::actingAs($this->viewer());
+        $response = $this->getJson('/api/v1/admin/orders?q='.$match->id);
+
+        $response->assertOk();
+        $this->assertSame([$match->id], collect($response->json('data'))->pluck('id')->all());
     }
 
     public function test_search_by_customer_email_and_name(): void
@@ -203,6 +223,51 @@ class AdminOrderIndexFiltersTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.commerce_channel_code', CommerceChannelCode::TzLocal->value)
             ->assertJsonPath('data.commerce_channel.code', CommerceChannelCode::TzLocal->value);
+    }
+
+    public function test_index_accepts_bounded_per_page_and_rejects_unbounded(): void
+    {
+        Sanctum::actingAs($this->viewer());
+
+        $this->getJson('/api/v1/admin/orders?per_page=20')
+            ->assertOk()
+            ->assertJsonPath('meta.per_page', 20);
+
+        $this->getJson('/api/v1/admin/orders?per_page=100')
+            ->assertOk()
+            ->assertJsonPath('meta.per_page', 100);
+
+        $this->getJson('/api/v1/admin/orders?per_page=1000')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['per_page']);
+    }
+
+    public function test_pending_status_filter_includes_legacy_pending_and_pending_payment(): void
+    {
+        $legacy = $this->makeOrder([
+            'order_number' => 'COT-PENDING-LEGACY',
+            'status' => OrderStatus::Pending,
+            'commerce_channel_id' => $this->local->id,
+        ]);
+        $awaiting = $this->makeOrder([
+            'order_number' => 'COT-PENDING-PAYMENT',
+            'status' => OrderStatus::PendingPayment,
+            'commerce_channel_id' => $this->local->id,
+        ]);
+        $this->makeOrder([
+            'order_number' => 'COT-PENDING-PAID',
+            'status' => OrderStatus::Paid,
+            'commerce_channel_id' => $this->china->id,
+        ]);
+
+        Sanctum::actingAs($this->viewer());
+        $response = $this->getJson('/api/v1/admin/orders?status=pending');
+
+        $response->assertOk();
+        $ids = collect($response->json('data'))->pluck('id')->all();
+        $this->assertContains($legacy->id, $ids);
+        $this->assertContains($awaiting->id, $ids);
+        $this->assertCount(2, $ids);
     }
 
     private function viewer(): Admin

@@ -1,24 +1,16 @@
 import type { Order } from "@/lib/types/order";
-import { normalizeOrder } from "@/lib/types/order";
 import type { AdminOrdersWsHandlers } from "@/lib/admin/admin-orders-ws";
 import {
   applyAdminOrdersPollResult,
   createAdminOrdersPollCycleState,
 } from "@/lib/admin/admin-orders-poll-cycle";
 import { getAdminOrdersPollIntervalMs } from "@/lib/admin/realtime-config";
+import { fetchAdminOrdersSnapshot } from "@/lib/admin/admin-orders-ws";
+import { getActiveAdminOrdersListQuery } from "@/lib/admin/admin-orders-pagination";
 
 async function fetchServerOrders(): Promise<{ orders: Order[]; ok: boolean }> {
-  try {
-    const response = await fetch("/api/admin/orders", { cache: "no-store" });
-    if (!response.ok) {
-      return { orders: [], ok: false };
-    }
-
-    const payload = (await response.json()) as { orders?: Order[] };
-    return { orders: (payload.orders ?? []).map((order) => normalizeOrder(order)), ok: true };
-  } catch {
-    return { orders: [], ok: false };
-  }
+  const result = await fetchAdminOrdersSnapshot(getActiveAdminOrdersListQuery());
+  return { orders: result.orders, ok: result.ok };
 }
 
 export function subscribeAdminOrdersPolling(handlers: AdminOrdersWsHandlers): () => void {

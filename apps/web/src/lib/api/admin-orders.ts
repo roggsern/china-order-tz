@@ -1,5 +1,16 @@
 import type { AdminFulfillmentApiError } from "@/lib/api/admin-fulfillments";
 import { hasAdminPermission } from "@/lib/api/admin-me";
+import type { Order } from "@/lib/types/order";
+import { normalizeOrder } from "@/lib/types/order";
+import {
+  ADMIN_ORDERS_DEFAULT_PER_PAGE,
+  buildAdminOrdersSearchParams,
+  emptyAdminOrdersListMeta,
+  extractLaravelPaginationMeta,
+  type AdminOrdersListMeta,
+  type AdminOrdersListQuery,
+} from "@/lib/admin/admin-orders-pagination";
+import { isAdminOrdersAuthFailureStatus } from "@/lib/admin/admin-orders-fetch";
 
 type ApiSuccessResponse<T> = {
   success?: boolean;
@@ -198,3 +209,100 @@ export async function failCancellationRefund(
 }
 
 export type { AdminFulfillmentApiError };
+
+export type AdminOrdersPageResult = {
+  ok: boolean;
+  status: number | null;
+  unauthenticated: boolean;
+  orders: Order[];
+  meta: AdminOrdersListMeta;
+};
+
+export async function fetchAdminOrderById(orderId: string): Promise<Order> {
+  const response = await fetch(`/api/admin/orders/${encodeURIComponent(orderId)}`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  });
+
+  let payload: ApiSuccessResponse<Order> & { order?: Order } = {};
+  try {
+    payload = (await response.json()) as ApiSuccessResponse<Order> & { order?: Order };
+  } catch {
+    throw new AdminOrdersApiError("Unable to load order.", response.status);
+  }
+
+  if (response.status === 404) {
+    throw new AdminOrdersApiError(formatError(payload, "Order not found."), 404);
+  }
+
+  if (!response.ok || payload.success === false) {
+    throw new AdminOrdersApiError(formatError(payload, "Unable to load order."), response.status);
+  }
+
+  const row = payload.data ?? payload.order;
+  if (!row || typeof row !== "object" || !("id" in row)) {
+    throw new AdminOrdersApiError("Unable to load order.", 502);
+  }
+
+  return normalizeOrder(row);
+}
+
+export async function fetchAdminOrdersPage(
+  query: Partial<AdminOrdersListQuery> = {},
+): Promise<AdminOrdersPageResult> {
+  const resolved: AdminOrdersListQuery = {
+    page: query.page && query.page > 0 ? query.page : 1,
+    perPage: query.perPage ?? ADMIN_ORDERS_DEFAULT_PER_PAGE,
+    status: query.status,
+    search: query.search,
+    source: query.source,
+  };
+  const search = buildAdminOrdersSearchParams(resolved);
+
+  try {
+    const response = await fetch(`/api/admin/orders?${search.toString()}`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        unauthenticated: isAdminOrdersAuthFailureStatus(response.status),
+        orders: [],
+        meta: emptyAdminOrdersListMeta(resolved.perPage),
+      };
+    }
+
+    const payload = (await response.json()) as {
+      orders?: Order[];
+      meta?: AdminOrdersListMeta;
+      authority?: string;
+    };
+    const orders = (payload.orders ?? []).map((order) => normalizeOrder(order));
+    const meta = extractLaravelPaginationMeta(payload, {
+      page: resolved.page,
+      perPage: resolved.perPage,
+      itemCount: orders.length,
+    });
+
+    return {
+      ok: true,
+      status: response.status,
+      unauthenticated: false,
+      orders,
+      meta,
+    };
+  } catch {
+    return {
+      ok: false,
+      status: null,
+      unauthenticated: false,
+      orders: [],
+      meta: emptyAdminOrdersListMeta(resolved.perPage),
+    };
+  }
+}

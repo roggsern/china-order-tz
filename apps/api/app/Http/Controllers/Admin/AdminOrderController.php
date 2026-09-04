@@ -35,6 +35,7 @@ class AdminOrderController extends Controller
             'status' => $validated['status'] ?? null,
             'q' => $validated['q'] ?? null,
             'commerce_channel' => $validated['commerce_channel'] ?? null,
+            'per_page' => $validated['per_page'] ?? null,
         ]))->additional(['success' => true]);
     }
 
