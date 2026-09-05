@@ -3,65 +3,100 @@ import { PriceText } from '@/src/shared/ui/PriceText';
 import { colors, radius, spacing, typography } from '@/src/shared/theme';
 import {
   parseVolumeMoney,
-  remainingToNextTier,
   volumePricingUnlocked,
   type VolumePricing,
 } from '@/src/features/pricing/mapVolumePricing';
+import {
+  nextTierHelperMessage,
+  presentVolumePricingRows,
+} from '@/src/features/pricing/presentVolumePricing';
 import { formatCustomerMoney } from '@/src/shared/utils/formatCustomerMoney';
 
 type Props = {
   pricing: VolumePricing | null;
+  quantity?: number;
+  loading?: boolean;
+  error?: boolean;
   showVariantAggregationNote?: boolean;
   showShippingNote?: boolean;
+  showCartAuthorityNote?: boolean;
 };
-
-function nextMessage(pricing: VolumePricing): string | null {
-  const remaining = remainingToNextTier(pricing);
-  if (remaining == null || !pricing.next_tier) return null;
-  const more = remaining === 1 ? '1 more' : `${remaining} more`;
-  if (pricing.next_tier.type === 'percent_off' && pricing.next_tier.discount_percent) {
-    return `Add ${more} to unlock ${parseFloat(pricing.next_tier.discount_percent)}% off`;
-  }
-  return `Add ${more} to unlock ${formatCustomerMoney(pricing.next_tier.unit_price, pricing.currency)} each`;
-}
 
 export function BulkPricingCard({
   pricing,
+  quantity,
+  loading = false,
+  error = false,
   showVariantAggregationNote = false,
   showShippingNote = false,
+  showCartAuthorityNote = false,
 }: Props) {
+  if (loading && !pricing) {
+    return (
+      <View
+        style={styles.wrap}
+        accessibilityRole="summary"
+        accessibilityLabel="Volume pricing"
+      >
+        <Text style={styles.title}>Volume pricing</Text>
+        <Text style={styles.muted}>Checking volume prices…</Text>
+      </View>
+    );
+  }
+
+  if (error && !pricing) {
+    return (
+      <View
+        style={styles.wrap}
+        accessibilityRole="summary"
+        accessibilityLabel="Volume pricing"
+      >
+        <Text style={styles.title}>Volume pricing</Text>
+        <Text style={styles.note}>
+          Volume prices unavailable. Final price is confirmed in cart.
+        </Text>
+      </View>
+    );
+  }
+
   if (!pricing || pricing.tiers.length === 0) return null;
 
+  const rows = presentVolumePricingRows(pricing, quantity);
+  if (rows.length === 0) return null;
+
   const unlocked = volumePricingUnlocked(pricing);
-  const next = nextMessage(pricing);
+  const next = nextTierHelperMessage(pricing, quantity);
   const savings = parseVolumeMoney(pricing.savings_total);
+  const qty = quantity ?? pricing.eligible_quantity;
+  const showUnlocked = unlocked && qty === pricing.eligible_quantity;
 
   return (
-    <View style={styles.wrap}>
-      <Text style={styles.title}>Buy More, Save More</Text>
-      {pricing.tiers.map((tier) => {
-        const active = pricing.current_tier?.min_quantity === tier.min_quantity;
-        return (
-          <View key={`${tier.scope}-${tier.min_quantity}`} style={styles.tierRow}>
-            <Text style={[styles.tierQty, active ? styles.tierActive : null]}>
-              {tier.min_quantity}+ pcs
+    <View
+      style={styles.wrap}
+      accessibilityRole="summary"
+      accessibilityLabel="Volume pricing"
+    >
+      <Text style={styles.title}>Volume pricing</Text>
+      {rows.map((row) => (
+        <View key={row.key} style={styles.tierRow}>
+          <Text style={[styles.tierQty, row.active ? styles.tierActive : null]}>
+            {row.quantityLabel}
+          </Text>
+          <View style={styles.priceCol}>
+            <PriceText
+              value={row.unitPrice}
+              currency={pricing.currency}
+              style={row.active ? styles.tierActivePrice : styles.tierPriceValue}
+              accessibilityLabelPrefix={row.active ? 'Active unit price' : 'Unit price'}
+            />
+            <Text style={[styles.each, row.active ? styles.tierActive : null]}>
+              each
             </Text>
-            {tier.type === 'percent_off' && tier.discount_percent ? (
-              <Text style={[styles.tierPrice, active ? styles.tierActive : null]}>
-                {parseFloat(tier.discount_percent)}% off
-              </Text>
-            ) : (
-              <PriceText
-                value={tier.unit_price}
-                currency={pricing.currency}
-                style={active ? styles.tierActivePrice : styles.tierPriceValue}
-              />
-            )}
           </View>
-        );
-      })}
+        </View>
+      ))}
 
-      {unlocked ? (
+      {showUnlocked ? (
         <Text style={styles.unlocked}>
           {savings > 0.001
             ? `Bulk price unlocked — you save ${formatCustomerMoney(pricing.savings_total, pricing.currency)}`
@@ -81,6 +116,10 @@ export function BulkPricingCard({
         <Text style={styles.note}>
           Bulk discounts apply to product prices only. Shipping is calculated separately.
         </Text>
+      ) : null}
+
+      {showCartAuthorityNote ? (
+        <Text style={styles.note}>Final price is confirmed in cart.</Text>
       ) : null}
     </View>
   );
@@ -105,12 +144,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'baseline',
     marginBottom: spacing.xs,
+    gap: spacing.md,
   },
   tierQty: {
     ...typography.body,
+    flexShrink: 1,
   },
-  tierPrice: {
-    ...typography.body,
+  priceCol: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: spacing.xs,
+  },
+  each: {
+    ...typography.caption,
   },
   tierPriceValue: {
     fontSize: 14,
@@ -134,6 +180,10 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     ...typography.body,
     color: colors.warning,
+  },
+  muted: {
+    ...typography.body,
+    color: colors.textMuted,
   },
   note: {
     marginTop: spacing.xs,

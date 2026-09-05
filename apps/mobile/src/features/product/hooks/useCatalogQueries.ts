@@ -105,6 +105,29 @@ export function productQuoteQueryKey(params: {
   ] as const;
 }
 
+/**
+ * Keep the last quote only when product + configuration match.
+ * Quantity may change; a different variant must not reuse the previous schedule.
+ */
+export function sameConfigurationQuotePlaceholder<T>(
+  previousData: T | undefined,
+  previousQuery: { queryKey: readonly unknown[] } | undefined,
+  next: { productKey: string; configurationKey: string },
+): T | undefined {
+  if (previousData == null || previousQuery == null) {
+    return undefined;
+  }
+  const previousProduct = previousQuery.queryKey[2];
+  const previousConfiguration = previousQuery.queryKey[3];
+  if (
+    previousProduct !== next.productKey ||
+    previousConfiguration !== next.configurationKey
+  ) {
+    return undefined;
+  }
+  return previousData;
+}
+
 /** Merge infinite catalog pages without inventing products. */
 export function flattenCatalogProductPages(
   pages: ProductListResult[] | undefined,
@@ -256,9 +279,12 @@ export function useProductQuote(params: {
     Number.isFinite(params.quantity) &&
     params.quantity >= 1;
 
+  const configurationKey = params.configurationId ?? 'simple';
+  const productKey = params.productKey ?? '';
+
   return useQuery({
     queryKey: productQuoteQueryKey({
-      productKey: params.productKey ?? '',
+      productKey,
       configurationId: params.configurationId,
       quantity: params.quantity,
     }),
@@ -269,5 +295,10 @@ export function useProductQuote(params: {
         quantity: params.quantity,
       }),
     enabled,
+    placeholderData: (previousData, previousQuery) =>
+      sameConfigurationQuotePlaceholder(previousData, previousQuery, {
+        productKey,
+        configurationKey,
+      }),
   });
 }

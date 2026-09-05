@@ -1,3 +1,4 @@
+import { mapProductQuote } from '@/src/features/product/map/mapProduct';
 import {
   buildAddToCartPayload,
   buildUpdateCartItemPayload,
@@ -386,6 +387,58 @@ describe('mapCart / mapCartItem', () => {
     expect(item?.volumePricing?.eligible_quantity).toBe(10);
     expect(item?.volumePricing?.savings_total).toBe('4000.00');
     expect(item?.volumePricing?.resolved_unit_price).toBe('8000.00');
+  });
+
+  it('keeps cart unit price server-owned and equal to the quote for the same payload', () => {
+    const volumePricing = {
+      eligible_quantity: 10,
+      aggregates_variants: false,
+      current_tier: {
+        min_quantity: 10,
+        unit_price: '8000.00',
+        type: 'fixed_unit',
+        discount_percent: null,
+        scope: 'product',
+      },
+      next_tier: null,
+      quantity_to_next_tier: null,
+      base_unit_price: '10000.00',
+      resolved_unit_price: '8000.00',
+      savings_per_unit: '2000.00',
+      savings_total: '20000.00',
+      currency: 'TZS',
+      tiers: [
+        {
+          min_quantity: 10,
+          unit_price: '8000.00',
+          type: 'fixed_unit',
+          discount_percent: null,
+          scope: 'product',
+        },
+      ],
+    };
+    const quote = mapProductQuote({
+      product_id: 'prod-1',
+      configuration_id: null,
+      quantity: 10,
+      currency: 'TZS',
+      unit_price: '8000.00',
+      line_total: '80000.00',
+      volume_pricing: volumePricing,
+    });
+    const cartItem = mapCartItem({
+      ...rawItem,
+      quantity: 10,
+      unit_price: '8000.00',
+      subtotal: '80000.00',
+      volume_pricing: volumePricing,
+    });
+
+    expect(quote?.unitPrice).toBe('8000.00');
+    expect(cartItem?.unitPrice).toBe(quote?.unitPrice);
+    expect(cartItem?.volumePricing?.resolved_unit_price).toBe(
+      quote?.volumePricing?.resolved_unit_price,
+    );
   });
 
   it('returns null for incomplete cart lines', () => {

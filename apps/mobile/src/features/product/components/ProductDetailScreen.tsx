@@ -17,6 +17,11 @@ import { ScreenContainer } from '@/src/shared/ui/ScreenContainer';
 import { SecondaryButton } from '@/src/shared/ui/SecondaryButton';
 import { TrustStrip, type TrustStripItem } from '@/src/shared/ui/TrustStrip';
 import { colors, spacing, typography } from '@/src/shared/theme';
+import { formatCustomerMoney } from '@/src/shared/utils/formatCustomerMoney';
+import {
+  parseVolumeMoney,
+  volumePricingUnlocked,
+} from '@/src/features/pricing/mapVolumePricing';
 import {
   useProductDetail,
   useProductQuote,
@@ -32,6 +37,10 @@ import type {
 import { canAddToCart, resolveAddToCartGate } from '../utils/canAddToCart';
 import { resolvePdpQuantityMax } from '../utils/resolvePdpQuantityMax';
 import { resolveDisplayedProductPrice } from '../utils/resolveDisplayedProductPrice';
+import {
+  quoteMatchesPdpSelection,
+  resolvePdpVolumePricing,
+} from '../utils/resolvePdpVolumePricing';
 import {
   formatAddToCartFollowUp,
   resolveQuotePurchaseQuantity,
@@ -247,14 +256,43 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
   const enabled = gate.canAdd;
 
   const quote = quoteQuery.data ?? null;
-  const purchaseQuantity = resolveQuotePurchaseQuantity(quote, boundedQuantity);
+  const matchedConfigurationId = configuration?.matchedConfigurationId ?? null;
+  const quoteMatchesSelection = quoteMatchesPdpSelection({
+    quote,
+    quoteEnabled,
+    quantity: boundedQuantity,
+    configurationId: matchedConfigurationId,
+  });
+  const volumePricing = resolvePdpVolumePricing({
+    quote,
+    quoteEnabled,
+    configurationLoading: configStatus.loading,
+    configurationId: matchedConfigurationId,
+  });
+  const purchaseQuantity = resolveQuotePurchaseQuantity(
+    quoteMatchesSelection ? quote : null,
+    boundedQuantity,
+  );
   const displayedPrice = resolveDisplayedProductPrice({
     product: detailProduct,
     configuration,
     configurationLoading: configStatus.loading,
-    quote: quote,
-    quoteLoading: quoteEnabled && quoteQuery.isFetching,
+    quote: quoteMatchesSelection ? quote : null,
+    quoteLoading:
+      quoteEnabled &&
+      !quoteQuery.isError &&
+      (quoteQuery.isFetching || !quoteMatchesSelection),
   });
+  const volumeCompareAt =
+    quoteMatchesSelection &&
+    quote?.volumePricing &&
+    volumePricingUnlocked(quote.volumePricing)
+      ? quote.volumePricing.base_unit_price
+      : null;
+  const showVolumeCompare =
+    volumeCompareAt != null &&
+    displayedPrice.amount != null &&
+    parseVolumeMoney(volumeCompareAt) > parseVolumeMoney(displayedPrice.amount);
 
   const gallerySlides = resolvePdpGalleryMediaFromPdpState({
     productImages: detailProduct.images,
@@ -266,8 +304,8 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
     variantGalleries,
   });
 
-  const matchedConfigurationId = configuration?.matchedConfigurationId ?? null;
   const showSale =
+    !showVolumeCompare &&
     detailProduct.compareAtPrice != null &&
     displayedPrice.source === 'base' &&
     displayedPrice.amount != null &&
@@ -367,6 +405,13 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
               size="large"
             />
           )}
+          {showVolumeCompare ? (
+            <PriceText
+              value={volumeCompareAt}
+              accessibilityLabelPrefix="Was"
+              style={styles.compare}
+            />
+          ) : null}
           {showSale ? (
             <PriceText
               value={detailProduct.compareAtPrice}
@@ -375,6 +420,15 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
             />
           ) : null}
         </View>
+        {quoteMatchesSelection &&
+        boundedQuantity > 1 &&
+        quote?.lineTotal != null &&
+        displayedPrice.source === 'quote' ? (
+          <Text style={styles.lineTotal}>
+            {boundedQuantity} pcs ·{' '}
+            {formatCustomerMoney(quote.lineTotal, quote.currency ?? 'TZS')}
+          </Text>
+        ) : null}
 
         <ProductAvailabilityBadge
           product={detailProduct}
@@ -393,15 +447,19 @@ export function ProductDetailScreen({ productKey, journey, storeSlug }: Props) {
           quantity={boundedQuantity}
           onChange={setQuantity}
           max={quantityMax}
-          disabled={addToCartMutation.isPending || !enabled}
+          disabled={addToCartMutation.isPending}
         />
 
         <ProductPurchaseQuantityCard presentation={purchaseQuantity} />
 
         <BulkPricingCard
-          pricing={quote?.volumePricing ?? null}
+          pricing={volumePricing}
+          quantity={boundedQuantity}
+          loading={quoteEnabled && quoteQuery.isFetching && volumePricing == null}
+          error={quoteEnabled && quoteQuery.isError && volumePricing == null}
           showVariantAggregationNote={hasConfigurations}
           showShippingNote
+          showCartAuthorityNote
         />
 
         <AddToCartButton
@@ -496,6 +554,10 @@ const styles = StyleSheet.create({
     textDecorationLine: 'line-through',
     color: colors.textSubtle,
     fontWeight: '400',
+  },
+  lineTotal: {
+    ...typography.caption,
+    marginBottom: spacing.sm,
   },
   wishlistBtn: {
     marginTop: spacing.sm,
